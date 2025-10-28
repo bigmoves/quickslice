@@ -1,0 +1,562 @@
+/// Integration tests for GraphQL handler with database
+///
+/// These tests verify the full GraphQL query flow:
+/// 1. Database setup with lexicons and records
+/// 2. GraphQL schema building from database lexicons
+/// 3. Query execution and result formatting
+/// 4. JSON parsing and encoding throughout the pipeline
+import database
+import gleam/http
+import gleam/int
+import gleam/json
+import gleam/list
+import gleam/string
+import gleeunit/should
+import graphql_handler
+import sqlight
+import wisp
+import wisp/simulate
+
+// Helper to create a status lexicon
+fn create_status_lexicon() -> String {
+  json.object([
+    #("lexicon", json.int(1)),
+    #("id", json.string("xyz.statusphere.status")),
+    #(
+      "defs",
+      json.object([
+        #(
+          "main",
+          json.object([
+            #("type", json.string("record")),
+            #("key", json.string("tid")),
+            #(
+              "record",
+              json.object([
+                #("type", json.string("object")),
+                #(
+                  "required",
+                  json.array(
+                    [json.string("status"), json.string("createdAt")],
+                    of: fn(x) { x },
+                  ),
+                ),
+                #(
+                  "properties",
+                  json.object([
+                    #(
+                      "status",
+                      json.object([
+                        #("type", json.string("string")),
+                        #("minLength", json.int(1)),
+                        #("maxGraphemes", json.int(1)),
+                        #("maxLength", json.int(32)),
+                      ]),
+                    ),
+                    #(
+                      "createdAt",
+                      json.object([
+                        #("type", json.string("string")),
+                        #("format", json.string("datetime")),
+                      ]),
+                    ),
+                  ]),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+      ]),
+    ),
+  ])
+  |> json.to_string
+}
+
+// Helper to create a simple lexicon with just properties
+fn create_simple_lexicon(nsid: String) -> String {
+  json.object([
+    #("lexicon", json.int(1)),
+    #("id", json.string(nsid)),
+    #(
+      "defs",
+      json.object([
+        #(
+          "main",
+          json.object([
+            #("type", json.string("record")),
+            #(
+              "record",
+              json.object([
+                #(
+                  "properties",
+                  json.object([
+                    #("status", json.object([#("type", json.string("string"))])),
+                  ]),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+      ]),
+    ),
+  ])
+  |> json.to_string
+}
+
+pub fn graphql_post_request_with_records_test() {
+  // Create in-memory database
+  let assert Ok(db) = sqlight.open(":memory:")
+  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = database.create_record_table(db)
+
+  // Insert a lexicon for xyz.statusphere.status
+  let lexicon = create_status_lexicon()
+  let assert Ok(_) =
+    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+
+  // Insert some test records
+  let record1_json =
+    json.object([
+      #("status", json.string("🎉")),
+      #("createdAt", json.string("2024-01-01T00:00:00Z")),
+    ])
+    |> json.to_string
+
+  let assert Ok(_) =
+    database.insert_record(
+      db,
+      "at://did:plc:test1/xyz.statusphere.status/123",
+      "cid1",
+      "did:plc:test1",
+      "xyz.statusphere.status",
+      record1_json,
+    )
+
+  let record2_json =
+    json.object([
+      #("status", json.string("🔥")),
+      #("createdAt", json.string("2024-01-02T00:00:00Z")),
+    ])
+    |> json.to_string
+
+  let assert Ok(_) =
+    database.insert_record(
+      db,
+      "at://did:plc:test2/xyz.statusphere.status/456",
+      "cid2",
+      "did:plc:test2",
+      "xyz.statusphere.status",
+      record2_json,
+    )
+
+  // Create GraphQL query request
+  let query =
+    json.object([
+      #(
+        "query",
+        json.string(
+          "{ xyzStatusphereStatus { uri cid did collection status createdAt } }",
+        ),
+      ),
+    ])
+    |> json.to_string
+
+  let request =
+    simulate.request(http.Post, "/graphql")
+    |> simulate.string_body(query)
+    |> simulate.header("content-type", "application/json")
+
+  let response = graphql_handler.handle_graphql_request(request, db)
+
+  // Verify response
+  response.status
+  |> should.equal(200)
+
+  // Get response body
+  let assert wisp.Text(body) = response.body
+
+  // Verify response contains data structure
+  body
+  |> should.not_equal("")
+
+  // Response should contain "data"
+  string.contains(body, "data")
+  |> should.be_true
+
+  // Response should contain field name
+  string.contains(body, "xyzStatusphereStatus")
+  |> should.be_true
+
+  // Response should contain our test URIs
+  string.contains(body, "at://did:plc:test1/xyz.statusphere.status/123")
+  |> should.be_true
+
+  string.contains(body, "at://did:plc:test2/xyz.statusphere.status/456")
+  |> should.be_true
+
+  // Response should contain our test data
+  string.contains(body, "🎉")
+  |> should.be_true
+
+  string.contains(body, "🔥")
+  |> should.be_true
+
+  // Clean up
+  let assert Ok(_) = sqlight.close(db)
+}
+
+pub fn graphql_post_request_empty_results_test() {
+  // Create in-memory database
+  let assert Ok(db) = sqlight.open(":memory:")
+  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = database.create_record_table(db)
+
+  // Insert a lexicon but no records
+  let lexicon = create_simple_lexicon("xyz.statusphere.status")
+  let assert Ok(_) =
+    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+
+  // Create GraphQL query request
+  let query =
+    json.object([#("query", json.string("{ xyzStatusphereStatus { uri } }"))])
+    |> json.to_string
+
+  let request =
+    simulate.request(http.Post, "/graphql")
+    |> simulate.string_body(query)
+    |> simulate.header("content-type", "application/json")
+
+  let response = graphql_handler.handle_graphql_request(request, db)
+
+  // Verify response
+  response.status
+  |> should.equal(200)
+
+  // Get response body
+  let assert wisp.Text(body) = response.body
+
+  // Should return empty array
+  string.contains(body, "[]")
+  |> should.be_true
+
+  // Clean up
+  let assert Ok(_) = sqlight.close(db)
+}
+
+pub fn graphql_get_request_test() {
+  // Create in-memory database
+  let assert Ok(db) = sqlight.open(":memory:")
+  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = database.create_record_table(db)
+
+  // Insert a lexicon
+  let lexicon = create_simple_lexicon("xyz.statusphere.status")
+  let assert Ok(_) =
+    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+
+  // Create GraphQL GET request with query parameter
+  let request =
+    simulate.request(
+      http.Get,
+      "/graphql?query={ xyzStatusphereStatus { uri } }",
+    )
+
+  let response = graphql_handler.handle_graphql_request(request, db)
+
+  // Verify response
+  response.status
+  |> should.equal(200)
+
+  // Get response body
+  let assert wisp.Text(body) = response.body
+
+  // Should contain data
+  string.contains(body, "data")
+  |> should.be_true
+
+  // Clean up
+  let assert Ok(_) = sqlight.close(db)
+}
+
+pub fn graphql_invalid_json_request_test() {
+  // Create in-memory database
+  let assert Ok(db) = sqlight.open(":memory:")
+  let assert Ok(_) = database.create_lexicon_table(db)
+
+  // Create request with invalid JSON
+  let request =
+    simulate.request(http.Post, "/graphql")
+    |> simulate.string_body("not valid json")
+    |> simulate.header("content-type", "application/json")
+
+  let response = graphql_handler.handle_graphql_request(request, db)
+
+  // Should return 400 Bad Request
+  response.status
+  |> should.equal(400)
+
+  // Get response body
+  let assert wisp.Text(body) = response.body
+
+  // Should contain error
+  string.contains(body, "error")
+  |> should.be_true
+
+  // Clean up
+  let assert Ok(_) = sqlight.close(db)
+}
+
+pub fn graphql_missing_query_field_test() {
+  // Create in-memory database
+  let assert Ok(db) = sqlight.open(":memory:")
+  let assert Ok(_) = database.create_lexicon_table(db)
+
+  // Create request with JSON but no query field
+  let body_json =
+    json.object([#("foo", json.string("bar"))])
+    |> json.to_string
+
+  let request =
+    simulate.request(http.Post, "/graphql")
+    |> simulate.string_body(body_json)
+    |> simulate.header("content-type", "application/json")
+
+  let response = graphql_handler.handle_graphql_request(request, db)
+
+  // Should return 400 Bad Request
+  response.status
+  |> should.equal(400)
+
+  // Get response body
+  let assert wisp.Text(body) = response.body
+
+  // Should contain error about missing query
+  string.contains(body, "query")
+  |> should.be_true
+
+  // Clean up
+  let assert Ok(_) = sqlight.close(db)
+}
+
+pub fn graphql_method_not_allowed_test() {
+  // Create in-memory database
+  let assert Ok(db) = sqlight.open(":memory:")
+
+  // Create DELETE request (not allowed)
+  let request = simulate.request(http.Delete, "/graphql")
+
+  let response = graphql_handler.handle_graphql_request(request, db)
+
+  // Should return 405 Method Not Allowed
+  response.status
+  |> should.equal(405)
+
+  // Get response body
+  let assert wisp.Text(body) = response.body
+
+  // Should contain error
+  string.contains(body, "MethodNotAllowed")
+  |> should.be_true
+
+  // Clean up
+  let assert Ok(_) = sqlight.close(db)
+}
+
+pub fn graphql_multiple_lexicons_test() {
+  // Create in-memory database
+  let assert Ok(db) = sqlight.open(":memory:")
+  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = database.create_record_table(db)
+
+  // Insert multiple lexicons
+  let lexicon1 = create_simple_lexicon("xyz.statusphere.status")
+  let lexicon2 =
+    json.object([
+      #("lexicon", json.int(1)),
+      #("id", json.string("app.bsky.feed.post")),
+      #(
+        "defs",
+        json.object([
+          #(
+            "main",
+            json.object([
+              #("type", json.string("record")),
+              #(
+                "record",
+                json.object([
+                  #(
+                    "properties",
+                    json.object([
+                      #("text", json.object([#("type", json.string("string"))])),
+                      #(
+                        "createdAt",
+                        json.object([#("type", json.string("string"))]),
+                      ),
+                    ]),
+                  ),
+                ]),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    ])
+    |> json.to_string
+
+  let assert Ok(_) =
+    database.insert_lexicon(db, "xyz.statusphere.status", lexicon1)
+  let assert Ok(_) = database.insert_lexicon(db, "app.bsky.feed.post", lexicon2)
+
+  // Insert records for first collection
+  let record1_json =
+    json.object([#("status", json.string("✨"))])
+    |> json.to_string
+
+  let assert Ok(_) =
+    database.insert_record(
+      db,
+      "at://did:plc:test/xyz.statusphere.status/1",
+      "cid1",
+      "did:plc:test",
+      "xyz.statusphere.status",
+      record1_json,
+    )
+
+  // Query the first collection
+  let query1 =
+    json.object([#("query", json.string("{ xyzStatusphereStatus { uri } }"))])
+    |> json.to_string
+  let request1 =
+    simulate.request(http.Post, "/graphql")
+    |> simulate.string_body(query1)
+    |> simulate.header("content-type", "application/json")
+
+  let response1 = graphql_handler.handle_graphql_request(request1, db)
+
+  response1.status
+  |> should.equal(200)
+
+  let assert wisp.Text(body1) = response1.body
+
+  string.contains(body1, "xyzStatusphereStatus")
+  |> should.be_true
+
+  // Insert records for second collection
+  let record2_json =
+    json.object([
+      #("text", json.string("Hello World")),
+      #("createdAt", json.string("2024-01-01T00:00:00Z")),
+    ])
+    |> json.to_string
+
+  let assert Ok(_) =
+    database.insert_record(
+      db,
+      "at://did:plc:test/app.bsky.feed.post/1",
+      "cid2",
+      "did:plc:test",
+      "app.bsky.feed.post",
+      record2_json,
+    )
+
+  // Query the second collection
+  let query2 =
+    json.object([#("query", json.string("{ appBskyFeedPost { uri } }"))])
+    |> json.to_string
+  let request2 =
+    simulate.request(http.Post, "/graphql")
+    |> simulate.string_body(query2)
+    |> simulate.header("content-type", "application/json")
+
+  let response2 = graphql_handler.handle_graphql_request(request2, db)
+
+  response2.status
+  |> should.equal(200)
+
+  let assert wisp.Text(body2) = response2.body
+
+  string.contains(body2, "appBskyFeedPost")
+  |> should.be_true
+
+  // Clean up
+  let assert Ok(_) = sqlight.close(db)
+}
+
+pub fn graphql_record_limit_test() {
+  // Create in-memory database
+  let assert Ok(db) = sqlight.open(":memory:")
+  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = database.create_record_table(db)
+
+  // Insert a lexicon
+  let lexicon = create_simple_lexicon("xyz.statusphere.status")
+  let assert Ok(_) =
+    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+
+  // Insert 150 records (handler should limit to 100)
+  let _ =
+    list_range(1, 150)
+    |> list.each(fn(i) {
+      let uri = "at://did:plc:test/xyz.statusphere.status/" <> int.to_string(i)
+      let cid = "cid" <> int.to_string(i)
+      let json_data =
+        json.object([#("status", json.string(int.to_string(i)))])
+        |> json.to_string
+      let assert Ok(_) =
+        database.insert_record(
+          db,
+          uri,
+          cid,
+          "did:plc:test",
+          "xyz.statusphere.status",
+          json_data,
+        )
+      Nil
+    })
+
+  // Query all records
+  let query =
+    json.object([#("query", json.string("{ xyzStatusphereStatus { uri } }"))])
+    |> json.to_string
+  let request =
+    simulate.request(http.Post, "/graphql")
+    |> simulate.string_body(query)
+    |> simulate.header("content-type", "application/json")
+
+  let response = graphql_handler.handle_graphql_request(request, db)
+
+  response.status
+  |> should.equal(200)
+
+  let assert wisp.Text(body) = response.body
+
+  // Count how many URIs are in the response (should be exactly 100)
+  let uri_count = count_occurrences(body, "\"uri\"")
+
+  // Should return exactly 100 records (not all 150)
+  uri_count
+  |> should.equal(100)
+
+  // Clean up
+  let assert Ok(_) = sqlight.close(db)
+}
+
+// Helper function to create a range of integers
+fn list_range(from: Int, to: Int) -> List(Int) {
+  list_range_helper(from, to, [])
+  |> list.reverse
+}
+
+fn list_range_helper(current: Int, to: Int, acc: List(Int)) -> List(Int) {
+  case current > to {
+    True -> acc
+    False -> list_range_helper(current + 1, to, [current, ..acc])
+  }
+}
+
+// Helper to count occurrences of a substring
+fn count_occurrences(text: String, pattern: String) -> Int {
+  string.split(text, pattern)
+  |> list.length
+  |> fn(n) { n - 1 }
+}

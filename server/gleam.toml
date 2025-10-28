@@ -1,0 +1,39 @@
+name = "server"
+version = "1.0.0"
+
+# Fill out these fields if you intend to generate HTML documentation or publish
+# your project to the Hex package manager.
+#
+# description = ""
+# licences = ["Apache-2.0"]
+# repository = { type = "github", user = "", repo = "" }
+# links = [{ title = "Website", href = "" }]
+#
+# For a full reference of all the available options, you can have a look at
+# https://gleam.run/writing-gleam/gleam-toml/.
+
+[dependencies]
+jetstream = { path = "../jetstream" }
+lexicon = { path = "../lexicon" }
+graphql = { path = "../graphql" }
+lexicon_graphql = { path = "../lexicon_graphql" }
+gleam_stdlib = ">= 0.60.0 and < 1.0.0"
+mist = ">= 5.0.3 and < 6.0.0"
+wisp = ">= 2.1.0 and < 3.0.0"
+gleam_erlang = ">= 1.0.0 and < 2.0.0"
+gleam_otp = ">= 1.2.0 and < 2.0.0"
+gleam_http = ">= 4.0.0 and < 5.0.0"
+gleam_json = ">= 3.0.2 and < 4.0.0"
+gleam_httpc = ">= 5.0.0 and < 6.0.0"
+sqlight = ">= 1.0.0 and < 2.0.0"
+gleam_time = ">= 1.4.0 and < 2.0.0"
+lustre = ">= 5.0.0 and < 6.0.0"
+simplifile = ">= 2.0.0 and < 3.0.0"
+argv = ">= 1.0.0 and < 2.0.0"
+jose = ">= 1.11.10 and < 2.0.0"
+envoy = ">= 1.0.2 and < 2.0.0"
+dotenv_gleam = ">= 2.0.1 and < 3.0.0"
+thoas = ">= 1.0.0 and < 2.0.0"
+
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
