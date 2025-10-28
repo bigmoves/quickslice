@@ -131,11 +131,10 @@ pub fn handle_commit_event(
       io.println(
         "🗑️  delete " <> commit.collection <> " (" <> commit.rkey <> ")",
       )
-      io.println("    URI: " <> uri)
 
       case database.delete_record(db, uri) {
         Ok(_) -> {
-          io.println("    ✓ Deleted from database")
+          Nil
         }
         Error(err) -> {
           io.println_error("    ❌ Failed to delete: " <> string.inspect(err))

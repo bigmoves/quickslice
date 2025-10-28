@@ -3,16 +3,15 @@ import backfill
 import database
 import dotenv_gleam
 import envoy
-import gleam/erlang/process.{type Subject}
+import gleam/erlang/process
+import gleam/http as gleam_http
 import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option
-import gleam/otp/actor
 import graphiql_handler
 import graphql_handler
 import importer
-import jetstream
 import jetstream_consumer
 import lustre/attribute
 import lustre/element
@@ -26,72 +25,6 @@ import xrpc_router
 
 pub type Context {
   Context(db: sqlight.Connection, auth_base_url: String)
-}
-
-pub type BackfillMessage {
-  StartLexiconBackfill(reply_to: Subject(Nil))
-  StartCustomBackfill(collections: List(String), reply_to: Subject(Nil))
-}
-
-fn handle_backfill(db: sqlight.Connection, message: BackfillMessage) {
-  case message {
-    StartLexiconBackfill(client) -> {
-      io.println("🔄 Starting lexicon schema backfill...")
-      backfill_lexicon_schemas(db)
-
-      // After lexicon backfill, check which collections have lexicons
-      io.println("")
-      io.println("🔍 Checking collections for lexicons...")
-
-      let collections_to_check = ["xyz.statusphere.status"]
-
-      let collections_with_lexicons =
-        collections_to_check
-        |> list.filter(fn(collection) {
-          case database.has_lexicon_for_collection(db, collection) {
-            Ok(True) -> {
-              io.println("  ✓ Found lexicon for: " <> collection)
-              True
-            }
-            Ok(False) -> {
-              io.println("  ✗ No lexicon for: " <> collection)
-              False
-            }
-            Error(_) -> {
-              io.println("  ⚠️ Error checking lexicon for: " <> collection)
-              False
-            }
-          }
-        })
-
-      case collections_with_lexicons {
-        [] -> {
-          io.println("")
-          io.println(
-            "⚠️ No collections with lexicons found - skipping custom backfill",
-          )
-        }
-        _ -> {
-          io.println("")
-          io.println(
-            "📋 Starting custom backfill for "
-            <> int.to_string(list.length(collections_with_lexicons))
-            <> " collections with lexicons...",
-          )
-          run_custom_backfill_for_collections(db, collections_with_lexicons)
-        }
-      }
-
-      process.send(client, Nil)
-      actor.continue(db)
-    }
-    StartCustomBackfill(collections, client) -> {
-      io.println("🔄 Starting custom backfill for specified collections...")
-      run_custom_backfill_for_collections(db, collections)
-      process.send(client, Nil)
-      actor.continue(db)
-    }
-  }
 }
 
 pub fn main() {
@@ -134,8 +67,14 @@ fn run_backfill_command() {
   io.println("🔄 Starting backfill for record-type lexicon collections")
   io.println("")
 
+  // Get database URL from environment variable or use default
+  let database_url = case envoy.get("DATABASE_URL") {
+    Ok(url) -> url
+    Error(_) -> "atproto.db"
+  }
+
   // Initialize the database
-  let assert Ok(db) = database.initialize("atproto.db")
+  let assert Ok(db) = database.initialize(database_url)
 
   // Get all record-type lexicons
   io.println("📚 Fetching record-type lexicons from database...")
@@ -173,8 +112,14 @@ fn start_server_normally() {
   // Load environment variables from .env file
   let _ = dotenv_gleam.config()
 
+  // Get database URL from environment variable or use default
+  let database_url = case envoy.get("DATABASE_URL") {
+    Ok(url) -> url
+    Error(_) -> "atproto.db"
+  }
+
   // Initialize the database
-  let assert Ok(db) = database.initialize("atproto.db")
+  let assert Ok(db) = database.initialize(database_url)
 
   // Auto-import lexicons from priv/lexicons if directory exists
   io.println("")
@@ -222,6 +167,21 @@ fn start_server(db: sqlight.Connection) {
     Error(_) -> "https://tunnel.chadtmiller.com"
   }
 
+  // Get HOST and PORT from environment variables or use defaults
+  let host = case envoy.get("HOST") {
+    Ok(h) -> h
+    Error(_) -> "127.0.0.1"
+  }
+
+  let port = case envoy.get("PORT") {
+    Ok(p) ->
+      case int.parse(p) {
+        Ok(port_num) -> port_num
+        Error(_) -> 8000
+      }
+    Error(_) -> 8000
+  }
+
   io.println("🔐 Using AIP server: " <> auth_base_url)
 
   let ctx = Context(db: db, auth_base_url: auth_base_url)
@@ -231,49 +191,12 @@ fn start_server(db: sqlight.Connection) {
   let assert Ok(_) =
     wisp_mist.handler(handler, secret_key_base)
     |> mist.new
-    |> mist.port(8000)
+    |> mist.bind(host)
+    |> mist.port(port)
     |> mist.start
 
-  io.println("Server started on http://localhost:8000")
+  io.println("Server started on http://" <> host <> ":" <> int.to_string(port))
   process.sleep_forever()
-}
-
-fn start_jetstream(db: sqlight.Connection) {
-  // Create a configuration for Jetstream
-  // Listen to commit events only (posts, likes, reposts, follows)
-  let config =
-    jetstream.JetstreamConfig(
-      endpoint: "wss://jetstream2.us-west.bsky.network/subscribe",
-      wanted_collections: [],
-      wanted_dids: [],
-    )
-
-  // Start the consumer with an event handler that identifies commit events
-  jetstream.start_consumer(config, fn(event_json) {
-    case jetstream.parse_event(event_json) {
-      jetstream.CommitEvent(did, _time_us, commit) -> {
-        io.println("✨ COMMIT EVENT")
-        io.println("  DID: " <> did)
-        io.println("  Operation: " <> commit.operation)
-        io.println("  Collection: " <> commit.collection)
-        io.println("  Record key: " <> commit.rkey)
-        io.println("  Revision: " <> commit.rev)
-        io.println("---")
-      }
-      jetstream.IdentityEvent(did, _time_us, _identity) -> {
-        io.println("👤 IDENTITY EVENT: " <> did)
-        io.println("---")
-      }
-      jetstream.AccountEvent(did, _time_us, _account) -> {
-        io.println("🔐 ACCOUNT EVENT: " <> did)
-        io.println("---")
-      }
-      jetstream.UnknownEvent(_raw) -> {
-        // Ignore unknown events
-        Nil
-      }
-    }
-  })
 }
 
 fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
@@ -283,6 +206,7 @@ fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
 
   case segments {
     [] -> index_route(ctx)
+    ["backfill"] -> handle_backfill_request(req, ctx.db)
     ["graphql"] -> graphql_handler.handle_graphql_request(req, ctx.db)
     ["graphiql"] -> graphiql_handler.handle_graphiql_request(req)
     ["xrpc", _] -> {
@@ -341,6 +265,60 @@ fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
       }
     }
     _ -> wisp.html_response("<h1>Not Found</h1>", 404)
+  }
+}
+
+fn handle_backfill_request(
+  req: wisp.Request,
+  db: sqlight.Connection,
+) -> wisp.Response {
+  case req.method {
+    gleam_http.Post -> {
+      // Get all record-type lexicons
+      case database.get_record_type_lexicons(db) {
+        Ok(lexicons) -> {
+          case lexicons {
+            [] -> {
+              wisp.response(200)
+              |> wisp.set_header("content-type", "application/json")
+              |> wisp.set_body(wisp.Text(
+                "{\"status\": \"no_lexicons\", \"message\": \"No record-type lexicons found\"}",
+              ))
+            }
+            _ -> {
+              let collections = list.map(lexicons, fn(lex) { lex.id })
+              // Run backfill in background process
+              let config = backfill.default_config()
+              process.spawn_unlinked(fn() {
+                backfill.backfill_collections([], collections, [], config, db)
+              })
+
+              wisp.response(200)
+              |> wisp.set_header("content-type", "application/json")
+              |> wisp.set_body(wisp.Text(
+                "{\"status\": \"started\", \"collections\": "
+                <> int.to_string(list.length(collections))
+                <> "}",
+              ))
+            }
+          }
+        }
+        Error(_) -> {
+          wisp.response(500)
+          |> wisp.set_header("content-type", "application/json")
+          |> wisp.set_body(wisp.Text(
+            "{\"error\": \"database_error\", \"message\": \"Failed to fetch lexicons\"}",
+          ))
+        }
+      }
+    }
+    _ -> {
+      wisp.response(405)
+      |> wisp.set_header("content-type", "application/json")
+      |> wisp.set_body(wisp.Text(
+        "{\"error\": \"method_not_allowed\", \"message\": \"Use POST to trigger backfill\"}",
+      ))
+    }
   }
 }
 
@@ -430,15 +408,35 @@ fn index_route(ctx: Context) -> wisp.Response {
             html.h1([attribute.class("text-4xl font-bold text-gray-900")], [
               element.text("quickslice"),
             ]),
-            html.a(
-              [
-                attribute.href("/graphiql"),
-                attribute.class(
-                  "bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-sm",
-                ),
-              ],
-              [element.text("Open GraphiQL")],
-            ),
+            html.div([attribute.class("flex gap-3")], [
+              html.form(
+                [
+                  attribute.method("post"),
+                  attribute.action("/backfill"),
+                  attribute.class("inline"),
+                ],
+                [
+                  html.button(
+                    [
+                      attribute.type_("submit"),
+                      attribute.class(
+                        "bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-sm",
+                      ),
+                    ],
+                    [element.text("Backfill Collections")],
+                  ),
+                ],
+              ),
+              html.a(
+                [
+                  attribute.href("/graphiql"),
+                  attribute.class(
+                    "bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-sm",
+                  ),
+                ],
+                [element.text("Open GraphiQL")],
+              ),
+            ]),
           ]),
           // Lexicons section
           html.div([attribute.class("mb-8")], [
@@ -548,51 +546,4 @@ fn middleware(
   use req <- wisp.handle_head(req)
 
   handle_request(req)
-}
-
-/// Backfills com.atproto.lexicon.schema collections on startup.
-/// This function auto-discovers repositories from the relay that have lexicon schemas
-/// and indexes them into the local database.
-/// Note: Actor indexing is disabled for lexicon schemas.
-fn backfill_lexicon_schemas(db: sqlight.Connection) {
-  let repos = []
-  let collections = ["com.atproto.lexicon.schema"]
-  let external_collections = []
-  let config =
-    backfill.BackfillConfig(
-      plc_directory_url: "https://plc.directory",
-      index_actors: False,
-      max_workers: 10,
-    )
-
-  backfill.backfill_collections(
-    repos,
-    collections,
-    external_collections,
-    config,
-    db,
-  )
-
-  io.println("✅ Lexicon schema backfill complete")
-}
-
-/// Run a custom backfill for specific collections that have lexicons.
-/// This backfills actual records (posts, follows, etc.) after verifying lexicons exist.
-fn run_custom_backfill_for_collections(
-  db: sqlight.Connection,
-  collections: List(String),
-) {
-  let repos = []
-  let external_collections = []
-  let config = backfill.default_config()
-
-  backfill.backfill_collections(
-    repos,
-    collections,
-    external_collections,
-    config,
-    db,
-  )
-
-  io.println("✅ Custom backfill complete")
 }

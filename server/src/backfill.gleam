@@ -1,4 +1,5 @@
 import database
+import envoy
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
@@ -58,8 +59,14 @@ pub type BackfillConfig {
 
 /// Creates a default backfill configuration
 pub fn default_config() -> BackfillConfig {
+  // Get PLC directory URL from environment variable or use default
+  let plc_url = case envoy.get("PLC_DIRECTORY_URL") {
+    Ok(url) -> url
+    Error(_) -> "https://plc.directory"
+  }
+
   BackfillConfig(
-    plc_directory_url: "https://plc.directory",
+    plc_directory_url: plc_url,
     index_actors: True,
     max_workers: 10,
   )
@@ -483,9 +490,16 @@ fn fetch_repos_paginated(
   cursor: Option(String),
   acc: List(String),
 ) -> Result(List(String), String) {
+  // Get relay URL from environment variable or use default
+  let relay_url = case envoy.get("RELAY_URL") {
+    Ok(url) -> url
+    Error(_) -> "https://relay1.us-west.bsky.network"
+  }
+
   // Build URL with large limit and cursor
   let base_url =
-    "https://relay1.us-west.bsky.network/xrpc/com.atproto.sync.listReposByCollection?collection="
+    relay_url
+    <> "/xrpc/com.atproto.sync.listReposByCollection?collection="
     <> collection
     <> "&limit=1000"
 

@@ -1,0 +1,23 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+**/build
+**/target
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/erl_crash.dump
+
+# IDE
+.vscode
+.idea
+**/.DS_Store
+
+# Env files
+**/.env
+**/.env.local
+
+# Claude
+.claude

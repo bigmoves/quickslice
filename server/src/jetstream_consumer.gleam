@@ -1,4 +1,5 @@
 import database
+import envoy
 import event_handler
 import gleam/erlang/process
 import gleam/int
@@ -35,10 +36,16 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
           )
           list.each(collection_ids, fn(col) { io.println("   - " <> col) })
 
+          // Get Jetstream URL from environment variable or use default
+          let jetstream_url = case envoy.get("JETSTREAM_URL") {
+            Ok(url) -> url
+            Error(_) -> "wss://jetstream2.us-east.bsky.network/subscribe"
+          }
+
           // Create Jetstream config
           let config =
             jetstream.JetstreamConfig(
-              endpoint: "wss://jetstream2.us-east.bsky.network/subscribe",
+              endpoint: jetstream_url,
               wanted_collections: collection_ids,
               wanted_dids: [],
             )
