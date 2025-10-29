@@ -58,6 +58,7 @@ pub type ArgumentValue {
   StringValue(String)
   BooleanValue(Bool)
   NullValue
+  EnumValue(String)
   ListValue(List(ArgumentValue))
   ObjectValue(List(#(String, ArgumentValue)))
   VariableValue(String)
@@ -329,8 +330,63 @@ fn parse_argument_value(
     [lexer.Name("true"), ..rest] -> Ok(#(BooleanValue(True), rest))
     [lexer.Name("false"), ..rest] -> Ok(#(BooleanValue(False), rest))
     [lexer.Name("null"), ..rest] -> Ok(#(NullValue, rest))
+    [lexer.Name(name), ..rest] -> Ok(#(EnumValue(name), rest))
     [lexer.Dollar, lexer.Name(name), ..rest] -> Ok(#(VariableValue(name), rest))
+    [lexer.BracketOpen, ..rest] -> parse_list_value(rest)
+    [lexer.BraceOpen, ..rest] -> parse_object_value(rest)
     [] -> Error(UnexpectedEndOfInput("Expected value"))
     [token, ..] -> Error(UnexpectedToken(token, "Expected value"))
+  }
+}
+
+/// Parse list value: [value, value, ...]
+fn parse_list_value(
+  tokens: List(lexer.Token),
+) -> Result(#(ArgumentValue, List(lexer.Token)), ParseError) {
+  case tokens {
+    [lexer.BracketClose, ..rest] -> Ok(#(ListValue([]), rest))
+    _ -> parse_list_value_items(tokens, [])
+  }
+}
+
+/// Parse list value items recursively
+fn parse_list_value_items(
+  tokens: List(lexer.Token),
+  acc: List(ArgumentValue),
+) -> Result(#(ArgumentValue, List(lexer.Token)), ParseError) {
+  case tokens {
+    [lexer.BracketClose, ..rest] -> Ok(#(ListValue(list.reverse(acc)), rest))
+    [lexer.Comma, ..rest] -> parse_list_value_items(rest, acc)
+    _ -> {
+      use #(value, rest) <- result.try(parse_argument_value(tokens))
+      parse_list_value_items(rest, [value, ..acc])
+    }
+  }
+}
+
+/// Parse object value: {field: value, field: value, ...}
+fn parse_object_value(
+  tokens: List(lexer.Token),
+) -> Result(#(ArgumentValue, List(lexer.Token)), ParseError) {
+  case tokens {
+    [lexer.BraceClose, ..rest] -> Ok(#(ObjectValue([]), rest))
+    _ -> parse_object_value_fields(tokens, [])
+  }
+}
+
+/// Parse object value fields recursively
+fn parse_object_value_fields(
+  tokens: List(lexer.Token),
+  acc: List(#(String, ArgumentValue)),
+) -> Result(#(ArgumentValue, List(lexer.Token)), ParseError) {
+  case tokens {
+    [lexer.BraceClose, ..rest] -> Ok(#(ObjectValue(list.reverse(acc)), rest))
+    [lexer.Comma, ..rest] -> parse_object_value_fields(rest, acc)
+    [lexer.Name(field_name), lexer.Colon, ..rest] -> {
+      use #(value, rest2) <- result.try(parse_argument_value(rest))
+      parse_object_value_fields(rest2, [#(field_name, value), ..acc])
+    }
+    [] -> Error(UnexpectedEndOfInput("Expected field name or }"))
+    [token, ..] -> Error(UnexpectedToken(token, "Expected field name or }"))
   }
 }

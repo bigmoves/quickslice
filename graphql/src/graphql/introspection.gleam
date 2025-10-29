@@ -80,14 +80,34 @@ fn collect_types_from_type(
           let fields = schema.get_fields(t)
           list.fold(fields, new_acc, fn(acc2, field) {
             let field_type = schema.field_type(field)
-            collect_types_from_type_deep(field_type, acc2)
+            let acc3 = collect_types_from_type_deep(field_type, acc2)
+
+            // Also collect types from field arguments
+            let arguments = schema.field_arguments(field)
+            list.fold(arguments, acc3, fn(acc4, arg) {
+              let arg_type = schema.argument_type(arg)
+              collect_types_from_type_deep(arg_type, acc4)
+            })
           })
         }
         False -> {
-          // Check if it's a wrapping type (List or NonNull)
-          case schema.inner_type(t) {
-            option.Some(inner) -> collect_types_from_type_deep(inner, new_acc)
-            option.None -> new_acc
+          // Check if it's an InputObjectType
+          let input_fields = schema.get_input_fields(t)
+          case list.is_empty(input_fields) {
+            False -> {
+              // This is an InputObjectType, collect types from its fields
+              list.fold(input_fields, new_acc, fn(acc2, input_field) {
+                let field_type = schema.input_field_type(input_field)
+                collect_types_from_type_deep(field_type, acc2)
+              })
+            }
+            True -> {
+              // Check if it's a wrapping type (List or NonNull)
+              case schema.inner_type(t) {
+                option.Some(inner) -> collect_types_from_type_deep(inner, new_acc)
+                option.None -> new_acc
+              }
+            }
           }
         }
       }
@@ -124,6 +144,18 @@ fn type_introspection(t: schema.Type) -> value.Value {
     _ -> value.Null
   }
 
+  // Determine inputFields for INPUT_OBJECT types
+  let input_fields = case kind {
+    "INPUT_OBJECT" -> value.List(get_input_fields_for_type(t))
+    _ -> value.Null
+  }
+
+  // Determine enumValues for ENUM types
+  let enum_values = case kind {
+    "ENUM" -> value.List(get_enum_values_for_type(t))
+    _ -> value.Null
+  }
+
   // Handle wrapping types (LIST/NON_NULL) differently
   let name = case kind {
     "LIST" -> value.Null
@@ -138,8 +170,8 @@ fn type_introspection(t: schema.Type) -> value.Value {
     #("fields", fields),
     #("interfaces", value.List([])),
     #("possibleTypes", value.Null),
-    #("enumValues", value.Null),
-    #("inputFields", value.Null),
+    #("enumValues", enum_values),
+    #("inputFields", input_fields),
     #("ofType", of_type),
   ])
 }
@@ -157,6 +189,36 @@ fn get_fields_for_type(t: schema.Type) -> List(value.Value) {
       #("description", value.String(schema.field_description(field))),
       #("args", value.List(list.map(args, argument_introspection))),
       #("type", type_ref(field_type_val)),
+      #("isDeprecated", value.Boolean(False)),
+      #("deprecationReason", value.Null),
+    ])
+  })
+}
+
+/// Get input fields for a type (if it's an input object type)
+fn get_input_fields_for_type(t: schema.Type) -> List(value.Value) {
+  let input_fields = schema.get_input_fields(t)
+
+  list.map(input_fields, fn(input_field) {
+    let field_type_val = schema.input_field_type(input_field)
+
+    value.Object([
+      #("name", value.String(schema.input_field_name(input_field))),
+      #("description", value.String(schema.input_field_description(input_field))),
+      #("type", type_ref(field_type_val)),
+      #("defaultValue", value.Null),
+    ])
+  })
+}
+
+/// Get enum values for a type (if it's an enum type)
+fn get_enum_values_for_type(t: schema.Type) -> List(value.Value) {
+  let enum_values = schema.get_enum_values(t)
+
+  list.map(enum_values, fn(enum_value) {
+    value.Object([
+      #("name", value.String(schema.enum_value_name(enum_value))),
+      #("description", value.String(schema.enum_value_description(enum_value))),
       #("isDeprecated", value.Boolean(False)),
       #("deprecationReason", value.Null),
     ])

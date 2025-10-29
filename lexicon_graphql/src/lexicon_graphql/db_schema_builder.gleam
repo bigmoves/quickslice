@@ -2,12 +2,14 @@
 ///
 /// Builds GraphQL schemas from AT Protocol lexicon definitions with database-backed resolvers.
 /// This extends the base schema_builder with actual data resolution.
+import gleam/int
 import gleam/list
 import gleam/option
 import gleam/result
 import graphql/connection
 import graphql/schema
 import graphql/value
+import lexicon_graphql/connection as lexicon_connection
 import lexicon_graphql/nsid
 import lexicon_graphql/schema_builder
 import lexicon_graphql/type_mapper
@@ -163,6 +165,25 @@ fn build_fields(
   list.append(standard_fields, lexicon_fields)
 }
 
+/// Build a SortFieldEnum for a record type with all its sortable fields
+fn build_sort_field_enum(record_type: RecordType) -> schema.Type {
+  // Get field names from the record type
+  let field_names =
+    list.map(record_type.fields, fn(field) { schema.field_name(field) })
+
+  // Convert field names to enum values
+  let enum_values =
+    list.map(field_names, fn(field_name) {
+      schema.enum_value(field_name, "Sort by " <> field_name)
+    })
+
+  schema.enum_type(
+    record_type.type_name <> "SortField",
+    "Available sort fields for " <> record_type.type_name,
+    enum_values,
+  )
+}
+
 /// Build the root Query type with fields for each record type
 fn build_query_type(
   record_types: List(RecordType),
@@ -183,14 +204,23 @@ fn build_query_type(
       let connection_type =
         connection.connection_type(record_type.type_name, edge_type)
 
+      // Build custom SortFieldEnum for this record type
+      let sort_field_enum = build_sort_field_enum(record_type)
+
+      // Build custom connection args with type-specific sort field enum
+      let connection_args =
+        lexicon_connection.lexicon_connection_args_with_field_enum(
+          sort_field_enum,
+        )
+
       // Create query field that returns a Connection of this record type
       // Capture the nsid and fetcher in the closure
       let collection_nsid = record_type.nsid
       schema.field_with_args(
         record_type.field_name,
         connection_type,
-        "Query " <> record_type.nsid <> " with cursor pagination",
-        connection.connection_args(),
+        "Query " <> record_type.nsid <> " with cursor pagination and sorting",
+        connection_args,
         fn(ctx: schema.Context) {
           // Extract pagination arguments from context
           let pagination_params = extract_pagination_params(ctx)
@@ -237,18 +267,77 @@ fn build_query_type(
 
 /// Extract pagination parameters from GraphQL context
 fn extract_pagination_params(ctx: schema.Context) -> PaginationParams {
-  let _ = ctx
-  // TODO: In a full implementation, arguments would be extracted from context
-  // Currently the GraphQL executor doesn't pass arguments to resolvers
-  // For now, we use sensible defaults:
-  // - Default to 50 items per page
-  // - Sort by indexed_at DESC (most recent first)
+  // Extract sortBy argument
+  let sort_by = case schema.get_argument(ctx, "sortBy") {
+    option.Some(value.List(items)) -> {
+      // Convert list of sort objects to list of tuples
+      let sort_tuples =
+        list.filter_map(items, fn(item) {
+          case item {
+            value.Object(fields) -> {
+              // Extract field and direction from the object
+              case list.key_find(fields, "field"), list.key_find(fields, "direction") {
+                Ok(value.String(field)), Ok(value.String(direction)) -> {
+                  // Convert direction to lowercase for consistency
+                  let dir = case direction {
+                    "ASC" -> "asc"
+                    "DESC" -> "desc"
+                    _ -> "desc"
+                  }
+                  Ok(#(field, dir))
+                }
+                _, _ -> Error(Nil)
+              }
+            }
+            _ -> Error(Nil)
+          }
+        })
+
+      case sort_tuples {
+        [] -> option.Some([#("indexed_at", "desc")])
+        _ -> option.Some(sort_tuples)
+      }
+    }
+    _ -> option.Some([#("indexed_at", "desc")])
+  }
+
+  // Extract first/after/last/before arguments
+  let first = case schema.get_argument(ctx, "first") {
+    option.Some(value.String(s)) -> {
+      case int.parse(s) {
+        Ok(n) -> option.Some(n)
+        Error(_) -> option.Some(50)
+      }
+    }
+    _ -> option.Some(50)
+  }
+
+  let after = case schema.get_argument(ctx, "after") {
+    option.Some(value.String(s)) -> option.Some(s)
+    _ -> option.None
+  }
+
+  let last = case schema.get_argument(ctx, "last") {
+    option.Some(value.String(s)) -> {
+      case int.parse(s) {
+        Ok(n) -> option.Some(n)
+        Error(_) -> option.None
+      }
+    }
+    _ -> option.None
+  }
+
+  let before = case schema.get_argument(ctx, "before") {
+    option.Some(value.String(s)) -> option.Some(s)
+    _ -> option.None
+  }
+
   PaginationParams(
-    first: option.Some(50),
-    after: option.None,
-    last: option.None,
-    before: option.None,
-    sort_by: option.Some([#("indexed_at", "desc")]),
+    first: first,
+    after: after,
+    last: last,
+    before: before,
+    sort_by: sort_by,
   )
 }
 

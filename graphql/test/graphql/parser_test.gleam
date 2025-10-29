@@ -245,3 +245,179 @@ pub fn parse_inline_fragment_test() {
   |> parser.parse
   |> should.be_ok
 }
+
+// List value tests
+pub fn parse_empty_list_argument_test() {
+  "{ user(tags: []) }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.Query(parser.SelectionSet([
+          parser.Field(
+            name: "user",
+            alias: None,
+            arguments: [parser.Argument("tags", parser.ListValue([]))],
+            selections: [],
+          ),
+        ])),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_list_of_ints_test() {
+  "{ user(ids: [1, 2, 3]) }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.Query(parser.SelectionSet([
+          parser.Field(
+            name: "user",
+            alias: None,
+            arguments: [
+              parser.Argument(
+                "ids",
+                parser.ListValue([
+                  parser.IntValue("1"),
+                  parser.IntValue("2"),
+                  parser.IntValue("3"),
+                ]),
+              ),
+            ],
+            selections: [],
+          ),
+        ])),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_list_of_strings_test() {
+  "{ user(tags: [\"foo\", \"bar\"]) }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.Query(parser.SelectionSet([
+          parser.Field(
+            name: "user",
+            alias: None,
+            arguments: [
+              parser.Argument(
+                "tags",
+                parser.ListValue([
+                  parser.StringValue("foo"),
+                  parser.StringValue("bar"),
+                ]),
+              ),
+            ],
+            selections: [],
+          ),
+        ])),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+// Object value tests
+pub fn parse_empty_object_argument_test() {
+  "{ user(filter: {}) }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.Query(parser.SelectionSet([
+          parser.Field(
+            name: "user",
+            alias: None,
+            arguments: [parser.Argument("filter", parser.ObjectValue([]))],
+            selections: [],
+          ),
+        ])),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_object_with_fields_test() {
+  "{ user(filter: {name: \"Alice\", age: 30}) }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.Query(parser.SelectionSet([
+          parser.Field(
+            name: "user",
+            alias: None,
+            arguments: [
+              parser.Argument(
+                "filter",
+                parser.ObjectValue([
+                  #("name", parser.StringValue("Alice")),
+                  #("age", parser.IntValue("30")),
+                ]),
+              ),
+            ],
+            selections: [],
+          ),
+        ])),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+// Nested structures
+pub fn parse_list_of_objects_test() {
+  "{ posts(sortBy: [{field: \"date\", direction: DESC}]) }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.Query(parser.SelectionSet([
+          parser.Field(
+            name: "posts",
+            alias: None,
+            arguments: [
+              parser.Argument(
+                "sortBy",
+                parser.ListValue([
+                  parser.ObjectValue([
+                    #("field", parser.StringValue("date")),
+                    #("direction", parser.EnumValue("DESC")),
+                  ]),
+                ]),
+              ),
+            ],
+            selections: [],
+          ),
+        ])),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_object_with_nested_list_test() {
+  "{ user(filter: {tags: [\"a\", \"b\"]}) }"
+  |> parser.parse
+  |> should.be_ok
+}

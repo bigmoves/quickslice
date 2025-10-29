@@ -30,7 +30,7 @@ pub fn schema_multiple_fields_test() {
   let query =
     "{ __schema { queryType { name } mutationType { name } subscriptionType { name } } }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
   |> fn(response) {
@@ -77,7 +77,7 @@ pub fn schema_types_with_other_fields_test() {
   let schema = test_schema()
   let query = "{ __schema { queryType { name } types { name } } }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
   |> fn(response) {
@@ -122,7 +122,7 @@ pub fn schema_all_fields_test() {
   let query =
     "{ __schema { queryType { name } mutationType { name } subscriptionType { name } types { name } directives { name } } }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
   |> fn(response) {
@@ -151,8 +151,8 @@ pub fn schema_field_order_test() {
   let query1 = "{ __schema { types { name } queryType { name } } }"
   let query2 = "{ __schema { queryType { name } types { name } } }"
 
-  let result1 = executor.execute(query1, schema, schema.Context(None))
-  let result2 = executor.execute(query2, schema, schema.Context(None))
+  let result1 = executor.execute(query1, schema, schema.context(None))
+  let result2 = executor.execute(query2, schema, schema.context(None))
 
   // Both should succeed
   should.be_ok(result1)
@@ -187,7 +187,7 @@ pub fn schema_types_nested_fields_test() {
   let schema = test_schema()
   let query = "{ __schema { types { name kind fields { name } } } }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
   |> fn(response) {
@@ -240,7 +240,7 @@ pub fn schema_null_field_with_deep_nesting_test() {
   let schema = test_schema()
   let query = "{ __schema { mutationType { name fields { name } } } }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
   |> fn(response) {
@@ -269,7 +269,7 @@ pub fn schema_inline_fragment_test() {
   let schema = test_schema()
   let query = "{ __schema { types { ... on __Type { kind name } } } }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
   |> fn(response) {

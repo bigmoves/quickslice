@@ -96,7 +96,7 @@ pub fn execute_query_with_db(
       )
 
       // Step 5: Execute the query
-      let ctx = schema.Context(data: option.None)
+      let ctx = schema.context(option.None)
       use response <- result.try(executor.execute(
         query_string,
         graphql_schema,

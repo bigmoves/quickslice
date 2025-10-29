@@ -280,7 +280,10 @@ fn execute_selection(
         }
       }
     }
-    parser.Field(name, _alias, _arguments, nested_selections) -> {
+    parser.Field(name, _alias, arguments, nested_selections) -> {
+      // Convert arguments to dict
+      let args_dict = arguments_to_dict(arguments)
+
       // Handle introspection meta-fields
       case name {
         "__typename" -> {
@@ -327,8 +330,11 @@ fn execute_selection(
               // Get the field's type for nested selections
               let field_type_def = schema.field_type(field)
 
+              // Create context with arguments
+              let field_ctx = schema.Context(ctx.data, args_dict)
+
               // Resolve the field
-              case schema.resolve_field(field, ctx) {
+              case schema.resolve_field(field, field_ctx) {
                 Error(err) -> {
                   let error = GraphQLError(err, [name, ..path])
                   Ok(#(name, value.Null, [error]))
@@ -343,7 +349,7 @@ fn execute_selection(
                         value.Object(_) -> {
                           // Execute nested selections using the field's type, not parent type
                           // Create new context with this object's data
-                          let object_ctx = schema.Context(option.Some(field_value))
+                          let object_ctx = schema.context(option.Some(field_value))
                           let selection_set =
                             parser.SelectionSet(nested_selections)
                           case
@@ -386,7 +392,7 @@ fn execute_selection(
                           let results =
                             list.map(items, fn(item) {
                               // Create context with this item's data
-                              let item_ctx = schema.Context(option.Some(item))
+                              let item_ctx = schema.context(option.Some(item))
                               execute_selection_set(
                                 selection_set,
                                 inner_type,
@@ -625,4 +631,42 @@ fn execute_introspection_selection_set(
       }
     }
   }
+}
+
+/// Convert parser ArgumentValue to value.Value
+fn argument_value_to_value(arg_value: parser.ArgumentValue) -> value.Value {
+  case arg_value {
+    parser.IntValue(s) -> value.String(s)
+    parser.FloatValue(s) -> value.String(s)
+    parser.StringValue(s) -> value.String(s)
+    parser.BooleanValue(b) -> value.Boolean(b)
+    parser.NullValue -> value.Null
+    parser.EnumValue(s) -> value.String(s)
+    parser.ListValue(items) ->
+      value.List(list.map(items, argument_value_to_value))
+    parser.ObjectValue(fields) ->
+      value.Object(
+        list.map(fields, fn(pair) {
+          let #(name, val) = pair
+          #(name, argument_value_to_value(val))
+        }),
+      )
+    parser.VariableValue(_name) ->
+      // TODO: Variables support - for now return null
+      value.Null
+  }
+}
+
+/// Convert list of Arguments to a Dict of values
+fn arguments_to_dict(
+  arguments: List(parser.Argument),
+) -> Dict(String, value.Value) {
+  list.fold(arguments, dict.new(), fn(acc, arg) {
+    case arg {
+      parser.Argument(name, arg_value) -> {
+        let value = argument_value_to_value(arg_value)
+        dict.insert(acc, name, value)
+      }
+    }
+  })
 }

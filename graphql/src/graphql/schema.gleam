@@ -2,13 +2,24 @@
 ///
 /// Per GraphQL spec Section 3 - Type System
 /// Defines the type system including scalars, objects, enums, etc.
+import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None}
 import graphql/value
 
 /// Resolver context - will contain request context, data loaders, etc.
 pub type Context {
-  Context(data: Option(value.Value))
+  Context(data: Option(value.Value), arguments: Dict(String, value.Value))
+}
+
+/// Helper to create a context without arguments
+pub fn context(data: Option(value.Value)) -> Context {
+  Context(data, dict.new())
+}
+
+/// Helper to get an argument value from context
+pub fn get_argument(ctx: Context, name: String) -> Option(value.Value) {
+  dict.get(ctx.arguments, name) |> option.from_result
 }
 
 /// Field resolver function type
@@ -19,6 +30,7 @@ pub type Resolver =
 pub opaque type Type {
   ScalarType(name: String)
   ObjectType(name: String, description: String, fields: List(Field))
+  InputObjectType(name: String, description: String, fields: List(InputField))
   EnumType(name: String, description: String, values: List(EnumValue))
   ListType(inner_type: Type)
   NonNullType(inner_type: Type)
@@ -40,6 +52,16 @@ pub opaque type Argument {
   Argument(
     name: String,
     arg_type: Type,
+    description: String,
+    default_value: Option(value.Value),
+  )
+}
+
+/// GraphQL Input Field (for InputObject types)
+pub opaque type InputField {
+  InputField(
+    name: String,
+    field_type: Type,
     description: String,
     default_value: Option(value.Value),
   )
@@ -93,6 +115,14 @@ pub fn enum_type(
   EnumType(name, description, values)
 }
 
+pub fn input_object_type(
+  name: String,
+  description: String,
+  fields: List(InputField),
+) -> Type {
+  InputObjectType(name, description, fields)
+}
+
 pub fn list_type(inner_type: Type) -> Type {
   ListType(inner_type)
 }
@@ -131,6 +161,16 @@ pub fn argument(
   Argument(name, arg_type, description, default_value)
 }
 
+// Input field constructor
+pub fn input_field(
+  name: String,
+  field_type: Type,
+  description: String,
+  default_value: Option(value.Value),
+) -> InputField {
+  InputField(name, field_type, description, default_value)
+}
+
 // Enum value constructor
 pub fn enum_value(name: String, description: String) -> EnumValue {
   EnumValue(name, description)
@@ -146,6 +186,7 @@ pub fn type_name(t: Type) -> String {
   case t {
     ScalarType(name) -> name
     ObjectType(name, _, _) -> name
+    InputObjectType(name, _, _) -> name
     EnumType(name, _, _) -> name
     ListType(inner) -> "[" <> type_name(inner) <> "]"
     NonNullType(inner) -> type_name(inner) <> "!"
@@ -215,6 +256,14 @@ pub fn get_fields(t: Type) -> List(Field) {
   }
 }
 
+/// Get all input fields from an InputObjectType
+pub fn get_input_fields(t: Type) -> List(InputField) {
+  case t {
+    InputObjectType(_, _, fields) -> fields
+    _ -> []
+  }
+}
+
 /// Get field description
 pub fn field_description(field: Field) -> String {
   case field {
@@ -247,6 +296,49 @@ pub fn argument_type(arg: Argument) -> Type {
 pub fn argument_description(arg: Argument) -> String {
   case arg {
     Argument(_, _, desc, _) -> desc
+  }
+}
+
+/// Get input field type
+pub fn input_field_type(input_field: InputField) -> Type {
+  case input_field {
+    InputField(_, field_type, _, _) -> field_type
+  }
+}
+
+/// Get input field name
+pub fn input_field_name(input_field: InputField) -> String {
+  case input_field {
+    InputField(name, _, _, _) -> name
+  }
+}
+
+/// Get input field description
+pub fn input_field_description(input_field: InputField) -> String {
+  case input_field {
+    InputField(_, _, desc, _) -> desc
+  }
+}
+
+/// Get all enum values from an EnumType
+pub fn get_enum_values(t: Type) -> List(EnumValue) {
+  case t {
+    EnumType(_, _, values) -> values
+    _ -> []
+  }
+}
+
+/// Get enum value name
+pub fn enum_value_name(enum_value: EnumValue) -> String {
+  case enum_value {
+    EnumValue(name, _) -> name
+  }
+}
+
+/// Get enum value description
+pub fn enum_value_description(enum_value: EnumValue) -> String {
+  case enum_value {
+    EnumValue(_, desc) -> desc
   }
 }
 
@@ -288,6 +380,7 @@ pub fn type_kind(t: Type) -> String {
   case t {
     ScalarType(_) -> "SCALAR"
     ObjectType(_, _, _) -> "OBJECT"
+    InputObjectType(_, _, _) -> "INPUT_OBJECT"
     EnumType(_, _, _) -> "ENUM"
     ListType(_) -> "LIST"
     NonNullType(_) -> "NON_NULL"

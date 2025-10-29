@@ -1,8 +1,9 @@
 /// Tests for GraphQL Executor
 ///
 /// Tests query execution combining parser + schema + resolvers
+import gleam/dict
 import gleam/list
-import gleam/option.{None}
+import gleam/option.{None, Some}
 import gleeunit/should
 import graphql/executor
 import graphql/schema
@@ -61,7 +62,7 @@ pub fn execute_simple_query_test() {
   let schema = test_schema()
   let query = "{ hello }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
   |> fn(response) {
@@ -80,7 +81,7 @@ pub fn execute_multiple_fields_test() {
   let schema = test_schema()
   let query = "{ hello number }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
 }
@@ -89,7 +90,7 @@ pub fn execute_nested_query_test() {
   let schema = nested_schema()
   let query = "{ user { id name } }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
 }
@@ -98,7 +99,7 @@ pub fn execute_field_with_arguments_test() {
   let schema = test_schema()
   let query = "{ greet(name: \"Alice\") }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
 }
@@ -107,7 +108,7 @@ pub fn execute_invalid_query_returns_error_test() {
   let schema = test_schema()
   let query = "{ invalid }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   // Should return error since field doesn't exist
   case result {
@@ -121,7 +122,7 @@ pub fn execute_parse_error_returns_error_test() {
   let schema = test_schema()
   let query = "{ invalid syntax"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_error(result)
 }
@@ -130,7 +131,7 @@ pub fn execute_typename_introspection_test() {
   let schema = test_schema()
   let query = "{ __typename }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
   |> fn(response) {
@@ -149,7 +150,7 @@ pub fn execute_typename_with_regular_fields_test() {
   let schema = test_schema()
   let query = "{ __typename hello }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
   |> fn(response) {
@@ -171,7 +172,7 @@ pub fn execute_schema_introspection_query_type_test() {
   let schema = test_schema()
   let query = "{ __schema { queryType { name } } }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
   |> fn(response) {
@@ -206,7 +207,7 @@ pub fn execute_simple_fragment_spread_test() {
     { user { ...UserFields } }
     "
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   // Test should pass - fragment should be expanded
   should.be_ok(result)
@@ -304,7 +305,7 @@ pub fn execute_list_with_nested_selections_test() {
   // Query with nested field selection - only request id and name, not email
   let query = "{ users { id name } }"
 
-  let result = executor.execute(query, schema, schema.Context(None))
+  let result = executor.execute(query, schema, schema.context(None))
 
   // The result should only contain id and name fields, NOT email
   should.be_ok(result)
@@ -342,6 +343,157 @@ pub fn execute_list_with_nested_selections_test() {
           _ -> False
         }
       }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+// Test that arguments are actually passed to resolvers
+pub fn execute_field_receives_string_argument_test() {
+  let query_type =
+    schema.object_type("Query", "Root", [
+      schema.field_with_args(
+        "echo",
+        schema.string_type(),
+        "Echo the input",
+        [schema.argument("message", schema.string_type(), "Message", None)],
+        fn(ctx) {
+          // Extract the argument from context
+          case schema.get_argument(ctx, "message") {
+            Some(value.String(msg)) -> Ok(value.String("Echo: " <> msg))
+            _ -> Ok(value.String("No message"))
+          }
+        },
+      ),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+  let query = "{ echo(message: \"hello\") }"
+
+  let result = executor.execute(query, test_schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(
+        data: value.Object([#("echo", value.String("Echo: hello"))]),
+        errors: [],
+      ) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+// Test list argument
+pub fn execute_field_receives_list_argument_test() {
+  let query_type =
+    schema.object_type("Query", "Root", [
+      schema.field_with_args(
+        "sum",
+        schema.int_type(),
+        "Sum numbers",
+        [
+          schema.argument(
+            "numbers",
+            schema.list_type(schema.int_type()),
+            "Numbers",
+            None,
+          ),
+        ],
+        fn(ctx) {
+          case schema.get_argument(ctx, "numbers") {
+            Some(value.List(_items)) -> Ok(value.String("got list"))
+            _ -> Ok(value.String("no list"))
+          }
+        },
+      ),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+  let query = "{ sum(numbers: [1, 2, 3]) }"
+
+  let result = executor.execute(query, test_schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(
+        data: value.Object([#("sum", value.String("got list"))]),
+        errors: [],
+      ) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+// Test object argument (like sortBy)
+pub fn execute_field_receives_object_argument_test() {
+  let query_type =
+    schema.object_type("Query", "Root", [
+      schema.field_with_args(
+        "posts",
+        schema.list_type(schema.string_type()),
+        "Get posts",
+        [
+          schema.argument(
+            "sortBy",
+            schema.list_type(
+              schema.input_object_type("SortInput", "Sort", [
+                schema.input_field("field", schema.string_type(), "Field", None),
+                schema.input_field(
+                  "direction",
+                  schema.enum_type("Direction", "Direction", [
+                    schema.enum_value("ASC", "Ascending"),
+                    schema.enum_value("DESC", "Descending"),
+                  ]),
+                  "Direction",
+                  None,
+                ),
+              ]),
+            ),
+            "Sort order",
+            None,
+          ),
+        ],
+        fn(ctx) {
+          case schema.get_argument(ctx, "sortBy") {
+            Some(value.List([value.Object(fields), ..])) -> {
+              case dict.from_list(fields) {
+                fields_dict -> {
+                  case
+                    dict.get(fields_dict, "field"),
+                    dict.get(fields_dict, "direction")
+                  {
+                    Ok(value.String(field)), Ok(value.String(dir)) ->
+                      Ok(value.String("Sorting by " <> field <> " " <> dir))
+                    _, _ -> Ok(value.String("Invalid sort"))
+                  }
+                }
+              }
+            }
+            _ -> Ok(value.String("No sort"))
+          }
+        },
+      ),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+  let query = "{ posts(sortBy: [{field: \"date\", direction: DESC}]) }"
+
+  let result = executor.execute(query, test_schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(
+        data: value.Object([
+          #("posts", value.String("Sorting by date DESC")),
+        ]),
+        errors: [],
+      ) -> True
       _ -> False
     }
   }

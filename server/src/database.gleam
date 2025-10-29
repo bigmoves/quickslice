@@ -723,17 +723,28 @@ fn build_order_by(sort_fields: List(#(String, String))) -> String {
       let #(field_name, direction) = field
       let field_ref = case field_name {
         "uri" | "cid" | "did" | "collection" | "indexed_at" -> field_name
+        // For JSON fields, check if they look like dates and handle accordingly
+        "createdAt" | "indexedAt" -> {
+          // Use CASE to treat invalid dates as NULL for sorting
+          let json_field = "json_extract(json, '$." <> field_name <> "')"
+          "CASE
+            WHEN " <> json_field <> " IS NULL THEN NULL
+            WHEN datetime(" <> json_field <> ") IS NULL THEN NULL
+            ELSE " <> json_field <> "
+           END"
+        }
         _ -> "json_extract(json, '$." <> field_name <> "')"
       }
       let dir = case string.lowercase(direction) {
         "asc" -> "ASC"
         _ -> "DESC"
       }
-      field_ref <> " " <> dir
+      // Always put NULLs last regardless of sort direction
+      field_ref <> " " <> dir <> " NULLS LAST"
     })
 
   case list.is_empty(order_parts) {
-    True -> "indexed_at DESC"
+    True -> "indexed_at DESC NULLS LAST"
     False -> string.join(order_parts, ", ")
   }
 }
