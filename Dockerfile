@@ -60,6 +60,6 @@ ENV PORT=8000
 # Expose the port the server will run on
 EXPOSE $PORT
 
-# Run the server in foreground mode without requiring a TTY
-# The 'foreground' command keeps the process running without an interactive shell
-CMD ["./entrypoint.sh", "foreground"]
+# Run the server without requiring a TTY
+# The -noinput flag prevents Erlang from trying to start an interactive I/O system
+CMD ["/bin/sh", "-c", "exec erl -pa /app/*/ebin -eval 'server@@main:run(server)' -noshell -noinput"]
