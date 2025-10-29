@@ -32,7 +32,7 @@ The server will be available at `http://localhost:8000`
 cd example
 docker run -p 8000:8000 \
   -v $(pwd)/lexicons:/app/priv/lexicons:ro \
-  ghcr.io/chadmiller/quickslice:latest
+  ghcr.io/bigmoves/quickslice:latest
 ```
 
 ## Custom Lexicons
@@ -100,14 +100,14 @@ The `:ro` flag makes the mount read-only for security.
 ## Stopping the Server
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ## Pulling Latest Image
 
 ```bash
-docker-compose pull
-docker-compose up -d
+docker compose pull
+docker compose up -d
 ```
 
 ## Troubleshooting

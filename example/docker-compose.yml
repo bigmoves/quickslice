@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   quickslice:
-    image: ghcr.io/chadmiller/quickslice:latest
+    image: ghcr.io/bigmoves/quickslice:latest
     ports:
       - "8000:8000"
     volumes:

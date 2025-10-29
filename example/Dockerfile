@@ -1,4 +1,4 @@
-FROM ghcr.io/chadmiller/quickslice:latest
+FROM ghcr.io/bigmoves/quickslice:latest
 
 # The base image already has:
 # - HOST=0.0.0.0
