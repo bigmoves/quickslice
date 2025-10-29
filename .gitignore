@@ -1,2 +1,7 @@
 erl_crash.dump
 .claude
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
