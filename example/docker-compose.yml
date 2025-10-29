@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  quickslice:
+    image: ghcr.io/chadmiller/quickslice:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount local lexicons directory to /app/priv/lexicons in the container
+      - ./lexicons:/app/priv/lexicons:ro
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+    restart: unless-stopped

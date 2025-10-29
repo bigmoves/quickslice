@@ -5,6 +5,7 @@ FROM ghcr.io/gleam-lang/gleam:${GLEAM_VERSION}-erlang-alpine AS builder
 
 # Install build dependencies including Rust for NIFs
 RUN apk add --no-cache \
+    bash \
     git \
     build-base \
     sqlite-dev \
@@ -15,7 +16,6 @@ RUN apk add --no-cache \
 ENV GIT_TERMINAL_PROMPT=0
 
 # Add local dependencies first (these change less frequently)
-COPY ./jetstream /build/jetstream
 COPY ./lexicon /build/lexicon
 COPY ./graphql /build/graphql
 COPY ./lexicon_graphql /build/lexicon_graphql
@@ -29,7 +29,6 @@ RUN cd /build/lexicon/native/lexicon_nif && cargo build --release && \
     cp /build/lexicon/native/lexicon_nif/target/release/liblexicon_nif.so /build/lexicon/priv/liblexicon_nif.so
 
 # Install dependencies for all projects
-RUN cd /build/jetstream && gleam deps download
 RUN cd /build/lexicon && gleam deps download
 RUN cd /build/graphql && gleam deps download
 RUN cd /build/lexicon_graphql && gleam deps download
