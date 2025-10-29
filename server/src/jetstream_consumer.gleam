@@ -43,7 +43,7 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
             Error(_) -> "wss://jetstream2.us-east.bsky.network/subscribe"
           }
 
-          // Create Jetstream config
+          // Create Jetstream config with automatic retry
           let config =
             goose.JetstreamConfig(
               endpoint: jetstream_url,
@@ -51,25 +51,27 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
               wanted_dids: [],
               cursor: option.None,
               max_message_size_bytes: option.None,
-              compress: True,
+              compress: False,
               require_hello: False,
+              max_backoff_seconds: 60,
+              log_connection_events: True,
+              log_retry_attempts: False,
             )
 
           io.println("")
-          io.println("🌐 Connecting to Jetstream...")
+          io.println("Connecting to Jetstream...")
           io.println("   Endpoint: " <> config.endpoint)
           io.println("   DID filter: All DIDs (no filter)")
           io.println("")
 
-          // Start the Jetstream consumer in a separate process
-          // This will run independently and call our event handler callback
+          // Start the Jetstream consumer (automatically retries on failure)
           process.spawn_unlinked(fn() {
             goose.start_consumer(config, fn(event_json) {
               handle_jetstream_event(db, event_json)
             })
           })
 
-          io.println("✅ Jetstream consumer started")
+          io.println("Jetstream consumer started")
           io.println("")
 
           Ok(Nil)
