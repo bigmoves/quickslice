@@ -52,8 +52,6 @@ COPY --from=builder /build/server/priv/lexicons /app/priv/lexicons
 
 # Set up the entrypoint
 WORKDIR /app
-RUN echo -e '#!/bin/sh\nexec ./entrypoint.sh "$@"' > ./start.sh \
-    && chmod +x ./start.sh
 
 # Set environment variables
 ENV HOST=0.0.0.0
@@ -62,5 +60,6 @@ ENV PORT=8000
 # Expose the port the server will run on
 EXPOSE $PORT
 
-# Run the server
-CMD ["./start.sh", "run"]
+# Run the server in foreground mode without requiring a TTY
+# The 'foreground' command keeps the process running without an interactive shell
+CMD ["./entrypoint.sh", "foreground"]
