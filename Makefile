@@ -17,9 +17,6 @@ build:
 	@echo "Building lexicon_graphql package..."
 	@cd lexicon_graphql && gleam build
 	@echo ""
-	@echo "Building jetstream package..."
-	@cd jetstream && gleam build
-	@echo ""
 	@echo "Building server..."
 	@cd server && gleam build
 	@echo ""
@@ -48,6 +45,5 @@ clean:
 	@echo "Cleaning build artifacts..."
 	@cd graphql && gleam clean
 	@cd lexicon_graphql && gleam clean
-	@cd jetstream && gleam clean
 	@cd server && gleam clean
 	@echo "Clean complete"

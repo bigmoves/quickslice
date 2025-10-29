@@ -342,6 +342,8 @@ fn execute_selection(
                       case field_value {
                         value.Object(_) -> {
                           // Execute nested selections using the field's type, not parent type
+                          // Create new context with this object's data
+                          let object_ctx = schema.Context(option.Some(field_value))
                           let selection_set =
                             parser.SelectionSet(nested_selections)
                           case
@@ -349,7 +351,7 @@ fn execute_selection(
                               selection_set,
                               field_type_def,
                               graphql_schema,
-                              ctx,
+                              object_ctx,
                               fragments,
                               [name, ..path],
                             )
@@ -364,11 +366,17 @@ fn execute_selection(
                         }
                         value.List(items) -> {
                           // Handle list with nested selections
-                          // Get the inner type from the LIST wrapper
+                          // Get the inner type from the LIST wrapper, unwrapping NonNull if needed
                           let inner_type = case
                             schema.inner_type(field_type_def)
                           {
-                            option.Some(t) -> t
+                            option.Some(t) -> {
+                              // If the result is still wrapped (NonNull), unwrap it too
+                              case schema.inner_type(t) {
+                                option.Some(unwrapped) -> unwrapped
+                                option.None -> t
+                              }
+                            }
                             option.None -> field_type_def
                           }
 

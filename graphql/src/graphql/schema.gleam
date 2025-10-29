@@ -195,6 +195,7 @@ pub fn get_field(t: Type, field_name: String) -> Option(Field) {
       })
       |> option.from_result
     }
+    NonNullType(inner) -> get_field(inner, field_name)
     _ -> None
   }
 }

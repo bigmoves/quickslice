@@ -5,6 +5,7 @@
 import gleam/list
 import gleam/option
 import gleam/result
+import graphql/connection
 import graphql/schema
 import graphql/value
 import lexicon_graphql/nsid
@@ -21,10 +22,26 @@ type RecordType {
   )
 }
 
-/// Type for a database record fetcher function
-/// Takes a collection NSID and returns a list of records as GraphQL values
+/// Pagination parameters for connection queries
+pub type PaginationParams {
+  PaginationParams(
+    first: option.Option(Int),
+    after: option.Option(String),
+    last: option.Option(Int),
+    before: option.Option(String),
+    sort_by: option.Option(List(#(String, String))),
+  )
+}
+
+/// Type for a database record fetcher function with pagination support
+/// Takes a collection NSID and pagination params, returns Connection data
+/// Returns: (records_with_cursors, end_cursor, has_next_page, has_previous_page)
 pub type RecordFetcher =
-  fn(String) -> Result(List(value.Value), String)
+  fn(String, PaginationParams) ->
+    Result(
+      #(List(#(value.Value, String)), option.Option(String), Bool, Bool),
+      String,
+    )
 
 /// Build a GraphQL schema from lexicons with database-backed resolvers
 ///
@@ -161,25 +178,78 @@ fn build_query_type(
           record_type.fields,
         )
 
-      // Create a list type for the query field
-      let list_type = schema.list_type(object_type)
+      // Create Connection types
+      let edge_type = connection.edge_type(record_type.type_name, object_type)
+      let connection_type =
+        connection.connection_type(record_type.type_name, edge_type)
 
-      // Create query field that returns a list of this record type
+      // Create query field that returns a Connection of this record type
       // Capture the nsid and fetcher in the closure
       let collection_nsid = record_type.nsid
-      schema.field(
+      schema.field_with_args(
         record_type.field_name,
-        list_type,
-        "Query " <> record_type.nsid,
-        fn(_ctx: schema.Context) {
-          // Call the fetcher function to get records from database
-          fetcher(collection_nsid)
-          |> result.map(fn(records) { value.List(records) })
+        connection_type,
+        "Query " <> record_type.nsid <> " with cursor pagination",
+        connection.connection_args(),
+        fn(ctx: schema.Context) {
+          // Extract pagination arguments from context
+          let pagination_params = extract_pagination_params(ctx)
+
+          // Call the fetcher function to get records with cursors from database
+          use #(records_with_cursors, end_cursor, has_next_page, has_previous_page) <- result.try(
+            fetcher(collection_nsid, pagination_params),
+          )
+
+          // Build edges from records with their cursors
+          let edges =
+            list.map(records_with_cursors, fn(record_tuple) {
+              let #(record_value, record_cursor) = record_tuple
+              connection.Edge(node: record_value, cursor: record_cursor)
+            })
+
+          // Build PageInfo
+          let page_info =
+            connection.PageInfo(
+              has_next_page: has_next_page,
+              has_previous_page: has_previous_page,
+              start_cursor: case list.first(edges) {
+                Ok(edge) -> option.Some(edge.cursor)
+                Error(_) -> option.None
+              },
+              end_cursor: end_cursor,
+            )
+
+          // Build Connection
+          let conn =
+            connection.Connection(
+              edges: edges,
+              page_info: page_info,
+              total_count: option.None,
+            )
+
+          Ok(connection.connection_to_value(conn))
         },
       )
     })
 
   schema.object_type("Query", "Root query type", query_fields)
+}
+
+/// Extract pagination parameters from GraphQL context
+fn extract_pagination_params(ctx: schema.Context) -> PaginationParams {
+  let _ = ctx
+  // TODO: In a full implementation, arguments would be extracted from context
+  // Currently the GraphQL executor doesn't pass arguments to resolvers
+  // For now, we use sensible defaults:
+  // - Default to 50 items per page
+  // - Sort by indexed_at DESC (most recent first)
+  PaginationParams(
+    first: option.Some(50),
+    after: option.None,
+    last: option.None,
+    before: option.None,
+    sort_by: option.Some([#("indexed_at", "desc")]),
+  )
 }
 
 /// Helper to extract a field value from resolver context

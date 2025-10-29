@@ -149,13 +149,13 @@ pub fn graphql_post_request_with_records_test() {
       record2_json,
     )
 
-  // Create GraphQL query request
+  // Create GraphQL query request with Connection structure
   let query =
     json.object([
       #(
         "query",
         json.string(
-          "{ xyzStatusphereStatus { uri cid did collection status createdAt } }",
+          "{ xyzStatusphereStatus { edges { node { uri cid did collection status createdAt } cursor } pageInfo { hasNextPage hasPreviousPage startCursor endCursor } } }",
         ),
       ),
     ])
@@ -216,9 +216,16 @@ pub fn graphql_post_request_empty_results_test() {
   let assert Ok(_) =
     database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
 
-  // Create GraphQL query request
+  // Create GraphQL query request with Connection structure
   let query =
-    json.object([#("query", json.string("{ xyzStatusphereStatus { uri } }"))])
+    json.object([
+      #(
+        "query",
+        json.string(
+          "{ xyzStatusphereStatus { edges { node { uri } } pageInfo { hasNextPage } } }",
+        ),
+      ),
+    ])
     |> json.to_string
 
   let request =
@@ -258,7 +265,7 @@ pub fn graphql_get_request_test() {
   let request =
     simulate.request(
       http.Get,
-      "/graphql?query={ xyzStatusphereStatus { uri } }",
+      "/graphql?query={ xyzStatusphereStatus { edges { node { uri } } } }",
     )
 
   let response = graphql_handler.handle_graphql_request(request, db)
@@ -424,7 +431,14 @@ pub fn graphql_multiple_lexicons_test() {
 
   // Query the first collection
   let query1 =
-    json.object([#("query", json.string("{ xyzStatusphereStatus { uri } }"))])
+    json.object([
+      #(
+        "query",
+        json.string(
+          "{ xyzStatusphereStatus { edges { node { uri } } pageInfo { hasNextPage } } }",
+        ),
+      ),
+    ])
     |> json.to_string
   let request1 =
     simulate.request(http.Post, "/graphql")
@@ -461,7 +475,14 @@ pub fn graphql_multiple_lexicons_test() {
 
   // Query the second collection
   let query2 =
-    json.object([#("query", json.string("{ appBskyFeedPost { uri } }"))])
+    json.object([
+      #(
+        "query",
+        json.string(
+          "{ appBskyFeedPost { edges { node { uri } } pageInfo { hasNextPage } } }",
+        ),
+      ),
+    ])
     |> json.to_string
   let request2 =
     simulate.request(http.Post, "/graphql")
@@ -514,9 +535,16 @@ pub fn graphql_record_limit_test() {
       Nil
     })
 
-  // Query all records
+  // Query all records with Connection structure
   let query =
-    json.object([#("query", json.string("{ xyzStatusphereStatus { uri } }"))])
+    json.object([
+      #(
+        "query",
+        json.string(
+          "{ xyzStatusphereStatus { edges { node { uri } } pageInfo { hasNextPage } } }",
+        ),
+      ),
+    ])
     |> json.to_string
   let request =
     simulate.request(http.Post, "/graphql")
@@ -530,12 +558,13 @@ pub fn graphql_record_limit_test() {
 
   let assert wisp.Text(body) = response.body
 
-  // Count how many URIs are in the response (should be exactly 100)
+  // Count how many URIs are in the response
+  // With default pagination (50 items), we should get 50 records
   let uri_count = count_occurrences(body, "\"uri\"")
 
-  // Should return exactly 100 records (not all 150)
+  // Should return 50 records (the default page size)
   uri_count
-  |> should.equal(100)
+  |> should.equal(50)
 
   // Clean up
   let assert Ok(_) = sqlight.close(db)

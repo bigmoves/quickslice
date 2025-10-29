@@ -1,6 +1,11 @@
+import cursor
 import gleam/dynamic/decode
+import gleam/int
 import gleam/io
+import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/result
+import gleam/string
 import sqlight
 
 pub type Record {
@@ -568,4 +573,167 @@ pub fn get_record_type_lexicons(
   }
 
   sqlight.query(sql, on: conn, with: [], expecting: decoder)
+}
+
+/// Paginated query for records with cursor-based pagination
+///
+/// Supports both forward (first/after) and backward (last/before) pagination.
+/// Returns a tuple of (records, next_cursor, has_next_page, has_previous_page)
+pub fn get_records_by_collection_paginated(
+  conn: sqlight.Connection,
+  collection: String,
+  first: Option(Int),
+  after: Option(String),
+  last: Option(Int),
+  before: Option(String),
+  sort_by: Option(List(#(String, String))),
+) -> Result(#(List(Record), Option(String), Bool, Bool), sqlight.Error) {
+  // Validate pagination arguments
+  let #(limit, is_forward, cursor_opt) = case first, last {
+    Some(f), None -> #(f, True, after)
+    None, Some(l) -> #(l, False, before)
+    Some(f), Some(_) ->
+      // Both first and last specified - use first
+      #(f, True, after)
+    None, None ->
+      // Neither specified - default to first 50
+      #(50, True, None)
+  }
+
+  // Default sort order if not specified
+  let sort_fields = case sort_by {
+    Some(fields) -> fields
+    None -> [#("indexed_at", "desc")]
+  }
+
+  // Build the ORDER BY clause
+  let order_by_clause = build_order_by(sort_fields)
+
+  // Build WHERE clause parts
+  let where_parts = ["collection = ?"]
+  let bind_values = [sqlight.text(collection)]
+
+  // Add cursor condition if present
+  let #(final_where_parts, final_bind_values) = case cursor_opt {
+    Some(cursor_str) -> {
+      case cursor.decode_cursor(cursor_str, sort_by) {
+        Ok(decoded_cursor) -> {
+          let #(cursor_where, cursor_params) =
+            cursor.build_cursor_where_clause(
+              decoded_cursor,
+              sort_by,
+              !is_forward,
+            )
+
+          let new_where = list.append(where_parts, [cursor_where])
+          let new_binds =
+            list.append(
+              bind_values,
+              list.map(cursor_params, sqlight.text),
+            )
+          #(new_where, new_binds)
+        }
+        Error(_) -> #(where_parts, bind_values)
+      }
+    }
+    None -> #(where_parts, bind_values)
+  }
+
+  // Fetch limit + 1 to detect if there are more pages
+  let fetch_limit = limit + 1
+
+  // Build the SQL query
+  let sql =
+    "
+    SELECT uri, cid, did, collection, json, indexed_at
+    FROM record
+    WHERE "
+    <> string.join(final_where_parts, " AND ")
+    <> "
+    ORDER BY "
+    <> order_by_clause
+    <> "
+    LIMIT "
+    <> int.to_string(fetch_limit)
+
+  // Execute query
+  let decoder = {
+    use uri <- decode.field(0, decode.string)
+    use cid <- decode.field(1, decode.string)
+    use did <- decode.field(2, decode.string)
+    use collection <- decode.field(3, decode.string)
+    use json <- decode.field(4, decode.string)
+    use indexed_at <- decode.field(5, decode.string)
+    decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
+  }
+
+  use records <- result.try(sqlight.query(
+    sql,
+    on: conn,
+    with: final_bind_values,
+    expecting: decoder,
+  ))
+
+  // Check if there are more results
+  let has_more = list.length(records) > limit
+  let final_records = case has_more {
+    True -> list.take(records, limit)
+    False -> records
+  }
+
+  // Calculate hasNextPage and hasPreviousPage
+  let has_next_page = case is_forward {
+    True -> has_more
+    False -> option.is_some(cursor_opt)
+  }
+
+  let has_previous_page = case is_forward {
+    True -> option.is_some(cursor_opt)
+    False -> has_more
+  }
+
+  // Generate next cursor if there are more results
+  let next_cursor = case has_more, list.last(final_records) {
+    True, Ok(last_record) -> {
+      let record_like = record_to_record_like(last_record)
+      Some(cursor.generate_cursor_from_record(record_like, sort_by))
+    }
+    _, _ -> None
+  }
+
+  Ok(#(final_records, next_cursor, has_next_page, has_previous_page))
+}
+
+/// Converts a database Record to a cursor.RecordLike
+pub fn record_to_record_like(record: Record) -> cursor.RecordLike {
+  cursor.RecordLike(
+    uri: record.uri,
+    cid: record.cid,
+    did: record.did,
+    collection: record.collection,
+    json: record.json,
+    indexed_at: record.indexed_at,
+  )
+}
+
+/// Builds an ORDER BY clause from sort fields
+fn build_order_by(sort_fields: List(#(String, String))) -> String {
+  let order_parts =
+    list.map(sort_fields, fn(field) {
+      let #(field_name, direction) = field
+      let field_ref = case field_name {
+        "uri" | "cid" | "did" | "collection" | "indexed_at" -> field_name
+        _ -> "json_extract(json, '$." <> field_name <> "')"
+      }
+      let dir = case string.lowercase(direction) {
+        "asc" -> "ASC"
+        _ -> "DESC"
+      }
+      field_ref <> " " <> dir
+    })
+
+  case list.is_empty(order_parts) {
+    True -> "indexed_at DESC"
+    False -> string.join(order_parts, ", ")
+  }
 }

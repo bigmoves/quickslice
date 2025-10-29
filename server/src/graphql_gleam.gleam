@@ -2,6 +2,7 @@
 ///
 /// This module provides GraphQL schema building and query execution using
 /// pure Gleam code, replacing the previous Elixir FFI implementation.
+import cursor
 import database
 import gleam/dict
 import gleam/dynamic
@@ -41,20 +42,47 @@ pub fn execute_query_with_db(
   case parsed_lexicons {
     [] -> Error("No valid lexicons found in database")
     _ -> {
-      // Step 3: Create a record fetcher function that queries the database
-      let record_fetcher = fn(collection_nsid: String) -> Result(
-        List(value.Value),
+      // Step 3: Create a record fetcher function that queries the database with pagination
+      let record_fetcher = fn(
+        collection_nsid: String,
+        pagination_params: db_schema_builder.PaginationParams,
+      ) -> Result(
+        #(List(#(value.Value, String)), option.Option(String), Bool, Bool),
         String,
       ) {
-        // Fetch records from database for this collection
-        case database.get_records_by_collection(db, collection_nsid) {
-          Error(_) -> Ok([])
-          // Return empty list if no records found
-          Ok(records) -> {
-            // Convert database records to GraphQL values
-            let graphql_records =
-              list.map(records, fn(record) { record_to_graphql_value(record) })
-            Ok(graphql_records)
+        // Fetch records from database for this collection with pagination
+        case
+          database.get_records_by_collection_paginated(
+            db,
+            collection_nsid,
+            pagination_params.first,
+            pagination_params.after,
+            pagination_params.last,
+            pagination_params.before,
+            pagination_params.sort_by,
+          )
+        {
+          Error(_) -> Ok(#([], option.None, False, False))
+          // Return empty result on error
+          Ok(#(records, next_cursor, has_next_page, has_previous_page)) -> {
+            // Convert database records to GraphQL values with cursors
+            let graphql_records_with_cursors =
+              list.map(records, fn(record) {
+                let graphql_value = record_to_graphql_value(record)
+                // Generate cursor for this record
+                let record_cursor =
+                  cursor.generate_cursor_from_record(
+                    database.record_to_record_like(record),
+                    pagination_params.sort_by,
+                  )
+                #(graphql_value, record_cursor)
+              })
+            Ok(#(
+              graphql_records_with_cursors,
+              next_cursor,
+              has_next_page,
+              has_previous_page,
+            ))
           }
         }
       }
