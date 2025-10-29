@@ -3,6 +3,7 @@ version: '3.8'
 services:
   quickslice:
     image: ghcr.io/bigmoves/quickslice:latest
+    platform: linux/amd64
     ports:
       - "8000:8000"
     volumes:
