@@ -5,8 +5,9 @@ import gleam/erlang/process
 import gleam/int
 import gleam/io
 import gleam/list
+import gleam/option
 import gleam/string
-import jetstream
+import goose
 import sqlight
 
 /// Start the Jetstream consumer in a background process
@@ -44,10 +45,14 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
 
           // Create Jetstream config
           let config =
-            jetstream.JetstreamConfig(
+            goose.JetstreamConfig(
               endpoint: jetstream_url,
               wanted_collections: collection_ids,
               wanted_dids: [],
+              cursor: option.None,
+              max_message_size_bytes: option.None,
+              compress: True,
+              require_hello: False,
             )
 
           io.println("")
@@ -59,7 +64,7 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
           // Start the Jetstream consumer in a separate process
           // This will run independently and call our event handler callback
           process.spawn_unlinked(fn() {
-            jetstream.start_consumer(config, fn(event_json) {
+            goose.start_consumer(config, fn(event_json) {
               handle_jetstream_event(db, event_json)
             })
           })
@@ -79,19 +84,19 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
 
 /// Handle a raw Jetstream event JSON string
 fn handle_jetstream_event(db: sqlight.Connection, event_json: String) -> Nil {
-  case jetstream.parse_event(event_json) {
-    jetstream.CommitEvent(did, _time_us, commit) -> {
+  case goose.parse_event(event_json) {
+    goose.CommitEvent(did, _time_us, commit) -> {
       event_handler.handle_commit_event(db, did, commit)
     }
-    jetstream.IdentityEvent(_did, _time_us, _identity) -> {
+    goose.IdentityEvent(_did, _time_us, _identity) -> {
       // Silently ignore identity events
       Nil
     }
-    jetstream.AccountEvent(_did, _time_us, _account) -> {
+    goose.AccountEvent(_did, _time_us, _account) -> {
       // Silently ignore account events
       Nil
     }
-    jetstream.UnknownEvent(_raw) -> {
+    goose.UnknownEvent(_raw) -> {
       // Silently ignore unknown events
       Nil
     }

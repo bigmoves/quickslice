@@ -5,7 +5,7 @@ import gleam/io
 import gleam/list
 import gleam/option
 import gleam/string
-import jetstream
+import goose
 import lexicon
 import sqlight
 
@@ -41,7 +41,7 @@ fn iolist_to_string(iolist: Dynamic) -> String {
 pub fn handle_commit_event(
   db: sqlight.Connection,
   did: String,
-  commit: jetstream.CommitData,
+  commit: goose.CommitData,
 ) -> Nil {
   let uri = "at://" <> did <> "/" <> commit.collection <> "/" <> commit.rkey
 
@@ -150,7 +150,7 @@ pub fn handle_commit_event(
 /// Handle an identity event (update actor handle)
 pub fn handle_identity_event(
   db: sqlight.Connection,
-  identity: jetstream.IdentityData,
+  identity: goose.IdentityData,
 ) -> Nil {
   case database.upsert_actor(db, identity.did, identity.handle) {
     Ok(_) -> {
@@ -172,7 +172,7 @@ pub fn handle_identity_event(
 /// Handle an account event
 pub fn handle_account_event(
   _db: sqlight.Connection,
-  account: jetstream.AccountData,
+  account: goose.AccountData,
 ) -> Nil {
   // For now, just log account events - we could extend this in the future
   let status = case account.active {
