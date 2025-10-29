@@ -61,6 +61,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
-          # Note: ARM64 builds are very slow due to Rust NIF cross-compilation
-          # Users on ARM Macs can use Rosetta 2 emulation with --platform linux/amd64
+          platforms: linux/amd64,linux/arm64

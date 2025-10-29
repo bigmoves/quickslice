@@ -60,6 +60,5 @@ ENV PORT=8000
 # Expose the port the server will run on
 EXPOSE $PORT
 
-# Run the server without requiring a TTY
-# The -noinput flag prevents Erlang from trying to start an interactive I/O system
-CMD ["/bin/sh", "-c", "exec erl -pa /app/*/ebin -eval 'server@@main:run(server)' -noshell -noinput"]
+# Run the server
+CMD ["./entrypoint.sh", "run"]
