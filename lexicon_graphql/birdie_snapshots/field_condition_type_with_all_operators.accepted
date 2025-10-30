@@ -1,0 +1,23 @@
+---
+version: 1.4.1
+title: Field condition type with all operators
+file: ./test/where_schema_test.gleam
+test_name: field_condition_snapshot_test
+---
+"""Filter operators for AppBskyFeedPost fields"""
+input AppBskyFeedPostFieldCondition {
+  """Exact match (equals)"""
+  eq: String
+  """Match any value in the list"""
+  in: [String!]
+  """Case-insensitive substring match (string fields only)"""
+  contains: String
+  """Greater than"""
+  gt: String
+  """Greater than or equal to"""
+  gte: String
+  """Less than"""
+  lt: String
+  """Less than or equal to"""
+  lte: String
+}

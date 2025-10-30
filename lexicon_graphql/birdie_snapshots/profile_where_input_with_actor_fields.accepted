@@ -1,0 +1,23 @@
+---
+version: 1.4.1
+title: Profile WhereInput with actor fields
+file: ./test/where_schema_test.gleam
+test_name: profile_where_input_snapshot_test
+---
+"""Filter conditions for AppBskyActorProfile with nested AND/OR support"""
+input AppBskyActorProfileWhereInput {
+  """Filter by did"""
+  did: AppBskyActorProfileFieldCondition
+  """Filter by handle"""
+  handle: AppBskyActorProfileFieldCondition
+  """Filter by displayName"""
+  displayName: AppBskyActorProfileFieldCondition
+  """Filter by description"""
+  description: AppBskyActorProfileFieldCondition
+  """Filter by avatar"""
+  avatar: AppBskyActorProfileFieldCondition
+  """All conditions must match (AND logic)"""
+  and: [AppBskyActorProfileWhereInput!]
+  """Any condition must match (OR logic)"""
+  or: [AppBskyActorProfileWhereInput!]
+}

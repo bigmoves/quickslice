@@ -1,0 +1,29 @@
+---
+version: 1.4.1
+title: Multiple record types with different WhereInput names
+file: ./test/where_schema_test.gleam
+test_name: multiple_record_types_snapshot_test
+---
+"""Filter conditions for AppBskyFeedPost with nested AND/OR support"""
+input AppBskyFeedPostWhereInput {
+  """Filter by text"""
+  text: AppBskyFeedPostFieldCondition
+  """Filter by createdAt"""
+  createdAt: AppBskyFeedPostFieldCondition
+  """All conditions must match (AND logic)"""
+  and: [AppBskyFeedPostWhereInput!]
+  """Any condition must match (OR logic)"""
+  or: [AppBskyFeedPostWhereInput!]
+}
+
+"""Filter conditions for AppBskyActorProfile with nested AND/OR support"""
+input AppBskyActorProfileWhereInput {
+  """Filter by displayName"""
+  displayName: AppBskyActorProfileFieldCondition
+  """Filter by description"""
+  description: AppBskyActorProfileFieldCondition
+  """All conditions must match (AND logic)"""
+  and: [AppBskyActorProfileWhereInput!]
+  """Any condition must match (OR logic)"""
+  or: [AppBskyActorProfileWhereInput!]
+}

@@ -1,0 +1,37 @@
+---
+version: 1.4.1
+title: All types generated for simple status record
+file: ./test/schema_builder_test.gleam
+test_name: simple_schema_all_types_snapshot_test
+---
+scalar String
+
+"""Record type: xyz.statusphere.status"""
+type XyzStatusphereStatus {
+  """Record URI"""
+  uri: String
+  """Record CID"""
+  cid: String
+  """DID of record author"""
+  did: String
+  """When record was indexed"""
+  indexedAt: String
+  """Field from lexicon"""
+  text: String
+  """Field from lexicon"""
+  createdAt: String
+}
+
+"""Root query type"""
+type Query {
+  """Query xyz.statusphere.status"""
+  xyzStatusphereStatus: [XyzStatusphereStatus]
+}
+
+scalar Int
+
+scalar Float
+
+scalar Boolean
+
+scalar ID

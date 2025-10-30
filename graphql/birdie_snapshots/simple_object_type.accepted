@@ -1,0 +1,15 @@
+---
+version: 1.4.1
+title: Simple object type
+file: ./test/sdl_test.gleam
+test_name: simple_object_type_test
+---
+"""A user in the system"""
+type User {
+  """User ID"""
+  id: ID!
+  """User's name"""
+  name: String
+  """Email address"""
+  email: String
+}

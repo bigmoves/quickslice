@@ -18,6 +18,7 @@ import graphql/value
 import lexicon_graphql/db_schema_builder
 import lexicon_graphql/lexicon_parser
 import sqlight
+import where_converter
 
 /// Execute a GraphQL query against lexicons in the database
 ///
@@ -47,12 +48,35 @@ pub fn execute_query_with_db(
         collection_nsid: String,
         pagination_params: db_schema_builder.PaginationParams,
       ) -> Result(
-        #(List(#(value.Value, String)), option.Option(String), Bool, Bool),
+        #(
+          List(#(value.Value, String)),
+          option.Option(String),
+          Bool,
+          Bool,
+          option.Option(Int),
+        ),
         String,
       ) {
+        // Convert where clause from GraphQL types to SQL types
+        let where_clause = case pagination_params.where {
+          option.Some(graphql_where) ->
+            option.Some(where_converter.convert_where_clause(graphql_where))
+          option.None -> option.None
+        }
+
+        // Get total count for this collection (with where filter if present)
+        let total_count =
+          database.get_collection_count_with_where(
+            db,
+            collection_nsid,
+            where_clause,
+          )
+          |> result.map(option.Some)
+          |> result.unwrap(option.None)
+
         // Fetch records from database for this collection with pagination
         case
-          database.get_records_by_collection_paginated(
+          database.get_records_by_collection_paginated_with_where(
             db,
             collection_nsid,
             pagination_params.first,
@@ -60,15 +84,16 @@ pub fn execute_query_with_db(
             pagination_params.last,
             pagination_params.before,
             pagination_params.sort_by,
+            where_clause,
           )
         {
-          Error(_) -> Ok(#([], option.None, False, False))
+          Error(_) -> Ok(#([], option.None, False, False, option.None))
           // Return empty result on error
           Ok(#(records, next_cursor, has_next_page, has_previous_page)) -> {
             // Convert database records to GraphQL values with cursors
             let graphql_records_with_cursors =
               list.map(records, fn(record) {
-                let graphql_value = record_to_graphql_value(record)
+                let graphql_value = record_to_graphql_value(record, db)
                 // Generate cursor for this record
                 let record_cursor =
                   cursor.generate_cursor_from_record(
@@ -82,6 +107,7 @@ pub fn execute_query_with_db(
               next_cursor,
               has_next_page,
               has_previous_page,
+              total_count,
             ))
           }
         }
@@ -112,12 +138,21 @@ pub fn execute_query_with_db(
 /// Convert a database Record to a GraphQL value.Value
 ///
 /// Creates an Object with all the record metadata plus the parsed JSON value
-fn record_to_graphql_value(record: database.Record) -> value.Value {
+fn record_to_graphql_value(
+  record: database.Record,
+  db: sqlight.Connection,
+) -> value.Value {
   // Parse the record JSON and convert to GraphQL value
   let value_object = case parse_json_to_value(record.json) {
     Ok(val) -> val
     Error(_) -> value.Object([])
     // Fallback to empty object on parse error
+  }
+
+  // Look up actor handle from actor table
+  let actor_handle = case database.get_actor(db, record.did) {
+    Ok([actor, ..]) -> value.String(actor.handle)
+    _ -> value.Null
   }
 
   // Create the full record object with metadata and value
@@ -127,6 +162,7 @@ fn record_to_graphql_value(record: database.Record) -> value.Value {
     #("did", value.String(record.did)),
     #("collection", value.String(record.collection)),
     #("indexedAt", value.String(record.indexed_at)),
+    #("actorHandle", actor_handle),
     #("value", value_object),
   ])
 }

@@ -7,6 +7,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import sqlight
+import where_clause
 
 pub type Record {
   Record(
@@ -606,8 +607,8 @@ pub fn get_records_by_collection_paginated(
     None -> [#("indexed_at", "desc")]
   }
 
-  // Build the ORDER BY clause
-  let order_by_clause = build_order_by(sort_fields)
+  // Build the ORDER BY clause (no joins in this function, so no prefix needed)
+  let order_by_clause = build_order_by(sort_fields, False)
 
   // Build WHERE clause parts
   let where_parts = ["collection = ?"]
@@ -704,6 +705,224 @@ pub fn get_records_by_collection_paginated(
   Ok(#(final_records, next_cursor, has_next_page, has_previous_page))
 }
 
+/// Paginated query for records with cursor-based pagination AND where clause filtering
+///
+/// Same as get_records_by_collection_paginated but with an additional where_clause parameter
+pub fn get_records_by_collection_paginated_with_where(
+  conn: sqlight.Connection,
+  collection: String,
+  first: Option(Int),
+  after: Option(String),
+  last: Option(Int),
+  before: Option(String),
+  sort_by: Option(List(#(String, String))),
+  where: Option(where_clause.WhereClause),
+) -> Result(#(List(Record), Option(String), Bool, Bool), sqlight.Error) {
+  // Validate pagination arguments
+  let #(limit, is_forward, cursor_opt) = case first, last {
+    Some(f), None -> #(f, True, after)
+    None, Some(l) -> #(l, False, before)
+    Some(f), Some(_) -> #(f, True, after)
+    None, None -> #(50, True, None)
+  }
+
+  // Default sort order if not specified
+  let sort_fields = case sort_by {
+    Some(fields) -> fields
+    None -> [#("indexed_at", "desc")]
+  }
+
+  // Check if we need to join with actor table
+  let needs_actor_join = case where {
+    Some(wc) -> where_clause.requires_actor_join(wc)
+    None -> False
+  }
+
+  // Build the ORDER BY clause (with table prefix if doing a join)
+  let order_by_clause = build_order_by(sort_fields, needs_actor_join)
+
+  // Build FROM clause with optional LEFT JOIN
+  let from_clause = case needs_actor_join {
+    True -> "record LEFT JOIN actor ON record.did = actor.did"
+    False -> "record"
+  }
+
+  // Build WHERE clause parts - start with collection filter
+  let mut_where_parts = ["record.collection = ?"]
+  let mut_bind_values = [sqlight.text(collection)]
+
+  // Add where clause conditions if provided
+  let #(where_parts, bind_values) = case where {
+    Some(wc) -> {
+      case where_clause.is_clause_empty(wc) {
+        True -> #(mut_where_parts, mut_bind_values)
+        False -> {
+          let #(where_sql, where_params) =
+            where_clause.build_where_sql(wc, needs_actor_join)
+          let new_where = list.append(mut_where_parts, [where_sql])
+          let new_binds = list.append(mut_bind_values, where_params)
+          #(new_where, new_binds)
+        }
+      }
+    }
+    None -> #(mut_where_parts, mut_bind_values)
+  }
+
+  // Add cursor condition if present
+  let #(final_where_parts, final_bind_values) = case cursor_opt {
+    Some(cursor_str) -> {
+      case cursor.decode_cursor(cursor_str, sort_by) {
+        Ok(decoded_cursor) -> {
+          let #(cursor_where, cursor_params) =
+            cursor.build_cursor_where_clause(
+              decoded_cursor,
+              sort_by,
+              !is_forward,
+            )
+
+          let new_where = list.append(where_parts, [cursor_where])
+          let new_binds =
+            list.append(
+              bind_values,
+              list.map(cursor_params, sqlight.text),
+            )
+          #(new_where, new_binds)
+        }
+        Error(_) -> #(where_parts, bind_values)
+      }
+    }
+    None -> #(where_parts, bind_values)
+  }
+
+  // Fetch limit + 1 to detect if there are more pages
+  let fetch_limit = limit + 1
+
+  // Build the SQL query
+  let sql =
+    "
+    SELECT record.uri, record.cid, record.did, record.collection, record.json, record.indexed_at
+    FROM "
+    <> from_clause
+    <> "
+    WHERE "
+    <> string.join(final_where_parts, " AND ")
+    <> "
+    ORDER BY "
+    <> order_by_clause
+    <> "
+    LIMIT "
+    <> int.to_string(fetch_limit)
+
+  // Execute query
+  let decoder = {
+    use uri <- decode.field(0, decode.string)
+    use cid <- decode.field(1, decode.string)
+    use did <- decode.field(2, decode.string)
+    use collection <- decode.field(3, decode.string)
+    use json <- decode.field(4, decode.string)
+    use indexed_at <- decode.field(5, decode.string)
+    decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
+  }
+
+  use records <- result.try(sqlight.query(
+    sql,
+    on: conn,
+    with: final_bind_values,
+    expecting: decoder,
+  ))
+
+  // Check if there are more results
+  let has_more = list.length(records) > limit
+  let final_records = case has_more {
+    True -> list.take(records, limit)
+    False -> records
+  }
+
+  // Calculate hasNextPage and hasPreviousPage
+  let has_next_page = case is_forward {
+    True -> has_more
+    False -> option.is_some(cursor_opt)
+  }
+
+  let has_previous_page = case is_forward {
+    True -> option.is_some(cursor_opt)
+    False -> has_more
+  }
+
+  // Generate next cursor if there are more results
+  let next_cursor = case has_more, list.last(final_records) {
+    True, Ok(last_record) -> {
+      let record_like = record_to_record_like(last_record)
+      Some(cursor.generate_cursor_from_record(record_like, sort_by))
+    }
+    _, _ -> None
+  }
+
+  Ok(#(final_records, next_cursor, has_next_page, has_previous_page))
+}
+
+/// Gets the total count of records for a collection with optional where clause
+pub fn get_collection_count_with_where(
+  conn: sqlight.Connection,
+  collection: String,
+  where: Option(where_clause.WhereClause),
+) -> Result(Int, sqlight.Error) {
+  // Check if we need to join with actor table
+  let needs_actor_join = case where {
+    Some(wc) -> where_clause.requires_actor_join(wc)
+    None -> False
+  }
+
+  // Build FROM clause with optional LEFT JOIN
+  let from_clause = case needs_actor_join {
+    True -> "record LEFT JOIN actor ON record.did = actor.did"
+    False -> "record"
+  }
+
+  // Build WHERE clause parts - start with collection filter
+  let mut_where_parts = ["record.collection = ?"]
+  let mut_bind_values = [sqlight.text(collection)]
+
+  // Add where clause conditions if provided
+  let #(where_parts, bind_values) = case where {
+    Some(wc) -> {
+      case where_clause.is_clause_empty(wc) {
+        True -> #(mut_where_parts, mut_bind_values)
+        False -> {
+          let #(where_sql, where_params) =
+            where_clause.build_where_sql(wc, needs_actor_join)
+          let new_where = list.append(mut_where_parts, [where_sql])
+          let new_binds = list.append(mut_bind_values, where_params)
+          #(new_where, new_binds)
+        }
+      }
+    }
+    None -> #(mut_where_parts, mut_bind_values)
+  }
+
+  // Build the SQL query
+  let sql =
+    "
+    SELECT COUNT(*) as count
+    FROM "
+    <> from_clause
+    <> "
+    WHERE "
+    <> string.join(where_parts, " AND ")
+
+  // Execute query
+  let decoder = {
+    use count <- decode.field(0, decode.int)
+    decode.success(count)
+  }
+
+  case sqlight.query(sql, on: conn, with: bind_values, expecting: decoder) {
+    Ok([count]) -> Ok(count)
+    Ok(_) -> Ok(0)
+    Error(err) -> Error(err)
+  }
+}
+
 /// Converts a database Record to a cursor.RecordLike
 pub fn record_to_record_like(record: Record) -> cursor.RecordLike {
   cursor.RecordLike(
@@ -717,23 +936,34 @@ pub fn record_to_record_like(record: Record) -> cursor.RecordLike {
 }
 
 /// Builds an ORDER BY clause from sort fields
-fn build_order_by(sort_fields: List(#(String, String))) -> String {
+/// use_table_prefix: if True, prefixes table columns with "record." for joins
+fn build_order_by(
+  sort_fields: List(#(String, String)),
+  use_table_prefix: Bool,
+) -> String {
   let order_parts =
     list.map(sort_fields, fn(field) {
       let #(field_name, direction) = field
+      let table_prefix = case use_table_prefix {
+        True -> "record."
+        False -> ""
+      }
       let field_ref = case field_name {
-        "uri" | "cid" | "did" | "collection" | "indexed_at" -> field_name
+        "uri" | "cid" | "did" | "collection" | "indexed_at" ->
+          table_prefix <> field_name
         // For JSON fields, check if they look like dates and handle accordingly
         "createdAt" | "indexedAt" -> {
           // Use CASE to treat invalid dates as NULL for sorting
-          let json_field = "json_extract(json, '$." <> field_name <> "')"
+          let json_field =
+            "json_extract(" <> table_prefix <> "json, '$." <> field_name <> "')"
           "CASE
             WHEN " <> json_field <> " IS NULL THEN NULL
             WHEN datetime(" <> json_field <> ") IS NULL THEN NULL
             ELSE " <> json_field <> "
            END"
         }
-        _ -> "json_extract(json, '$." <> field_name <> "')"
+        _ ->
+          "json_extract(" <> table_prefix <> "json, '$." <> field_name <> "')"
       }
       let dir = case string.lowercase(direction) {
         "asc" -> "ASC"
@@ -744,7 +974,13 @@ fn build_order_by(sort_fields: List(#(String, String))) -> String {
     })
 
   case list.is_empty(order_parts) {
-    True -> "indexed_at DESC NULLS LAST"
+    True -> {
+      let prefix = case use_table_prefix {
+        True -> "record."
+        False -> ""
+      }
+      prefix <> "indexed_at DESC NULLS LAST"
+    }
     False -> string.join(order_parts, ", ")
   }
 }

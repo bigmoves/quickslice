@@ -1,0 +1,11 @@
+---
+version: 1.4.1
+title: Schema showing PascalCase type name and camelCase field name from NSID
+file: ./test/schema_builder_test.gleam
+test_name: correct_type_names_snapshot_test
+---
+"""Root query type"""
+type Query {
+  """Query app.bsky.feed.post"""
+  appBskyFeedPost: [AppBskyFeedPost]
+}

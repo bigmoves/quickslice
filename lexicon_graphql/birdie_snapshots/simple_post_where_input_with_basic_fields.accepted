@@ -1,0 +1,21 @@
+---
+version: 1.4.1
+title: Simple Post WhereInput with basic fields
+file: ./test/where_schema_test.gleam
+test_name: simple_post_where_input_snapshot_test
+---
+"""Filter conditions for AppBskyFeedPost with nested AND/OR support"""
+input AppBskyFeedPostWhereInput {
+  """Filter by uri"""
+  uri: AppBskyFeedPostFieldCondition
+  """Filter by cid"""
+  cid: AppBskyFeedPostFieldCondition
+  """Filter by text"""
+  text: AppBskyFeedPostFieldCondition
+  """Filter by createdAt"""
+  createdAt: AppBskyFeedPostFieldCondition
+  """All conditions must match (AND logic)"""
+  and: [AppBskyFeedPostWhereInput!]
+  """Any condition must match (OR logic)"""
+  or: [AppBskyFeedPostWhereInput!]
+}

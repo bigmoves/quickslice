@@ -219,6 +219,22 @@ pub fn is_list(t: Type) -> Bool {
   }
 }
 
+pub fn is_input_object(t: Type) -> Bool {
+  case t {
+    InputObjectType(_, _, _) -> True
+    _ -> False
+  }
+}
+
+pub fn type_description(t: Type) -> String {
+  case t {
+    ObjectType(_, description, _) -> description
+    InputObjectType(_, description, _) -> description
+    EnumType(_, description, _) -> description
+    _ -> ""
+  }
+}
+
 // Field resolution helpers
 pub fn resolve_field(field: Field, ctx: Context) -> Result(value.Value, String) {
   case field {

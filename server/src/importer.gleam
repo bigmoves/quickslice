@@ -30,12 +30,55 @@ pub fn import_lexicons_from_directory(
     "  ✓ Found " <> string.inspect(list.length(file_paths)) <> " .json files",
   )
   io.println("")
-  io.println("📝 Validating and importing lexicons...")
+  io.println("📝 Reading all lexicon files...")
 
-  // Import each file
-  let results =
+  // Read all files first to get their content
+  let file_contents =
     file_paths
-    |> list.map(fn(file_path) { import_single_lexicon(db, file_path) })
+    |> list.filter_map(fn(file_path) {
+      case simplifile.read(file_path) {
+        Ok(content) -> Ok(#(file_path, content))
+        Error(_) -> Error(Nil)
+      }
+    })
+
+  io.println("📝 Validating all lexicons together...")
+
+  // Extract all JSON strings for validation
+  let all_json_strings = list.map(file_contents, fn(pair) { pair.1 })
+
+  // Validate all schemas together (this allows cross-references to be resolved)
+  let validation_result = case lexicon.validate_schemas(all_json_strings) {
+    Ok(_) -> {
+      io.println("  ✓ All lexicons validated successfully")
+      Ok(Nil)
+    }
+    Error(err) -> {
+      io.println_error(
+        "  ✗ Validation failed: " <> format_validation_error(err),
+      )
+      Error("Validation failed")
+    }
+  }
+
+  io.println("")
+  io.println("📝 Importing lexicons to database...")
+
+  // Import each file (skip individual validation since we already validated all together)
+  let results = case validation_result {
+    Error(_) -> {
+      // If validation failed, don't import anything
+      file_paths |> list.map(fn(_) { Error("Validation failed") })
+    }
+    Ok(_) -> {
+      // Validation succeeded, import each lexicon
+      file_contents
+      |> list.map(fn(pair) {
+        let #(file_path, json_content) = pair
+        import_validated_lexicon(db, file_path, json_content)
+      })
+    }
+  }
 
   // Calculate stats
   let total = list.length(results)
@@ -157,7 +200,7 @@ fn format_validation_error(error: lexicon.ValidationError) -> String {
   string.inspect(error)
 }
 
-/// Imports a single lexicon file
+/// Imports a single lexicon file (with validation)
 pub fn import_single_lexicon(
   conn: sqlight.Connection,
   file_path: String,
@@ -169,6 +212,40 @@ pub fn import_single_lexicon(
 
   case parse_and_validate_lexicon(file_path) {
     Ok(#(lexicon_id, json_content)) -> {
+      case database.insert_lexicon(conn, lexicon_id, json_content) {
+        Ok(_) -> {
+          io.println("  ✓ " <> lexicon_id)
+          Ok(lexicon_id)
+        }
+        Error(_) -> {
+          let err_msg = file_name <> ": Database insertion failed"
+          io.println("  ✗ " <> err_msg)
+          Error(err_msg)
+        }
+      }
+    }
+    Error(err) -> {
+      let err_msg = file_name <> ": " <> err
+      io.println("  ✗ " <> err_msg)
+      Error(err_msg)
+    }
+  }
+}
+
+/// Imports a lexicon that has already been validated
+/// Used when importing multiple lexicons that were validated together
+fn import_validated_lexicon(
+  conn: sqlight.Connection,
+  file_path: String,
+  json_content: String,
+) -> Result(String, String) {
+  let file_name = case string.split(file_path, "/") |> list.last {
+    Ok(name) -> name
+    Error(_) -> file_path
+  }
+
+  case extract_lexicon_id(json_content) {
+    Ok(lexicon_id) -> {
       case database.insert_lexicon(conn, lexicon_id, json_content) {
         Ok(_) -> {
           io.println("  ✓ " <> lexicon_id)

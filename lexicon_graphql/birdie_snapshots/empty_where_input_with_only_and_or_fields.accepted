@@ -1,0 +1,13 @@
+---
+version: 1.4.1
+title: Empty WhereInput with only AND/OR fields
+file: ./test/where_schema_test.gleam
+test_name: empty_where_input_snapshot_test
+---
+"""Filter conditions for EmptyRecord with nested AND/OR support"""
+input EmptyRecordWhereInput {
+  """All conditions must match (AND logic)"""
+  and: [EmptyRecordWhereInput!]
+  """Any condition must match (OR logic)"""
+  or: [EmptyRecordWhereInput!]
+}

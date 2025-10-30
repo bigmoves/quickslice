@@ -72,6 +72,19 @@ pub fn default_config() -> BackfillConfig {
   )
 }
 
+/// Check if an NSID matches the configured domain authority
+/// NSID format is like "com.example.post" where "com.example" is the authority
+pub fn nsid_matches_domain_authority(nsid: String) -> Bool {
+  case envoy.get("DOMAIN_AUTHORITY") {
+    Error(_) -> False
+    Ok(domain_authority) -> {
+      // NSID format: authority.name (e.g., "com.example.post")
+      // We need to check if the NSID starts with the domain authority
+      string.starts_with(nsid, domain_authority <> ".")
+    }
+  }
+}
+
 /// Resolve a DID to get ATP data (PDS endpoint and handle)
 pub fn resolve_did(did: String, plc_url: String) -> Result(AtprotoData, String) {
   let url = plc_url <> "/" <> did

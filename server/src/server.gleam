@@ -88,17 +88,46 @@ fn run_backfill_command() {
           )
         }
         _ -> {
-          let collections = list.map(lexicons, fn(lex) { lex.id })
+          // Separate lexicons by domain authority
+          let #(local_lexicons, external_lexicons) =
+            lexicons
+            |> list.partition(fn(lex) {
+              backfill.nsid_matches_domain_authority(lex.id)
+            })
+
+          let collections = list.map(local_lexicons, fn(lex) { lex.id })
+          let external_collections =
+            list.map(external_lexicons, fn(lex) { lex.id })
+
           io.println(
             "✓ Found "
             <> int.to_string(list.length(collections))
-            <> " record-type collection(s):",
+            <> " local collection(s):",
           )
           list.each(collections, fn(col) { io.println("  - " <> col) })
 
+          case external_collections {
+            [] -> Nil
+            _ -> {
+              io.println("")
+              io.println(
+                "✓ Found "
+                <> int.to_string(list.length(external_collections))
+                <> " external collection(s):",
+              )
+              list.each(external_collections, fn(col) { io.println("  - " <> col) })
+            }
+          }
+
           io.println("")
           let config = backfill.default_config()
-          backfill.backfill_collections([], collections, [], config, db)
+          backfill.backfill_collections(
+            [],
+            collections,
+            external_collections,
+            config,
+            db,
+          )
         }
       }
     }
@@ -286,18 +315,36 @@ fn handle_backfill_request(
               ))
             }
             _ -> {
-              let collections = list.map(lexicons, fn(lex) { lex.id })
+              // Separate lexicons by domain authority
+              let #(collections, external_collections) =
+                lexicons
+                |> list.partition(fn(lex) {
+                  backfill.nsid_matches_domain_authority(lex.id)
+                })
+
+              let collection_ids = list.map(collections, fn(lex) { lex.id })
+              let external_collection_ids =
+                list.map(external_collections, fn(lex) { lex.id })
+
               // Run backfill in background process
               let config = backfill.default_config()
               process.spawn_unlinked(fn() {
-                backfill.backfill_collections([], collections, [], config, db)
+                backfill.backfill_collections(
+                  [],
+                  collection_ids,
+                  external_collection_ids,
+                  config,
+                  db,
+                )
               })
 
               wisp.response(200)
               |> wisp.set_header("content-type", "application/json")
               |> wisp.set_body(wisp.Text(
                 "{\"status\": \"started\", \"collections\": "
-                <> int.to_string(list.length(collections))
+                <> int.to_string(list.length(collection_ids))
+                <> ", \"external_collections\": "
+                <> int.to_string(list.length(external_collection_ids))
                 <> "}",
               ))
             }

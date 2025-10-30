@@ -1,0 +1,11 @@
+---
+version: 1.4.1
+title: Enum without descriptions
+file: ./test/sdl_test.gleam
+test_name: enum_without_descriptions_test
+---
+enum Color {
+  RED
+  GREEN
+  BLUE
+}

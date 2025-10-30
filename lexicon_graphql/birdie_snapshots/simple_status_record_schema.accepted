@@ -1,0 +1,11 @@
+---
+version: 1.4.1
+title: Simple status record schema
+file: ./test/schema_builder_test.gleam
+test_name: simple_schema_snapshot_test
+---
+"""Root query type"""
+type Query {
+  """Query xyz.statusphere.status"""
+  xyzStatusphereStatus: [XyzStatusphereStatus]
+}

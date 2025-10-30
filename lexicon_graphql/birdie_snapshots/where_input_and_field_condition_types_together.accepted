@@ -1,0 +1,37 @@
+---
+version: 1.4.1
+title: WhereInput and FieldCondition types together
+file: ./test/where_schema_test.gleam
+test_name: related_types_snapshot_test
+---
+"""Filter conditions for TestRecord with nested AND/OR support"""
+input TestRecordWhereInput {
+  """Filter by text"""
+  text: TestRecordFieldCondition
+  """Filter by createdAt"""
+  createdAt: TestRecordFieldCondition
+  """Filter by likes"""
+  likes: TestRecordFieldCondition
+  """All conditions must match (AND logic)"""
+  and: [TestRecordWhereInput!]
+  """Any condition must match (OR logic)"""
+  or: [TestRecordWhereInput!]
+}
+
+"""Filter operators for TestRecord fields"""
+input TestRecordFieldCondition {
+  """Exact match (equals)"""
+  eq: String
+  """Match any value in the list"""
+  in: [String!]
+  """Case-insensitive substring match (string fields only)"""
+  contains: String
+  """Greater than"""
+  gt: String
+  """Greater than or equal to"""
+  gte: String
+  """Less than"""
+  lt: String
+  """Less than or equal to"""
+  lte: String
+}

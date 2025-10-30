@@ -1,0 +1,15 @@
+---
+version: 1.4.1
+title: Simple input object with descriptions
+file: ./test/sdl_test.gleam
+test_name: simple_input_object_test
+---
+"""Input for creating or updating a user"""
+input UserInput {
+  """User's name"""
+  name: String
+  """User's email address"""
+  email: String!
+  """User's age"""
+  age: Int
+}

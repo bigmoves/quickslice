@@ -1,0 +1,8 @@
+---
+version: 1.4.1
+title: Empty input object
+file: ./test/sdl_test.gleam
+test_name: empty_input_object_test
+---
+"""An empty input"""
+input EmptyInput {}

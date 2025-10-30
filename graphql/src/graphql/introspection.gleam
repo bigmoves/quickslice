@@ -23,8 +23,9 @@ pub fn schema_introspection(graphql_schema: schema.Schema) -> value.Value {
   ])
 }
 
-/// Get all types from the schema
-fn get_all_types(graphql_schema: schema.Schema) -> List(value.Value) {
+/// Get all types from the schema as schema.Type values
+/// Useful for testing and documentation generation
+pub fn get_all_schema_types(graphql_schema: schema.Schema) -> List(schema.Type) {
   let query_type = schema.query_type(graphql_schema)
 
   // Collect all types by traversing the schema
@@ -53,7 +54,12 @@ fn get_all_types(graphql_schema: schema.Schema) -> List(value.Value) {
       !list.contains(collected_names, built_in_name)
     })
 
-  let all_types = list.append(unique_types, missing_built_ins)
+  list.append(unique_types, missing_built_ins)
+}
+
+/// Get all types from the schema
+fn get_all_types(graphql_schema: schema.Schema) -> List(value.Value) {
+  let all_types = get_all_schema_types(graphql_schema)
 
   // Convert all types to introspection values
   list.map(all_types, type_introspection)
@@ -163,10 +169,15 @@ fn type_introspection(t: schema.Type) -> value.Value {
     _ -> value.String(type_name)
   }
 
+  let description = case schema.type_description(t) {
+    "" -> value.Null
+    desc -> value.String(desc)
+  }
+
   value.Object([
     #("kind", value.String(kind)),
     #("name", name),
-    #("description", value.Null),
+    #("description", description),
     #("fields", fields),
     #("interfaces", value.List([])),
     #("possibleTypes", value.Null),

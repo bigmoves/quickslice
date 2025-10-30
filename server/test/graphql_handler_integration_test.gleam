@@ -589,3 +589,212 @@ fn count_occurrences(text: String, pattern: String) -> Int {
   |> list.length
   |> fn(n) { n - 1 }
 }
+
+pub fn graphql_actor_handle_lookup_test() {
+  // Create in-memory database
+  let assert Ok(db) = sqlight.open(":memory:")
+  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = database.create_actor_table(db)
+
+  // Insert a lexicon for xyz.statusphere.status
+  let lexicon = create_status_lexicon()
+  let assert Ok(_) =
+    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+
+  // Insert test actors
+  let assert Ok(_) =
+    database.upsert_actor(db, "did:plc:alice", "alice.bsky.social")
+  let assert Ok(_) = database.upsert_actor(db, "did:plc:bob", "bob.bsky.social")
+
+  // Insert test records with those DIDs
+  let record1_json =
+    json.object([
+      #("status", json.string("👍")),
+      #("createdAt", json.string("2024-01-01T00:00:00Z")),
+    ])
+    |> json.to_string
+
+  let assert Ok(_) =
+    database.insert_record(
+      db,
+      "at://did:plc:alice/xyz.statusphere.status/123",
+      "cid1",
+      "did:plc:alice",
+      "xyz.statusphere.status",
+      record1_json,
+    )
+
+  let record2_json =
+    json.object([
+      #("status", json.string("🔥")),
+      #("createdAt", json.string("2024-01-02T00:00:00Z")),
+    ])
+    |> json.to_string
+
+  let assert Ok(_) =
+    database.insert_record(
+      db,
+      "at://did:plc:bob/xyz.statusphere.status/456",
+      "cid2",
+      "did:plc:bob",
+      "xyz.statusphere.status",
+      record2_json,
+    )
+
+  // Query with actorHandle field
+  let query =
+    json.object([
+      #(
+        "query",
+        json.string(
+          "{ xyzStatusphereStatus(where: {status: {contains: \"👍\"}}, sortBy: [{direction: DESC, field: createdAt}]) { edges { node { actorHandle did status createdAt } cursor } pageInfo { hasNextPage } } }",
+        ),
+      ),
+    ])
+    |> json.to_string
+
+  let request =
+    simulate.request(http.Post, "/graphql")
+    |> simulate.string_body(query)
+    |> simulate.header("content-type", "application/json")
+
+  let response = graphql_handler.handle_graphql_request(request, db)
+
+  // Verify response
+  response.status
+  |> should.equal(200)
+
+  let assert wisp.Text(body) = response.body
+
+  // Should contain the actor handle
+  string.contains(body, "alice.bsky.social")
+  |> should.be_true
+
+  // Should contain the record data
+  string.contains(body, "did:plc:alice")
+  |> should.be_true
+
+  string.contains(body, "👍")
+  |> should.be_true
+
+  // Clean up
+  let assert Ok(_) = sqlight.close(db)
+}
+
+pub fn graphql_filter_by_actor_handle_test() {
+  // Create in-memory database
+  let assert Ok(db) = sqlight.open(":memory:")
+  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = database.create_actor_table(db)
+
+  // Insert a lexicon for xyz.statusphere.status
+  let lexicon = create_status_lexicon()
+  let assert Ok(_) =
+    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+
+  // Insert test actors
+  let assert Ok(_) =
+    database.upsert_actor(db, "did:plc:alice", "alice.bsky.social")
+  let assert Ok(_) = database.upsert_actor(db, "did:plc:bob", "bob.bsky.social")
+  let assert Ok(_) =
+    database.upsert_actor(db, "did:plc:charlie", "charlie.bsky.social")
+
+  // Insert test records with those DIDs
+  let record1_json =
+    json.object([
+      #("status", json.string("👍")),
+      #("createdAt", json.string("2024-01-01T00:00:00Z")),
+    ])
+    |> json.to_string
+
+  let assert Ok(_) =
+    database.insert_record(
+      db,
+      "at://did:plc:alice/xyz.statusphere.status/123",
+      "cid1",
+      "did:plc:alice",
+      "xyz.statusphere.status",
+      record1_json,
+    )
+
+  let record2_json =
+    json.object([
+      #("status", json.string("🔥")),
+      #("createdAt", json.string("2024-01-02T00:00:00Z")),
+    ])
+    |> json.to_string
+
+  let assert Ok(_) =
+    database.insert_record(
+      db,
+      "at://did:plc:bob/xyz.statusphere.status/456",
+      "cid2",
+      "did:plc:bob",
+      "xyz.statusphere.status",
+      record2_json,
+    )
+
+  let record3_json =
+    json.object([
+      #("status", json.string("⭐")),
+      #("createdAt", json.string("2024-01-03T00:00:00Z")),
+    ])
+    |> json.to_string
+
+  let assert Ok(_) =
+    database.insert_record(
+      db,
+      "at://did:plc:charlie/xyz.statusphere.status/789",
+      "cid3",
+      "did:plc:charlie",
+      "xyz.statusphere.status",
+      record3_json,
+    )
+
+  // Query filtering by actorHandle
+  let query =
+    json.object([
+      #(
+        "query",
+        json.string(
+          "{ xyzStatusphereStatus(where: {actorHandle: {eq: \"alice.bsky.social\"}}) { edges { node { actorHandle did status } } } }",
+        ),
+      ),
+    ])
+    |> json.to_string
+
+  let request =
+    simulate.request(http.Post, "/graphql")
+    |> simulate.string_body(query)
+    |> simulate.header("content-type", "application/json")
+
+  let response = graphql_handler.handle_graphql_request(request, db)
+
+  // Verify response
+  response.status
+  |> should.equal(200)
+
+  let assert wisp.Text(body) = response.body
+
+  // Should contain alice's handle and record
+  string.contains(body, "alice.bsky.social")
+  |> should.be_true
+
+  string.contains(body, "did:plc:alice")
+  |> should.be_true
+
+  string.contains(body, "👍")
+  |> should.be_true
+
+  // Should NOT contain bob or charlie's records
+  string.contains(body, "bob.bsky.social")
+  |> should.be_false
+
+  string.contains(body, "charlie.bsky.social")
+  |> should.be_false
+
+  // Clean up
+  let assert Ok(_) = sqlight.close(db)
+}

@@ -1,0 +1,21 @@
+---
+version: 1.4.1
+title: Nested input types
+file: ./test/sdl_test.gleam
+test_name: nested_input_types_test
+---
+"""Street address information"""
+input AddressInput {
+  """Street name"""
+  street: String
+  """City name"""
+  city: String
+}
+
+"""User information"""
+input UserInput {
+  """Full name"""
+  name: String
+  """Home address"""
+  address: AddressInput
+}

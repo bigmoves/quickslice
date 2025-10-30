@@ -5,6 +5,7 @@
 ///
 /// Based on the Elixir implementation but adapted for the pure Gleam GraphQL library.
 import graphql/schema
+import lexicon_graphql/blob_type
 
 /// Maps a lexicon type string to a GraphQL Type.
 ///
@@ -23,8 +24,8 @@ pub fn map_type(lexicon_type: String) -> schema.Type {
     "boolean" -> schema.boolean_type()
     "number" -> schema.float_type()
 
-    // Binary/blob types - map to String (base64 or URL)
-    "blob" -> schema.string_type()
+    // Binary/blob types
+    "blob" -> blob_type.create_blob_type()
     "bytes" -> schema.string_type()
     "cid-link" -> schema.string_type()
 

@@ -1,0 +1,13 @@
+---
+version: 1.4.1
+title: Schema with multiple record types
+file: ./test/schema_builder_test.gleam
+test_name: multiple_lexicons_snapshot_test
+---
+"""Root query type"""
+type Query {
+  """Query xyz.statusphere.status"""
+  xyzStatusphereStatus: [XyzStatusphereStatus]
+  """Query xyz.statusphere.profile"""
+  xyzStatusphereProfile: [XyzStatusphereProfile]
+}

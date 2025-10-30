@@ -1,0 +1,17 @@
+---
+version: 1.4.1
+title: WhereInput showing recursive AND/OR fields
+file: ./test/where_schema_test.gleam
+test_name: recursive_and_or_fields_snapshot_test
+---
+"""Filter conditions for RecursiveTest with nested AND/OR support"""
+input RecursiveTestWhereInput {
+  """Filter by name"""
+  name: RecursiveTestFieldCondition
+  """Filter by status"""
+  status: RecursiveTestFieldCondition
+  """All conditions must match (AND logic)"""
+  and: [RecursiveTestWhereInput!]
+  """Any condition must match (OR logic)"""
+  or: [RecursiveTestWhereInput!]
+}

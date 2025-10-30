@@ -33,9 +33,11 @@ pub fn map_unknown_type_test() {
 }
 
 pub fn map_blob_type_test() {
-  // Blob types map to String (URL or base64)
-  type_mapper.map_type("blob")
-  |> should.equal(schema.string_type())
+  // Blob types map to Blob object type with ref, mimeType, size, and url fields
+  let blob_type = type_mapper.map_type("blob")
+
+  schema.type_name(blob_type)
+  |> should.equal("Blob")
 }
 
 pub fn map_bytes_type_test() {

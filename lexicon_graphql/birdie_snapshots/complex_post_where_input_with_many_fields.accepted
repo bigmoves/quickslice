@@ -1,0 +1,31 @@
+---
+version: 1.4.1
+title: Complex Post WhereInput with many fields
+file: ./test/where_schema_test.gleam
+test_name: complex_post_where_input_snapshot_test
+---
+"""Filter conditions for AppBskyFeedPost with nested AND/OR support"""
+input AppBskyFeedPostWhereInput {
+  """Filter by uri"""
+  uri: AppBskyFeedPostFieldCondition
+  """Filter by cid"""
+  cid: AppBskyFeedPostFieldCondition
+  """Filter by text"""
+  text: AppBskyFeedPostFieldCondition
+  """Filter by createdAt"""
+  createdAt: AppBskyFeedPostFieldCondition
+  """Filter by indexedAt"""
+  indexedAt: AppBskyFeedPostFieldCondition
+  """Filter by likeCount"""
+  likeCount: AppBskyFeedPostFieldCondition
+  """Filter by replyCount"""
+  replyCount: AppBskyFeedPostFieldCondition
+  """Filter by repostCount"""
+  repostCount: AppBskyFeedPostFieldCondition
+  """Filter by author"""
+  author: AppBskyFeedPostFieldCondition
+  """All conditions must match (AND logic)"""
+  and: [AppBskyFeedPostWhereInput!]
+  """Any condition must match (OR logic)"""
+  or: [AppBskyFeedPostWhereInput!]
+}

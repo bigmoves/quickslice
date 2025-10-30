@@ -13,6 +13,7 @@ import lexicon_graphql/connection as lexicon_connection
 import lexicon_graphql/nsid
 import lexicon_graphql/schema_builder
 import lexicon_graphql/type_mapper
+import lexicon_graphql/where_input
 
 /// Record type metadata with database resolver info
 type RecordType {
@@ -32,16 +33,23 @@ pub type PaginationParams {
     last: option.Option(Int),
     before: option.Option(String),
     sort_by: option.Option(List(#(String, String))),
+    where: option.Option(where_input.WhereClause),
   )
 }
 
 /// Type for a database record fetcher function with pagination support
 /// Takes a collection NSID and pagination params, returns Connection data
-/// Returns: (records_with_cursors, end_cursor, has_next_page, has_previous_page)
+/// Returns: (records_with_cursors, end_cursor, has_next_page, has_previous_page, total_count)
 pub type RecordFetcher =
   fn(String, PaginationParams) ->
     Result(
-      #(List(#(value.Value, String)), option.Option(String), Bool, Bool),
+      #(
+        List(#(value.Value, String)),
+        option.Option(String),
+        Bool,
+        Bool,
+        option.Option(Int),
+      ),
       String,
     )
 
@@ -144,6 +152,17 @@ fn build_fields(
         }
       },
     ),
+    schema.field(
+      "actorHandle",
+      schema.string_type(),
+      "Handle of the actor who created this record",
+      fn(ctx) {
+        case get_field_from_context(ctx, "actorHandle") {
+          Ok(handle) -> Ok(value.String(handle))
+          Error(_) -> Ok(value.Null)
+        }
+      },
+    ),
   ]
 
   // Build fields from lexicon properties
@@ -153,10 +172,22 @@ fn build_fields(
       let graphql_type = type_mapper.map_type(type_)
 
       schema.field(name, graphql_type, "Field from lexicon", fn(ctx) {
-        // Try to extract field from the value object in context
-        case get_nested_field_from_context(ctx, "value", name) {
-          Ok(val) -> Ok(value.String(val))
-          Error(_) -> Ok(value.Null)
+        // Special handling for blob fields
+        case type_ {
+          "blob" -> {
+            // Extract blob data from AT Protocol format and convert to Blob type format
+            case extract_blob_data(ctx, name) {
+              Ok(blob_value) -> Ok(blob_value)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> {
+            // Try to extract field from the value object in context
+            case get_nested_field_from_context(ctx, "value", name) {
+              Ok(val) -> Ok(value.String(val))
+              Error(_) -> Ok(value.Null)
+            }
+          }
         }
       })
     })
@@ -167,9 +198,10 @@ fn build_fields(
 
 /// Build a SortFieldEnum for a record type with all its sortable fields
 fn build_sort_field_enum(record_type: RecordType) -> schema.Type {
-  // Get field names from the record type
+  // Get field names from the record type, excluding non-sortable fields
   let field_names =
     list.map(record_type.fields, fn(field) { schema.field_name(field) })
+    |> list.filter(fn(name) { name != "actorHandle" })
 
   // Convert field names to enum values
   let enum_values =
@@ -182,6 +214,16 @@ fn build_sort_field_enum(record_type: RecordType) -> schema.Type {
     "Available sort fields for " <> record_type.type_name,
     enum_values,
   )
+}
+
+/// Build a WhereInput type for a record type with all its filterable fields
+fn build_where_input_type(record_type: RecordType) -> schema.Type {
+  // Get field names from the record type
+  let field_names =
+    list.map(record_type.fields, fn(field) { schema.field_name(field) })
+
+  // Use the connection module to build the where input type
+  lexicon_connection.build_where_input_type(record_type.type_name, field_names)
 }
 
 /// Build the root Query type with fields for each record type
@@ -207,10 +249,14 @@ fn build_query_type(
       // Build custom SortFieldEnum for this record type
       let sort_field_enum = build_sort_field_enum(record_type)
 
-      // Build custom connection args with type-specific sort field enum
+      // Build custom WhereInput type for this record type
+      let where_input_type = build_where_input_type(record_type)
+
+      // Build custom connection args with type-specific sort field enum and where input
       let connection_args =
-        lexicon_connection.lexicon_connection_args_with_field_enum(
+        lexicon_connection.lexicon_connection_args_with_field_enum_and_where(
           sort_field_enum,
+          where_input_type,
         )
 
       // Create query field that returns a Connection of this record type
@@ -226,7 +272,7 @@ fn build_query_type(
           let pagination_params = extract_pagination_params(ctx)
 
           // Call the fetcher function to get records with cursors from database
-          use #(records_with_cursors, end_cursor, has_next_page, has_previous_page) <- result.try(
+          use #(records_with_cursors, end_cursor, has_next_page, has_previous_page, total_count) <- result.try(
             fetcher(collection_nsid, pagination_params),
           )
 
@@ -254,7 +300,7 @@ fn build_query_type(
             connection.Connection(
               edges: edges,
               page_info: page_info,
-              total_count: option.None,
+              total_count: total_count,
             )
 
           Ok(connection.connection_to_value(conn))
@@ -332,12 +378,25 @@ fn extract_pagination_params(ctx: schema.Context) -> PaginationParams {
     _ -> option.None
   }
 
+  // Extract where argument
+  let where = case schema.get_argument(ctx, "where") {
+    option.Some(where_value) -> {
+      let parsed = where_input.parse_where_clause(where_value)
+      case where_input.is_clause_empty(parsed) {
+        True -> option.None
+        False -> option.Some(parsed)
+      }
+    }
+    _ -> option.None
+  }
+
   PaginationParams(
     first: first,
     after: after,
     last: last,
     before: before,
     sort_by: sort_by,
+    where: where,
   )
 }
 
@@ -369,6 +428,78 @@ fn get_nested_field_from_context(
         Ok(value.Object(nested_fields)) -> {
           case list.key_find(nested_fields, field_name) {
             Ok(value.String(val)) -> Ok(val)
+            _ -> Error(Nil)
+          }
+        }
+        _ -> Error(Nil)
+      }
+    }
+    _ -> Error(Nil)
+  }
+}
+
+/// Extract blob data from AT Protocol format and convert to Blob type format
+/// AT Protocol blob format:
+/// {
+///   "ref": {"$link": "bafyrei..."},
+///   "mimeType": "image/jpeg",
+///   "size": 12345
+/// }
+/// Blob type expects:
+/// {
+///   "ref": "bafyrei...",
+///   "mime_type": "image/jpeg",
+///   "size": 12345,
+///   "did": "did:plc:..."
+/// }
+fn extract_blob_data(
+  ctx: schema.Context,
+  field_name: String,
+) -> Result(value.Value, Nil) {
+  case ctx.data {
+    option.Some(value.Object(fields)) -> {
+      // First get the DID from the top-level context
+      let did = case list.key_find(fields, "did") {
+        Ok(value.String(d)) -> d
+        _ -> ""
+      }
+
+      // Then get the blob object from value.{field_name}
+      case list.key_find(fields, "value") {
+        Ok(value.Object(nested_fields)) -> {
+          case list.key_find(nested_fields, field_name) {
+            Ok(value.Object(blob_fields)) -> {
+              // Extract ref from {"$link": "cid..."}
+              let ref = case list.key_find(blob_fields, "ref") {
+                Ok(value.Object(ref_obj)) -> {
+                  case list.key_find(ref_obj, "$link") {
+                    Ok(value.String(cid)) -> cid
+                    _ -> ""
+                  }
+                }
+                _ -> ""
+              }
+
+              // Extract mimeType
+              let mime_type = case list.key_find(blob_fields, "mimeType") {
+                Ok(value.String(mt)) -> mt
+                _ -> "image/jpeg"
+              }
+
+              // Extract size
+              let size = case list.key_find(blob_fields, "size") {
+                Ok(value.Int(s)) -> s
+                _ -> 0
+              }
+
+              // Return blob data in format expected by Blob type resolvers
+              Ok(value.Object([
+                #("ref", value.String(ref)),
+                #("mime_type", value.String(mime_type)),
+                #("size", value.Int(size)),
+                #("did", value.String(did)),
+              ]))
+            }
             _ -> Error(Nil)
           }
         }

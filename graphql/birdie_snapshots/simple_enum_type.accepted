@@ -1,0 +1,17 @@
+---
+version: 1.4.1
+title: Simple enum type
+file: ./test/sdl_test.gleam
+test_name: simple_enum_test
+---
+"""Order status"""
+enum Status {
+  """Order is pending"""
+  PENDING
+  """Order is being processed"""
+  PROCESSING
+  """Order has been shipped"""
+  SHIPPED
+  """Order has been delivered"""
+  DELIVERED
+}
