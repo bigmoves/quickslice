@@ -10,13 +10,20 @@ import graphql/value
 /// Build introspection value for __schema
 pub fn schema_introspection(graphql_schema: schema.Schema) -> value.Value {
   let query_type = schema.query_type(graphql_schema)
+  let mutation_type_option = schema.get_mutation_type(graphql_schema)
 
   // Build list of all types in the schema
   let all_types = get_all_types(graphql_schema)
 
+  // Build mutation type ref if it exists
+  let mutation_type_value = case mutation_type_option {
+    option.Some(mutation_type) -> type_ref(mutation_type)
+    option.None -> value.Null
+  }
+
   value.Object([
     #("queryType", type_ref(query_type)),
-    #("mutationType", value.Null),
+    #("mutationType", mutation_type_value),
     #("subscriptionType", value.Null),
     #("types", value.List(all_types)),
     #("directives", value.List([])),
@@ -27,14 +34,22 @@ pub fn schema_introspection(graphql_schema: schema.Schema) -> value.Value {
 /// Useful for testing and documentation generation
 pub fn get_all_schema_types(graphql_schema: schema.Schema) -> List(schema.Type) {
   let query_type = schema.query_type(graphql_schema)
+  let mutation_type_option = schema.get_mutation_type(graphql_schema)
 
-  // Collect all types by traversing the schema
+  // Collect all types by traversing the query type
   let mut_collected_types = collect_types_from_type(query_type, [])
 
+  // Also collect types from mutation type if it exists
+  let all_collected_types = case mutation_type_option {
+    option.Some(mutation_type) ->
+      collect_types_from_type(mutation_type, mut_collected_types)
+    option.None -> mut_collected_types
+  }
+
   // Deduplicate by type name
-  let type_names = list.map(mut_collected_types, schema.type_name)
+  let type_names = list.map(all_collected_types, schema.type_name)
   let unique_types =
-    list.zip(type_names, mut_collected_types)
+    list.zip(type_names, all_collected_types)
     |> list.unique
     |> list.map(fn(pair) { pair.1 })
 

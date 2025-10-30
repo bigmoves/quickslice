@@ -236,7 +236,8 @@ fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
   case segments {
     [] -> index_route(ctx)
     ["backfill"] -> handle_backfill_request(req, ctx.db)
-    ["graphql"] -> graphql_handler.handle_graphql_request(req, ctx.db)
+    ["graphql"] ->
+      graphql_handler.handle_graphql_request(req, ctx.db, ctx.auth_base_url)
     ["graphiql"] -> graphiql_handler.handle_graphiql_request(req)
     ["xrpc", _] -> {
       // Try to parse the XRPC route

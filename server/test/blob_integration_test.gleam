@@ -115,7 +115,7 @@ pub fn blob_field_query_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
-  let response = graphql_handler.handle_graphql_request(request, db)
+  let response = graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
 
   // Verify response
   response.status
@@ -200,7 +200,7 @@ pub fn blob_field_with_different_presets_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
-  let response = graphql_handler.handle_graphql_request(request, db)
+  let response = graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
 
   response.status
   |> should.equal(200)
@@ -260,7 +260,7 @@ pub fn blob_field_default_preset_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
-  let response = graphql_handler.handle_graphql_request(request, db)
+  let response = graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
 
   response.status
   |> should.equal(200)
@@ -312,7 +312,7 @@ pub fn blob_field_null_when_missing_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
-  let response = graphql_handler.handle_graphql_request(request, db)
+  let response = graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
 
   response.status
   |> should.equal(200)

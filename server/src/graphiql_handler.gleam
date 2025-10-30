@@ -1,9 +1,15 @@
 /// GraphiQL interface handler
 ///
 /// Serves the GraphiQL interactive GraphQL IDE
+import envoy
 import wisp
 
 pub fn handle_graphiql_request(_req: wisp.Request) -> wisp.Response {
+  // Read optional OAuth token from environment for testing
+  let oauth_token = case envoy.get("GRAPHIQL_OAUTH_TOKEN") {
+    Ok(token) -> token
+    Error(_) -> ""
+  }
   let graphiql_html =
     "<!doctype html>
 <html lang=\"en\">
@@ -61,8 +67,12 @@ pub fn handle_graphiql_request(_req: wisp.Request) -> wisp.Response {
       import { explorerPlugin } from '@graphiql/plugin-explorer';
       import 'graphiql/setup-workers/esm.sh';
 
+      const token = '" <> oauth_token <> "';
       const fetcher = createGraphiQLFetcher({
-        url: '/graphql'
+        url: '/graphql',
+        headers: token ? {
+          'Authorization': token
+        } : {}
       });
       const plugins = [HISTORY_PLUGIN, explorerPlugin()];
 

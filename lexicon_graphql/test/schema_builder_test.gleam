@@ -9,17 +9,18 @@ import graphql/introspection
 import graphql/schema
 import graphql/sdl
 import lexicon_graphql/schema_builder
+import lexicon_graphql/types
 
 // Test building a schema from a simple lexicon
 pub fn simple_schema_snapshot_test() {
   // Simple status lexicon with text field
   let lexicon =
-    schema_builder.Lexicon(
+    types.Lexicon(
       id: "xyz.statusphere.status",
-      defs: schema_builder.Defs(
-        main: schema_builder.RecordDef(type_: "record", properties: [
-          #("text", schema_builder.Property("string", False)),
-          #("createdAt", schema_builder.Property("string", True)),
+      defs: types.Defs(
+        main: types.RecordDef(type_: "record", properties: [
+          #("text", types.Property("string", False)),
+          #("createdAt", types.Property("string", True)),
         ]),
       ),
     )
@@ -40,21 +41,21 @@ pub fn simple_schema_snapshot_test() {
 // Test building schema with multiple lexicons
 pub fn multiple_lexicons_snapshot_test() {
   let status_lexicon =
-    schema_builder.Lexicon(
+    types.Lexicon(
       id: "xyz.statusphere.status",
-      defs: schema_builder.Defs(
-        main: schema_builder.RecordDef(type_: "record", properties: [
-          #("text", schema_builder.Property("string", False)),
+      defs: types.Defs(
+        main: types.RecordDef(type_: "record", properties: [
+          #("text", types.Property("string", False)),
         ]),
       ),
     )
 
   let profile_lexicon =
-    schema_builder.Lexicon(
+    types.Lexicon(
       id: "xyz.statusphere.profile",
-      defs: schema_builder.Defs(
-        main: schema_builder.RecordDef(type_: "record", properties: [
-          #("displayName", schema_builder.Property("string", False)),
+      defs: types.Defs(
+        main: types.RecordDef(type_: "record", properties: [
+          #("displayName", types.Property("string", False)),
         ]),
       ),
     )
@@ -75,12 +76,12 @@ pub fn multiple_lexicons_snapshot_test() {
 // Test that the schema has correct type names from NSID
 pub fn correct_type_names_snapshot_test() {
   let lexicon =
-    schema_builder.Lexicon(
+    types.Lexicon(
       id: "app.bsky.feed.post",
-      defs: schema_builder.Defs(
-        main: schema_builder.RecordDef(type_: "record", properties: [
-          #("text", schema_builder.Property("string", True)),
-          #("replyCount", schema_builder.Property("integer", False)),
+      defs: types.Defs(
+        main: types.RecordDef(type_: "record", properties: [
+          #("text", types.Property("string", True)),
+          #("replyCount", types.Property("integer", False)),
         ]),
       ),
     )
@@ -109,12 +110,12 @@ pub fn build_schema_with_empty_list_test() {
 // Comprehensive test showing ALL generated types
 pub fn simple_schema_all_types_snapshot_test() {
   let lexicon =
-    schema_builder.Lexicon(
+    types.Lexicon(
       id: "xyz.statusphere.status",
-      defs: schema_builder.Defs(
-        main: schema_builder.RecordDef(type_: "record", properties: [
-          #("text", schema_builder.Property("string", False)),
-          #("createdAt", schema_builder.Property("string", True)),
+      defs: types.Defs(
+        main: types.RecordDef(type_: "record", properties: [
+          #("text", types.Property("string", False)),
+          #("createdAt", types.Property("string", True)),
         ]),
       ),
     )

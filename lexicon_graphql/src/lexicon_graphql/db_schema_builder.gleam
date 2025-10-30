@@ -10,9 +10,10 @@ import graphql/connection
 import graphql/schema
 import graphql/value
 import lexicon_graphql/connection as lexicon_connection
+import lexicon_graphql/mutation_builder
 import lexicon_graphql/nsid
-import lexicon_graphql/schema_builder
 import lexicon_graphql/type_mapper
+import lexicon_graphql/types
 import lexicon_graphql/where_input
 
 /// Record type metadata with database resolver info
@@ -56,9 +57,13 @@ pub type RecordFetcher =
 /// Build a GraphQL schema from lexicons with database-backed resolvers
 ///
 /// The fetcher parameter should be a function that queries the database for records
+/// The mutation resolver factories are optional - if None, mutations will return stub errors
 pub fn build_schema_with_fetcher(
-  lexicons: List(schema_builder.Lexicon),
+  lexicons: List(types.Lexicon),
   fetcher: RecordFetcher,
+  create_factory: option.Option(mutation_builder.ResolverFactory),
+  update_factory: option.Option(mutation_builder.ResolverFactory),
+  delete_factory: option.Option(mutation_builder.ResolverFactory),
 ) -> Result(schema.Schema, String) {
   case lexicons {
     [] -> Error("Cannot build schema from empty lexicon list")
@@ -69,27 +74,31 @@ pub fn build_schema_with_fetcher(
       // Build the query type with fields for each record
       let query_type = build_query_type(record_types, fetcher)
 
-      // Create the schema
-      Ok(schema.schema(query_type, option.None))
+      // Build the mutation type with provided resolver factories
+      let mutation_type =
+        mutation_builder.build_mutation_type(
+          lexicons,
+          create_factory,
+          update_factory,
+          delete_factory,
+        )
+
+      // Create the schema with both queries and mutations
+      Ok(schema.schema(query_type, option.Some(mutation_type)))
     }
   }
 }
 
 /// Extract record types from lexicon definitions
-fn extract_record_types(
-  lexicons: List(schema_builder.Lexicon),
-) -> List(RecordType) {
+fn extract_record_types(lexicons: List(types.Lexicon)) -> List(RecordType) {
   lexicons
   |> list.filter_map(parse_lexicon)
 }
 
 /// Parse a single lexicon into a RecordType
-fn parse_lexicon(lexicon: schema_builder.Lexicon) -> Result(RecordType, Nil) {
+fn parse_lexicon(lexicon: types.Lexicon) -> Result(RecordType, Nil) {
   case lexicon {
-    schema_builder.Lexicon(
-      id,
-      schema_builder.Defs(schema_builder.RecordDef("record", properties)),
-    ) -> {
+    types.Lexicon(id, types.Defs(types.RecordDef("record", properties))) -> {
       let type_name = nsid.to_type_name(id)
       let field_name = nsid.to_field_name(id)
       let fields = build_fields(properties)
@@ -107,7 +116,7 @@ fn parse_lexicon(lexicon: schema_builder.Lexicon) -> Result(RecordType, Nil) {
 
 /// Build GraphQL fields from lexicon properties
 fn build_fields(
-  properties: List(#(String, schema_builder.Property)),
+  properties: List(#(String, types.Property)),
 ) -> List(schema.Field) {
   // Add standard AT Proto fields
   let standard_fields = [
@@ -168,7 +177,7 @@ fn build_fields(
   // Build fields from lexicon properties
   let lexicon_fields =
     list.map(properties, fn(prop) {
-      let #(name, schema_builder.Property(type_, _required)) = prop
+      let #(name, types.Property(type_, _required)) = prop
       let graphql_type = type_mapper.map_type(type_)
 
       schema.field(name, graphql_type, "Field from lexicon", fn(ctx) {
@@ -272,9 +281,15 @@ fn build_query_type(
           let pagination_params = extract_pagination_params(ctx)
 
           // Call the fetcher function to get records with cursors from database
-          use #(records_with_cursors, end_cursor, has_next_page, has_previous_page, total_count) <- result.try(
-            fetcher(collection_nsid, pagination_params),
-          )
+          use
+            #(
+              records_with_cursors,
+              end_cursor,
+              has_next_page,
+              has_previous_page,
+              total_count,
+            )
+          <- result.try(fetcher(collection_nsid, pagination_params))
 
           // Build edges from records with their cursors
           let edges =
@@ -322,7 +337,10 @@ fn extract_pagination_params(ctx: schema.Context) -> PaginationParams {
           case item {
             value.Object(fields) -> {
               // Extract field and direction from the object
-              case list.key_find(fields, "field"), list.key_find(fields, "direction") {
+              case
+                list.key_find(fields, "field"),
+                list.key_find(fields, "direction")
+              {
                 Ok(value.String(field)), Ok(value.String(direction)) -> {
                   // Convert direction to lowercase for consistency
                   let dir = case direction {
@@ -493,12 +511,14 @@ fn extract_blob_data(
               }
 
               // Return blob data in format expected by Blob type resolvers
-              Ok(value.Object([
-                #("ref", value.String(ref)),
-                #("mime_type", value.String(mime_type)),
-                #("size", value.Int(size)),
-                #("did", value.String(did)),
-              ]))
+              Ok(
+                value.Object([
+                  #("ref", value.String(ref)),
+                  #("mime_type", value.String(mime_type)),
+                  #("size", value.Int(size)),
+                  #("did", value.String(did)),
+                ]),
+              )
             }
             _ -> Error(Nil)
           }

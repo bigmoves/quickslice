@@ -115,6 +115,28 @@ fn parse_operations(
       }
     }
 
+    // Named mutation: "mutation Name { ... }"
+    [lexer.Name("mutation"), lexer.Name(name), ..rest] -> {
+      case parse_selection_set(rest) {
+        Ok(#(selections, remaining)) -> {
+          let op = NamedMutation(name, [], selections)
+          parse_operations(remaining, [op, ..acc])
+        }
+        Error(err) -> Error(err)
+      }
+    }
+
+    // Anonymous mutation: "mutation { ... }"
+    [lexer.Name("mutation"), lexer.BraceOpen, ..] -> {
+      case parse_selection_set(list.drop(tokens, 1)) {
+        Ok(#(selections, remaining)) -> {
+          let op = Mutation(selections)
+          parse_operations(remaining, [op, ..acc])
+        }
+        Error(err) -> Error(err)
+      }
+    }
+
     // Fragment definition: "fragment Name on Type { ... }"
     [
       lexer.Name("fragment"),

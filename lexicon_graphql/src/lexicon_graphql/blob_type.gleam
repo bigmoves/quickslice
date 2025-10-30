@@ -43,7 +43,7 @@ import gleam/result
 import graphql/schema
 import graphql/value
 
-/// Create the Blob GraphQL object type
+/// Create the Blob GraphQL object type (output type)
 pub fn create_blob_type() -> schema.Type {
   schema.object_type("Blob", "A blob reference with metadata and URL generation", [
     // ref field - CID reference
@@ -81,6 +81,38 @@ pub fn create_blob_type() -> schema.Type {
         ),
       ],
       resolve_url,
+    ),
+  ])
+}
+
+/// Create the BlobInput GraphQL input object type (input type for mutations)
+///
+/// ```graphql
+/// input BlobInput {
+///   ref: String!
+///   mimeType: String!
+///   size: Int!
+/// }
+/// ```
+pub fn create_blob_input_type() -> schema.Type {
+  schema.input_object_type("BlobInput", "Input type for blob references", [
+    schema.input_field(
+      "ref",
+      schema.non_null(schema.string_type()),
+      "CID reference to the blob",
+      option.None,
+    ),
+    schema.input_field(
+      "mimeType",
+      schema.non_null(schema.string_type()),
+      "MIME type of the blob",
+      option.None,
+    ),
+    schema.input_field(
+      "size",
+      schema.non_null(schema.int_type()),
+      "Size in bytes",
+      option.None,
     ),
   ])
 }

@@ -7,15 +7,15 @@ import gleam/dynamic/decode
 import gleam/json
 import gleam/list
 import gleam/result
-import lexicon_graphql/schema_builder
+import lexicon_graphql/types
 
 /// Parse a lexicon JSON string into a Lexicon type
-pub fn parse_lexicon(json_str: String) -> Result(schema_builder.Lexicon, String) {
+pub fn parse_lexicon(json_str: String) -> Result(types.Lexicon, String) {
   // Decode the JSON into a structured format using continuation-passing style
   let decoder = {
     use id <- decode.field("id", decode.string)
     use defs <- decode.field("defs", decode_defs())
-    decode.success(schema_builder.Lexicon(id:, defs:))
+    decode.success(types.Lexicon(id:, defs:))
   }
 
   json.parse(json_str, decoder)
@@ -23,22 +23,20 @@ pub fn parse_lexicon(json_str: String) -> Result(schema_builder.Lexicon, String)
 }
 
 /// Create a decoder for the defs object
-fn decode_defs() -> decode.Decoder(schema_builder.Defs) {
+fn decode_defs() -> decode.Decoder(types.Defs) {
   use main <- decode.field("main", decode_record_def())
-  decode.success(schema_builder.Defs(main:))
+  decode.success(types.Defs(main:))
 }
 
 /// Create a decoder for a record definition
-fn decode_record_def() -> decode.Decoder(schema_builder.RecordDef) {
+fn decode_record_def() -> decode.Decoder(types.RecordDef) {
   use type_ <- decode.field("type", decode.string)
   use record <- decode.field("record", decode_record_object())
-  decode.success(schema_builder.RecordDef(type_:, properties: record))
+  decode.success(types.RecordDef(type_:, properties: record))
 }
 
 /// Create a decoder for the record object which contains properties
-fn decode_record_object() -> decode.Decoder(
-  List(#(String, schema_builder.Property)),
-) {
+fn decode_record_object() -> decode.Decoder(List(#(String, types.Property))) {
   // This is more complex - we need to decode a dict of properties
   use properties_dict <- decode.field(
     "properties",
@@ -65,7 +63,7 @@ fn decode_record_object() -> decode.Decoder(
         // Default fallback
       }
 
-      #(name, schema_builder.Property(prop_type, is_required))
+      #(name, types.Property(prop_type, is_required))
     })
 
   decode.success(properties)

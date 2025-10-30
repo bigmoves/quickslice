@@ -21,10 +21,11 @@ import wisp
 pub fn handle_graphql_request(
   req: wisp.Request,
   db: sqlight.Connection,
+  auth_base_url: String,
 ) -> wisp.Response {
   case req.method {
-    http.Post -> handle_graphql_post(req, db)
-    http.Get -> handle_graphql_get(req, db)
+    http.Post -> handle_graphql_post(req, db, auth_base_url)
+    http.Get -> handle_graphql_get(req, db, auth_base_url)
     _ -> method_not_allowed_response()
   }
 }
@@ -32,7 +33,11 @@ pub fn handle_graphql_request(
 fn handle_graphql_post(
   req: wisp.Request,
   db: sqlight.Connection,
+  auth_base_url: String,
 ) -> wisp.Response {
+  // Extract Authorization header (optional for queries, required for mutations)
+  let auth_token = list.key_find(req.headers, "authorization")
+
   // Read request body
   case wisp.read_body_bits(req) {
     Ok(body) -> {
@@ -40,7 +45,7 @@ fn handle_graphql_post(
         Ok(body_string) -> {
           // Parse JSON to extract query
           case extract_query_from_json(body_string) {
-            Ok(query) -> execute_graphql_query(db, query)
+            Ok(query) -> execute_graphql_query(db, query, auth_token, auth_base_url)
             Error(err) -> bad_request_response("Invalid JSON: " <> err)
           }
         }
@@ -54,18 +59,27 @@ fn handle_graphql_post(
 fn handle_graphql_get(
   req: wisp.Request,
   db: sqlight.Connection,
+  auth_base_url: String,
 ) -> wisp.Response {
+  // Extract Authorization header (optional for queries, required for mutations)
+  let auth_token = list.key_find(req.headers, "authorization")
+
   // Support GET requests with query parameter
   let query_params = wisp.get_query(req)
   case list.key_find(query_params, "query") {
-    Ok(query) -> execute_graphql_query(db, query)
+    Ok(query) -> execute_graphql_query(db, query, auth_token, auth_base_url)
     Error(_) -> bad_request_response("Missing 'query' parameter")
   }
 }
 
-fn execute_graphql_query(db: sqlight.Connection, query: String) -> wisp.Response {
+fn execute_graphql_query(
+  db: sqlight.Connection,
+  query: String,
+  auth_token: Result(String, Nil),
+  auth_base_url: String,
+) -> wisp.Response {
   // Use the new pure Gleam GraphQL implementation
-  case graphql_gleam.execute_query_with_db(db, query) {
+  case graphql_gleam.execute_query_with_db(db, query, auth_token, auth_base_url) {
     Ok(result_json) -> success_response(result_json)
     Error(err) -> internal_error_response(err)
   }

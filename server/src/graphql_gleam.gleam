@@ -17,6 +17,7 @@ import graphql/schema
 import graphql/value
 import lexicon_graphql/db_schema_builder
 import lexicon_graphql/lexicon_parser
+import mutation_resolvers
 import sqlight
 import where_converter
 
@@ -27,6 +28,8 @@ import where_converter
 pub fn execute_query_with_db(
   db: sqlight.Connection,
   query_string: String,
+  auth_token: Result(String, Nil),
+  auth_base_url: String,
 ) -> Result(String, String) {
   // Step 1: Fetch lexicons from database
   use lexicon_records <- result.try(
@@ -113,23 +116,54 @@ pub fn execute_query_with_db(
         }
       }
 
-      // Step 4: Build schema with database-backed resolvers
+      // Step 4: Create mutation resolver factories
+      let mutation_ctx =
+        mutation_resolvers.MutationContext(db: db, auth_base_url: auth_base_url)
+
+      let create_factory =
+        option.Some(fn(collection) {
+          mutation_resolvers.create_resolver_factory(collection, mutation_ctx)
+        })
+
+      let update_factory =
+        option.Some(fn(collection) {
+          mutation_resolvers.update_resolver_factory(collection, mutation_ctx)
+        })
+
+      let delete_factory =
+        option.Some(fn(collection) {
+          mutation_resolvers.delete_resolver_factory(collection, mutation_ctx)
+        })
+
+      // Step 5: Build schema with database-backed resolvers and mutations
       use graphql_schema <- result.try(
         db_schema_builder.build_schema_with_fetcher(
           parsed_lexicons,
           record_fetcher,
+          create_factory,
+          update_factory,
+          delete_factory,
         ),
       )
 
-      // Step 5: Execute the query
-      let ctx = schema.context(option.None)
+      // Step 6: Create context with auth token if provided
+      let ctx_data = case auth_token {
+        Ok(token) -> {
+          // Add auth token to context for mutation resolvers
+          option.Some(value.Object([#("auth_token", value.String(token))]))
+        }
+        Error(_) -> option.None
+      }
+      let ctx = schema.context(ctx_data)
+
+      // Step 7: Execute the query
       use response <- result.try(executor.execute(
         query_string,
         graphql_schema,
         ctx,
       ))
 
-      // Step 6: Format the response as JSON
+      // Step 8: Format the response as JSON
       Ok(format_response(response))
     }
   }

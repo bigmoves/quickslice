@@ -4,7 +4,7 @@
 import gleam/list
 import gleeunit/should
 import lexicon_graphql/lexicon_parser
-import lexicon_graphql/schema_builder
+import lexicon_graphql/types
 
 // Test parsing a simple record lexicon
 pub fn parse_simple_record_lexicon_test() {
@@ -37,11 +37,11 @@ pub fn parse_simple_record_lexicon_test() {
       should.equal(lexicon.id, "xyz.statusphere.status")
       // Verify it has properties
       case lexicon.defs.main {
-        schema_builder.RecordDef(type_: "record", properties: props) -> {
+        types.RecordDef(type_: "record", properties: props) -> {
           // Should have at least text and createdAt properties
           should.be_true(list.length(props) >= 2)
         }
-        schema_builder.RecordDef(type_: _, properties: _) -> {
+        types.RecordDef(type_: _, properties: _) -> {
           should.fail()
         }
       }

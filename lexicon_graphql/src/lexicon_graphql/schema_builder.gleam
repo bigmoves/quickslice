@@ -3,31 +3,26 @@
 /// Builds GraphQL schemas from AT Protocol lexicon definitions.
 /// Simplified MVP version - handles basic record types only.
 import gleam/list
-import gleam/option.{None}
+import gleam/option
 import graphql/schema
 import graphql/value
+import lexicon_graphql/mutation_builder
 import lexicon_graphql/nsid
 import lexicon_graphql/type_mapper
+import lexicon_graphql/types
 
-/// Lexicon definition structure (simplified)
-pub type Lexicon {
-  Lexicon(id: String, defs: Defs)
-}
+/// Re-export types for backwards compatibility
+pub type Lexicon =
+  types.Lexicon
 
-/// Lexicon definitions container
-pub type Defs {
-  Defs(main: RecordDef)
-}
+pub type Defs =
+  types.Defs
 
-/// Record definition
-pub type RecordDef {
-  RecordDef(type_: String, properties: List(#(String, Property)))
-}
+pub type RecordDef =
+  types.RecordDef
 
-/// Property definition
-pub type Property {
-  Property(type_: String, required: Bool)
-}
+pub type Property =
+  types.Property
 
 /// Record type metadata
 type RecordType {
@@ -42,6 +37,7 @@ type RecordType {
 /// Builds a GraphQL schema from a list of lexicon definitions.
 ///
 /// Returns a Schema that can be used for query execution.
+/// Includes mutations with stub resolvers (no actual implementation).
 pub fn build_schema(lexicons: List(Lexicon)) -> Result(schema.Schema, String) {
   case lexicons {
     [] -> Error("Cannot build schema from empty lexicon list")
@@ -52,8 +48,17 @@ pub fn build_schema(lexicons: List(Lexicon)) -> Result(schema.Schema, String) {
       // Build the query type with fields for each record
       let query_type = build_query_type(record_types)
 
-      // Create the schema
-      Ok(schema.schema(query_type, None))
+      // Build the mutation type with stub resolvers
+      let mutation_type =
+        mutation_builder.build_mutation_type(
+          lexicons,
+          option.None,
+          option.None,
+          option.None,
+        )
+
+      // Create the schema with queries and mutations
+      Ok(schema.schema(query_type, option.Some(mutation_type)))
     }
   }
 }
@@ -67,7 +72,7 @@ fn extract_record_types(lexicons: List(Lexicon)) -> List(RecordType) {
 /// Parse a single lexicon into a RecordType
 fn parse_lexicon(lexicon: Lexicon) -> Result(RecordType, Nil) {
   case lexicon {
-    Lexicon(id, Defs(RecordDef("record", properties))) -> {
+    types.Lexicon(id, types.Defs(types.RecordDef("record", properties))) -> {
       let type_name = nsid.to_type_name(id)
       let field_name = nsid.to_field_name(id)
       let fields = build_fields(properties)
@@ -107,7 +112,7 @@ fn build_fields(properties: List(#(String, Property))) -> List(schema.Field) {
   // Build fields from lexicon properties
   let lexicon_fields =
     list.map(properties, fn(prop) {
-      let #(name, Property(type_, _required)) = prop
+      let #(name, types.Property(type_, _required)) = prop
       let graphql_type = type_mapper.map_type(type_)
 
       schema.field(name, graphql_type, "Field from lexicon", fn(_ctx) {

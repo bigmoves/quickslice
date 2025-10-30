@@ -205,6 +205,12 @@ pub fn query_type(s: Schema) -> Type {
   }
 }
 
+pub fn get_mutation_type(s: Schema) -> Option(Type) {
+  case s {
+    Schema(_, mutation_type) -> mutation_type
+  }
+}
+
 pub fn is_non_null(t: Type) -> Bool {
   case t {
     NonNullType(_) -> True

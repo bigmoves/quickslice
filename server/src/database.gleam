@@ -284,6 +284,29 @@ pub fn delete_record(
   Ok(Nil)
 }
 
+/// Updates an existing record in the database
+pub fn update_record(
+  conn: sqlight.Connection,
+  uri: String,
+  cid: String,
+  json: String,
+) -> Result(Nil, sqlight.Error) {
+  let sql =
+    "
+    UPDATE record
+    SET cid = ?, json = ?, indexed_at = datetime('now')
+    WHERE uri = ?
+  "
+
+  use _ <- result.try(sqlight.query(
+    sql,
+    on: conn,
+    with: [sqlight.text(cid), sqlight.text(json), sqlight.text(uri)],
+    expecting: decode.string,
+  ))
+  Ok(Nil)
+}
+
 /// Inserts or updates an actor in the database
 pub fn upsert_actor(
   conn: sqlight.Connection,

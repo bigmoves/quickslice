@@ -134,7 +134,7 @@ pub fn graphql_total_count_basic_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
-  let response = graphql_handler.handle_graphql_request(request, db)
+  let response = graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
 
   // Verify response
   response.status
@@ -236,7 +236,7 @@ pub fn graphql_total_count_with_filter_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
-  let response = graphql_handler.handle_graphql_request(request, db)
+  let response = graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
 
   // Verify response
   response.status
@@ -291,7 +291,7 @@ pub fn graphql_total_count_empty_result_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
-  let response = graphql_handler.handle_graphql_request(request, db)
+  let response = graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
 
   // Verify response
   response.status
@@ -359,7 +359,7 @@ pub fn graphql_total_count_with_pagination_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
-  let response = graphql_handler.handle_graphql_request(request, db)
+  let response = graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
 
   // Verify response
   response.status

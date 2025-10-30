@@ -17,6 +17,7 @@ import graphql/schema
 import graphql/sdl
 import lexicon_graphql/db_schema_builder
 import lexicon_graphql/schema_builder
+import lexicon_graphql/types
 
 // Helper to create a test schema with a mock fetcher
 fn create_test_schema_from_lexicons(
@@ -27,7 +28,7 @@ fn create_test_schema_from_lexicons(
     Ok(#([], option.None, False, False, option.None))
   }
 
-  case db_schema_builder.build_schema_with_fetcher(lexicons, fetcher) {
+  case db_schema_builder.build_schema_with_fetcher(lexicons, fetcher, option.None, option.None, option.None) {
     Ok(s) -> s
     Error(_) -> panic as "Failed to build test schema"
   }
@@ -36,12 +37,12 @@ fn create_test_schema_from_lexicons(
 // Test: Single lexicon creates connection field with sortBy
 pub fn single_lexicon_with_sorting_snapshot_test() {
   let lexicon =
-    schema_builder.Lexicon(
+    types.Lexicon(
       "xyz.statusphere.status",
-      schema_builder.Defs(
-        schema_builder.RecordDef("record", [
-          #("status", schema_builder.Property("string", False)),
-          #("createdAt", schema_builder.Property("string", False)),
+      types.Defs(
+        types.RecordDef("record", [
+          #("status", types.Property("string", False)),
+          #("createdAt", types.Property("string", False)),
         ]),
       ),
     )
@@ -60,23 +61,23 @@ pub fn single_lexicon_with_sorting_snapshot_test() {
 // Test: Multiple lexicons create distinct fields with separate sort enums
 pub fn multiple_lexicons_with_distinct_sort_enums_snapshot_test() {
   let lexicon1 =
-    schema_builder.Lexicon(
+    types.Lexicon(
       "xyz.statusphere.status",
-      schema_builder.Defs(
-        schema_builder.RecordDef("record", [
-          #("status", schema_builder.Property("string", False)),
-          #("createdAt", schema_builder.Property("string", False)),
+      types.Defs(
+        types.RecordDef("record", [
+          #("status", types.Property("string", False)),
+          #("createdAt", types.Property("string", False)),
         ]),
       ),
     )
 
   let lexicon2 =
-    schema_builder.Lexicon(
+    types.Lexicon(
       "app.bsky.feed.post",
-      schema_builder.Defs(
-        schema_builder.RecordDef("record", [
-          #("text", schema_builder.Property("string", False)),
-          #("likeCount", schema_builder.Property("integer", False)),
+      types.Defs(
+        types.RecordDef("record", [
+          #("text", types.Property("string", False)),
+          #("likeCount", types.Property("integer", False)),
         ]),
       ),
     )
@@ -95,11 +96,11 @@ pub fn multiple_lexicons_with_distinct_sort_enums_snapshot_test() {
 // Unit test: Verify sortBy argument is a list type
 pub fn sortby_argument_is_list_type_test() {
   let lexicon =
-    schema_builder.Lexicon(
+    types.Lexicon(
       "xyz.statusphere.status",
-      schema_builder.Defs(
-        schema_builder.RecordDef("record", [
-          #("status", schema_builder.Property("string", False)),
+      types.Defs(
+        types.RecordDef("record", [
+          #("status", types.Property("string", False)),
         ]),
       ),
     )
@@ -128,11 +129,11 @@ pub fn sortby_argument_is_list_type_test() {
 // Unit test: Verify connection has all pagination arguments
 pub fn connection_has_all_pagination_arguments_test() {
   let lexicon =
-    schema_builder.Lexicon(
+    types.Lexicon(
       "xyz.statusphere.status",
-      schema_builder.Defs(
-        schema_builder.RecordDef("record", [
-          #("status", schema_builder.Property("string", False)),
+      types.Defs(
+        types.RecordDef("record", [
+          #("status", types.Property("string", False)),
         ]),
       ),
     )
@@ -159,12 +160,12 @@ pub fn connection_has_all_pagination_arguments_test() {
 // Comprehensive test showing ALL generated types for db_schema_builder
 pub fn db_schema_all_types_snapshot_test() {
   let lexicon =
-    schema_builder.Lexicon(
+    types.Lexicon(
       "xyz.statusphere.status",
-      schema_builder.Defs(
-        schema_builder.RecordDef("record", [
-          #("text", schema_builder.Property("string", False)),
-          #("createdAt", schema_builder.Property("string", False)),
+      types.Defs(
+        types.RecordDef("record", [
+          #("text", types.Property("string", False)),
+          #("createdAt", types.Property("string", False)),
         ]),
       ),
     )

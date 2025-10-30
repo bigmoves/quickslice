@@ -104,10 +104,9 @@ fn execute_operation(
   ctx: schema.Context,
   fragments: Dict(String, parser.Operation),
 ) -> Result(#(value.Value, List(GraphQLError)), String) {
-  let root_type = schema.query_type(graphql_schema)
-
   case operation {
-    parser.Query(selection_set) ->
+    parser.Query(selection_set) -> {
+      let root_type = schema.query_type(graphql_schema)
       execute_selection_set(
         selection_set,
         root_type,
@@ -116,7 +115,9 @@ fn execute_operation(
         fragments,
         [],
       )
-    parser.NamedQuery(_, _, selection_set) ->
+    }
+    parser.NamedQuery(_, _, selection_set) -> {
+      let root_type = schema.query_type(graphql_schema)
       execute_selection_set(
         selection_set,
         root_type,
@@ -125,8 +126,39 @@ fn execute_operation(
         fragments,
         [],
       )
-    parser.Mutation(_) -> Error("Mutations not yet implemented")
-    parser.NamedMutation(_, _, _) -> Error("Mutations not yet implemented")
+    }
+    parser.Mutation(selection_set) -> {
+      // Get mutation root type from schema
+      case schema.get_mutation_type(graphql_schema) {
+        option.Some(mutation_type) ->
+          execute_selection_set(
+            selection_set,
+            mutation_type,
+            graphql_schema,
+            ctx,
+            fragments,
+            [],
+          )
+        option.None ->
+          Error("Schema does not define a mutation type")
+      }
+    }
+    parser.NamedMutation(_, _, selection_set) -> {
+      // Get mutation root type from schema
+      case schema.get_mutation_type(graphql_schema) {
+        option.Some(mutation_type) ->
+          execute_selection_set(
+            selection_set,
+            mutation_type,
+            graphql_schema,
+            ctx,
+            fragments,
+            [],
+          )
+        option.None ->
+          Error("Schema does not define a mutation type")
+      }
+    }
     parser.FragmentDefinition(_, _, _) ->
       Error("Fragment definitions are not executable operations")
   }

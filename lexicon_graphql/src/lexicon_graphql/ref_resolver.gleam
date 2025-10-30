@@ -8,7 +8,7 @@
 /// - "nsid#fragment" - references a specific definition within that NSID
 import gleam/list
 import gleam/string
-import lexicon_graphql/schema_builder
+import lexicon_graphql/types
 
 /// Parse a reference URI into NSID and definition name
 ///
@@ -34,7 +34,7 @@ pub fn parse_ref_uri(ref_uri: String) -> #(String, String) {
 /// Returns the NSID of the referenced type if found, Error if not found
 pub fn resolve_ref(
   ref_uri: String,
-  lexicons: List(schema_builder.Lexicon),
+  lexicons: List(types.Lexicon),
 ) -> Result(String, String) {
   let #(nsid, _fragment) = parse_ref_uri(ref_uri)
 
@@ -48,8 +48,8 @@ pub fn resolve_ref(
 /// Find a lexicon by its NSID
 fn find_lexicon(
   nsid: String,
-  lexicons: List(schema_builder.Lexicon),
-) -> Result(schema_builder.Lexicon, Nil) {
+  lexicons: List(types.Lexicon),
+) -> Result(types.Lexicon, Nil) {
   lexicons
   |> list.find(fn(lex) { lex.id == nsid })
 }

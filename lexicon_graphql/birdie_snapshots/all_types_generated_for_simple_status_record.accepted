@@ -4,6 +4,30 @@ title: All types generated for simple status record
 file: ./test/schema_builder_test.gleam
 test_name: simple_schema_all_types_snapshot_test
 ---
+"""Result of a delete mutation"""
+type DeleteResult {
+  """URI of deleted record"""
+  uri: String
+}
+
+"""Input type for XyzStatusphereStatusInput"""
+input XyzStatusphereStatusInput {
+  """Input field for text"""
+  text: String
+  """Input field for createdAt"""
+  createdAt: String!
+}
+
+"""Root mutation type"""
+type Mutation {
+  """Create a new xyz.statusphere.status record"""
+  createXyzStatusphereStatus: XyzStatusphereStatus
+  """Update an existing xyz.statusphere.status record"""
+  updateXyzStatusphereStatus: XyzStatusphereStatus
+  """Delete a xyz.statusphere.status record"""
+  deleteXyzStatusphereStatus: DeleteResult
+}
+
 scalar String
 
 """Record type: xyz.statusphere.status"""
