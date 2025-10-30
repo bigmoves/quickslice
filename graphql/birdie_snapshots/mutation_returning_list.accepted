@@ -1,0 +1,11 @@
+---
+version: 1.4.1
+title: Mutation returning list
+file: ./test/mutation_sdl_test.gleam
+test_name: mutation_returning_list_test
+---
+"""Mutations"""
+type Mutation {
+  """Create multiple users"""
+  createUsers: [User]
+}

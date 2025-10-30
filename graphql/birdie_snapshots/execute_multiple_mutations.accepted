@@ -1,0 +1,7 @@
+---
+version: 1.4.1
+title: Execute multiple mutations
+file: ./test/mutation_execution_test.gleam
+test_name: execute_multiple_mutations_test
+---
+Response(Object([#("createUser", Object([#("id", String("123")), #("name", String("Alice"))])), #("deleteUser", Boolean(True))]), [])

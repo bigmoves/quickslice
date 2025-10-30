@@ -1,0 +1,11 @@
+---
+version: 1.4.1
+title: Mutation with non-null return type
+file: ./test/mutation_sdl_test.gleam
+test_name: mutation_with_non_null_return_test
+---
+"""Mutations"""
+type Mutation {
+  """Create a user (guaranteed to return)"""
+  createUser: User!
+}

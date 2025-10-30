@@ -1,0 +1,7 @@
+---
+version: 1.4.1
+title: Named mutation
+file: ./test/mutation_parser_test.gleam
+test_name: parse_named_mutation_test
+---
+Document([NamedMutation("CreateUser", [], SelectionSet([Field("createUser", None, [Argument("name", StringValue("Alice"))], [Field("id", None, [], []), Field("name", None, [], [])])]))])

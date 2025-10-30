@@ -1,0 +1,7 @@
+---
+version: 1.4.1
+title: Execute simple query
+file: ./test/executor_test.gleam
+test_name: execute_simple_query_test
+---
+Response(Object([#("hello", String("world"))]), [])

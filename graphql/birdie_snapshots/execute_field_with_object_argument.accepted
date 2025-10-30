@@ -1,0 +1,7 @@
+---
+version: 1.4.1
+title: Execute field with object argument
+file: ./test/executor_test.gleam
+test_name: execute_field_receives_object_argument_test
+---
+Response(Object([#("posts", String("Sorting by date DESC"))]), [])

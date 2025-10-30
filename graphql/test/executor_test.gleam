@@ -1,9 +1,11 @@
 /// Tests for GraphQL Executor
 ///
 /// Tests query execution combining parser + schema + resolvers
+import birdie
 import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/string
 import gleeunit/should
 import graphql/executor
 import graphql/schema
@@ -64,17 +66,12 @@ pub fn execute_simple_query_test() {
 
   let result = executor.execute(query, schema, schema.context(None))
 
-  should.be_ok(result)
-  |> fn(response) {
-    case response {
-      executor.Response(
-        data: value.Object([#("hello", value.String("world"))]),
-        errors: [],
-      ) -> True
-      _ -> False
-    }
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
   }
-  |> should.be_true
+
+  birdie.snap(title: "Execute simple query", content: format_response(response))
 }
 
 pub fn execute_multiple_fields_test() {
@@ -93,6 +90,11 @@ pub fn execute_nested_query_test() {
   let result = executor.execute(query, schema, schema.context(None))
 
   should.be_ok(result)
+}
+
+// Helper to format response for snapshots
+fn format_response(response: executor.Response) -> String {
+  string.inspect(response)
 }
 
 pub fn execute_field_with_arguments_test() {
@@ -133,17 +135,15 @@ pub fn execute_typename_introspection_test() {
 
   let result = executor.execute(query, schema, schema.context(None))
 
-  should.be_ok(result)
-  |> fn(response) {
-    case response {
-      executor.Response(
-        data: value.Object([#("__typename", value.String("Query"))]),
-        errors: [],
-      ) -> True
-      _ -> False
-    }
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
   }
-  |> should.be_true
+
+  birdie.snap(
+    title: "Execute __typename introspection",
+    content: format_response(response),
+  )
 }
 
 pub fn execute_typename_with_regular_fields_test() {
@@ -152,20 +152,15 @@ pub fn execute_typename_with_regular_fields_test() {
 
   let result = executor.execute(query, schema, schema.context(None))
 
-  should.be_ok(result)
-  |> fn(response) {
-    case response {
-      executor.Response(
-        data: value.Object([
-          #("__typename", value.String("Query")),
-          #("hello", value.String("world")),
-        ]),
-        errors: [],
-      ) -> True
-      _ -> False
-    }
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
   }
-  |> should.be_true
+
+  birdie.snap(
+    title: "Execute __typename with regular fields",
+    content: format_response(response),
+  )
 }
 
 pub fn execute_schema_introspection_query_type_test() {
@@ -174,24 +169,15 @@ pub fn execute_schema_introspection_query_type_test() {
 
   let result = executor.execute(query, schema, schema.context(None))
 
-  should.be_ok(result)
-  |> fn(response) {
-    case response {
-      executor.Response(
-        data: value.Object([
-          #(
-            "__schema",
-            value.Object([
-              #("queryType", value.Object([#("name", value.String("Query"))])),
-            ]),
-          ),
-        ]),
-        errors: [],
-      ) -> True
-      _ -> False
-    }
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
   }
-  |> should.be_true
+
+  birdie.snap(
+    title: "Execute __schema introspection",
+    content: format_response(response),
+  )
 }
 
 // Fragment execution tests
@@ -209,32 +195,15 @@ pub fn execute_simple_fragment_spread_test() {
 
   let result = executor.execute(query, schema, schema.context(None))
 
-  // Test should pass - fragment should be expanded
-  should.be_ok(result)
-  |> fn(response) {
-    case response {
-      executor.Response(data: value.Object(fields), errors: []) -> {
-        // Check that we have a user field
-        case list.key_find(fields, "user") {
-          Ok(value.Object(user_fields)) -> {
-            // Check that user has id and name fields
-            let has_id = case list.key_find(user_fields, "id") {
-              Ok(value.String("123")) -> True
-              _ -> False
-            }
-            let has_name = case list.key_find(user_fields, "name") {
-              Ok(value.String("Alice")) -> True
-              _ -> False
-            }
-            has_id && has_name
-          }
-          _ -> False
-        }
-      }
-      _ -> False
-    }
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
   }
-  |> should.be_true
+
+  birdie.snap(
+    title: "Execute simple fragment spread",
+    content: format_response(response),
+  )
 }
 
 // Test for list fields with nested selections
@@ -307,46 +276,15 @@ pub fn execute_list_with_nested_selections_test() {
 
   let result = executor.execute(query, schema, schema.context(None))
 
-  // The result should only contain id and name fields, NOT email
-  should.be_ok(result)
-  |> fn(response) {
-    case response {
-      executor.Response(data: value.Object(fields), errors: []) -> {
-        case list.key_find(fields, "users") {
-          Ok(value.List(users)) -> {
-            // Should have 2 users
-            list.length(users) == 2
-            && list.all(users, fn(user) {
-              case user {
-                value.Object(user_fields) -> {
-                  // Each user should have exactly 2 fields: id and name
-                  let field_count = list.length(user_fields)
-                  let has_id = case list.key_find(user_fields, "id") {
-                    Ok(_) -> True
-                    _ -> False
-                  }
-                  let has_name = case list.key_find(user_fields, "name") {
-                    Ok(_) -> True
-                    _ -> False
-                  }
-                  let has_email = case list.key_find(user_fields, "email") {
-                    Ok(_) -> True
-                    _ -> False
-                  }
-                  // Should have id and name, but NOT email
-                  field_count == 2 && has_id && has_name && !has_email
-                }
-                _ -> False
-              }
-            })
-          }
-          _ -> False
-        }
-      }
-      _ -> False
-    }
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
   }
-  |> should.be_true
+
+  birdie.snap(
+    title: "Execute list with nested selections",
+    content: format_response(response),
+  )
 }
 
 // Test that arguments are actually passed to resolvers
@@ -373,17 +311,15 @@ pub fn execute_field_receives_string_argument_test() {
 
   let result = executor.execute(query, test_schema, schema.context(None))
 
-  should.be_ok(result)
-  |> fn(response) {
-    case response {
-      executor.Response(
-        data: value.Object([#("echo", value.String("Echo: hello"))]),
-        errors: [],
-      ) -> True
-      _ -> False
-    }
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
   }
-  |> should.be_true
+
+  birdie.snap(
+    title: "Execute field with string argument",
+    content: format_response(response),
+  )
 }
 
 // Test list argument
@@ -485,17 +421,13 @@ pub fn execute_field_receives_object_argument_test() {
 
   let result = executor.execute(query, test_schema, schema.context(None))
 
-  should.be_ok(result)
-  |> fn(response) {
-    case response {
-      executor.Response(
-        data: value.Object([
-          #("posts", value.String("Sorting by date DESC")),
-        ]),
-        errors: [],
-      ) -> True
-      _ -> False
-    }
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
   }
-  |> should.be_true
+
+  birdie.snap(
+    title: "Execute field with object argument",
+    content: format_response(response),
+  )
 }

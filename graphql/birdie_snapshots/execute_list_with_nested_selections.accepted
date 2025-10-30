@@ -1,0 +1,7 @@
+---
+version: 1.4.1
+title: Execute list with nested selections
+file: ./test/executor_test.gleam
+test_name: execute_list_with_nested_selections_test
+---
+Response(Object([#("users", List([Object([#("id", String("1")), #("name", String("Alice"))]), Object([#("id", String("2")), #("name", String("Bob"))])]))]), [])

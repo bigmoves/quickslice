@@ -1,0 +1,29 @@
+---
+version: 1.4.1
+title: Mutation with input object argument
+file: ./test/mutation_sdl_test.gleam
+test_name: mutation_with_input_object_test
+---
+"""Input for creating a user"""
+input CreateUserInput {
+  """User name"""
+  name: String!
+  """Email address"""
+  email: String!
+  """Age"""
+  age: Int
+}
+
+"""A user"""
+type User {
+  """User ID"""
+  id: ID
+  """User name"""
+  name: String
+}
+
+"""Mutations"""
+type Mutation {
+  """Create a new user"""
+  createUser: User
+}

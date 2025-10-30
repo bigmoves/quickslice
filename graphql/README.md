@@ -10,13 +10,16 @@ A GraphQL implementation in Gleam providing query parsing, execution, and intros
   - Arguments
   - Aliases
   - Fragments (inline and named)
+  - Mutations (named and anonymous)
 
 - **Schema Definition**: Type-safe schema builder with:
   - Object types
+  - Input object types
   - Scalar types (String, Int, Float, Boolean, ID)
   - List types
   - Non-null types
   - Field resolvers with context-based data access
+  - Mutation support with argument handling
 
 - **Query Execution**: Execution engine with:
   - Recursive field resolution
@@ -26,10 +29,18 @@ A GraphQL implementation in Gleam providing query parsing, execution, and intros
   - Error collection and reporting
   - Path tracking for error context
 
-- **Introspection**: GraphQL introspection support
+- **Mutation Execution**: Mutation engine with:
+  - Named mutations (`mutation CreateUser { ... }`)
+  - Anonymous mutations (`mutation { ... }`)
+  - Input type validation
+  - Context-based authentication and authorization
+  - Error handling and reporting
+
+- **Introspection**: Full GraphQL introspection support
   - Schema introspection queries
-  - Type introspection
+  - Type introspection (including mutation types)
   - Field introspection
+  - Input type introspection
   - Compatible with GraphiQL and other GraphQL clients
 
 ## Architecture
@@ -89,8 +100,44 @@ let query_type = schema.object_type(
   ]
 )
 
-// Create schema
+// Define input type for creating users
+let create_user_input = schema.input_object_type(
+  "CreateUserInput",
+  "Input for creating a user",
+  [
+    schema.input_field("name", schema.non_null(schema.string_type()), "User name", option.None),
+  ]
+)
+
+// Define mutation type
+let mutation_type = schema.object_type(
+  "Mutation",
+  "Root mutation type",
+  [
+    schema.field_with_args(
+      "createUser",
+      user_type,
+      "Create a new user",
+      [schema.argument("input", schema.non_null(create_user_input), "User data", option.None)],
+      fn(ctx) {
+        // Extract input from arguments and create user
+        case schema.get_argument(ctx, "input") {
+          option.Some(input) -> {
+            Ok(value.Object([
+              #("id", value.String("2")),
+              #("name", value.String("Bob")),
+            ]))
+          }
+          option.None -> Error("Missing input argument")
+        }
+      }
+    ),
+  ]
+)
+
+// Create schema with mutations
 let my_schema = schema.new(query_type)
+  |> schema.with_mutation(mutation_type)
 ```
 
 ### Executing Queries
@@ -100,7 +147,8 @@ import graphql/executor
 import graphql/schema
 
 let query = "{ user { id name } }"
-let result = executor.execute(query, my_schema, schema.Context(None))
+let ctx = schema.context(option.None)
+let result = executor.execute(query, my_schema, ctx)
 
 case result {
   Ok(executor.Response(data: data, errors: [])) -> {
@@ -119,22 +167,65 @@ case result {
 }
 ```
 
+### Executing Mutations
+
+```gleam
+import graphql/executor
+import graphql/schema
+import graphql/value
+
+let mutation = "
+  mutation {
+    createUser(input: { name: \"Bob\" }) {
+      id
+      name
+    }
+  }
+"
+
+// Create context with optional data (e.g., auth token)
+let ctx_data = value.Object([
+  #("auth_token", value.String("some_token"))
+])
+let ctx = schema.context(option.Some(ctx_data))
+
+let result = executor.execute(mutation, my_schema, ctx)
+
+case result {
+  Ok(executor.Response(data: data, errors: [])) -> {
+    // Mutation succeeded
+    io.println("Created user: " <> string.inspect(data))
+  }
+  Ok(executor.Response(data: data, errors: errors)) -> {
+    // Mutation executed with errors
+    io.println("Errors: " <> string.inspect(errors))
+  }
+  Error(err) -> {
+    io.println("Error: " <> err)
+  }
+}
+```
+
 ## Test Coverage
 
 The package includes tests covering:
-- Parsing
-- Execution
-- Schema
-- Introspection
-- Edge cases
+- Query parsing (including mutations)
+- Query execution
+- Mutation execution
+- Schema definition and validation
+- Introspection (queries and mutation types)
+- Input type handling
+- Fragment support
+- Error handling and edge cases
 
 ## Known Limitations
 
-- Mutations not yet implemented
 - Subscriptions not yet implemented
 - Directives not yet implemented
 - Variables not yet implemented
 - Custom scalar types limited to built-in types
+- Union types not yet implemented
+- Interface types not yet implemented
 
 ## Dependencies
 

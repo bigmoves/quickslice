@@ -1,0 +1,7 @@
+---
+version: 1.4.1
+title: Multiple mutations in one operation
+file: ./test/mutation_parser_test.gleam
+test_name: parse_multiple_mutations_test
+---
+Document([Mutation(SelectionSet([Field("createUser", None, [Argument("name", StringValue("Alice"))], [Field("id", None, [], [])]), Field("deleteUser", None, [Argument("id", StringValue("123"))], [Field("success", None, [], [])])]))])
