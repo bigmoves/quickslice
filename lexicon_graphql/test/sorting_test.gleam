@@ -23,7 +23,9 @@ fn create_test_schema_from_lexicons(
   lexicons: List(schema_builder.Lexicon),
 ) -> schema.Schema {
   // Mock fetcher that returns empty results (we're only testing schema generation)
-  let fetcher = fn(_collection, _params) { Ok(#([], option.None, False, False)) }
+  let fetcher = fn(_collection, _params) {
+    Ok(#([], option.None, False, False, option.None))
+  }
 
   case db_schema_builder.build_schema_with_fetcher(lexicons, fetcher) {
     Ok(s) -> s
