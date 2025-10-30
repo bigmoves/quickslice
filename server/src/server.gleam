@@ -70,7 +70,7 @@ fn run_backfill_command() {
   // Get database URL from environment variable or use default
   let database_url = case envoy.get("DATABASE_URL") {
     Ok(url) -> url
-    Error(_) -> "atproto.db"
+    Error(_) -> "quickslice.db"
   }
 
   // Initialize the database
@@ -144,7 +144,7 @@ fn start_server_normally() {
   // Get database URL from environment variable or use default
   let database_url = case envoy.get("DATABASE_URL") {
     Ok(url) -> url
-    Error(_) -> "atproto.db"
+    Error(_) -> "quickslice.db"
   }
 
   // Initialize the database

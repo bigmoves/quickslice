@@ -31,13 +31,13 @@ The server will be available at `http://localhost:8000`
 ```bash
 cd example
 docker run -p 8000:8000 \
-  -v $(pwd)/lexicons:/app/priv/lexicons:ro \
+  -v $(pwd)/lexicons:/app/server/priv/lexicons:ro \
   ghcr.io/bigmoves/quickslice:latest
 ```
 
 ## Custom Lexicons
 
-The `lexicons/` directory is mounted to `/app/priv/lexicons` in the container. This allows you to provide custom AT Protocol lexicons without rebuilding the image.
+The `lexicons/` directory is mounted to `/app/server/priv/lexicons` in the container. This allows you to provide custom AT Protocol lexicons without rebuilding the image.
 
 ### Adding Your Own Lexicon
 
@@ -85,6 +85,7 @@ You can customize the server configuration using environment variables in `docke
 
 - `HOST` - Server host (default: `0.0.0.0`)
 - `PORT` - Server port (default: `8000`)
+- `DOMAIN_AUTHORITY` - Domain authority (default: `xyz.statusphere`)
 
 ## GraphQL Endpoint
 
@@ -93,7 +94,7 @@ Once running, access the GraphQL endpoint at:
 
 ## Volume Mounts
 
-- `./lexicons:/app/priv/lexicons:ro` - Mounts local lexicons directory as read-only
+- `./lexicons:/app/server/priv/lexicons:ro` - Mounts local lexicons directory as read-only
 
 The `:ro` flag makes the mount read-only for security.
 

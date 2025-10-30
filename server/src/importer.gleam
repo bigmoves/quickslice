@@ -1,4 +1,5 @@
 import database
+import envoy
 import gleam/dynamic/decode
 import gleam/io
 import gleam/json
@@ -17,7 +18,13 @@ pub type ImportStats {
 pub fn import_lexicons_from_directory(
   directory: String,
 ) -> Result(ImportStats, String) {
-  use db <- result.try(case database.initialize("atproto.db") {
+  // Get database URL from environment variable or use default
+  let database_url = case envoy.get("DATABASE_URL") {
+    Ok(url) -> url
+    Error(_) -> "quickslice.db"
+  }
+
+  use db <- result.try(case database.initialize(database_url) {
     Ok(conn) -> Ok(conn)
     Error(_) -> Error("Failed to initialize database")
   })

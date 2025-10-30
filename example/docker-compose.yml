@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   quickslice:
@@ -11,4 +11,5 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=8000
+      - DOMAIN_AUTHORITY=xyz.statusphere
     restart: on-failure:5
