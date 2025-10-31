@@ -313,8 +313,8 @@ fn execute_selection(
       }
     }
     parser.Field(name, _alias, arguments, nested_selections) -> {
-      // Convert arguments to dict
-      let args_dict = arguments_to_dict(arguments)
+      // Convert arguments to dict (with variable resolution from context)
+      let args_dict = arguments_to_dict(arguments, ctx)
 
       // Handle introspection meta-fields
       case name {
@@ -362,8 +362,8 @@ fn execute_selection(
               // Get the field's type for nested selections
               let field_type_def = schema.field_type(field)
 
-              // Create context with arguments
-              let field_ctx = schema.Context(ctx.data, args_dict)
+              // Create context with arguments (preserve variables from parent context)
+              let field_ctx = schema.Context(ctx.data, args_dict, ctx.variables)
 
               // Resolve the field
               case schema.resolve_field(field, field_ctx) {
@@ -666,7 +666,10 @@ fn execute_introspection_selection_set(
 }
 
 /// Convert parser ArgumentValue to value.Value
-fn argument_value_to_value(arg_value: parser.ArgumentValue) -> value.Value {
+fn argument_value_to_value(
+  arg_value: parser.ArgumentValue,
+  ctx: schema.Context,
+) -> value.Value {
   case arg_value {
     parser.IntValue(s) -> value.String(s)
     parser.FloatValue(s) -> value.String(s)
@@ -675,28 +678,33 @@ fn argument_value_to_value(arg_value: parser.ArgumentValue) -> value.Value {
     parser.NullValue -> value.Null
     parser.EnumValue(s) -> value.String(s)
     parser.ListValue(items) ->
-      value.List(list.map(items, argument_value_to_value))
+      value.List(list.map(items, fn(item) { argument_value_to_value(item, ctx) }))
     parser.ObjectValue(fields) ->
       value.Object(
         list.map(fields, fn(pair) {
           let #(name, val) = pair
-          #(name, argument_value_to_value(val))
+          #(name, argument_value_to_value(val, ctx))
         }),
       )
-    parser.VariableValue(_name) ->
-      // TODO: Variables support - for now return null
-      value.Null
+    parser.VariableValue(name) -> {
+      // Look up variable value from context
+      case schema.get_variable(ctx, name) {
+        option.Some(val) -> val
+        option.None -> value.Null
+      }
+    }
   }
 }
 
 /// Convert list of Arguments to a Dict of values
 fn arguments_to_dict(
   arguments: List(parser.Argument),
+  ctx: schema.Context,
 ) -> Dict(String, value.Value) {
   list.fold(arguments, dict.new(), fn(acc, arg) {
     case arg {
       parser.Argument(name, arg_value) -> {
-        let value = argument_value_to_value(arg_value)
+        let value = argument_value_to_value(arg_value, ctx)
         dict.insert(acc, name, value)
       }
     }

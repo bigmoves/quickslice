@@ -84,7 +84,14 @@ pub fn test_create_mutation_generates_correct_schema_test() {
   }
 
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(parsed_lexicons, empty_fetcher, option.None, option.None, option.None)
+    db_schema_builder.build_schema_with_fetcher(
+      parsed_lexicons,
+      empty_fetcher,
+      option.None,
+      option.None,
+      option.None,
+      option.None,
+    )
 
   // Test: Verify that the schema has mutation type
   let mutation_type_option = schema.get_mutation_type(built_schema)
@@ -130,7 +137,14 @@ pub fn test_create_mutation_field_signature_test() {
     Ok(#([], option.None, False, False, option.None))
   }
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(parsed_lexicons, empty_fetcher, option.None, option.None, option.None)
+    db_schema_builder.build_schema_with_fetcher(
+      parsed_lexicons,
+      empty_fetcher,
+      option.None,
+      option.None,
+      option.None,
+      option.None,
+    )
 
   // Get mutation type and find createXyzStatusphereStatus field
   let assert option.Some(mutation_type) = schema.get_mutation_type(built_schema)
@@ -178,7 +192,14 @@ pub fn test_update_mutation_field_signature_test() {
     Ok(#([], option.None, False, False, option.None))
   }
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(parsed_lexicons, empty_fetcher, option.None, option.None, option.None)
+    db_schema_builder.build_schema_with_fetcher(
+      parsed_lexicons,
+      empty_fetcher,
+      option.None,
+      option.None,
+      option.None,
+      option.None,
+    )
 
   // Get mutation type and find updateXyzStatusphereStatus field
   let assert option.Some(mutation_type) = schema.get_mutation_type(built_schema)
@@ -225,7 +246,14 @@ pub fn test_delete_mutation_field_signature_test() {
     Ok(#([], option.None, False, False, option.None))
   }
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(parsed_lexicons, empty_fetcher, option.None, option.None, option.None)
+    db_schema_builder.build_schema_with_fetcher(
+      parsed_lexicons,
+      empty_fetcher,
+      option.None,
+      option.None,
+      option.None,
+      option.None,
+    )
 
   // Get mutation type and find deleteXyzStatusphereStatus field
   let assert option.Some(mutation_type) = schema.get_mutation_type(built_schema)

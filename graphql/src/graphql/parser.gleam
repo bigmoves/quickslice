@@ -104,25 +104,67 @@ fn parse_operations(
   case tokens {
     [] -> Ok(#(list.reverse(acc), []))
 
-    // Named query: "query Name { ... }"
+    // Named query: "query Name(...) { ... }" or "query Name { ... }"
     [lexer.Name("query"), lexer.Name(name), ..rest] -> {
-      case parse_selection_set(rest) {
-        Ok(#(selections, remaining)) -> {
-          let op = NamedQuery(name, [], selections)
-          parse_operations(remaining, [op, ..acc])
+      // Check if there are variable definitions
+      case rest {
+        [lexer.ParenOpen, ..vars_rest] -> {
+          // Parse variable definitions
+          case parse_variable_definitions(vars_rest) {
+            Ok(#(variables, after_vars)) -> {
+              case parse_selection_set(after_vars) {
+                Ok(#(selections, remaining)) -> {
+                  let op = NamedQuery(name, variables, selections)
+                  parse_operations(remaining, [op, ..acc])
+                }
+                Error(err) -> Error(err)
+              }
+            }
+            Error(err) -> Error(err)
+          }
         }
-        Error(err) -> Error(err)
+        _ -> {
+          // No variables, parse selection set directly
+          case parse_selection_set(rest) {
+            Ok(#(selections, remaining)) -> {
+              let op = NamedQuery(name, [], selections)
+              parse_operations(remaining, [op, ..acc])
+            }
+            Error(err) -> Error(err)
+          }
+        }
       }
     }
 
-    // Named mutation: "mutation Name { ... }"
+    // Named mutation: "mutation Name(...) { ... }" or "mutation Name { ... }"
     [lexer.Name("mutation"), lexer.Name(name), ..rest] -> {
-      case parse_selection_set(rest) {
-        Ok(#(selections, remaining)) -> {
-          let op = NamedMutation(name, [], selections)
-          parse_operations(remaining, [op, ..acc])
+      // Check if there are variable definitions
+      case rest {
+        [lexer.ParenOpen, ..vars_rest] -> {
+          // Parse variable definitions
+          case parse_variable_definitions(vars_rest) {
+            Ok(#(variables, after_vars)) -> {
+              case parse_selection_set(after_vars) {
+                Ok(#(selections, remaining)) -> {
+                  let op = NamedMutation(name, variables, selections)
+                  parse_operations(remaining, [op, ..acc])
+                }
+                Error(err) -> Error(err)
+              }
+            }
+            Error(err) -> Error(err)
+          }
         }
-        Error(err) -> Error(err)
+        _ -> {
+          // No variables, parse selection set directly
+          case parse_selection_set(rest) {
+            Ok(#(selections, remaining)) -> {
+              let op = NamedMutation(name, [], selections)
+              parse_operations(remaining, [op, ..acc])
+            }
+            Error(err) -> Error(err)
+          }
+        }
       }
     }
 
@@ -410,5 +452,50 @@ fn parse_object_value_fields(
     }
     [] -> Error(UnexpectedEndOfInput("Expected field name or }"))
     [token, ..] -> Error(UnexpectedToken(token, "Expected field name or }"))
+  }
+}
+
+/// Parse variable definitions: ($var1: Type!, $var2: Type)
+/// Returns the list of variables and remaining tokens after the closing paren
+fn parse_variable_definitions(
+  tokens: List(lexer.Token),
+) -> Result(#(List(Variable), List(lexer.Token)), ParseError) {
+  parse_variable_definitions_loop(tokens, [])
+}
+
+/// Parse variable definitions loop
+fn parse_variable_definitions_loop(
+  tokens: List(lexer.Token),
+  acc: List(Variable),
+) -> Result(#(List(Variable), List(lexer.Token)), ParseError) {
+  case tokens {
+    // End of variable definitions
+    [lexer.ParenClose, ..rest] -> Ok(#(list.reverse(acc), rest))
+
+    // Skip commas
+    [lexer.Comma, ..rest] -> parse_variable_definitions_loop(rest, acc)
+
+    // Parse a variable: $name: Type! or $name: Type
+    [lexer.Dollar, lexer.Name(var_name), lexer.Colon, ..rest] -> {
+      // Parse the type (Name or Name!)
+      case rest {
+        [lexer.Name(type_name), lexer.Exclamation, ..rest2] -> {
+          // Non-null type
+          let variable = Variable(var_name, type_name <> "!")
+          parse_variable_definitions_loop(rest2, [variable, ..acc])
+        }
+        [lexer.Name(type_name), ..rest2] -> {
+          // Nullable type
+          let variable = Variable(var_name, type_name)
+          parse_variable_definitions_loop(rest2, [variable, ..acc])
+        }
+        [] -> Error(UnexpectedEndOfInput("Expected type after :"))
+        [token, ..] -> Error(UnexpectedToken(token, "Expected type name"))
+      }
+    }
+
+    [] -> Error(UnexpectedEndOfInput("Expected variable definition or )"))
+    [token, ..] ->
+      Error(UnexpectedToken(token, "Expected $variableName or )"))
   }
 }

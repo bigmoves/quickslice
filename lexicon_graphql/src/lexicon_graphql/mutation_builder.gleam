@@ -18,6 +18,11 @@ import lexicon_graphql/types
 pub type ResolverFactory =
   fn(String) -> schema.Resolver
 
+/// Upload blob resolver factory type
+/// Doesn't take a collection name (not collection-specific)
+pub type UploadBlobResolverFactory =
+  fn() -> schema.Resolver
+
 /// Build a GraphQL Mutation type from lexicon definitions
 ///
 /// For each record type, generates:
@@ -25,18 +30,21 @@ pub type ResolverFactory =
 /// - update{TypeName}(rkey: String!, input: {TypeName}Input!): {TypeName}
 /// - delete{TypeName}(rkey: String!): {TypeName}
 ///
+/// Also adds uploadBlob mutation if upload_blob_factory is provided
+///
 /// Resolver factories are optional - if None, mutations will return errors
 pub fn build_mutation_type(
   lexicons: List(types.Lexicon),
   create_factory: option.Option(ResolverFactory),
   update_factory: option.Option(ResolverFactory),
   delete_factory: option.Option(ResolverFactory),
+  upload_blob_factory: option.Option(UploadBlobResolverFactory),
 ) -> schema.Type {
   // Extract record types
   let record_types = extract_record_types(lexicons)
 
   // Build mutation fields for each record type
-  let mutation_fields =
+  let record_mutation_fields =
     list.flat_map(record_types, fn(record) {
       build_mutations_for_record(
         record,
@@ -46,8 +54,17 @@ pub fn build_mutation_type(
       )
     })
 
+  // Add uploadBlob mutation if factory is provided
+  let all_mutation_fields = case upload_blob_factory {
+    option.Some(factory) -> {
+      let upload_blob_mutation = build_upload_blob_mutation(factory)
+      [upload_blob_mutation, ..record_mutation_fields]
+    }
+    option.None -> record_mutation_fields
+  }
+
   // Build the Mutation object type
-  schema.object_type("Mutation", "Root mutation type", mutation_fields)
+  schema.object_type("Mutation", "Root mutation type", all_mutation_fields)
 }
 
 /// Record type info needed for building mutations
@@ -378,5 +395,106 @@ fn build_record_object_type(record: RecordInfo) -> schema.Type {
     record.type_name,
     "Record type: " <> record.nsid,
     all_fields,
+  )
+}
+
+/// Build BlobUploadResponse type
+/// Returns: { ref: String!, mimeType: String!, size: Int! }
+fn build_blob_upload_response_type() -> schema.Type {
+  let fields = [
+    // ref field - CID reference
+    schema.field(
+      "ref",
+      schema.non_null(schema.string_type()),
+      "CID reference to the blob",
+      fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "ref") {
+              Ok(value.String(ref)) -> Ok(value.String(ref))
+              _ -> Error("Missing ref field")
+            }
+          }
+          _ -> Error("Missing blob data")
+        }
+      },
+    ),
+    // mimeType field
+    schema.field(
+      "mimeType",
+      schema.non_null(schema.string_type()),
+      "MIME type of the blob",
+      fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "mime_type") {
+              Ok(value.String(mime_type)) -> Ok(value.String(mime_type))
+              _ -> Error("Missing mime_type field")
+            }
+          }
+          _ -> Error("Missing blob data")
+        }
+      },
+    ),
+    // size field
+    schema.field(
+      "size",
+      schema.non_null(schema.int_type()),
+      "Size in bytes",
+      fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "size") {
+              Ok(value.Int(size)) -> Ok(value.Int(size))
+              _ -> Error("Missing size field")
+            }
+          }
+          _ -> Error("Missing blob data")
+        }
+      },
+    ),
+  ]
+
+  schema.object_type(
+    "BlobUploadResponse",
+    "Response from uploading a blob",
+    fields,
+  )
+}
+
+/// Build uploadBlob mutation
+/// Signature: uploadBlob(data: String!, mimeType: String!): BlobUploadResponse!
+fn build_upload_blob_mutation(
+  factory: UploadBlobResolverFactory,
+) -> schema.Field {
+  // Create the BlobUploadResponse type
+  let response_type = build_blob_upload_response_type()
+
+  // Create arguments
+  let arguments = [
+    schema.argument(
+      "data",
+      schema.non_null(schema.string_type()),
+      "Base64 encoded blob data",
+      option.None,
+    ),
+    schema.argument(
+      "mimeType",
+      schema.non_null(schema.string_type()),
+      "MIME type of the blob",
+      option.None,
+    ),
+  ]
+
+  // Get resolver from factory
+  let resolver = factory()
+
+  // Create the mutation field with arguments
+  schema.field_with_args(
+    "uploadBlob",
+    schema.non_null(response_type),
+    "Upload a blob to the PDS",
+    arguments,
+    resolver,
   )
 }

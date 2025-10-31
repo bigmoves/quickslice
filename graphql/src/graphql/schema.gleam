@@ -9,17 +9,34 @@ import graphql/value
 
 /// Resolver context - will contain request context, data loaders, etc.
 pub type Context {
-  Context(data: Option(value.Value), arguments: Dict(String, value.Value))
+  Context(
+    data: Option(value.Value),
+    arguments: Dict(String, value.Value),
+    variables: Dict(String, value.Value),
+  )
 }
 
-/// Helper to create a context without arguments
+/// Helper to create a context without arguments or variables
 pub fn context(data: Option(value.Value)) -> Context {
-  Context(data, dict.new())
+  Context(data, dict.new(), dict.new())
+}
+
+/// Helper to create a context with variables
+pub fn context_with_variables(
+  data: Option(value.Value),
+  variables: Dict(String, value.Value),
+) -> Context {
+  Context(data, dict.new(), variables)
 }
 
 /// Helper to get an argument value from context
 pub fn get_argument(ctx: Context, name: String) -> Option(value.Value) {
   dict.get(ctx.arguments, name) |> option.from_result
+}
+
+/// Helper to get a variable value from context
+pub fn get_variable(ctx: Context, name: String) -> Option(value.Value) {
+  dict.get(ctx.variables, name) |> option.from_result
 }
 
 /// Field resolver function type

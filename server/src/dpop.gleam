@@ -1,4 +1,5 @@
 import atproto_auth.{type AtprotoSession}
+import gleam/bit_array
 import gleam/http.{type Method, Delete, Get, Head, Options, Patch, Post, Put}
 import gleam/http/request
 import gleam/http/response.{type Response}
@@ -107,6 +108,111 @@ fn get_dpop_nonce_header(
   {
     Ok(#(_, nonce)) -> Some(nonce)
     Error(_) -> None
+  }
+}
+
+/// Make an authenticated DPoP request with binary body
+pub fn make_dpop_request_with_binary(
+  method: String,
+  url: String,
+  session: AtprotoSession,
+  body: BitArray,
+  content_type: String,
+) -> Result(Response(String), String) {
+  // First attempt without nonce
+  case
+    make_dpop_request_with_binary_and_nonce(
+      method,
+      url,
+      session,
+      body,
+      content_type,
+      None,
+    )
+  {
+    Ok(resp) -> {
+      // Check if response is 401 with use_dpop_nonce error
+      case resp.status {
+        401 -> {
+          // Check if body contains use_dpop_nonce error
+          case string.contains(resp.body, "use_dpop_nonce") {
+            True -> {
+              // Extract DPoP-Nonce header and retry
+              case get_dpop_nonce_header(resp.headers) {
+                Some(nonce) -> {
+                  make_dpop_request_with_binary_and_nonce(
+                    method,
+                    url,
+                    session,
+                    body,
+                    content_type,
+                    Some(nonce),
+                  )
+                }
+                None -> Ok(resp)
+              }
+            }
+            False -> Ok(resp)
+          }
+        }
+        _ -> Ok(resp)
+      }
+    }
+    Error(err) -> Error(err)
+  }
+}
+
+/// Make DPoP request with binary body and optional nonce
+fn make_dpop_request_with_binary_and_nonce(
+  method: String,
+  url: String,
+  session: AtprotoSession,
+  body: BitArray,
+  content_type: String,
+  nonce: option.Option(String),
+) -> Result(Response(String), String) {
+  // Generate DPoP proof token with optional nonce
+  case
+    jose_wrapper.generate_dpop_proof_with_nonce(
+      method,
+      url,
+      session.access_token,
+      session.dpop_jwk,
+      nonce,
+    )
+  {
+    Error(err) ->
+      Error("Failed to generate DPoP proof: " <> string.inspect(err))
+    Ok(dpop_proof) -> {
+      // Create the HTTP request with DPoP headers
+      case request.to(url) {
+        Error(_) -> Error("Failed to create request")
+        Ok(req) -> {
+          let req =
+            req
+            |> request.set_method(parse_method(method))
+            |> request.set_header(
+              "authorization",
+              "DPoP " <> session.access_token,
+            )
+            |> request.set_header("dpop", dpop_proof)
+            |> request.set_header("content-type", content_type)
+            |> request.set_body(body)
+
+          case httpc.send_bits(req) {
+            Error(_) -> Error("Request failed")
+            Ok(resp) -> {
+              // Convert BitArray response body to String
+              case bit_array.to_string(resp.body) {
+                Ok(body_string) ->
+                  Ok(response.Response(..resp, body: body_string))
+                Error(_) -> Error("Failed to decode response body")
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
 

@@ -7,7 +7,6 @@
 /// - Pagination arguments (first, after, last, before)
 ///
 /// Uses birdie to capture and verify the generated schemas
-
 import birdie
 import gleam/list
 import gleam/option.{Some}
@@ -28,7 +27,16 @@ fn create_test_schema_from_lexicons(
     Ok(#([], option.None, False, False, option.None))
   }
 
-  case db_schema_builder.build_schema_with_fetcher(lexicons, fetcher, option.None, option.None, option.None) {
+  case
+    db_schema_builder.build_schema_with_fetcher(
+      lexicons,
+      fetcher,
+      option.None,
+      option.None,
+      option.None,
+      option.None,
+    )
+  {
     Ok(s) -> s
     Error(_) -> panic as "Failed to build test schema"
   }

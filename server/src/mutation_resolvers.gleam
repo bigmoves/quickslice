@@ -5,6 +5,7 @@
 import atproto_auth
 import database
 import dpop
+import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
 import gleam/json
@@ -461,3 +462,161 @@ pub fn delete_resolver_factory(
     Ok(value.Object([#("uri", value.String(uri))]))
   }
 }
+
+/// Create a resolver for uploadBlob mutation
+pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
+  fn(resolver_ctx: schema.Context) -> Result(value.Value, String) {
+    // Step 1: Extract auth token from context data
+    let token = case resolver_ctx.data {
+      option.Some(value.Object(fields)) -> {
+        case list.key_find(fields, "auth_token") {
+          Ok(value.String(t)) -> Ok(t)
+          Ok(_) -> Error("auth_token must be a string")
+          Error(_) ->
+            Error(
+              "Authentication required. Please provide Authorization header.",
+            )
+        }
+      }
+      _ ->
+        Error("Authentication required. Please provide Authorization header.")
+    }
+
+    use token <- result.try(token)
+
+    // Step 2: Get data and mimeType from arguments
+    let data_result = case schema.get_argument(resolver_ctx, "data") {
+      option.Some(value.String(d)) -> Ok(d)
+      option.Some(_) -> Error("data must be a string")
+      option.None -> Error("Missing required argument: data")
+    }
+
+    use data_base64 <- result.try(data_result)
+
+    let mime_type_result = case schema.get_argument(resolver_ctx, "mimeType") {
+      option.Some(value.String(m)) -> Ok(m)
+      option.Some(_) -> Error("mimeType must be a string")
+      option.None -> Error("Missing required argument: mimeType")
+    }
+
+    use mime_type <- result.try(mime_type_result)
+
+    // Step 3: Verify OAuth token and get AT Protocol session
+    use user_info <- result.try(
+      atproto_auth.verify_oauth_token(token, ctx.auth_base_url)
+      |> result.map_error(fn(err) {
+        case err {
+          atproto_auth.UnauthorizedToken -> "Invalid or expired authentication token"
+          atproto_auth.MissingAuthHeader -> "Missing authentication"
+          atproto_auth.InvalidAuthHeader -> "Invalid authentication header"
+          _ -> "Authentication failed"
+        }
+      }),
+    )
+
+    use session <- result.try(
+      atproto_auth.get_atproto_session(token, ctx.auth_base_url)
+      |> result.map_error(fn(_) { "Failed to get AT Protocol session" }),
+    )
+
+    // Step 4: Decode base64 data to binary
+    use binary_data <- result.try(
+      decode_base64(data_base64)
+      |> result.map_error(fn(_) { "Failed to decode base64 data" }),
+    )
+
+    // Step 5: Upload blob to PDS
+    let pds_url = session.pds_endpoint <> "/xrpc/com.atproto.repo.uploadBlob"
+
+    use response <- result.try(
+      dpop.make_dpop_request_with_binary(
+        "POST",
+        pds_url,
+        session,
+        binary_data,
+        mime_type,
+      )
+      |> result.map_error(fn(_) { "Failed to upload blob to PDS" }),
+    )
+
+    // Step 6: Check HTTP status and parse response
+    use blob_ref <- result.try(case response.status {
+      200 | 201 -> {
+        // Parse PDS response: { blob: { $type: "blob", ref: { $link: "..." }, mimeType: "...", size: 123 } }
+        let response_decoder = {
+          use blob <- decode.field("blob", decode.dynamic)
+          decode.success(blob)
+        }
+
+        case json.parse(response.body, response_decoder) {
+          Ok(blob_dynamic) -> {
+            // Extract blob fields from the response
+            extract_blob_from_dynamic(blob_dynamic, user_info.did)
+          }
+          Error(_) -> {
+            Error(
+              "Failed to parse PDS response. Body: " <> response.body,
+            )
+          }
+        }
+      }
+      _ -> {
+        // Return actual PDS error
+        Error(
+          "PDS request failed with status "
+          <> int.to_string(response.status)
+          <> ": "
+          <> response.body,
+        )
+      }
+    })
+
+    // Step 7: Return the BlobUploadResponse directly (flat structure)
+    Ok(blob_ref)
+  }
+}
+
+/// Decode base64 string to bit array
+fn decode_base64(base64_str: String) -> Result(BitArray, Nil) {
+  // Erlang's base64:decode returns BitArray directly, not wrapped in Ok()
+  // So we wrap it in Ok to match our function signature
+  Ok(do_erlang_base64_decode(base64_str))
+}
+
+/// Extract blob fields from dynamic PDS response
+fn extract_blob_from_dynamic(
+  blob_dynamic: dynamic.Dynamic,
+  did: String,
+) -> Result(value.Value, String) {
+  // Create a decoder for the nested ref.$link field
+  let ref_link_decoder = {
+    use link <- decode.field("$link", decode.string)
+    decode.success(link)
+  }
+
+  // Decode all fields including nested ref.$link
+  let full_decoder = {
+    use mime_type <- decode.field("mimeType", decode.string)
+    use size <- decode.field("size", decode.int)
+    use ref <- decode.field("ref", ref_link_decoder)
+    decode.success(#(ref, mime_type, size))
+  }
+
+  use #(ref, mime_type, size) <- result.try(
+    decode.run(blob_dynamic, full_decoder)
+    |> result.map_error(fn(_) { "Failed to decode blob fields" }),
+  )
+
+  Ok(
+    value.Object([
+      #("ref", value.String(ref)),
+      #("mime_type", value.String(mime_type)),
+      #("size", value.Int(size)),
+      #("did", value.String(did)),
+    ]),
+  )
+}
+
+/// Erlang FFI: base64:decode/1 returns BitArray directly (not Result)
+@external(erlang, "base64", "decode")
+fn do_erlang_base64_decode(a: String) -> BitArray

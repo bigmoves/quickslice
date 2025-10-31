@@ -71,3 +71,8 @@ pub fn map_input_type(lexicon_type: String) -> schema.Type {
     _ -> schema.string_type()
   }
 }
+
+/// Get the Blob output type (for mutations and queries)
+pub fn get_blob_type() -> schema.Type {
+  blob_type.create_blob_type()
+}

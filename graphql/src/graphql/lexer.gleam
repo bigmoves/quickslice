@@ -21,6 +21,7 @@ pub type Token {
   Equals
   At
   Dollar
+  Exclamation
   Spread
 
   // Values
@@ -82,6 +83,7 @@ fn tokenize_graphemes(
     ["=", ..rest] -> tokenize_graphemes(rest, [Equals, ..acc], pos + 1)
     ["@", ..rest] -> tokenize_graphemes(rest, [At, ..acc], pos + 1)
     ["$", ..rest] -> tokenize_graphemes(rest, [Dollar, ..acc], pos + 1)
+    ["!", ..rest] -> tokenize_graphemes(rest, [Exclamation, ..acc], pos + 1)
 
     // Spread (...)
     [".", ".", ".", ..rest] ->

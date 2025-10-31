@@ -431,3 +431,151 @@ pub fn execute_field_receives_object_argument_test() {
     content: format_response(response),
   )
 }
+
+// Variable resolution tests
+pub fn execute_query_with_variable_string_test() {
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      schema.field_with_args(
+        "greet",
+        schema.string_type(),
+        "Greet someone",
+        [
+          schema.argument(
+            "name",
+            schema.string_type(),
+            "Name to greet",
+            None,
+          ),
+        ],
+        fn(ctx) {
+          case schema.get_argument(ctx, "name") {
+            Some(value.String(name)) ->
+              Ok(value.String("Hello, " <> name <> "!"))
+            _ -> Ok(value.String("Hello, stranger!"))
+          }
+        },
+      ),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+  let query = "query Test($name: String!) { greet(name: $name) }"
+
+  // Create context with variables
+  let variables =
+    dict.from_list([#("name", value.String("Alice"))])
+  let ctx = schema.context_with_variables(None, variables)
+
+  let result = executor.execute(query, test_schema, ctx)
+
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
+  }
+
+  birdie.snap(
+    title: "Execute query with string variable",
+    content: format_response(response),
+  )
+}
+
+pub fn execute_query_with_variable_int_test() {
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      schema.field_with_args(
+        "user",
+        schema.string_type(),
+        "Get user by ID",
+        [
+          schema.argument(
+            "id",
+            schema.int_type(),
+            "User ID",
+            None,
+          ),
+        ],
+        fn(ctx) {
+          case schema.get_argument(ctx, "id") {
+            Some(value.Int(id)) ->
+              Ok(value.String("User #" <> string.inspect(id)))
+            _ -> Ok(value.String("Unknown user"))
+          }
+        },
+      ),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+  let query = "query GetUser($userId: Int!) { user(id: $userId) }"
+
+  // Create context with variables
+  let variables =
+    dict.from_list([#("userId", value.Int(42))])
+  let ctx = schema.context_with_variables(None, variables)
+
+  let result = executor.execute(query, test_schema, ctx)
+
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
+  }
+
+  birdie.snap(
+    title: "Execute query with int variable",
+    content: format_response(response),
+  )
+}
+
+pub fn execute_query_with_multiple_variables_test() {
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      schema.field_with_args(
+        "search",
+        schema.string_type(),
+        "Search for something",
+        [
+          schema.argument(
+            "query",
+            schema.string_type(),
+            "Search query",
+            None,
+          ),
+          schema.argument(
+            "limit",
+            schema.int_type(),
+            "Max results",
+            None,
+          ),
+        ],
+        fn(ctx) {
+          case schema.get_argument(ctx, "query"), schema.get_argument(ctx, "limit") {
+            Some(value.String(q)), Some(value.Int(l)) ->
+              Ok(value.String("Searching for '" <> q <> "' (limit: " <> string.inspect(l) <> ")"))
+            _, _ -> Ok(value.String("Invalid search"))
+          }
+        },
+      ),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+  let query = "query Search($q: String!, $max: Int!) { search(query: $q, limit: $max) }"
+
+  // Create context with variables
+  let variables =
+    dict.from_list([
+      #("q", value.String("graphql")),
+      #("max", value.Int(10)),
+    ])
+  let ctx = schema.context_with_variables(None, variables)
+
+  let result = executor.execute(query, test_schema, ctx)
+
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
+  }
+
+  birdie.snap(
+    title: "Execute query with multiple variables",
+    content: format_response(response),
+  )
+}

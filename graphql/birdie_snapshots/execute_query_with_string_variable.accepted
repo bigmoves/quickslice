@@ -1,0 +1,7 @@
+---
+version: 1.4.1
+title: Execute query with string variable
+file: ./test/executor_test.gleam
+test_name: execute_query_with_variable_string_test
+---
+Response(Object([#("greet", String("Hello, Alice!"))]), [])

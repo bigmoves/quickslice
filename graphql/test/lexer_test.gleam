@@ -5,7 +5,8 @@
 /// Ignored: Whitespace, LineTerminator, Comment, Comma
 import gleeunit/should
 import graphql/lexer.{
-  BraceClose, BraceOpen, Colon, Float, Int, Name, ParenClose, ParenOpen, String,
+  BraceClose, BraceOpen, Colon, Dollar, Exclamation, Float, Int, Name,
+  ParenClose, ParenOpen, String,
 }
 
 // Punctuator tests
@@ -32,6 +33,16 @@ pub fn tokenize_paren_close_test() {
 pub fn tokenize_colon_test() {
   lexer.tokenize(":")
   |> should.equal(Ok([Colon]))
+}
+
+pub fn tokenize_exclamation_test() {
+  lexer.tokenize("!")
+  |> should.equal(Ok([Exclamation]))
+}
+
+pub fn tokenize_dollar_test() {
+  lexer.tokenize("$")
+  |> should.equal(Ok([Dollar]))
 }
 
 // Name tests (identifiers)
@@ -177,6 +188,34 @@ pub fn tokenize_query_with_string_argument_test() {
       Colon,
       String("Alice"),
       ParenClose,
+      BraceClose,
+    ]),
+  )
+}
+
+// Variable definition tests
+pub fn tokenize_variable_definition_test() {
+  lexer.tokenize("$name: String!")
+  |> should.equal(
+    Ok([Dollar, Name("name"), Colon, Name("String"), Exclamation]),
+  )
+}
+
+pub fn tokenize_variable_in_query_test() {
+  lexer.tokenize("query Test($id: Int!) { user }")
+  |> should.equal(
+    Ok([
+      Name("query"),
+      Name("Test"),
+      ParenOpen,
+      Dollar,
+      Name("id"),
+      Colon,
+      Name("Int"),
+      Exclamation,
+      ParenClose,
+      BraceOpen,
+      Name("user"),
       BraceClose,
     ]),
   )

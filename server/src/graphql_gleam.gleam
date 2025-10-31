@@ -28,6 +28,7 @@ import where_converter
 pub fn execute_query_with_db(
   db: sqlight.Connection,
   query_string: String,
+  variables_json_str: String,
   auth_token: Result(String, Nil),
   auth_base_url: String,
 ) -> Result(String, String) {
@@ -135,6 +136,11 @@ pub fn execute_query_with_db(
           mutation_resolvers.delete_resolver_factory(collection, mutation_ctx)
         })
 
+      let upload_blob_factory =
+        option.Some(fn() {
+          mutation_resolvers.upload_blob_resolver_factory(mutation_ctx)
+        })
+
       // Step 5: Build schema with database-backed resolvers and mutations
       use graphql_schema <- result.try(
         db_schema_builder.build_schema_with_fetcher(
@@ -143,6 +149,7 @@ pub fn execute_query_with_db(
           create_factory,
           update_factory,
           delete_factory,
+          upload_blob_factory,
         ),
       )
 
@@ -154,7 +161,11 @@ pub fn execute_query_with_db(
         }
         Error(_) -> option.None
       }
-      let ctx = schema.context(ctx_data)
+
+      // Convert json variables to Dict(String, value.Value)
+      let variables_dict = json_string_to_variables_dict(variables_json_str)
+
+      let ctx = schema.context_with_variables(ctx_data, variables_dict)
 
       // Step 7: Execute the query
       use response <- result.try(executor.execute(
@@ -302,5 +313,62 @@ fn value_to_json(val: value.Value) -> String {
         })
       "{" <> string.join(field_jsons, ",") <> "}"
     }
+  }
+}
+
+/// Convert JSON string variables to Dict(String, value.Value)
+fn json_string_to_variables_dict(json_string: String) -> dict.Dict(String, value.Value) {
+  // First try to extract the "variables" field from the JSON
+  let variables_decoder = {
+    use vars <- decode.field("variables", decode.dynamic)
+    decode.success(vars)
+  }
+
+  case json.parse(json_string, variables_decoder) {
+    Ok(dyn) -> {
+      // Convert dynamic to value.Value
+      case json_dynamic_to_value(dyn) {
+        value.Object(fields) -> dict.from_list(fields)
+        _ -> dict.new()
+      }
+    }
+    Error(_) -> dict.new()
+  }
+}
+
+/// Convert a dynamic JSON value to graphql value.Value
+fn json_dynamic_to_value(dyn: dynamic.Dynamic) -> value.Value {
+  // Try different decoders in order
+  case decode.run(dyn, decode.string) {
+    Ok(s) -> value.String(s)
+    Error(_) ->
+      case decode.run(dyn, decode.int) {
+        Ok(i) -> value.Int(i)
+        Error(_) ->
+          case decode.run(dyn, decode.float) {
+            Ok(f) -> value.Float(f)
+            Error(_) ->
+              case decode.run(dyn, decode.bool) {
+                Ok(b) -> value.Boolean(b)
+                Error(_) ->
+                  // Try as a list
+                  case decode.run(dyn, decode.list(decode.dynamic)) {
+                    Ok(items) ->
+                      value.List(list.map(items, json_dynamic_to_value))
+                    Error(_) ->
+                      // Try as an object (dict)
+                      case decode.run(dyn, decode.dict(decode.string, decode.dynamic)) {
+                        Ok(d) ->
+                          value.Object(
+                            list.map(dict.to_list(d), fn(pair) {
+                              #(pair.0, json_dynamic_to_value(pair.1))
+                            }),
+                          )
+                        Error(_) -> value.Null
+                      }
+                  }
+              }
+          }
+      }
   }
 }

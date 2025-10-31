@@ -55,6 +55,7 @@ pub fn build_schema(lexicons: List(Lexicon)) -> Result(schema.Schema, String) {
           option.None,
           option.None,
           option.None,
+          option.None,
         )
 
       // Create the schema with queries and mutations

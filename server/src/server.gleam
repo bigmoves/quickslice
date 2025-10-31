@@ -18,6 +18,7 @@ import lustre/element
 import lustre/element/html
 import mist
 import sqlight
+import upload_handler
 import wisp
 import wisp/wisp_mist
 import xrpc_handlers
@@ -239,6 +240,7 @@ fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
     ["graphql"] ->
       graphql_handler.handle_graphql_request(req, ctx.db, ctx.auth_base_url)
     ["graphiql"] -> graphiql_handler.handle_graphiql_request(req)
+    ["upload"] -> upload_handler.handle_upload_request(req)
     ["xrpc", _] -> {
       // Try to parse the XRPC route
       case xrpc_router.parse_xrpc_path(segments) {
@@ -483,6 +485,15 @@ fn index_route(ctx: Context) -> wisp.Response {
                   ),
                 ],
                 [element.text("Open GraphiQL")],
+              ),
+              html.a(
+                [
+                  attribute.href("/upload"),
+                  attribute.class(
+                    "bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-sm",
+                  ),
+                ],
+                [element.text("Upload Blob")],
               ),
             ]),
           ]),

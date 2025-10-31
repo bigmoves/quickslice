@@ -421,3 +421,95 @@ pub fn parse_object_with_nested_list_test() {
   |> parser.parse
   |> should.be_ok
 }
+
+// Variable definition tests
+pub fn parse_query_with_one_variable_test() {
+  "query Test($name: String!) { user }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedQuery(
+          name: "Test",
+          variables: [parser.Variable("name", "String!")],
+          selections: parser.SelectionSet([
+            parser.Field("user", None, [], []),
+          ]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_query_with_multiple_variables_test() {
+  "query Test($name: String!, $age: Int) { user }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedQuery(
+          name: "Test",
+          variables: [
+            parser.Variable("name", "String!"),
+            parser.Variable("age", "Int"),
+          ],
+          selections: parser.SelectionSet([
+            parser.Field("user", None, [], []),
+          ]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_mutation_with_variables_test() {
+  "mutation CreateUser($name: String!, $email: String!) { createUser }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedMutation(
+          name: "CreateUser",
+          variables: [
+            parser.Variable("name", "String!"),
+            parser.Variable("email", "String!"),
+          ],
+          selections: parser.SelectionSet([
+            parser.Field("createUser", None, [], []),
+          ]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_variable_value_in_argument_test() {
+  "{ user(name: $userName) }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.Query(parser.SelectionSet([
+          parser.Field(
+            name: "user",
+            alias: None,
+            arguments: [parser.Argument("name", parser.VariableValue("userName"))],
+            selections: [],
+          ),
+        ])),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}

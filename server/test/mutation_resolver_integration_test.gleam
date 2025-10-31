@@ -207,6 +207,7 @@ pub fn create_mutation_without_auth_fails_test() {
       create_factory,
       option.None,
       option.None,
+      option.None,
     )
 
   // Execute mutation WITHOUT auth token (using shorthand syntax)
@@ -252,6 +253,7 @@ pub fn create_mutation_with_auth_succeeds_test() {
       parsed_lexicons,
       empty_fetcher,
       create_factory,
+      option.None,
       option.None,
       option.None,
     )
@@ -318,6 +320,7 @@ pub fn update_mutation_with_auth_succeeds_test() {
       option.None,
       update_factory,
       option.None,
+      option.None,
     )
 
   // Execute update mutation WITH auth token and rkey
@@ -381,6 +384,7 @@ pub fn delete_mutation_with_auth_succeeds_test() {
       option.None,
       option.None,
       delete_factory,
+      option.None,
     )
 
   // Execute delete mutation WITH auth token and rkey
@@ -444,6 +448,7 @@ pub fn update_mutation_without_rkey_fails_test() {
       option.None,
       update_factory,
       option.None,
+      option.None,
     )
 
   // Execute update mutation WITHOUT rkey (should fail at GraphQL validation level)
@@ -490,6 +495,7 @@ pub fn delete_mutation_without_rkey_fails_test() {
       option.None,
       option.None,
       delete_factory,
+      option.None,
     )
 
   // Execute delete mutation WITHOUT rkey (should fail at GraphQL validation level)
@@ -504,6 +510,149 @@ pub fn delete_mutation_without_rkey_fails_test() {
   let error_count = list.length(response.errors)
   case error_count > 0 {
     True -> Nil
+    False -> should.fail()
+  }
+}
+
+pub fn test_upload_blob_mutation_success() {
+  // Parse a minimal lexicon (we just need a valid schema to test uploadBlob)
+  let lexicon_json = create_status_lexicon()
+  let assert Ok(lexicon) = lexicon_parser.parse_lexicon(lexicon_json)
+  let parsed_lexicons = [lexicon]
+
+  let empty_fetcher = fn(_collection, _params) {
+    Ok(#([], option.None, False, False, option.None))
+  }
+
+  // Create a mock uploadBlob resolver factory
+  let mock_upload_blob_resolver_factory = fn() {
+    fn(_ctx) {
+      // Return a mock BlobUploadResponse: { blob: { ... } }
+      Ok(
+        value.Object([
+          #(
+            "blob",
+            value.Object([
+              #("ref", value.String("bafyreiabc123xyz")),
+              #("mimeType", value.String("image/jpeg")),
+              #("size", value.Int(12345)),
+              #("did", value.String("did:plc:mockuser")),
+            ]),
+          ),
+        ]),
+      )
+    }
+  }
+
+  let upload_blob_factory = option.Some(mock_upload_blob_resolver_factory)
+
+  let assert Ok(built_schema) =
+    db_schema_builder.build_schema_with_fetcher(
+      parsed_lexicons,
+      empty_fetcher,
+      option.None,
+      option.None,
+      option.None,
+      upload_blob_factory,
+    )
+
+  // Execute uploadBlob mutation WITH auth token
+  // Note: Using a small base64 string for testing
+  let mutation =
+    "mutation { uploadBlob(data: \"SGVsbG8=\", mimeType: \"text/plain\") { blob { ref mimeType size } } }"
+
+  let ctx_data =
+    value.Object([#("auth_token", value.String("mock_token_123"))])
+  let ctx = schema.context(option.Some(ctx_data))
+  let assert Ok(response) = executor.execute(mutation, built_schema, ctx)
+
+  // Should have no errors
+  response.errors
+  |> list.length
+  |> should.equal(0)
+
+  // Verify response data structure
+  case response.data {
+    value.Object(fields) -> {
+      case list.key_find(fields, "uploadBlob") {
+        Ok(value.Object(upload_response_fields)) -> {
+          // Verify blob is nested under uploadBlob
+          case list.key_find(upload_response_fields, "blob") {
+            Ok(value.Object(blob_fields)) -> {
+              // Verify blob fields
+              case list.key_find(blob_fields, "ref") {
+                Ok(value.String(ref)) -> ref |> should.equal("bafyreiabc123xyz")
+                _ -> should.fail()
+              }
+              case list.key_find(blob_fields, "mimeType") {
+                Ok(value.String(mime)) -> mime |> should.equal("image/jpeg")
+                _ -> should.fail()
+              }
+              case list.key_find(blob_fields, "size") {
+                Ok(value.Int(size)) -> size |> should.equal(12345)
+                _ -> should.fail()
+              }
+            }
+            _ -> should.fail()
+          }
+        }
+        _ -> should.fail()
+      }
+    }
+    _ -> should.fail()
+  }
+}
+
+pub fn test_upload_blob_mutation_requires_auth() {
+  // Parse a minimal lexicon
+  let lexicon_json = create_status_lexicon()
+  let assert Ok(lexicon) = lexicon_parser.parse_lexicon(lexicon_json)
+  let parsed_lexicons = [lexicon]
+
+  let empty_fetcher = fn(_collection, _params) {
+    Ok(#([], option.None, False, False, option.None))
+  }
+
+  // Create a mock uploadBlob resolver factory that checks for auth
+  let mock_upload_blob_resolver_factory = fn() {
+    fn(_ctx) {
+      Error("Authentication required. Please provide Authorization header.")
+    }
+  }
+
+  let upload_blob_factory = option.Some(mock_upload_blob_resolver_factory)
+
+  let assert Ok(built_schema) =
+    db_schema_builder.build_schema_with_fetcher(
+      parsed_lexicons,
+      empty_fetcher,
+      option.None,
+      option.None,
+      option.None,
+      upload_blob_factory,
+    )
+
+  // Execute uploadBlob mutation WITHOUT auth token
+  let mutation =
+    "mutation { uploadBlob(data: \"SGVsbG8=\", mimeType: \"text/plain\") { blob { ref } } }"
+
+  let ctx = schema.context(option.None)
+  let assert Ok(response) = executor.execute(mutation, built_schema, ctx)
+
+  // Should have errors
+  let error_count = list.length(response.errors)
+  case error_count > 0 {
+    True -> {
+      // Verify error message
+      case response.errors {
+        [error, ..] ->
+          error.message
+          |> should.equal(
+            "Authentication required. Please provide Authorization header.",
+          )
+        _ -> should.fail()
+      }
+    }
     False -> should.fail()
   }
 }

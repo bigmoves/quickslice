@@ -64,6 +64,7 @@ pub fn build_schema_with_fetcher(
   create_factory: option.Option(mutation_builder.ResolverFactory),
   update_factory: option.Option(mutation_builder.ResolverFactory),
   delete_factory: option.Option(mutation_builder.ResolverFactory),
+  upload_blob_factory: option.Option(mutation_builder.UploadBlobResolverFactory),
 ) -> Result(schema.Schema, String) {
   case lexicons {
     [] -> Error("Cannot build schema from empty lexicon list")
@@ -81,6 +82,7 @@ pub fn build_schema_with_fetcher(
           create_factory,
           update_factory,
           delete_factory,
+          upload_blob_factory,
         )
 
       // Create the schema with both queries and mutations

@@ -61,7 +61,7 @@ pub fn blob_ref_field_resolver_test() {
     #("did", value.String("did:plc:test123")),
   ])
 
-  let ctx = schema.Context(Some(blob_data), dict.new())
+  let ctx = schema.Context(Some(blob_data), dict.new(), dict.new())
   let result = blob_type.resolve_ref(ctx)
 
   result
@@ -78,7 +78,7 @@ pub fn blob_mime_type_field_resolver_test() {
     #("did", value.String("did:plc:test123")),
   ])
 
-  let ctx = schema.Context(Some(blob_data), dict.new())
+  let ctx = schema.Context(Some(blob_data), dict.new(), dict.new())
   let result = blob_type.resolve_mime_type(ctx)
 
   result
@@ -95,7 +95,7 @@ pub fn blob_size_field_resolver_test() {
     #("did", value.String("did:plc:test123")),
   ])
 
-  let ctx = schema.Context(Some(blob_data), dict.new())
+  let ctx = schema.Context(Some(blob_data), dict.new(), dict.new())
   let result = blob_type.resolve_size(ctx)
 
   result
@@ -112,7 +112,7 @@ pub fn blob_url_field_resolver_with_default_preset_test() {
     #("did", value.String("did:plc:test123")),
   ])
 
-  let ctx = schema.Context(Some(blob_data), dict.new())
+  let ctx = schema.Context(Some(blob_data), dict.new(), dict.new())
   let result = blob_type.resolve_url(ctx)
 
   let expected_url = "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:test123/bafyreiabc123@jpeg"
@@ -132,7 +132,7 @@ pub fn blob_url_field_resolver_with_avatar_preset_test() {
   ])
 
   let args = dict.from_list([#("preset", value.String("avatar"))])
-  let ctx = schema.Context(Some(blob_data), args)
+  let ctx = schema.Context(Some(blob_data), args, dict.new())
   let result = blob_type.resolve_url(ctx)
 
   let expected_url = "https://cdn.bsky.app/img/avatar/plain/did:plc:user789/bafyreiabc456@jpeg"
@@ -152,7 +152,7 @@ pub fn blob_url_field_resolver_with_banner_preset_test() {
   ])
 
   let args = dict.from_list([#("preset", value.String("banner"))])
-  let ctx = schema.Context(Some(blob_data), args)
+  let ctx = schema.Context(Some(blob_data), args, dict.new())
   let result = blob_type.resolve_url(ctx)
 
   let expected_url = "https://cdn.bsky.app/img/banner/plain/did:plc:banner123/bafyreiabc789@jpeg"
@@ -172,7 +172,7 @@ pub fn blob_url_field_resolver_with_feed_thumbnail_preset_test() {
   ])
 
   let args = dict.from_list([#("preset", value.String("feed_thumbnail"))])
-  let ctx = schema.Context(Some(blob_data), args)
+  let ctx = schema.Context(Some(blob_data), args, dict.new())
   let result = blob_type.resolve_url(ctx)
 
   let expected_url = "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:thumb456/bafyreiathumbnail@jpeg"
