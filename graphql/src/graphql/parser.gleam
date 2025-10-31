@@ -168,6 +168,17 @@ fn parse_operations(
       }
     }
 
+    // Anonymous query: "query { ... }"
+    [lexer.Name("query"), lexer.BraceOpen, ..] -> {
+      case parse_selection_set(list.drop(tokens, 1)) {
+        Ok(#(selections, remaining)) -> {
+          let op = Query(selections)
+          parse_operations(remaining, [op, ..acc])
+        }
+        Error(err) -> Error(err)
+      }
+    }
+
     // Anonymous mutation: "mutation { ... }"
     [lexer.Name("mutation"), lexer.BraceOpen, ..] -> {
       case parse_selection_set(list.drop(tokens, 1)) {

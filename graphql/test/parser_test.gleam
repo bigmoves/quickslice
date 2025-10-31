@@ -13,6 +13,19 @@ pub fn parse_empty_query_test() {
   |> should.be_ok
 }
 
+pub fn parse_anonymous_query_with_keyword_test() {
+  "query { user }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([parser.Query(parser.SelectionSet([parser.Field("user", None, [], [])]))]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
 pub fn parse_single_field_test() {
   "{ user }"
   |> parser.parse
