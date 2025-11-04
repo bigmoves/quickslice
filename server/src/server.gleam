@@ -238,6 +238,7 @@ fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
 
   case segments {
     [] -> index_route(ctx)
+    ["health"] -> handle_health_check(ctx)
     ["backfill"] -> handle_backfill_request(req, ctx.db)
     ["graphql"] ->
       graphql_handler.handle_graphql_request(req, ctx.db, ctx.auth_base_url)
@@ -369,6 +370,26 @@ fn handle_backfill_request(
       |> wisp.set_header("content-type", "application/json")
       |> wisp.set_body(wisp.Text(
         "{\"error\": \"method_not_allowed\", \"message\": \"Use POST to trigger backfill\"}",
+      ))
+    }
+  }
+}
+
+fn handle_health_check(ctx: Context) -> wisp.Response {
+  // Try a simple database query to verify connectivity
+  case database.get_lexicon_count(ctx.db) {
+    Ok(_) -> {
+      // Database is accessible
+      wisp.response(200)
+      |> wisp.set_header("content-type", "application/json")
+      |> wisp.set_body(wisp.Text("{\"status\": \"healthy\"}"))
+    }
+    Error(_) -> {
+      // Database is not accessible
+      wisp.response(503)
+      |> wisp.set_header("content-type", "application/json")
+      |> wisp.set_body(wisp.Text(
+        "{\"status\": \"unhealthy\", \"message\": \"Database connection failed\"}",
       ))
     }
   }
