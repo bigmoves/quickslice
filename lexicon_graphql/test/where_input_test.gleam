@@ -1,7 +1,6 @@
 /// Tests for GraphQL where input parsing
 ///
 /// Tests the parsing of GraphQL values into WhereClause structures
-
 import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
@@ -39,10 +38,7 @@ pub fn parse_in_operator_test() {
   // { status: { in: ["active", "pending"] } }
   let condition_value =
     value.Object([
-      #(
-        "in",
-        value.List([value.String("active"), value.String("pending")]),
-      ),
+      #("in", value.List([value.String("active"), value.String("pending")])),
     ])
   let where_value = value.Object([#("status", condition_value)])
 
@@ -227,7 +223,8 @@ pub fn parse_simple_and_test() {
   let name_clause = value.Object([#("name", name_condition)])
   let age_clause = value.Object([#("age", age_condition)])
 
-  let where_value = value.Object([#("and", value.List([name_clause, age_clause]))])
+  let where_value =
+    value.Object([#("and", value.List([name_clause, age_clause]))])
 
   let result = where_input.parse_where_clause(where_value)
 
@@ -468,7 +465,8 @@ pub fn parse_complex_user_filter_test() {
   let or_status =
     value.Object([#("or", value.List([status_active, status_premium]))])
 
-  let age_cond = value.Object([#("gte", value.Int(18)), #("lte", value.Int(65))])
+  let age_cond =
+    value.Object([#("gte", value.Int(18)), #("lte", value.Int(65))])
   let age_clause = value.Object([#("age", age_cond)])
 
   let name_cond = value.Object([#("contains", value.String("smith"))])

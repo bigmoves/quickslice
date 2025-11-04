@@ -25,7 +25,11 @@ pub fn parse_lexicon(json_str: String) -> Result(types.Lexicon, String) {
 
 /// Create a decoder for the defs object
 fn decode_defs() -> decode.Decoder(types.Defs) {
-  use main <- decode.optional_field("main", None, decode.optional(decode_record_def()))
+  use main <- decode.optional_field(
+    "main",
+    None,
+    decode.optional(decode_record_def()),
+  )
   use defs_dict <- decode.then(decode.dict(decode.string, decode.dynamic))
 
   // Filter out "main" and parse remaining defs
@@ -46,7 +50,9 @@ fn decode_defs() -> decode.Decoder(types.Defs) {
 }
 
 /// Decode a definition (either record or object)
-fn decode_def(dyn: decode.Dynamic) -> Result(types.Def, List(decode.DecodeError)) {
+fn decode_def(
+  dyn: decode.Dynamic,
+) -> Result(types.Def, List(decode.DecodeError)) {
   // Try to decode as object first (simpler structure)
   case decode_object_def_inner(dyn) {
     Ok(obj_def) -> Ok(types.Object(obj_def))
@@ -61,11 +67,20 @@ fn decode_def(dyn: decode.Dynamic) -> Result(types.Def, List(decode.DecodeError)
 }
 
 /// Decode an object definition (inner, returns ObjectDef not Def)
-fn decode_object_def_inner(dyn: decode.Dynamic) -> Result(types.ObjectDef, List(decode.DecodeError)) {
+fn decode_object_def_inner(
+  dyn: decode.Dynamic,
+) -> Result(types.ObjectDef, List(decode.DecodeError)) {
   let decoder = {
     use type_ <- decode.field("type", decode.string)
-    use required_fields <- decode.optional_field("required", [], decode.list(decode.string))
-    use properties_dict <- decode.field("properties", decode.dict(decode.string, decode.dynamic))
+    use required_fields <- decode.optional_field(
+      "required",
+      [],
+      decode.list(decode.string),
+    )
+    use properties_dict <- decode.field(
+      "properties",
+      decode.dict(decode.string, decode.dynamic),
+    )
 
     // Convert dict to list of properties
     let properties =
@@ -75,7 +90,9 @@ fn decode_object_def_inner(dyn: decode.Dynamic) -> Result(types.ObjectDef, List(
         let #(name, prop_dyn) = entry
         let is_required = list.contains(required_fields, name)
 
-        let #(prop_type, prop_format, prop_ref) = case decode_property(prop_dyn) {
+        let #(prop_type, prop_format, prop_ref) = case
+          decode_property(prop_dyn)
+        {
           Ok(#(t, f, r)) -> #(t, f, r)
           Error(_) -> #("string", None, None)
         }
@@ -133,11 +150,22 @@ fn decode_record_object() -> decode.Decoder(List(#(String, types.Property))) {
 /// Decode a property's type, format, and ref fields
 fn decode_property(
   dyn: decode.Dynamic,
-) -> Result(#(String, option.Option(String), option.Option(String)), List(decode.DecodeError)) {
+) -> Result(
+  #(String, option.Option(String), option.Option(String)),
+  List(decode.DecodeError),
+) {
   let property_decoder = {
     use type_ <- decode.field("type", decode.string)
-    use format <- decode.optional_field("format", None, decode.optional(decode.string))
-    use ref <- decode.optional_field("ref", None, decode.optional(decode.string))
+    use format <- decode.optional_field(
+      "format",
+      None,
+      decode.optional(decode.string),
+    )
+    use ref <- decode.optional_field(
+      "ref",
+      None,
+      decode.optional(decode.string),
+    )
 
     decode.success(#(type_, format, ref))
   }

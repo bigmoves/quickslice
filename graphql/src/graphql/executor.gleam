@@ -148,8 +148,7 @@ fn execute_operation(
             fragments,
             [],
           )
-        option.None ->
-          Error("Schema does not define a mutation type")
+        option.None -> Error("Schema does not define a mutation type")
       }
     }
     parser.NamedMutation(_, _, selection_set) -> {
@@ -164,8 +163,7 @@ fn execute_operation(
             fragments,
             [],
           )
-        option.None ->
-          Error("Schema does not define a mutation type")
+        option.None -> Error("Schema does not define a mutation type")
       }
     }
     parser.FragmentDefinition(_, _, _) ->
@@ -369,7 +367,12 @@ fn execute_selection(
           case dict.get(args_dict, "name") {
             Ok(value.String(type_name)) -> {
               // Look up the type in the schema
-              case introspection.type_by_name_introspection(graphql_schema, type_name) {
+              case
+                introspection.type_by_name_introspection(
+                  graphql_schema,
+                  type_name,
+                )
+              {
                 option.Some(type_value) -> {
                   // Handle nested selections on __type
                   case nested_selections {
@@ -404,11 +407,13 @@ fn execute_selection(
               }
             }
             Ok(_) -> {
-              let error = GraphQLError("__type argument 'name' must be a String", path)
+              let error =
+                GraphQLError("__type argument 'name' must be a String", path)
               Ok(#(key, value.Null, [error]))
             }
             Error(_) -> {
-              let error = GraphQLError("__type requires a 'name' argument", path)
+              let error =
+                GraphQLError("__type requires a 'name' argument", path)
               Ok(#(key, value.Null, [error]))
             }
           }
@@ -443,13 +448,18 @@ fn execute_selection(
                         value.Object(_) -> {
                           // Check if field_type_def is a union type
                           // If so, resolve it to the concrete type first
-                          let type_to_use = case schema.is_union(field_type_def) {
+                          let type_to_use = case
+                            schema.is_union(field_type_def)
+                          {
                             True -> {
                               // Create context with the field value for type resolution
                               let resolve_ctx =
                                 schema.context(option.Some(field_value))
                               case
-                                schema.resolve_union_type(field_type_def, resolve_ctx)
+                                schema.resolve_union_type(
+                                  field_type_def,
+                                  resolve_ctx,
+                                )
                               {
                                 Ok(concrete_type) -> concrete_type
                                 Error(_) -> field_type_def
@@ -461,7 +471,8 @@ fn execute_selection(
 
                           // Execute nested selections using the resolved type
                           // Create new context with this object's data
-                          let object_ctx = schema.context(option.Some(field_value))
+                          let object_ctx =
+                            schema.context(option.Some(field_value))
                           let selection_set =
                             parser.SelectionSet(nested_selections)
                           case
@@ -507,10 +518,17 @@ fn execute_selection(
                               let item_type = case schema.is_union(inner_type) {
                                 True -> {
                                   // Create context with the item value for type resolution
-                                  let resolve_ctx = schema.context(option.Some(item))
-                                  case schema.resolve_union_type(inner_type, resolve_ctx) {
+                                  let resolve_ctx =
+                                    schema.context(option.Some(item))
+                                  case
+                                    schema.resolve_union_type(
+                                      inner_type,
+                                      resolve_ctx,
+                                    )
+                                  {
                                     Ok(concrete_type) -> concrete_type
-                                    Error(_) -> inner_type  // Fallback to union type if resolution fails
+                                    Error(_) -> inner_type
+                                    // Fallback to union type if resolution fails
                                   }
                                 }
                                 False -> inner_type
@@ -656,37 +674,82 @@ fn execute_introspection_selection_set(
 
               // For each selection, find the corresponding field in the object
               let results =
-            list.map(selections, fn(selection) {
-              case selection {
-                parser.FragmentSpread(name) -> {
-                  // Look up the fragment definition
-                  case dict.get(fragments, name) {
-                    Error(_) -> {
-                      // Fragment not found - return error
-                      let error = GraphQLError("Fragment '" <> name <> "' not found", path)
-                      Ok(#("__FRAGMENT_ERROR", value.String("Fragment not found: " <> name), [error]))
+                list.map(selections, fn(selection) {
+                  case selection {
+                    parser.FragmentSpread(name) -> {
+                      // Look up the fragment definition
+                      case dict.get(fragments, name) {
+                        Error(_) -> {
+                          // Fragment not found - return error
+                          let error =
+                            GraphQLError(
+                              "Fragment '" <> name <> "' not found",
+                              path,
+                            )
+                          Ok(
+                            #(
+                              "__FRAGMENT_ERROR",
+                              value.String("Fragment not found: " <> name),
+                              [error],
+                            ),
+                          )
+                        }
+                        Ok(parser.FragmentDefinition(
+                          _fname,
+                          _type_condition,
+                          fragment_selection_set,
+                        )) -> {
+                          // For introspection, we don't check type conditions - just execute the fragment
+                          // IMPORTANT: Use visited_types (not new_visited) because we're selecting from
+                          // the SAME object, not recursing into it. The current object was already added
+                          // to new_visited, but the fragment is just selecting different fields.
+                          case
+                            execute_introspection_selection_set(
+                              fragment_selection_set,
+                              value_obj,
+                              graphql_schema,
+                              ctx,
+                              fragments,
+                              path,
+                              visited_types,
+                            )
+                          {
+                            Ok(#(value.Object(fragment_fields), errs)) ->
+                              Ok(#(
+                                "__fragment_fields",
+                                value.Object(fragment_fields),
+                                errs,
+                              ))
+                            Ok(#(val, errs)) ->
+                              Ok(#("__fragment_fields", val, errs))
+                            Error(_err) -> Error(Nil)
+                          }
+                        }
+                        Ok(_) -> Error(Nil)
+                        // Invalid fragment definition
+                      }
                     }
-                    Ok(parser.FragmentDefinition(
-                      _fname,
-                      _type_condition,
-                      fragment_selection_set,
-                    )) -> {
-                      // For introspection, we don't check type conditions - just execute the fragment
-                      // IMPORTANT: Use visited_types (not new_visited) because we're selecting from
-                      // the SAME object, not recursing into it. The current object was already added
-                      // to new_visited, but the fragment is just selecting different fields.
+                    parser.InlineFragment(
+                      _type_condition_opt,
+                      inline_selections,
+                    ) -> {
+                      // For introspection, inline fragments always execute (no type checking needed)
+                      // Execute the inline fragment's selections on this object
+                      let inline_selection_set =
+                        parser.SelectionSet(inline_selections)
                       case
                         execute_introspection_selection_set(
-                          fragment_selection_set,
+                          inline_selection_set,
                           value_obj,
                           graphql_schema,
                           ctx,
                           fragments,
                           path,
-                          visited_types,
+                          new_visited,
                         )
                       {
                         Ok(#(value.Object(fragment_fields), errs)) ->
+                          // Return fragment fields to be merged
                           Ok(#(
                             "__fragment_fields",
                             value.Object(fragment_fields),
@@ -697,106 +760,82 @@ fn execute_introspection_selection_set(
                         Error(_err) -> Error(Nil)
                       }
                     }
-                    Ok(_) -> Error(Nil)
-                    // Invalid fragment definition
-                  }
-                }
-                parser.InlineFragment(_type_condition_opt, inline_selections) -> {
-                  // For introspection, inline fragments always execute (no type checking needed)
-                  // Execute the inline fragment's selections on this object
-                  let inline_selection_set =
-                    parser.SelectionSet(inline_selections)
-                  case
-                    execute_introspection_selection_set(
-                      inline_selection_set,
-                      value_obj,
-                      graphql_schema,
-                      ctx,
-                      fragments,
-                      path,
-                      new_visited,
-                    )
-                  {
-                    Ok(#(value.Object(fragment_fields), errs)) ->
-                      // Return fragment fields to be merged
-                      Ok(#(
-                        "__fragment_fields",
-                        value.Object(fragment_fields),
-                        errs,
-                      ))
-                    Ok(#(val, errs)) -> Ok(#("__fragment_fields", val, errs))
-                    Error(_err) -> Error(Nil)
-                  }
-                }
-                parser.Field(name, alias, _arguments, nested_selections) -> {
-                  // Determine the response key (use alias if provided, otherwise field name)
-                  let key = response_key(name, alias)
+                    parser.Field(name, alias, _arguments, nested_selections) -> {
+                      // Determine the response key (use alias if provided, otherwise field name)
+                      let key = response_key(name, alias)
 
-                  // Find the field in the object
-                  case list.key_find(fields, name) {
-                    Ok(field_value) -> {
-                      // Handle nested selections
-                      case nested_selections {
-                        [] -> Ok(#(key, field_value, []))
-                        _ -> {
-                          let selection_set =
-                            parser.SelectionSet(nested_selections)
-                          case
-                            execute_introspection_selection_set(
-                              selection_set,
-                              field_value,
-                              graphql_schema,
-                              ctx,
-                              fragments,
-                              [name, ..path],
-                              new_visited,
-                            )
-                          {
-                            Ok(#(nested_data, nested_errors)) ->
-                              Ok(#(key, nested_data, nested_errors))
-                            Error(err) -> {
-                              let error = GraphQLError(err, [name, ..path])
-                              Ok(#(key, value.Null, [error]))
+                      // Find the field in the object
+                      case list.key_find(fields, name) {
+                        Ok(field_value) -> {
+                          // Handle nested selections
+                          case nested_selections {
+                            [] -> Ok(#(key, field_value, []))
+                            _ -> {
+                              let selection_set =
+                                parser.SelectionSet(nested_selections)
+                              case
+                                execute_introspection_selection_set(
+                                  selection_set,
+                                  field_value,
+                                  graphql_schema,
+                                  ctx,
+                                  fragments,
+                                  [name, ..path],
+                                  new_visited,
+                                )
+                              {
+                                Ok(#(nested_data, nested_errors)) ->
+                                  Ok(#(key, nested_data, nested_errors))
+                                Error(err) -> {
+                                  let error = GraphQLError(err, [name, ..path])
+                                  Ok(#(key, value.Null, [error]))
+                                }
+                              }
                             }
                           }
                         }
+                        Error(_) -> {
+                          let error =
+                            GraphQLError(
+                              "Field '" <> name <> "' not found",
+                              path,
+                            )
+                          Ok(#(key, value.Null, [error]))
+                        }
                       }
                     }
-                    Error(_) -> {
-                      let error =
-                        GraphQLError("Field '" <> name <> "' not found", path)
-                      Ok(#(key, value.Null, [error]))
-                    }
                   }
-                }
-              }
-            })
+                })
 
-          // Collect all data and errors, merging fragment fields
-          let #(data, errors) =
-            results
-            |> list.fold(#([], []), fn(acc, r) {
-              let #(fields_acc, errors_acc) = acc
-              case r {
-                Ok(#("__fragment_fields", value.Object(fragment_fields), errs)) -> {
-                  // Merge fragment fields into parent
-                  #(
-                    list.append(fields_acc, fragment_fields),
-                    list.append(errors_acc, errs),
-                  )
-                }
-                Ok(#(name, val, errs)) -> {
-                  // Regular field
-                  #(
-                    list.append(fields_acc, [#(name, val)]),
-                    list.append(errors_acc, errs),
-                  )
-                }
-                Error(_) -> acc
-              }
-            })
+              // Collect all data and errors, merging fragment fields
+              let #(data, errors) =
+                results
+                |> list.fold(#([], []), fn(acc, r) {
+                  let #(fields_acc, errors_acc) = acc
+                  case r {
+                    Ok(#(
+                      "__fragment_fields",
+                      value.Object(fragment_fields),
+                      errs,
+                    )) -> {
+                      // Merge fragment fields into parent
+                      #(
+                        list.append(fields_acc, fragment_fields),
+                        list.append(errors_acc, errs),
+                      )
+                    }
+                    Ok(#(name, val, errs)) -> {
+                      // Regular field
+                      #(
+                        list.append(fields_acc, [#(name, val)]),
+                        list.append(errors_acc, errs),
+                      )
+                    }
+                    Error(_) -> acc
+                  }
+                })
 
-          Ok(#(value.Object(data), errors))
+              Ok(#(value.Object(data), errors))
             }
           }
         }
@@ -822,7 +861,9 @@ fn argument_value_to_value(
     parser.NullValue -> value.Null
     parser.EnumValue(s) -> value.String(s)
     parser.ListValue(items) ->
-      value.List(list.map(items, fn(item) { argument_value_to_value(item, ctx) }))
+      value.List(
+        list.map(items, fn(item) { argument_value_to_value(item, ctx) }),
+      )
     parser.ObjectValue(fields) ->
       value.Object(
         list.map(fields, fn(pair) {

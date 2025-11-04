@@ -1,8 +1,8 @@
-import gleeunit
-import gleeunit/should
 import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
+import gleeunit
+import gleeunit/should
 import sqlight
 import where_clause
 
@@ -139,36 +139,39 @@ pub fn condition_with_multiple_operators_test() {
 
 // Test constructing a clause with nested AND/OR
 pub fn clause_with_nested_and_or_test() {
-  let and_clause1 = where_clause.WhereClause(
-    conditions: dict.from_list([
-      #(
-        "artist",
-        where_clause.WhereCondition(
-          eq: None,
-          in_values: None,
-          contains: Some("pearl jam"),
-          gt: None,
-          gte: None,
-          lt: None,
-          lte: None,
+  let and_clause1 =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "artist",
+          where_clause.WhereCondition(
+            eq: None,
+            in_values: None,
+            contains: Some("pearl jam"),
+            gt: None,
+            gte: None,
+            lt: None,
+            lte: None,
+          ),
         ),
-      ),
-    ]),
-    and: None,
-    or: None,
-  )
+      ]),
+      and: None,
+      or: None,
+    )
 
-  let or_clause = where_clause.WhereClause(
-    conditions: dict.new(),
-    and: None,
-    or: Some([and_clause1]),
-  )
+  let or_clause =
+    where_clause.WhereClause(
+      conditions: dict.new(),
+      and: None,
+      or: Some([and_clause1]),
+    )
 
-  let root_clause = where_clause.WhereClause(
-    conditions: dict.new(),
-    and: Some([or_clause]),
-    or: None,
-  )
+  let root_clause =
+    where_clause.WhereClause(
+      conditions: dict.new(),
+      and: Some([or_clause]),
+      or: None,
+    )
 
   case root_clause.and {
     Some(and_list) -> list.length(and_list) |> should.equal(1)

@@ -100,9 +100,7 @@ fn get_all_types(graphql_schema: schema.Schema) -> List(value.Value) {
 /// Deduplicate types by name, keeping the version with the most fields
 /// This ensures we get the "most complete" version of each type when
 /// multiple versions exist (e.g., from different passes in schema building)
-fn deduplicate_types_by_name(
-  types: List(schema.Type),
-) -> List(schema.Type) {
+fn deduplicate_types_by_name(types: List(schema.Type)) -> List(schema.Type) {
   // Group types by name
   types
   |> list.group(schema.type_name)
@@ -194,7 +192,6 @@ fn collect_types_from_type(
   case should_traverse_children {
     False -> new_acc
     True -> {
-
       // Recursively collect types from fields if this is an object type
       case schema.is_object(t) {
         True -> {
@@ -352,7 +349,10 @@ fn get_input_fields_for_type(t: schema.Type) -> List(value.Value) {
 
     value.Object([
       #("name", value.String(schema.input_field_name(input_field))),
-      #("description", value.String(schema.input_field_description(input_field))),
+      #(
+        "description",
+        value.String(schema.input_field_description(input_field)),
+      ),
       #("type", type_ref(field_type_val)),
       #("defaultValue", value.Null),
     ])

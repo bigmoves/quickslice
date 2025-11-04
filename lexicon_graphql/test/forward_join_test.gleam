@@ -43,21 +43,28 @@ pub fn strong_ref_generates_forward_join_field_test() {
     types.Lexicon(
       id: "app.bsky.actor.profile",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "displayName",
-            types.Property(type_: "string", required: True, format: None, ref: None),
-          ),
-          #(
-            "pinnedPost",
-            types.Property(
-              type_: "ref",
-              required: False,
-              format: None,
-              ref: Some("com.atproto.repo.strongRef"),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "displayName",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+            #(
+              "pinnedPost",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("com.atproto.repo.strongRef"),
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -79,26 +86,28 @@ pub fn at_uri_generates_forward_join_field_test() {
     types.Lexicon(
       id: "app.bsky.feed.like",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "subject",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: Some("at-uri"),
-              ref: None,
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "subject",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: Some("at-uri"),
+                ref: None,
+              ),
             ),
-          ),
-          #(
-            "createdAt",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: Some("datetime"),
-              ref: None,
+            #(
+              "createdAt",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: Some("datetime"),
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -119,30 +128,37 @@ pub fn multiple_forward_join_fields_test() {
     types.Lexicon(
       id: "app.bsky.feed.post",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: None, ref: None),
-          ),
-          #(
-            "reply",
-            types.Property(
-              type_: "ref",
-              required: False,
-              format: None,
-              ref: Some("com.atproto.repo.strongRef"),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
             ),
-          ),
-          #(
-            "via",
-            types.Property(
-              type_: "string",
-              required: False,
-              format: Some("at-uri"),
-              ref: None,
+            #(
+              "reply",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("com.atproto.repo.strongRef"),
+              ),
             ),
-          ),
-        ])),
+            #(
+              "via",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: Some("at-uri"),
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -166,21 +182,28 @@ pub fn no_join_fields_test() {
     types.Lexicon(
       id: "xyz.statusphere.status",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "status",
-            types.Property(type_: "string", required: True, format: None, ref: None),
-          ),
-          #(
-            "createdAt",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: Some("datetime"),
-              ref: None,
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "status",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+            #(
+              "createdAt",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: Some("datetime"),
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -207,21 +230,28 @@ pub fn record_union_type_exists_test() {
     types.Lexicon(
       id: "app.bsky.feed.post",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: None, ref: None),
-          ),
-          #(
-            "reply",
-            types.Property(
-              type_: "ref",
-              required: False,
-              format: None,
-              ref: Some("com.atproto.repo.strongRef"),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+            #(
+              "reply",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("com.atproto.repo.strongRef"),
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -242,21 +272,28 @@ pub fn forward_join_field_has_union_type_test() {
     types.Lexicon(
       id: "app.bsky.feed.post",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: None, ref: None),
-          ),
-          #(
-            "reply",
-            types.Property(
-              type_: "ref",
-              required: False,
-              format: None,
-              ref: Some("com.atproto.repo.strongRef"),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+            #(
+              "reply",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("com.atproto.repo.strongRef"),
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -270,4 +307,3 @@ pub fn forward_join_field_has_union_type_test() {
   string.contains(serialized, "replyResolved: Record")
   |> should.be_true
 }
-

@@ -279,20 +279,14 @@ pub fn page_info_to_value(page_info: PageInfo) -> value.Value {
   value.Object([
     #("hasNextPage", value.Boolean(page_info.has_next_page)),
     #("hasPreviousPage", value.Boolean(page_info.has_previous_page)),
-    #(
-      "startCursor",
-      case page_info.start_cursor {
-        Some(cursor) -> value.String(cursor)
-        None -> value.Null
-      },
-    ),
-    #(
-      "endCursor",
-      case page_info.end_cursor {
-        Some(cursor) -> value.String(cursor)
-        None -> value.Null
-      },
-    ),
+    #("startCursor", case page_info.start_cursor {
+      Some(cursor) -> value.String(cursor)
+      None -> value.Null
+    }),
+    #("endCursor", case page_info.end_cursor {
+      Some(cursor) -> value.String(cursor)
+      None -> value.Null
+    }),
   ])
 }
 

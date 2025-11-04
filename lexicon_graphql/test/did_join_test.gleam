@@ -47,12 +47,19 @@ pub fn collections_get_did_join_fields_test() {
     types.Lexicon(
       id: "xyz.statusphere.status",
       defs: types.Defs(
-        main: option.Some(types.RecordDef(type_: "record", key: option.None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: option.None, ref: option.None),
-          ),
-        ])),
+        main: option.Some(
+          types.RecordDef(type_: "record", key: option.None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: option.None,
+                ref: option.None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -61,21 +68,23 @@ pub fn collections_get_did_join_fields_test() {
     types.Lexicon(
       id: "app.bsky.actor.profile",
       defs: types.Defs(
-        main: option.Some(types.RecordDef(
-          type_: "record",
-          key: option.Some("literal:self"),
-          properties: [
-            #(
-              "displayName",
-              types.Property(
-                type_: "string",
-                required: False,
-                format: option.None,
-                ref: option.None,
+        main: option.Some(
+          types.RecordDef(
+            type_: "record",
+            key: option.Some("literal:self"),
+            properties: [
+              #(
+                "displayName",
+                types.Property(
+                  type_: "string",
+                  required: False,
+                  format: option.None,
+                  ref: option.None,
+                ),
               ),
-            ),
-          ],
-        )),
+            ],
+          ),
+        ),
         others: dict.new(),
       ),
     )
@@ -102,12 +111,19 @@ pub fn literal_self_returns_single_object_test() {
     types.Lexicon(
       id: "xyz.statusphere.status",
       defs: types.Defs(
-        main: option.Some(types.RecordDef(type_: "record", key: option.None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: option.None, ref: option.None),
-          ),
-        ])),
+        main: option.Some(
+          types.RecordDef(type_: "record", key: option.None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: option.None,
+                ref: option.None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -116,21 +132,23 @@ pub fn literal_self_returns_single_object_test() {
     types.Lexicon(
       id: "app.bsky.actor.profile",
       defs: types.Defs(
-        main: option.Some(types.RecordDef(
-          type_: "record",
-          key: option.Some("literal:self"),
-          properties: [
-            #(
-              "displayName",
-              types.Property(
-                type_: "string",
-                required: False,
-                format: option.None,
-                ref: option.None,
+        main: option.Some(
+          types.RecordDef(
+            type_: "record",
+            key: option.Some("literal:self"),
+            properties: [
+              #(
+                "displayName",
+                types.Property(
+                  type_: "string",
+                  required: False,
+                  format: option.None,
+                  ref: option.None,
+                ),
               ),
-            ),
-          ],
-        )),
+            ],
+          ),
+        ),
         others: dict.new(),
       ),
     )
@@ -154,12 +172,19 @@ pub fn non_literal_self_returns_list_test() {
     types.Lexicon(
       id: "xyz.statusphere.status",
       defs: types.Defs(
-        main: option.Some(types.RecordDef(type_: "record", key: option.None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: option.None, ref: option.None),
-          ),
-        ])),
+        main: option.Some(
+          types.RecordDef(type_: "record", key: option.None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: option.None,
+                ref: option.None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -168,12 +193,19 @@ pub fn non_literal_self_returns_list_test() {
     types.Lexicon(
       id: "app.bsky.feed.post",
       defs: types.Defs(
-        main: option.Some(types.RecordDef(type_: "record", key: option.None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: option.None, ref: option.None),
-          ),
-        ])),
+        main: option.Some(
+          types.RecordDef(type_: "record", key: option.None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: option.None,
+                ref: option.None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -196,12 +228,19 @@ pub fn multiple_collections_get_cross_joins_test() {
     types.Lexicon(
       id: "xyz.statusphere.status",
       defs: types.Defs(
-        main: option.Some(types.RecordDef(type_: "record", key: option.None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: option.None, ref: option.None),
-          ),
-        ])),
+        main: option.Some(
+          types.RecordDef(type_: "record", key: option.None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: option.None,
+                ref: option.None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -210,12 +249,19 @@ pub fn multiple_collections_get_cross_joins_test() {
     types.Lexicon(
       id: "app.bsky.feed.post",
       defs: types.Defs(
-        main: option.Some(types.RecordDef(type_: "record", key: option.None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: option.None, ref: option.None),
-          ),
-        ])),
+        main: option.Some(
+          types.RecordDef(type_: "record", key: option.None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: option.None,
+                ref: option.None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -224,23 +270,29 @@ pub fn multiple_collections_get_cross_joins_test() {
     types.Lexicon(
       id: "app.bsky.feed.like",
       defs: types.Defs(
-        main: option.Some(types.RecordDef(type_: "record", key: option.None, properties: [
-          #(
-            "subject",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: option.Some("at-uri"),
-              ref: option.None,
+        main: option.Some(
+          types.RecordDef(type_: "record", key: option.None, properties: [
+            #(
+              "subject",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: option.Some("at-uri"),
+                ref: option.None,
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
 
   let test_schema =
-    create_test_schema_from_lexicons([status_lexicon, post_lexicon, like_lexicon])
+    create_test_schema_from_lexicons([
+      status_lexicon,
+      post_lexicon,
+      like_lexicon,
+    ])
 
   let all_types = introspection.get_all_schema_types(test_schema)
   let serialized = sdl.print_types(all_types)
@@ -255,7 +307,6 @@ pub fn multiple_collections_get_cross_joins_test() {
   // Post should have joins to Status and Like
   string.contains(serialized, "xyzStatusphereStatusByDid")
   |> should.be_true
-
   // Like should have joins to Status and Post
   // (already checked above)
 }
@@ -266,12 +317,19 @@ pub fn no_self_join_test() {
     types.Lexicon(
       id: "xyz.statusphere.status",
       defs: types.Defs(
-        main: option.Some(types.RecordDef(type_: "record", key: option.None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: option.None, ref: option.None),
-          ),
-        ])),
+        main: option.Some(
+          types.RecordDef(type_: "record", key: option.None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: option.None,
+                ref: option.None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )

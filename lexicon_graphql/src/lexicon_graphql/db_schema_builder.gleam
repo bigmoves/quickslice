@@ -145,7 +145,10 @@ fn extract_record_types_and_object_types(
   let metadata_list =
     list.filter_map(lexicons, fn(lex) {
       case lex {
-        types.Lexicon(id, types.Defs(option.Some(types.RecordDef("record", _, _)), _)) -> {
+        types.Lexicon(
+          id,
+          types.Defs(option.Some(types.RecordDef("record", _, _)), _),
+        ) -> {
           let meta = collection_meta.extract_metadata(lex)
           Ok(#(id, meta))
         }
@@ -168,21 +171,30 @@ fn extract_record_types_and_object_types(
 
   // Build basic object types WITHOUT forward joins (needed as generic type for forward joins)
   let basic_object_types_without_forward_joins =
-    list.fold(basic_record_types_without_forward_joins, dict.new(), fn(acc, record_type) {
-      let object_type =
-        schema.object_type(
-          record_type.type_name,
-          "Record type: " <> record_type.nsid,
-          record_type.fields,
-        )
-      dict.insert(acc, record_type.nsid, object_type)
-    })
+    list.fold(
+      basic_record_types_without_forward_joins,
+      dict.new(),
+      fn(acc, record_type) {
+        let object_type =
+          schema.object_type(
+            record_type.type_name,
+            "Record type: " <> record_type.nsid,
+            record_type.fields,
+          )
+        dict.insert(acc, record_type.nsid, object_type)
+      },
+    )
 
   // Build Record union for forward joins to reference
-  let basic_possible_types = dict.values(basic_object_types_without_forward_joins)
+  let basic_possible_types =
+    dict.values(basic_object_types_without_forward_joins)
   let basic_record_union = build_record_union(basic_possible_types)
   let basic_object_types_with_generic =
-    dict.insert(basic_object_types_without_forward_joins, "_generic_record", basic_record_union)
+    dict.insert(
+      basic_object_types_without_forward_joins,
+      "_generic_record",
+      basic_record_union,
+    )
 
   // Now add forward join fields to basic types
   // This ensures Connection types built in Pass 2 reference types with forward joins
@@ -195,8 +207,7 @@ fn extract_record_types_and_object_types(
           basic_object_types_with_generic,
         )
 
-      let all_fields =
-        list.flatten([record_type.fields, forward_join_fields])
+      let all_fields = list.flatten([record_type.fields, forward_join_fields])
 
       RecordType(..record_type, fields: all_fields)
     })
@@ -215,10 +226,16 @@ fn extract_record_types_and_object_types(
     })
 
   // Rebuild Record union with complete basic types
-  let basic_possible_types_complete = dict.values(basic_object_types_without_generic)
-  let basic_record_union_complete = build_record_union(basic_possible_types_complete)
+  let basic_possible_types_complete =
+    dict.values(basic_object_types_without_generic)
+  let basic_record_union_complete =
+    build_record_union(basic_possible_types_complete)
   let basic_object_types =
-    dict.insert(basic_object_types_without_generic, "_generic_record", basic_record_union_complete)
+    dict.insert(
+      basic_object_types_without_generic,
+      "_generic_record",
+      basic_record_union_complete,
+    )
 
   // Build sort field enums dict BEFORE Pass 2 - create each enum once and reuse
   let sort_field_enums: dict.Dict(String, schema.Type) =
@@ -275,23 +292,24 @@ fn extract_record_types_and_object_types(
           did_join_fields,
         ])
 
-      RecordType(..record_type, fields: all_fields, reverse_joins: reverse_joins)
+      RecordType(
+        ..record_type,
+        fields: all_fields,
+        reverse_joins: reverse_joins,
+      )
     })
 
   // Build complete object types from complete RecordTypes
   let complete_object_types_without_generic: dict.Dict(String, schema.Type) =
     list.fold(complete_record_types, dict.new(), fn(acc, rt: RecordType) {
       let object_type =
-        schema.object_type(
-          rt.type_name,
-          "Record type: " <> rt.nsid,
-          rt.fields,
-        )
+        schema.object_type(rt.type_name, "Record type: " <> rt.nsid, rt.fields)
       dict.insert(acc, rt.nsid, object_type)
     })
 
   // Build Record union with complete object types
-  let complete_possible_types = dict.values(complete_object_types_without_generic)
+  let complete_possible_types =
+    dict.values(complete_object_types_without_generic)
   let complete_record_union = build_record_union(complete_possible_types)
   let complete_object_types =
     dict.insert(
@@ -350,7 +368,11 @@ fn extract_record_types_and_object_types(
           did_join_fields,
         ])
 
-      RecordType(..record_type, fields: all_fields, reverse_joins: reverse_joins)
+      RecordType(
+        ..record_type,
+        fields: all_fields,
+        reverse_joins: reverse_joins,
+      )
     })
 
   // Rebuild final object types with all fields
@@ -465,7 +487,10 @@ fn parse_lexicon_with_reverse_joins(
   ref_object_types: Dict(String, schema.Type),
 ) -> Result(RecordType, Nil) {
   case lexicon {
-    types.Lexicon(id, types.Defs(option.Some(types.RecordDef("record", _, properties)), _)) -> {
+    types.Lexicon(
+      id,
+      types.Defs(option.Some(types.RecordDef("record", _, properties)), _),
+    ) -> {
       let type_name = nsid.to_type_name(id)
       let field_name = nsid.to_field_name(id)
 
@@ -474,7 +499,12 @@ fn parse_lexicon_with_reverse_joins(
 
       // Build regular and forward join fields
       let base_fields =
-        build_fields_with_meta(properties, meta, batch_fetcher, ref_object_types)
+        build_fields_with_meta(
+          properties,
+          meta,
+          batch_fetcher,
+          ref_object_types,
+        )
 
       // Note: Reverse join fields are NOT built here - they will be added later
       // once object types exist (see build_reverse_join_fields_with_types)
@@ -1138,7 +1168,13 @@ fn get_sortable_field_names_for_sorting(record_type: RecordType) -> List(String)
   // Add standard sortable fields from AT Protocol
   // Note: actorHandle is NOT included because it's a computed field that requires a join
   // and can't be used directly in ORDER BY clauses
-  let standard_sortable_fields = ["uri", "cid", "did", "collection", "indexedAt"]
+  let standard_sortable_fields = [
+    "uri",
+    "cid",
+    "did",
+    "collection",
+    "indexedAt",
+  ]
   list.append(standard_sortable_fields, sortable_property_names)
 }
 
@@ -1420,6 +1456,7 @@ fn get_nested_field_value_from_context(
     _ -> Error(Nil)
   }
 }
+
 /// Helper to extract a nested field value as Dynamic from resolver context
 /// This version returns the raw Dynamic value for processing by uri_extractor
 fn get_nested_field_from_context_dynamic(

@@ -454,8 +454,8 @@ pub fn resolve_union_type(t: Type, ctx: Context) -> Result(Type, String) {
             Error(_) ->
               Error(
                 "Type resolver returned '"
-                  <> resolved_type_name
-                  <> "' which is not a possible type of this union",
+                <> resolved_type_name
+                <> "' which is not a possible type of this union",
               )
           }
         }

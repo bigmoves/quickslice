@@ -2,10 +2,10 @@
 ///
 /// Tests that SQL ORDER BY clauses are generated correctly and
 /// that sorting works properly with the database
+import database
 import gleam/list
 import gleam/option.{None, Some}
 import gleeunit/should
-import database
 import sqlight
 
 // Helper to create test database with records
@@ -66,19 +66,7 @@ fn create_test_db_with_records() -> sqlight.Connection {
     let #(uri, cid, did, collection, json, indexed_at) = record
     let insert_sql =
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
-       VALUES ('"
-      <> uri
-      <> "', '"
-      <> cid
-      <> "', '"
-      <> did
-      <> "', '"
-      <> collection
-      <> "', '"
-      <> json
-      <> "', '"
-      <> indexed_at
-      <> "')"
+       VALUES ('" <> uri <> "', '" <> cid <> "', '" <> did <> "', '" <> collection <> "', '" <> json <> "', '" <> indexed_at <> "')"
 
     let assert Ok(_) = sqlight.exec(insert_sql, conn)
     Nil
@@ -106,8 +94,7 @@ pub fn test_sort_by_indexed_at_desc() {
     Ok(#(records, _, _, _)) -> {
       // First record should be most recent (2025-01-25)
       case list.first(records) {
-        Ok(first) ->
-          should.equal(first.indexed_at, "2025-01-25T10:00:00Z")
+        Ok(first) -> should.equal(first.indexed_at, "2025-01-25T10:00:00Z")
         Error(_) -> should.be_true(False)
       }
 
@@ -144,8 +131,7 @@ pub fn test_sort_by_indexed_at_asc() {
     Ok(#(records, _, _, _)) -> {
       // First record should be oldest (2025-01-10)
       case list.first(records) {
-        Ok(first) ->
-          should.equal(first.indexed_at, "2025-01-10T10:00:00Z")
+        Ok(first) -> should.equal(first.indexed_at, "2025-01-10T10:00:00Z")
         Error(_) -> should.be_true(False)
       }
 
@@ -182,8 +168,7 @@ pub fn test_sort_by_json_field_desc_nulls_last() {
     Ok(#(records, _, _, _)) -> {
       // First record should have newest createdAt (2025-01-20)
       case list.first(records) {
-        Ok(first) ->
-          should.equal(first.indexed_at, "2025-01-20T10:00:00Z")
+        Ok(first) -> should.equal(first.indexed_at, "2025-01-20T10:00:00Z")
         Error(_) -> should.be_true(False)
       }
 
@@ -224,8 +209,7 @@ pub fn test_sort_by_json_field_asc_nulls_last() {
     Ok(#(records, _, _, _)) -> {
       // First record should have oldest valid createdAt (2025-01-10)
       case list.first(records) {
-        Ok(first) ->
-          should.equal(first.indexed_at, "2025-01-10T10:00:00Z")
+        Ok(first) -> should.equal(first.indexed_at, "2025-01-10T10:00:00Z")
         Error(_) -> should.be_true(False)
       }
 

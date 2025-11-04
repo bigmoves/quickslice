@@ -51,10 +51,28 @@ pub fn single_lexicon_with_sorting_snapshot_test() {
     types.Lexicon(
       "xyz.statusphere.status",
       types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #("status", types.Property(type_: "string", required: False, format: None, ref: None)),
-          #("createdAt", types.Property(type_: "string", required: False, format: None, ref: None)),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "status",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "createdAt",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -76,10 +94,28 @@ pub fn multiple_lexicons_with_distinct_sort_enums_snapshot_test() {
     types.Lexicon(
       "xyz.statusphere.status",
       types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #("status", types.Property(type_: "string", required: False, format: None, ref: None)),
-          #("createdAt", types.Property(type_: "string", required: False, format: None, ref: None)),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "status",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "createdAt",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -88,10 +124,28 @@ pub fn multiple_lexicons_with_distinct_sort_enums_snapshot_test() {
     types.Lexicon(
       "app.bsky.feed.post",
       types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #("text", types.Property(type_: "string", required: False, format: None, ref: None)),
-          #("likeCount", types.Property(type_: "integer", required: False, format: None, ref: None)),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "likeCount",
+              types.Property(
+                type_: "integer",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -113,9 +167,19 @@ pub fn sortby_argument_is_list_type_test() {
     types.Lexicon(
       "xyz.statusphere.status",
       types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #("status", types.Property(type_: "string", required: False, format: None, ref: None)),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "status",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -147,9 +211,19 @@ pub fn connection_has_all_pagination_arguments_test() {
     types.Lexicon(
       "xyz.statusphere.status",
       types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #("status", types.Property(type_: "string", required: False, format: None, ref: None)),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "status",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -179,10 +253,28 @@ pub fn db_schema_all_types_snapshot_test() {
     types.Lexicon(
       "xyz.statusphere.status",
       types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #("text", types.Property(type_: "string", required: False, format: None, ref: None)),
-          #("createdAt", types.Property(type_: "string", required: False, format: None, ref: None)),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "createdAt",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -205,16 +297,74 @@ pub fn sort_enum_excludes_blob_and_ref_types_test() {
     types.Lexicon(
       "app.bsky.test.record",
       types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #("stringField", types.Property(type_: "string", required: False, format: None, ref: None)),
-          #("intField", types.Property(type_: "integer", required: False, format: None, ref: None)),
-          #("boolField", types.Property(type_: "boolean", required: False, format: None, ref: None)),
-          #("numberField", types.Property(type_: "number", required: False, format: None, ref: None)),
-          #("uriField", types.Property(type_: "string", required: False, format: Some("at-uri"), ref: None)),
-          // Non-sortable types that should be excluded
-          #("blobField", types.Property(type_: "blob", required: False, format: None, ref: None)),
-          #("refField", types.Property(type_: "ref", required: False, format: None, ref: Some("app.bsky.test.object"))),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "stringField",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "intField",
+              types.Property(
+                type_: "integer",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "boolField",
+              types.Property(
+                type_: "boolean",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "numberField",
+              types.Property(
+                type_: "number",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "uriField",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: Some("at-uri"),
+                ref: None,
+              ),
+            ),
+            // Non-sortable types that should be excluded
+            #(
+              "blobField",
+              types.Property(
+                type_: "blob",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "refField",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("app.bsky.test.object"),
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -264,18 +414,84 @@ pub fn sort_enum_with_mixed_field_types_snapshot_test() {
     types.Lexicon(
       "app.bsky.test.record",
       types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          // Sortable primitive types
-          #("stringField", types.Property(type_: "string", required: False, format: None, ref: None)),
-          #("intField", types.Property(type_: "integer", required: False, format: None, ref: None)),
-          #("boolField", types.Property(type_: "boolean", required: False, format: None, ref: None)),
-          #("numberField", types.Property(type_: "number", required: False, format: None, ref: None)),
-          #("datetimeField", types.Property(type_: "string", required: False, format: Some("datetime"), ref: None)),
-          #("uriField", types.Property(type_: "string", required: False, format: Some("at-uri"), ref: None)),
-          // Non-sortable types
-          #("blobField", types.Property(type_: "blob", required: False, format: None, ref: None)),
-          #("refField", types.Property(type_: "ref", required: False, format: None, ref: Some("com.atproto.repo.strongRef"))),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            // Sortable primitive types
+            #(
+              "stringField",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "intField",
+              types.Property(
+                type_: "integer",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "boolField",
+              types.Property(
+                type_: "boolean",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "numberField",
+              types.Property(
+                type_: "number",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "datetimeField",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: Some("datetime"),
+                ref: None,
+              ),
+            ),
+            #(
+              "uriField",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: Some("at-uri"),
+                ref: None,
+              ),
+            ),
+            // Non-sortable types
+            #(
+              "blobField",
+              types.Property(
+                type_: "blob",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "refField",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("com.atproto.repo.strongRef"),
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )

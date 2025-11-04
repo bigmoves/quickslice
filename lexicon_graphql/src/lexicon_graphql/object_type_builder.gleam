@@ -23,11 +23,7 @@ pub fn build_object_type(
 ) -> schema.Type {
   let fields = build_object_fields(obj_def.properties, object_types_dict)
 
-  schema.object_type(
-    type_name,
-    "Object type from lexicon definition",
-    fields,
-  )
+  schema.object_type(type_name, "Object type from lexicon definition", fields)
 }
 
 /// Build GraphQL fields from object properties

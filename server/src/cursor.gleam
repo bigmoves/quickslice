@@ -236,12 +236,13 @@ pub fn build_cursor_where_clause(
   case list.is_empty(sort_fields) {
     True -> #("1=1", [])
     False -> {
-      let clauses = build_progressive_clauses(
-        sort_fields,
-        decoded_cursor.field_values,
-        decoded_cursor.cid,
-        is_before,
-      )
+      let clauses =
+        build_progressive_clauses(
+          sort_fields,
+          decoded_cursor.field_values,
+          decoded_cursor.cid,
+          is_before,
+        )
 
       let sql = "(" <> string.join(clauses.0, " OR ") <> ")"
       #(sql, clauses.1)
@@ -268,7 +269,8 @@ fn build_progressive_clauses(
           list.range(0, i - 1)
           |> list.fold(#([], []), fn(eq_acc, j) {
             let #(eq_parts, eq_params) = eq_acc
-            let prior_field = list_at(sort_fields, j) |> result.unwrap(#("", ""))
+            let prior_field =
+              list_at(sort_fields, j) |> result.unwrap(#("", ""))
             let value = list_at(field_values, j) |> result.unwrap("")
 
             let field_ref = build_field_reference(prior_field.0)
@@ -315,7 +317,8 @@ fn build_progressive_clauses(
   let last_field = list.last(sort_fields) |> result.unwrap(#("", "desc"))
   let cid_comparison_op = get_comparison_operator(last_field.1, is_before)
 
-  let final_parts = list.append(final_equality_parts, ["cid " <> cid_comparison_op <> " ?"])
+  let final_parts =
+    list.append(final_equality_parts, ["cid " <> cid_comparison_op <> " ?"])
   let final_params = list.append(final_equality_params, [cid])
 
   let final_clause = "(" <> string.join(final_parts, " AND ") <> ")"

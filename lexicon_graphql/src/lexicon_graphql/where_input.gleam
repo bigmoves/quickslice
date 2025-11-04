@@ -2,7 +2,6 @@
 ///
 /// Provides parsing functions to convert GraphQL values to intermediate where clause types.
 /// These are simple value types that can be passed to the database layer for SQL generation.
-
 import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -106,15 +105,16 @@ pub fn parse_condition(filter_value: value.Value) -> WhereCondition {
         lte: lte,
       )
     }
-    _ -> WhereCondition(
-      eq: None,
-      in_values: None,
-      contains: None,
-      gt: None,
-      gte: None,
-      lt: None,
-      lte: None,
-    )
+    _ ->
+      WhereCondition(
+        eq: None,
+        in_values: None,
+        contains: None,
+        gt: None,
+        gte: None,
+        lt: None,
+        lte: None,
+      )
   }
 }
 

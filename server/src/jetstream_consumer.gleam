@@ -23,7 +23,9 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
       // Separate lexicons by domain authority
       let #(local_lexicons, external_lexicons) =
         lexicons
-        |> list.partition(fn(lex) { backfill.nsid_matches_domain_authority(lex.id) })
+        |> list.partition(fn(lex) {
+          backfill.nsid_matches_domain_authority(lex.id)
+        })
 
       let local_collection_ids = list.map(local_lexicons, fn(lex) { lex.id })
       let external_collection_ids =
@@ -180,7 +182,13 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
 fn get_all_known_dids(db: sqlight.Connection) -> Result(List(String), String) {
   let sql = "SELECT did FROM actor"
 
-  case sqlight.query(sql, on: db, with: [], expecting: decode.at([0], decode.string))
+  case
+    sqlight.query(
+      sql,
+      on: db,
+      with: [],
+      expecting: decode.at([0], decode.string),
+    )
   {
     Ok(dids) -> Ok(dids)
     Error(err) -> Error("Failed to fetch DIDs: " <> string.inspect(err))

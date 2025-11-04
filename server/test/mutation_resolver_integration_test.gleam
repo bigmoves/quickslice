@@ -84,7 +84,12 @@ fn mock_create_resolver_factory(_collection: String) -> schema.Resolver {
                 // Return mock success response
                 Ok(
                   value.Object([
-                    #("uri", value.String("at://did:plc:test/xyz.statusphere.status/test123")),
+                    #(
+                      "uri",
+                      value.String(
+                        "at://did:plc:test/xyz.statusphere.status/test123",
+                      ),
+                    ),
                     #("cid", value.String("bafyreimock")),
                     #("did", value.String("did:plc:test")),
                     #("collection", value.String("xyz.statusphere.status")),
@@ -96,10 +101,14 @@ fn mock_create_resolver_factory(_collection: String) -> schema.Resolver {
             }
           }
           Ok(_) -> Error("auth_token must be a string")
-          Error(_) -> Error("Authentication required. Please provide Authorization header.")
+          Error(_) ->
+            Error(
+              "Authentication required. Please provide Authorization header.",
+            )
         }
       }
-      _ -> Error("Authentication required. Please provide Authorization header.")
+      _ ->
+        Error("Authentication required. Please provide Authorization header.")
     }
   }
 }
@@ -120,7 +129,12 @@ fn mock_update_resolver_factory(_collection: String) -> schema.Resolver {
                     // Return mock success response
                     Ok(
                       value.Object([
-                        #("uri", value.String("at://did:plc:test/xyz.statusphere.status/" <> rkey)),
+                        #(
+                          "uri",
+                          value.String(
+                            "at://did:plc:test/xyz.statusphere.status/" <> rkey,
+                          ),
+                        ),
                         #("cid", value.String("bafyreiupdated")),
                         #("did", value.String("did:plc:test")),
                         #("collection", value.String("xyz.statusphere.status")),
@@ -136,10 +150,14 @@ fn mock_update_resolver_factory(_collection: String) -> schema.Resolver {
             }
           }
           Ok(_) -> Error("auth_token must be a string")
-          Error(_) -> Error("Authentication required. Please provide Authorization header.")
+          Error(_) ->
+            Error(
+              "Authentication required. Please provide Authorization header.",
+            )
         }
       }
-      _ -> Error("Authentication required. Please provide Authorization header.")
+      _ ->
+        Error("Authentication required. Please provide Authorization header.")
     }
   }
 }
@@ -158,7 +176,12 @@ fn mock_delete_resolver_factory(_collection: String) -> schema.Resolver {
                 // Return mock success response
                 Ok(
                   value.Object([
-                    #("uri", value.String("at://did:plc:test/xyz.statusphere.status/" <> rkey)),
+                    #(
+                      "uri",
+                      value.String(
+                        "at://did:plc:test/xyz.statusphere.status/" <> rkey,
+                      ),
+                    ),
                     #("cid", value.String("")),
                     #("did", value.String("did:plc:test")),
                     #("collection", value.String("xyz.statusphere.status")),
@@ -171,10 +194,14 @@ fn mock_delete_resolver_factory(_collection: String) -> schema.Resolver {
             }
           }
           Ok(_) -> Error("auth_token must be a string")
-          Error(_) -> Error("Authentication required. Please provide Authorization header.")
+          Error(_) ->
+            Error(
+              "Authentication required. Please provide Authorization header.",
+            )
         }
       }
-      _ -> Error("Authentication required. Please provide Authorization header.")
+      _ ->
+        Error("Authentication required. Please provide Authorization header.")
     }
   }
 }
@@ -213,7 +240,8 @@ pub fn create_mutation_without_auth_fails_test() {
     )
 
   // Execute mutation WITHOUT auth token (using shorthand syntax)
-  let mutation = "mutation { createXyzStatusphereStatus(input: { status: \"test\", createdAt: \"2024-01-01T00:00:00Z\" }) { uri cid } }"
+  let mutation =
+    "mutation { createXyzStatusphereStatus(input: { status: \"test\", createdAt: \"2024-01-01T00:00:00Z\" }) { uri cid } }"
 
   let ctx = schema.context(option.None)
   let assert Ok(response) = executor.execute(mutation, built_schema, ctx)
@@ -226,7 +254,9 @@ pub fn create_mutation_without_auth_fails_test() {
   // Error message should mention authentication
   let assert [error, ..] = response.errors
   error.message
-  |> should.equal("Authentication required. Please provide Authorization header.")
+  |> should.equal(
+    "Authentication required. Please provide Authorization header.",
+  )
 }
 
 // Test: Create mutation with authentication should succeed
@@ -263,10 +293,10 @@ pub fn create_mutation_with_auth_succeeds_test() {
     )
 
   // Execute mutation WITH auth token in context
-  let mutation = "mutation { createXyzStatusphereStatus(input: { status: \"test\", createdAt: \"2024-01-01T00:00:00Z\" }) { uri cid did } }"
+  let mutation =
+    "mutation { createXyzStatusphereStatus(input: { status: \"test\", createdAt: \"2024-01-01T00:00:00Z\" }) { uri cid did } }"
 
-  let ctx_data =
-    value.Object([#("auth_token", value.String("mock_token_123"))])
+  let ctx_data = value.Object([#("auth_token", value.String("mock_token_123"))])
   let ctx = schema.context(option.Some(ctx_data))
   let assert Ok(response) = executor.execute(mutation, built_schema, ctx)
 
@@ -284,7 +314,9 @@ pub fn create_mutation_with_auth_succeeds_test() {
           case list.key_find(record_fields, "uri") {
             Ok(value.String(uri)) -> {
               uri
-              |> should.equal("at://did:plc:test/xyz.statusphere.status/test123")
+              |> should.equal(
+                "at://did:plc:test/xyz.statusphere.status/test123",
+              )
             }
             _ -> should.fail()
           }
@@ -330,10 +362,10 @@ pub fn update_mutation_with_auth_succeeds_test() {
     )
 
   // Execute update mutation WITH auth token and rkey
-  let mutation = "mutation { updateXyzStatusphereStatus(rkey: \"existing123\", input: { status: \"updated\", createdAt: \"2024-01-01T00:00:00Z\" }) { uri cid } }"
+  let mutation =
+    "mutation { updateXyzStatusphereStatus(rkey: \"existing123\", input: { status: \"updated\", createdAt: \"2024-01-01T00:00:00Z\" }) { uri cid } }"
 
-  let ctx_data =
-    value.Object([#("auth_token", value.String("mock_token_123"))])
+  let ctx_data = value.Object([#("auth_token", value.String("mock_token_123"))])
   let ctx = schema.context(option.Some(ctx_data))
   let assert Ok(response) = executor.execute(mutation, built_schema, ctx)
 
@@ -350,7 +382,9 @@ pub fn update_mutation_with_auth_succeeds_test() {
           case list.key_find(record_fields, "uri") {
             Ok(value.String(uri)) -> {
               uri
-              |> should.equal("at://did:plc:test/xyz.statusphere.status/existing123")
+              |> should.equal(
+                "at://did:plc:test/xyz.statusphere.status/existing123",
+              )
             }
             _ -> should.fail()
           }
@@ -396,10 +430,10 @@ pub fn delete_mutation_with_auth_succeeds_test() {
     )
 
   // Execute delete mutation WITH auth token and rkey
-  let mutation = "mutation { deleteXyzStatusphereStatus(rkey: \"todelete123\") { uri } }"
+  let mutation =
+    "mutation { deleteXyzStatusphereStatus(rkey: \"todelete123\") { uri } }"
 
-  let ctx_data =
-    value.Object([#("auth_token", value.String("mock_token_123"))])
+  let ctx_data = value.Object([#("auth_token", value.String("mock_token_123"))])
   let ctx = schema.context(option.Some(ctx_data))
   let assert Ok(response) = executor.execute(mutation, built_schema, ctx)
 
@@ -416,7 +450,9 @@ pub fn delete_mutation_with_auth_succeeds_test() {
           case list.key_find(record_fields, "uri") {
             Ok(value.String(uri)) -> {
               uri
-              |> should.equal("at://did:plc:test/xyz.statusphere.status/todelete123")
+              |> should.equal(
+                "at://did:plc:test/xyz.statusphere.status/todelete123",
+              )
             }
             _ -> should.fail()
           }
@@ -462,10 +498,10 @@ pub fn update_mutation_without_rkey_fails_test() {
     )
 
   // Execute update mutation WITHOUT rkey (should fail at GraphQL validation level)
-  let mutation = "mutation { updateXyzStatusphereStatus(input: { status: \"updated\", createdAt: \"2024-01-01T00:00:00Z\" }) { uri } }"
+  let mutation =
+    "mutation { updateXyzStatusphereStatus(input: { status: \"updated\", createdAt: \"2024-01-01T00:00:00Z\" }) { uri } }"
 
-  let ctx_data =
-    value.Object([#("auth_token", value.String("mock_token_123"))])
+  let ctx_data = value.Object([#("auth_token", value.String("mock_token_123"))])
   let ctx = schema.context(option.Some(ctx_data))
   let assert Ok(response) = executor.execute(mutation, built_schema, ctx)
 
@@ -513,8 +549,7 @@ pub fn delete_mutation_without_rkey_fails_test() {
   // Execute delete mutation WITHOUT rkey (should fail at GraphQL validation level)
   let mutation = "mutation { deleteXyzStatusphereStatus { uri } }"
 
-  let ctx_data =
-    value.Object([#("auth_token", value.String("mock_token_123"))])
+  let ctx_data = value.Object([#("auth_token", value.String("mock_token_123"))])
   let ctx = schema.context(option.Some(ctx_data))
   let assert Ok(response) = executor.execute(mutation, built_schema, ctx)
 
@@ -547,7 +582,7 @@ pub fn test_upload_blob_mutation_success() {
             value.Object([
               #("ref", value.String("bafyreiabc123xyz")),
               #("mimeType", value.String("image/jpeg")),
-              #("size", value.Int(12345)),
+              #("size", value.Int(12_345)),
               #("did", value.String("did:plc:mockuser")),
             ]),
           ),
@@ -575,8 +610,7 @@ pub fn test_upload_blob_mutation_success() {
   let mutation =
     "mutation { uploadBlob(data: \"SGVsbG8=\", mimeType: \"text/plain\") { blob { ref mimeType size } } }"
 
-  let ctx_data =
-    value.Object([#("auth_token", value.String("mock_token_123"))])
+  let ctx_data = value.Object([#("auth_token", value.String("mock_token_123"))])
   let ctx = schema.context(option.Some(ctx_data))
   let assert Ok(response) = executor.execute(mutation, built_schema, ctx)
 
@@ -603,7 +637,7 @@ pub fn test_upload_blob_mutation_success() {
                 _ -> should.fail()
               }
               case list.key_find(blob_fields, "size") {
-                Ok(value.Int(size)) -> size |> should.equal(12345)
+                Ok(value.Int(size)) -> size |> should.equal(12_345)
                 _ -> should.fail()
               }
             }

@@ -348,7 +348,8 @@ pub fn type_basic_query_test() {
 /// Verifies that nested selections work correctly on __type
 pub fn type_nested_fields_test() {
   let schema = test_schema()
-  let query = "{ __type(name: \"Query\") { name kind fields { name type { name kind } } } }"
+  let query =
+    "{ __type(name: \"Query\") { name kind fields { name type { name kind } } } }"
 
   let result = executor.execute(query, schema, schema.context(None))
 
@@ -480,7 +481,8 @@ pub fn type_missing_argument_test() {
 /// Verifies that __type and __schema can be queried together
 pub fn type_and_schema_combined_test() {
   let schema = test_schema()
-  let query = "{ __schema { queryType { name } } __type(name: \"String\") { name kind } }"
+  let query =
+    "{ __schema { queryType { name } } __type(name: \"String\") { name kind } }"
 
   let result = executor.execute(query, schema, schema.context(None))
 
@@ -641,7 +643,8 @@ pub fn introspection_fragment_spread_test() {
 pub fn simple_type_fragment_test() {
   let schema = test_schema()
 
-  let query = "{ __type(name: \"Query\") { ...TypeFrag } } fragment TypeFrag on __Type { name kind }"
+  let query =
+    "{ __type(name: \"Query\") { ...TypeFrag } } fragment TypeFrag on __Type { name kind }"
 
   let result = executor.execute(query, schema, schema.context(None))
 

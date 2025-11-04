@@ -139,14 +139,25 @@ pub fn execute_query_with_db(
                 case string.starts_with(first, "did:") {
                   True -> {
                     // DID join: fetch records by DID and collection
-                    case database.get_records_by_dids_and_collection(db, uris, collection) {
+                    case
+                      database.get_records_by_dids_and_collection(
+                        db,
+                        uris,
+                        collection,
+                      )
+                    {
                       Ok(records) -> {
                         // Group records by DID
                         let grouped =
                           list.fold(records, dict.new(), fn(acc, record) {
-                            let graphql_value = record_to_graphql_value(record, db)
-                            let existing = dict.get(acc, record.did) |> result.unwrap([])
-                            dict.insert(acc, record.did, [graphql_value, ..existing])
+                            let graphql_value =
+                              record_to_graphql_value(record, db)
+                            let existing =
+                              dict.get(acc, record.did) |> result.unwrap([])
+                            dict.insert(acc, record.did, [
+                              graphql_value,
+                              ..existing
+                            ])
                           })
                         Ok(grouped)
                       }
@@ -160,7 +171,8 @@ pub fn execute_query_with_db(
                         // Group records by URI
                         let grouped =
                           list.fold(records, dict.new(), fn(acc, record) {
-                            let graphql_value = record_to_graphql_value(record, db)
+                            let graphql_value =
+                              record_to_graphql_value(record, db)
                             // For forward joins, return single record per URI
                             dict.insert(acc, record.uri, [graphql_value])
                           })
@@ -203,7 +215,8 @@ pub fn execute_query_with_db(
               }
               Error(_) ->
                 Error(
-                  "Failed to fetch records by reference field: " <> reference_field,
+                  "Failed to fetch records by reference field: "
+                  <> reference_field,
                 )
             }
           }
@@ -248,7 +261,13 @@ pub fn execute_query_with_db(
                 db_where,
               )
             {
-              Ok(#(records, _next_cursor, has_next_page, has_previous_page, total_count)) -> {
+              Ok(#(
+                records,
+                _next_cursor,
+                has_next_page,
+                has_previous_page,
+                total_count,
+              )) -> {
                 // Convert records to GraphQL values with cursors
                 let edges =
                   list.map(records, fn(record) {
@@ -287,7 +306,13 @@ pub fn execute_query_with_db(
                 db_where,
               )
             {
-              Ok(#(records, _next_cursor, has_next_page, has_previous_page, total_count)) -> {
+              Ok(#(
+                records,
+                _next_cursor,
+                has_next_page,
+                has_previous_page,
+                total_count,
+              )) -> {
                 // Convert records to GraphQL values with cursors
                 let edges =
                   list.map(records, fn(record) {
@@ -519,7 +544,9 @@ fn value_to_json(val: value.Value) -> String {
 }
 
 /// Convert JSON string variables to Dict(String, value.Value)
-fn json_string_to_variables_dict(json_string: String) -> dict.Dict(String, value.Value) {
+fn json_string_to_variables_dict(
+  json_string: String,
+) -> dict.Dict(String, value.Value) {
   // First try to extract the "variables" field from the JSON
   let variables_decoder = {
     use vars <- decode.field("variables", decode.dynamic)
@@ -559,7 +586,12 @@ fn json_dynamic_to_value(dyn: dynamic.Dynamic) -> value.Value {
                       value.List(list.map(items, json_dynamic_to_value))
                     Error(_) ->
                       // Try as an object (dict)
-                      case decode.run(dyn, decode.dict(decode.string, decode.dynamic)) {
+                      case
+                        decode.run(
+                          dyn,
+                          decode.dict(decode.string, decode.dynamic),
+                        )
+                      {
                         Ok(d) ->
                           value.Object(
                             list.map(dict.to_list(d), fn(pair) {
@@ -577,7 +609,10 @@ fn json_dynamic_to_value(dyn: dynamic.Dynamic) -> value.Value {
 
 /// Extract a reference URI from a record's JSON
 /// This handles both simple string fields (at-uri) and strongRef objects
-fn extract_reference_uri(json_str: String, field_name: String) -> Result(String, Nil) {
+fn extract_reference_uri(
+  json_str: String,
+  field_name: String,
+) -> Result(String, Nil) {
   // Parse the JSON
   case parse_json_to_value(json_str) {
     Ok(value.Object(fields)) -> {

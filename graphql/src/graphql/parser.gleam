@@ -514,7 +514,6 @@ fn parse_variable_definitions_loop(
     }
 
     [] -> Error(UnexpectedEndOfInput("Expected variable definition or )"))
-    [token, ..] ->
-      Error(UnexpectedToken(token, "Expected $variableName or )"))
+    [token, ..] -> Error(UnexpectedToken(token, "Expected $variableName or )"))
   }
 }

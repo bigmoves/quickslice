@@ -45,26 +45,30 @@ fn load_grain_lexicons(db: sqlight.Connection) -> Result(Nil, String) {
   })
 
   // Import each lexicon (skipping individual validation since we already validated all together)
-  use _ <- result.try(case
-    list.try_map(file_contents, fn(pair) {
-      let #(_file_path, json_content) = pair
-      // Extract lexicon ID and insert into database
-      case json.parse(json_content, {
-        use id <- decode.field("id", decode.string)
-        decode.success(id)
-      }) {
-        Ok(lexicon_id) ->
-          case database.insert_lexicon(db, lexicon_id, json_content) {
-            Ok(_) -> Ok(Nil)
-            Error(_) -> Error("Database insertion failed")
-          }
-        Error(_) -> Error("Missing 'id' field")
-      }
-    })
-  {
-    Ok(_) -> Ok(Nil)
-    Error(err) -> Error("Import failed: " <> err)
-  })
+  use _ <- result.try(
+    case
+      list.try_map(file_contents, fn(pair) {
+        let #(_file_path, json_content) = pair
+        // Extract lexicon ID and insert into database
+        case
+          json.parse(json_content, {
+            use id <- decode.field("id", decode.string)
+            decode.success(id)
+          })
+        {
+          Ok(lexicon_id) ->
+            case database.insert_lexicon(db, lexicon_id, json_content) {
+              Ok(_) -> Ok(Nil)
+              Error(_) -> Error("Database insertion failed")
+            }
+          Error(_) -> Error("Missing 'id' field")
+        }
+      })
+    {
+      Ok(_) -> Ok(Nil)
+      Error(err) -> Error("Import failed: " <> err)
+    },
+  )
 
   Ok(Nil)
 }
@@ -315,7 +319,10 @@ pub fn introspection_query_did_join_field_structure_test() {
   // Insert a favorite record
   let favorite_json =
     json.object([
-      #("subject", json.string("at://" <> test_did <> "/social.grain.photo/456")),
+      #(
+        "subject",
+        json.string("at://" <> test_did <> "/social.grain.photo/456"),
+      ),
       #("createdAt", json.string("2024-01-01T00:00:00.000Z")),
     ])
     |> json.to_string
@@ -365,7 +372,9 @@ pub fn introspection_query_did_join_field_structure_test() {
   let assert wisp.Text(body) = response.body
 
   // Check for errors - if any DID join field doesn't exist, we'll get an error
-  let has_field_error = string.contains(body, "Cannot query field") || string.contains(body, "not found")
+  let has_field_error =
+    string.contains(body, "Cannot query field")
+    || string.contains(body, "not found")
 
   // If there are errors about fields not being found, the test should fail
   case has_field_error {

@@ -116,7 +116,9 @@ fn run_backfill_command() {
                 <> int.to_string(list.length(external_collections))
                 <> " external collection(s):",
               )
-              list.each(external_collections, fn(col) { io.println("  - " <> col) })
+              list.each(external_collections, fn(col) {
+                io.println("  - " <> col)
+              })
             }
           }
 

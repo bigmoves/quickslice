@@ -1,7 +1,6 @@
 /// Snapshot tests for SDL generation
 ///
 /// Verifies that GraphQL types are correctly serialized to SDL format
-
 import birdie
 import gleam/option.{None, Some}
 import gleeunit
@@ -34,48 +33,40 @@ pub fn simple_input_object_test() {
 
   let serialized = sdl.print_type(input_type)
 
-  birdie.snap(title: "Simple input object with descriptions", content: serialized)
-}
-
-pub fn input_object_with_default_values_test() {
-  let input_type =
-    schema.input_object_type(
-      "FilterInput",
-      "Filter options for queries",
-      [
-        schema.input_field(
-          "limit",
-          schema.int_type(),
-          "Maximum number of results",
-          Some(value.Int(10)),
-        ),
-        schema.input_field(
-          "offset",
-          schema.int_type(),
-          "Number of results to skip",
-          Some(value.Int(0)),
-        ),
-      ],
-    )
-
-  let serialized = sdl.print_type(input_type)
-
   birdie.snap(
-    title: "Input object with default values",
+    title: "Simple input object with descriptions",
     content: serialized,
   )
 }
 
+pub fn input_object_with_default_values_test() {
+  let input_type =
+    schema.input_object_type("FilterInput", "Filter options for queries", [
+      schema.input_field(
+        "limit",
+        schema.int_type(),
+        "Maximum number of results",
+        Some(value.Int(10)),
+      ),
+      schema.input_field(
+        "offset",
+        schema.int_type(),
+        "Number of results to skip",
+        Some(value.Int(0)),
+      ),
+    ])
+
+  let serialized = sdl.print_type(input_type)
+
+  birdie.snap(title: "Input object with default values", content: serialized)
+}
+
 pub fn nested_input_types_test() {
   let address_input =
-    schema.input_object_type(
-      "AddressInput",
-      "Street address information",
-      [
-        schema.input_field("street", schema.string_type(), "Street name", None),
-        schema.input_field("city", schema.string_type(), "City name", None),
-      ],
-    )
+    schema.input_object_type("AddressInput", "Street address information", [
+      schema.input_field("street", schema.string_type(), "Street name", None),
+      schema.input_field("city", schema.string_type(), "City name", None),
+    ])
 
   let user_input =
     schema.input_object_type("UserInput", "User information", [
@@ -93,9 +84,9 @@ pub fn nested_input_types_test() {
 pub fn simple_object_type_test() {
   let user_type =
     schema.object_type("User", "A user in the system", [
-      schema.field("id", schema.non_null(schema.id_type()), "User ID", fn(
-        _ctx,
-      ) { Ok(value.String("1")) }),
+      schema.field("id", schema.non_null(schema.id_type()), "User ID", fn(_ctx) {
+        Ok(value.String("1"))
+      }),
       schema.field("name", schema.string_type(), "User's name", fn(_ctx) {
         Ok(value.String("Alice"))
       }),
@@ -215,7 +206,10 @@ pub fn type_with_non_null_and_list_test() {
 
   let serialized = sdl.print_type(input_type)
 
-  birdie.snap(title: "Type with NonNull and List modifiers", content: serialized)
+  birdie.snap(
+    title: "Type with NonNull and List modifiers",
+    content: serialized,
+  )
 }
 
 // ===== Multiple Related Types =====
@@ -250,7 +244,8 @@ pub fn related_types_test() {
       ),
     ])
 
-  let serialized = sdl.print_types([sort_direction, sort_field_enum, sort_input])
+  let serialized =
+    sdl.print_types([sort_direction, sort_field_enum, sort_input])
 
   birdie.snap(title: "Multiple related types", content: serialized)
 }

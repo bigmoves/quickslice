@@ -183,9 +183,9 @@ pub fn lexicon_connection_args_with_field_enum_and_where(
     [
       schema.argument(
         "sortBy",
-        schema.list_type(schema.non_null(
-          sort_field_input_type_with_enum(type_name, field_enum),
-        )),
+        schema.list_type(
+          schema.non_null(sort_field_input_type_with_enum(type_name, field_enum)),
+        ),
         "Sort order for the connection",
         None,
       ),
@@ -210,9 +210,9 @@ pub fn lexicon_connection_args_with_field_enum(
     [
       schema.argument(
         "sortBy",
-        schema.list_type(schema.non_null(
-          sort_field_input_type_with_enum(type_name, field_enum),
-        )),
+        schema.list_type(
+          schema.non_null(sort_field_input_type_with_enum(type_name, field_enum)),
+        ),
         "Sort order for the connection",
         None,
       ),

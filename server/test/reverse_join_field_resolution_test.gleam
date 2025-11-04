@@ -5,12 +5,12 @@
 /// 2. Integer and object fields resolved correctly (not always converted to strings)
 /// 3. Nested queries work correctly: profile → galleries → items → photos
 import database
+import gleam/bool
 import gleam/json
 import gleam/string
 import gleeunit/should
 import graphql_gleam
 import sqlight
-import gleam/bool
 
 // Helper to create gallery lexicon
 fn create_gallery_lexicon() -> String {
@@ -31,9 +31,10 @@ fn create_gallery_lexicon() -> String {
                 #("type", json.string("object")),
                 #(
                   "required",
-                  json.array([json.string("title"), json.string("createdAt")], of: fn(
-                    x,
-                  ) { x }),
+                  json.array(
+                    [json.string("title"), json.string("createdAt")],
+                    of: fn(x) { x },
+                  ),
                 ),
                 #(
                   "properties",
@@ -159,10 +160,7 @@ fn create_photo_lexicon() -> String {
                 #(
                   "properties",
                   json.object([
-                    #(
-                      "alt",
-                      json.object([#("type", json.string("string"))]),
-                    ),
+                    #("alt", json.object([#("type", json.string("string"))])),
                     #(
                       "createdAt",
                       json.object([
@@ -246,7 +244,11 @@ pub fn reverse_join_includes_forward_join_fields_test() {
 
   // Insert lexicons
   let assert Ok(_) =
-    database.insert_lexicon(conn, "social.grain.gallery", create_gallery_lexicon())
+    database.insert_lexicon(
+      conn,
+      "social.grain.gallery",
+      create_gallery_lexicon(),
+    )
   let assert Ok(_) =
     database.insert_lexicon(
       conn,
@@ -442,7 +444,11 @@ pub fn nested_query_profile_to_photos_test() {
       create_profile_lexicon(),
     )
   let assert Ok(_) =
-    database.insert_lexicon(conn, "social.grain.gallery", create_gallery_lexicon())
+    database.insert_lexicon(
+      conn,
+      "social.grain.gallery",
+      create_gallery_lexicon(),
+    )
   let assert Ok(_) =
     database.insert_lexicon(
       conn,

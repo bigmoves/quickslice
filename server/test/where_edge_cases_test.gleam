@@ -1,7 +1,6 @@
 /// Edge case and error handling tests for where clause functionality
 ///
 /// Tests various edge cases, error conditions, and potential SQL injection attempts
-
 import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
@@ -216,8 +215,10 @@ pub fn integer_boundary_values_test() {
       or: None,
     )
 
-  let #(sql_large, params_large) = where_clause.build_where_sql(clause_large, False)
-  let #(sql_small, params_small) = where_clause.build_where_sql(clause_small, False)
+  let #(sql_large, params_large) =
+    where_clause.build_where_sql(clause_large, False)
+  let #(sql_small, params_small) =
+    where_clause.build_where_sql(clause_small, False)
 
   // count is a JSON field, not a table column
   sql_large |> should.equal("json_extract(json, '$.count') = ?")
@@ -428,8 +429,7 @@ pub fn parse_unknown_operator_test() {
       #("unknown_op", value.String("should_be_ignored")),
     ])
 
-  let where_object =
-    value.Object([#("field1", condition_value)])
+  let where_object = value.Object([#("field1", condition_value)])
 
   let result = where_input.parse_where_clause(where_object)
 
@@ -454,8 +454,7 @@ pub fn parse_type_mismatch_in_operator_test() {
       #("eq", value.List([value.String("test")])),
     ])
 
-  let where_object =
-    value.Object([#("field1", condition_value)])
+  let where_object = value.Object([#("field1", condition_value)])
 
   let result = where_input.parse_where_clause(where_object)
 
@@ -490,8 +489,7 @@ pub fn parse_mixed_types_in_in_list_test() {
       ),
     ])
 
-  let where_object =
-    value.Object([#("field1", condition_value)])
+  let where_object = value.Object([#("field1", condition_value)])
 
   let result = where_input.parse_where_clause(where_object)
 
@@ -603,13 +601,16 @@ pub fn large_in_list_test() {
   // Should generate correct number of placeholders
   list.length(params) |> should.equal(100)
   // Check SQL has correct IN clause structure
-  should.be_true(sql |> fn(s) {
-    s
-    |> fn(str) {
-      str
-      |> fn(_) { True }
-    }
-  })
+  should.be_true(
+    sql
+    |> fn(s) {
+      s
+      |> fn(str) {
+        str
+        |> fn(_) { True }
+      }
+    },
+  )
 }
 
 // ===== Special Characters in Field Names =====
@@ -637,9 +638,7 @@ pub fn field_name_with_json_path_test() {
 
   // Should use json_extract for dotted field names
   sql
-  |> should.equal(
-    "json_extract(json, '$.value.nested.field') = ?",
-  )
+  |> should.equal("json_extract(json, '$.value.nested.field') = ?")
   list.length(params) |> should.equal(1)
 }
 

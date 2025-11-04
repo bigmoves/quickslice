@@ -80,9 +80,7 @@ type RecordInfo {
 }
 
 /// Extract record information from lexicons
-fn extract_record_types(
-  lexicons: List(types.Lexicon),
-) -> List(RecordInfo) {
+fn extract_record_types(lexicons: List(types.Lexicon)) -> List(RecordInfo) {
   lexicons
   |> list.filter_map(fn(lexicon) {
     case lexicon {
@@ -106,8 +104,10 @@ fn build_mutations_for_record(
   update_factory: option.Option(ResolverFactory),
   delete_factory: option.Option(ResolverFactory),
 ) -> List(schema.Field) {
-  let create_mutation = build_create_mutation(record, object_types, create_factory)
-  let update_mutation = build_update_mutation(record, object_types, update_factory)
+  let create_mutation =
+    build_create_mutation(record, object_types, create_factory)
+  let update_mutation =
+    build_update_mutation(record, object_types, update_factory)
   let delete_mutation = build_delete_mutation(record, delete_factory)
 
   [create_mutation, update_mutation, delete_mutation]
@@ -149,14 +149,13 @@ fn build_create_mutation(
   let collection = record.nsid
   let resolver = case factory {
     option.Some(factory_fn) -> factory_fn(collection)
-    option.None ->
-      fn(_resolver_ctx) {
-        Error(
-          "Create mutation for "
-          <> collection
-          <> " not yet implemented. Use XRPC endpoint instead.",
-        )
-      }
+    option.None -> fn(_resolver_ctx) {
+      Error(
+        "Create mutation for "
+        <> collection
+        <> " not yet implemented. Use XRPC endpoint instead.",
+      )
+    }
   }
 
   // Create the mutation field with arguments
@@ -205,14 +204,13 @@ fn build_update_mutation(
   let collection = record.nsid
   let resolver = case factory {
     option.Some(factory_fn) -> factory_fn(collection)
-    option.None ->
-      fn(_resolver_ctx) {
-        Error(
-          "Update mutation for "
-          <> collection
-          <> " not yet implemented. Use XRPC endpoint instead.",
-        )
-      }
+    option.None -> fn(_resolver_ctx) {
+      Error(
+        "Update mutation for "
+        <> collection
+        <> " not yet implemented. Use XRPC endpoint instead.",
+      )
+    }
   }
 
   // Create the mutation field with arguments
@@ -250,14 +248,13 @@ fn build_delete_mutation(
   let collection = record.nsid
   let resolver = case factory {
     option.Some(factory_fn) -> factory_fn(collection)
-    option.None ->
-      fn(_resolver_ctx) {
-        Error(
-          "Delete mutation for "
-          <> collection
-          <> " not yet implemented. Use XRPC endpoint instead.",
-        )
-      }
+    option.None -> fn(_resolver_ctx) {
+      Error(
+        "Delete mutation for "
+        <> collection
+        <> " not yet implemented. Use XRPC endpoint instead.",
+      )
+    }
   }
 
   // Create the mutation field with arguments
@@ -287,7 +284,12 @@ fn build_input_type(
         False -> graphql_type
       }
 
-      schema.input_field(name, field_type, "Input field for " <> name, option.None)
+      schema.input_field(
+        name,
+        field_type,
+        "Input field for " <> name,
+        option.None,
+      )
     })
 
   schema.input_object_type(

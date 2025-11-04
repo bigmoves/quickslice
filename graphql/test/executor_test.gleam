@@ -441,12 +441,7 @@ pub fn execute_query_with_variable_string_test() {
         schema.string_type(),
         "Greet someone",
         [
-          schema.argument(
-            "name",
-            schema.string_type(),
-            "Name to greet",
-            None,
-          ),
+          schema.argument("name", schema.string_type(), "Name to greet", None),
         ],
         fn(ctx) {
           case schema.get_argument(ctx, "name") {
@@ -462,8 +457,7 @@ pub fn execute_query_with_variable_string_test() {
   let query = "query Test($name: String!) { greet(name: $name) }"
 
   // Create context with variables
-  let variables =
-    dict.from_list([#("name", value.String("Alice"))])
+  let variables = dict.from_list([#("name", value.String("Alice"))])
   let ctx = schema.context_with_variables(None, variables)
 
   let result = executor.execute(query, test_schema, ctx)
@@ -487,12 +481,7 @@ pub fn execute_query_with_variable_int_test() {
         schema.string_type(),
         "Get user by ID",
         [
-          schema.argument(
-            "id",
-            schema.int_type(),
-            "User ID",
-            None,
-          ),
+          schema.argument("id", schema.int_type(), "User ID", None),
         ],
         fn(ctx) {
           case schema.get_argument(ctx, "id") {
@@ -508,8 +497,7 @@ pub fn execute_query_with_variable_int_test() {
   let query = "query GetUser($userId: Int!) { user(id: $userId) }"
 
   // Create context with variables
-  let variables =
-    dict.from_list([#("userId", value.Int(42))])
+  let variables = dict.from_list([#("userId", value.Int(42))])
   let ctx = schema.context_with_variables(None, variables)
 
   let result = executor.execute(query, test_schema, ctx)
@@ -533,23 +521,22 @@ pub fn execute_query_with_multiple_variables_test() {
         schema.string_type(),
         "Search for something",
         [
-          schema.argument(
-            "query",
-            schema.string_type(),
-            "Search query",
-            None,
-          ),
-          schema.argument(
-            "limit",
-            schema.int_type(),
-            "Max results",
-            None,
-          ),
+          schema.argument("query", schema.string_type(), "Search query", None),
+          schema.argument("limit", schema.int_type(), "Max results", None),
         ],
         fn(ctx) {
-          case schema.get_argument(ctx, "query"), schema.get_argument(ctx, "limit") {
+          case
+            schema.get_argument(ctx, "query"),
+            schema.get_argument(ctx, "limit")
+          {
             Some(value.String(q)), Some(value.Int(l)) ->
-              Ok(value.String("Searching for '" <> q <> "' (limit: " <> string.inspect(l) <> ")"))
+              Ok(value.String(
+                "Searching for '"
+                <> q
+                <> "' (limit: "
+                <> string.inspect(l)
+                <> ")",
+              ))
             _, _ -> Ok(value.String("Invalid search"))
           }
         },
@@ -557,7 +544,8 @@ pub fn execute_query_with_multiple_variables_test() {
     ])
 
   let test_schema = schema.schema(query_type, None)
-  let query = "query Search($q: String!, $max: Int!) { search(query: $q, limit: $max) }"
+  let query =
+    "query Search($q: String!, $max: Int!) { search(query: $q, limit: $max) }"
 
   // Create context with variables
   let variables =
@@ -649,16 +637,21 @@ pub fn execute_union_with_inline_fragment_test() {
   // Create query type with a field returning the union
   let query_type =
     schema.object_type("Query", "Root query type", [
-      schema.field("search", search_result_union, "Search for content", fn(_ctx) {
-        // Return a Post
-        Ok(
-          value.Object([
-            #("__typename", value.String("Post")),
-            #("title", value.String("GraphQL is awesome")),
-            #("content", value.String("Learn all about GraphQL...")),
-          ]),
-        )
-      }),
+      schema.field(
+        "search",
+        search_result_union,
+        "Search for content",
+        fn(_ctx) {
+          // Return a Post
+          Ok(
+            value.Object([
+              #("__typename", value.String("Post")),
+              #("title", value.String("GraphQL is awesome")),
+              #("content", value.String("Learn all about GraphQL...")),
+            ]),
+          )
+        },
+      ),
     ])
 
   let test_schema = schema.schema(query_type, None)
@@ -825,8 +818,10 @@ pub fn execute_field_with_alias_test() {
         Error(_) -> {
           // Check if it incorrectly used "hello" instead
           case list.key_find(fields, "hello") {
-            Ok(_) -> panic as "Alias not applied - used 'hello' instead of 'greeting'"
-            Error(_) -> panic as "Neither 'greeting' nor 'hello' found in response"
+            Ok(_) ->
+              panic as "Alias not applied - used 'hello' instead of 'greeting'"
+            Error(_) ->
+              panic as "Neither 'greeting' nor 'hello' found in response"
           }
         }
       }

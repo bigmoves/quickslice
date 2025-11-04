@@ -10,8 +10,7 @@ pub fn handle_graphiql_request(_req: wisp.Request) -> wisp.Response {
     Ok(token) -> token
     Error(_) -> ""
   }
-  let graphiql_html =
-    "<!doctype html>
+  let graphiql_html = "<!doctype html>
 <html lang=\"en\">
   <head>
     <meta charset=\"UTF-8\" />

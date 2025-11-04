@@ -1,8 +1,8 @@
-import gleam/option.{type Option, None, Some}
 import gleam/dict.{type Dict}
 import gleam/list
-import gleam/string
+import gleam/option.{type Option, None, Some}
 import gleam/result
+import gleam/string
 import sqlight
 
 /// Represents a single condition on a field with various comparison operators
@@ -66,9 +66,7 @@ pub fn is_condition_empty(condition: WhereCondition) -> Bool {
 
 /// Checks if a WhereClause is empty (no conditions at all)
 pub fn is_clause_empty(clause: WhereClause) -> Bool {
-  dict.is_empty(clause.conditions)
-  && clause.and == None
-  && clause.or == None
+  dict.is_empty(clause.conditions) && clause.and == None && clause.or == None
 }
 
 /// Checks if a WhereClause requires a join with the actor table
@@ -244,19 +242,15 @@ fn build_where_clause_internal(
 
   // Build conditions from field-level conditions
   let #(field_sql_parts, field_params) =
-    dict.fold(
-      clause.conditions,
-      #([], []),
-      fn(acc, field, condition) {
-        let #(acc_sql, acc_params) = acc
-        let #(cond_sql_parts, cond_params) =
-          build_single_condition(field, condition, use_table_prefix)
-        #(
-          list.append(acc_sql, cond_sql_parts),
-          list.append(acc_params, cond_params),
-        )
-      },
-    )
+    dict.fold(clause.conditions, #([], []), fn(acc, field, condition) {
+      let #(acc_sql, acc_params) = acc
+      let #(cond_sql_parts, cond_params) =
+        build_single_condition(field, condition, use_table_prefix)
+      #(
+        list.append(acc_sql, cond_sql_parts),
+        list.append(acc_params, cond_params),
+      )
+    })
 
   let mut_sql_parts = list.append(mut_sql_parts, field_sql_parts)
   let mut_params = list.append(mut_params, field_params)

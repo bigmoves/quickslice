@@ -465,7 +465,13 @@ fn pds_worker(
         |> list.map(fn(job) {
           let #(repo, collection) = job
           process.spawn_unlinked(fn() {
-            fetch_records_worker(repo, collection, pds_url, plc_url, chunk_subject)
+            fetch_records_worker(
+              repo,
+              collection,
+              pds_url,
+              plc_url,
+              chunk_subject,
+            )
           })
         })
 

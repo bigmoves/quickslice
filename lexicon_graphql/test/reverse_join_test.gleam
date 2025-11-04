@@ -44,12 +44,19 @@ pub fn forward_join_creates_reverse_join_test() {
     types.Lexicon(
       id: "app.bsky.feed.post",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: None, ref: None),
-          ),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -59,22 +66,25 @@ pub fn forward_join_creates_reverse_join_test() {
     types.Lexicon(
       id: "app.bsky.feed.like",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "subject",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: Some("at-uri"),
-              ref: None,
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "subject",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: Some("at-uri"),
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
 
-  let test_schema = create_test_schema_from_lexicons([post_lexicon, like_lexicon])
+  let test_schema =
+    create_test_schema_from_lexicons([post_lexicon, like_lexicon])
 
   // Get all types and serialize to SDL
   let all_types = introspection.get_all_schema_types(test_schema)
@@ -93,12 +103,19 @@ pub fn strong_ref_creates_reverse_join_test() {
     types.Lexicon(
       id: "app.bsky.feed.post",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: None, ref: None),
-          ),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -108,17 +125,19 @@ pub fn strong_ref_creates_reverse_join_test() {
     types.Lexicon(
       id: "app.bsky.actor.profile",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "pinnedPost",
-            types.Property(
-              type_: "ref",
-              required: False,
-              format: None,
-              ref: Some("com.atproto.repo.strongRef"),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "pinnedPost",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("com.atproto.repo.strongRef"),
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -142,12 +161,19 @@ pub fn multiple_reverse_joins_test() {
     types.Lexicon(
       id: "app.bsky.feed.post",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: None, ref: None),
-          ),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -157,17 +183,19 @@ pub fn multiple_reverse_joins_test() {
     types.Lexicon(
       id: "app.bsky.feed.like",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "subject",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: Some("at-uri"),
-              ref: None,
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "subject",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: Some("at-uri"),
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -177,23 +205,29 @@ pub fn multiple_reverse_joins_test() {
     types.Lexicon(
       id: "app.bsky.feed.repost",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "subject",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: Some("at-uri"),
-              ref: None,
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "subject",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: Some("at-uri"),
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
 
   let test_schema =
-    create_test_schema_from_lexicons([post_lexicon, like_lexicon, repost_lexicon])
+    create_test_schema_from_lexicons([
+      post_lexicon,
+      like_lexicon,
+      repost_lexicon,
+    ])
 
   let all_types = introspection.get_all_schema_types(test_schema)
   let serialized = sdl.print_types(all_types)
@@ -213,12 +247,19 @@ pub fn no_false_positive_reverse_joins_test() {
     types.Lexicon(
       id: "app.bsky.feed.post",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "text",
-            types.Property(type_: "string", required: True, format: None, ref: None),
-          ),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -228,12 +269,19 @@ pub fn no_false_positive_reverse_joins_test() {
     types.Lexicon(
       id: "xyz.statusosphere.status",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "message",
-            types.Property(type_: "string", required: True, format: None, ref: None),
-          ),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "message",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )

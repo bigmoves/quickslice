@@ -61,15 +61,19 @@ fn test_schema_with_mutations() -> schema.Schema {
         fn(ctx) {
           case schema.get_argument(ctx, "name") {
             Some(value.String(name)) ->
-              Ok(value.Object([
-                #("id", value.String("123")),
-                #("name", value.String(name)),
-              ]))
+              Ok(
+                value.Object([
+                  #("id", value.String("123")),
+                  #("name", value.String(name)),
+                ]),
+              )
             _ ->
-              Ok(value.Object([
-                #("id", value.String("123")),
-                #("name", value.String("Default Name")),
-              ]))
+              Ok(
+                value.Object([
+                  #("id", value.String("123")),
+                  #("name", value.String("Default Name")),
+                ]),
+              )
           }
         },
       ),
@@ -103,7 +107,10 @@ pub fn execute_simple_mutation_test() {
     Error(_) -> panic as "Execution failed"
   }
 
-  birdie.snap(title: "Execute simple mutation", content: format_response(response))
+  birdie.snap(
+    title: "Execute simple mutation",
+    content: format_response(response),
+  )
 }
 
 pub fn execute_named_mutation_test() {
@@ -152,10 +159,10 @@ pub fn execute_mutation_with_context_test() {
   let query = "mutation { createUser(name: \"Context User\") { id name } }"
 
   let ctx_data =
-    value.Object([#("userId", value.String("456")), #(
-      "token",
-      value.String("abc123"),
-    )])
+    value.Object([
+      #("userId", value.String("456")),
+      #("token", value.String("abc123")),
+    ])
   let ctx = schema.context(Some(ctx_data))
 
   let result = executor.execute(query, schema, ctx)

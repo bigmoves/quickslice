@@ -20,8 +20,7 @@ fn handle_upload_form() -> wisp.Response {
     Error(_) -> ""
   }
 
-  let upload_html =
-    "<!doctype html>
+  let upload_html = "<!doctype html>
 <html lang=\"en\">
   <head>
     <meta charset=\"UTF-8\" />

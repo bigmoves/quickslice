@@ -20,7 +20,9 @@ pub fn parse_anonymous_query_with_keyword_test() {
   |> should.be_ok
   |> fn(doc) {
     case doc {
-      parser.Document([parser.Query(parser.SelectionSet([parser.Field("user", None, [], [])]))]) -> True
+      parser.Document([
+        parser.Query(parser.SelectionSet([parser.Field("user", None, [], [])])),
+      ]) -> True
       _ -> False
     }
   }
@@ -278,7 +280,8 @@ pub fn parse_fragment_truly_single_line_test() {
       parser.Document(operations) -> {
         // If we only got 1 operation, the parser stopped after the query
         case operations {
-          [parser.Query(_)] -> panic as "Only got Query - fragment was not parsed"
+          [parser.Query(_)] ->
+            panic as "Only got Query - fragment was not parsed"
           _ -> list.length(operations) == 2
         }
       }
@@ -482,9 +485,7 @@ pub fn parse_query_with_one_variable_test() {
         parser.NamedQuery(
           name: "Test",
           variables: [parser.Variable("name", "String!")],
-          selections: parser.SelectionSet([
-            parser.Field("user", None, [], []),
-          ]),
+          selections: parser.SelectionSet([parser.Field("user", None, [], [])]),
         ),
       ]) -> True
       _ -> False
@@ -506,9 +507,7 @@ pub fn parse_query_with_multiple_variables_test() {
             parser.Variable("name", "String!"),
             parser.Variable("age", "Int"),
           ],
-          selections: parser.SelectionSet([
-            parser.Field("user", None, [], []),
-          ]),
+          selections: parser.SelectionSet([parser.Field("user", None, [], [])]),
         ),
       ]) -> True
       _ -> False
@@ -552,7 +551,9 @@ pub fn parse_variable_value_in_argument_test() {
           parser.Field(
             name: "user",
             alias: None,
-            arguments: [parser.Argument("name", parser.VariableValue("userName"))],
+            arguments: [
+              parser.Argument("name", parser.VariableValue("userName")),
+            ],
             selections: [],
           ),
         ])),

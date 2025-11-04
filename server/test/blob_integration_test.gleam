@@ -115,7 +115,8 @@ pub fn blob_field_query_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
-  let response = graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+  let response =
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
 
   // Verify response
   response.status
@@ -144,7 +145,10 @@ pub fn blob_field_query_test() {
   |> should.be_true
 
   // Verify blob url field contains CDN URL with avatar preset
-  string.contains(body, "https://cdn.bsky.app/img/avatar/plain/did:plc:alice123/bafyreiabc123@jpeg")
+  string.contains(
+    body,
+    "https://cdn.bsky.app/img/avatar/plain/did:plc:alice123/bafyreiabc123@jpeg",
+  )
   |> should.be_true
 }
 
@@ -200,7 +204,8 @@ pub fn blob_field_with_different_presets_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
-  let response = graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+  let response =
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
 
   response.status
   |> should.equal(200)
@@ -208,7 +213,10 @@ pub fn blob_field_with_different_presets_test() {
   let assert wisp.Text(body) = response.body
 
   // Verify banner URL with banner preset
-  string.contains(body, "https://cdn.bsky.app/img/banner/plain/did:plc:bob456/bafyreibanner789@jpeg")
+  string.contains(
+    body,
+    "https://cdn.bsky.app/img/banner/plain/did:plc:bob456/bafyreibanner789@jpeg",
+  )
   |> should.be_true
 }
 
@@ -260,7 +268,8 @@ pub fn blob_field_default_preset_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
-  let response = graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+  let response =
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
 
   response.status
   |> should.equal(200)
@@ -268,7 +277,10 @@ pub fn blob_field_default_preset_test() {
   let assert wisp.Text(body) = response.body
 
   // Verify default preset is feed_fullsize
-  string.contains(body, "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:charlie/bafyreidefault@jpeg")
+  string.contains(
+    body,
+    "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:charlie/bafyreidefault@jpeg",
+  )
   |> should.be_true
 }
 
@@ -312,7 +324,8 @@ pub fn blob_field_null_when_missing_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
-  let response = graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+  let response =
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
 
   response.status
   |> should.equal(200)

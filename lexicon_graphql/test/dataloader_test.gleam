@@ -176,17 +176,19 @@ pub fn extract_uris_from_records_test() {
     types.Lexicon(
       id: "app.bsky.feed.like",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "subject",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: Some("at-uri"),
-              ref: None,
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "subject",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: Some("at-uri"),
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -226,17 +228,19 @@ pub fn extract_uris_from_records_with_strong_ref_test() {
     types.Lexicon(
       id: "app.bsky.actor.profile",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "pinnedPost",
-            types.Property(
-              type_: "ref",
-              required: False,
-              format: None,
-              ref: Some("com.atproto.repo.strongRef"),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "pinnedPost",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("com.atproto.repo.strongRef"),
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -306,7 +310,9 @@ pub fn batch_fetch_by_reverse_join_paginated_test() {
                 #(
                   "uri",
                   value.String(
-                    "at://did:plc:child" <> int.to_string(i) <> "/collection/key",
+                    "at://did:plc:child"
+                    <> int.to_string(i)
+                    <> "/collection/key",
                   ),
                 ),
                 #("parentUri", value.String(parent_uri)),
@@ -499,7 +505,10 @@ pub fn batch_fetch_backward_pagination_test() {
       |> list.map(fn(i) {
         let record =
           value.Object([
-            #("uri", value.String("at://did:plc:test/collection/" <> int.to_string(i))),
+            #(
+              "uri",
+              value.String("at://did:plc:test/collection/" <> int.to_string(i)),
+            ),
           ])
         let cursor = "cursor_" <> int.to_string(i)
         #(record, cursor)

@@ -15,7 +15,9 @@ pub fn extract_uri_from_strong_ref_test() {
       #("$type", test_helpers.to_dynamic("com.atproto.repo.strongRef")),
       #(
         "uri",
-        test_helpers.to_dynamic("at://did:plc:abc123/app.bsky.feed.post/3k7h8xyz"),
+        test_helpers.to_dynamic(
+          "at://did:plc:abc123/app.bsky.feed.post/3k7h8xyz",
+        ),
       ),
       #("cid", test_helpers.to_dynamic("bafyreiabc123...")),
     ])
@@ -112,7 +114,8 @@ pub fn is_strong_ref_negative_test() {
 
 // Test is_at_uri_string helper
 pub fn is_at_uri_string_test() {
-  let at_uri = test_helpers.to_dynamic("at://did:plc:test/app.bsky.feed.post/123")
+  let at_uri =
+    test_helpers.to_dynamic("at://did:plc:test/app.bsky.feed.post/123")
 
   uri_extractor.is_at_uri_string(at_uri)
   |> should.be_true
@@ -179,21 +182,24 @@ pub fn extract_uri_from_empty_string_test() {
 // Test extracting URI with various valid formats
 pub fn extract_uri_various_formats_test() {
   // With tid
-  let uri1 = test_helpers.to_dynamic("at://did:plc:abc/app.bsky.feed.post/3k7h8...")
+  let uri1 =
+    test_helpers.to_dynamic("at://did:plc:abc/app.bsky.feed.post/3k7h8...")
   case uri_extractor.extract_uri(uri1) {
     Some(_) -> Nil
     None -> panic as "Expected valid URI with tid"
   }
 
   // With literal:self
-  let uri2 = test_helpers.to_dynamic("at://did:plc:abc/app.bsky.actor.profile/self")
+  let uri2 =
+    test_helpers.to_dynamic("at://did:plc:abc/app.bsky.actor.profile/self")
   case uri_extractor.extract_uri(uri2) {
     Some(_) -> Nil
     None -> panic as "Expected valid URI with literal:self"
   }
 
   // With custom rkey
-  let uri3 = test_helpers.to_dynamic("at://did:plc:abc/collection/custom-key-123")
+  let uri3 =
+    test_helpers.to_dynamic("at://did:plc:abc/collection/custom-key-123")
   case uri_extractor.extract_uri(uri3) {
     Some(_) -> Nil
     None -> panic as "Expected valid URI with custom key"

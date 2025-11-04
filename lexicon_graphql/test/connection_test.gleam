@@ -16,7 +16,10 @@ pub fn sort_field_input_type_with_enum_creates_types_test() {
 
   // Create input type - should not crash
   let _input_type =
-    lexicon_connection.sort_field_input_type_with_enum("TestCollection", enum_type)
+    lexicon_connection.sort_field_input_type_with_enum(
+      "TestCollection",
+      enum_type,
+    )
 
   // If we got here without crashing, test passes
   True

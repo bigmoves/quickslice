@@ -45,44 +45,48 @@ import graphql/value
 
 /// Create the Blob GraphQL object type (output type)
 pub fn create_blob_type() -> schema.Type {
-  schema.object_type("Blob", "A blob reference with metadata and URL generation", [
-    // ref field - CID reference
-    schema.field(
-      "ref",
-      schema.non_null(schema.string_type()),
-      "CID reference to the blob",
-      resolve_ref,
-    ),
-    // mimeType field
-    schema.field(
-      "mimeType",
-      schema.non_null(schema.string_type()),
-      "MIME type of the blob",
-      resolve_mime_type,
-    ),
-    // size field
-    schema.field(
-      "size",
-      schema.non_null(schema.int_type()),
-      "Size in bytes",
-      resolve_size,
-    ),
-    // url field with preset argument
-    schema.field_with_args(
-      "url",
-      schema.non_null(schema.string_type()),
-      "Generate CDN URL for the blob with the specified preset (avatar, banner, feed_thumbnail, feed_fullsize)",
-      [
-        schema.argument(
-          "preset",
-          schema.string_type(),
-          "Image preset: avatar, banner, feed_thumbnail, feed_fullsize",
-          Some(value.String("feed_fullsize")),
-        ),
-      ],
-      resolve_url,
-    ),
-  ])
+  schema.object_type(
+    "Blob",
+    "A blob reference with metadata and URL generation",
+    [
+      // ref field - CID reference
+      schema.field(
+        "ref",
+        schema.non_null(schema.string_type()),
+        "CID reference to the blob",
+        resolve_ref,
+      ),
+      // mimeType field
+      schema.field(
+        "mimeType",
+        schema.non_null(schema.string_type()),
+        "MIME type of the blob",
+        resolve_mime_type,
+      ),
+      // size field
+      schema.field(
+        "size",
+        schema.non_null(schema.int_type()),
+        "Size in bytes",
+        resolve_size,
+      ),
+      // url field with preset argument
+      schema.field_with_args(
+        "url",
+        schema.non_null(schema.string_type()),
+        "Generate CDN URL for the blob with the specified preset (avatar, banner, feed_thumbnail, feed_fullsize)",
+        [
+          schema.argument(
+            "preset",
+            schema.string_type(),
+            "Image preset: avatar, banner, feed_thumbnail, feed_fullsize",
+            Some(value.String("feed_fullsize")),
+          ),
+        ],
+        resolve_url,
+      ),
+    ],
+  )
 }
 
 /// Create the BlobInput GraphQL input object type (input type for mutations)

@@ -64,9 +64,7 @@ pub fn mutation_with_input_object_test() {
 
   let user_type =
     schema.object_type("User", "A user", [
-      schema.field("id", schema.id_type(), "User ID", fn(_) {
-        Ok(value.Null)
-      }),
+      schema.field("id", schema.id_type(), "User ID", fn(_) { Ok(value.Null) }),
       schema.field("name", schema.string_type(), "User name", fn(_) {
         Ok(value.Null)
       }),
@@ -90,20 +88,16 @@ pub fn mutation_with_input_object_test() {
       ),
     ])
 
-  let serialized = sdl.print_types([create_user_input, user_type, mutation_type])
+  let serialized =
+    sdl.print_types([create_user_input, user_type, mutation_type])
 
-  birdie.snap(
-    title: "Mutation with input object argument",
-    content: serialized,
-  )
+  birdie.snap(title: "Mutation with input object argument", content: serialized)
 }
 
 pub fn multiple_mutations_test() {
   let user_type =
     schema.object_type("User", "A user", [
-      schema.field("id", schema.id_type(), "User ID", fn(_) {
-        Ok(value.Null)
-      }),
+      schema.field("id", schema.id_type(), "User ID", fn(_) { Ok(value.Null) }),
     ])
 
   let delete_response =
@@ -164,9 +158,7 @@ pub fn multiple_mutations_test() {
 pub fn mutation_returning_list_test() {
   let user_type =
     schema.object_type("User", "A user", [
-      schema.field("id", schema.id_type(), "User ID", fn(_) {
-        Ok(value.Null)
-      }),
+      schema.field("id", schema.id_type(), "User ID", fn(_) { Ok(value.Null) }),
     ])
 
   let mutation_type =
@@ -195,9 +187,7 @@ pub fn mutation_returning_list_test() {
 pub fn mutation_with_non_null_return_test() {
   let user_type =
     schema.object_type("User", "A user", [
-      schema.field("id", schema.id_type(), "User ID", fn(_) {
-        Ok(value.Null)
-      }),
+      schema.field("id", schema.id_type(), "User ID", fn(_) { Ok(value.Null) }),
     ])
 
   let mutation_type =
@@ -220,8 +210,5 @@ pub fn mutation_with_non_null_return_test() {
 
   let serialized = sdl.print_type(mutation_type)
 
-  birdie.snap(
-    title: "Mutation with non-null return type",
-    content: serialized,
-  )
+  birdie.snap(title: "Mutation with non-null return type", content: serialized)
 }

@@ -2,7 +2,6 @@
 ///
 /// Generates proper SDL output from GraphQL schema types
 /// Follows the GraphQL specification for schema representation
-
 import gleam/list
 import gleam/option
 import gleam/string
@@ -114,14 +113,19 @@ fn print_input_object(
           let field_name = schema.input_field_name(field)
           let field_type = schema.input_field_type(field)
           let field_desc = schema.input_field_description(field)
-          let field_type_str = print_type_internal(field_type, indent_level + 1, True)
+          let field_type_str =
+            print_type_internal(field_type, indent_level + 1, True)
 
           let field_desc_block = case field_desc {
             "" -> ""
             _ -> field_indent <> format_description(field_desc) <> "\n"
           }
 
-          field_desc_block <> field_indent <> field_name <> ": " <> field_type_str
+          field_desc_block
+          <> field_indent
+          <> field_name
+          <> ": "
+          <> field_type_str
         })
 
       case list.is_empty(fields) {
@@ -163,14 +167,19 @@ fn print_object(type_: schema.Type, indent_level: Int, inline: Bool) -> String {
           let field_name = schema.field_name(field)
           let field_type = schema.field_type(field)
           let field_desc = schema.field_description(field)
-          let field_type_str = print_type_internal(field_type, indent_level + 1, True)
+          let field_type_str =
+            print_type_internal(field_type, indent_level + 1, True)
 
           let field_desc_block = case field_desc {
             "" -> ""
             _ -> field_indent <> format_description(field_desc) <> "\n"
           }
 
-          field_desc_block <> field_indent <> field_name <> ": " <> field_type_str
+          field_desc_block
+          <> field_indent
+          <> field_name
+          <> ": "
+          <> field_type_str
         })
 
       case list.is_empty(fields) {

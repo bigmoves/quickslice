@@ -20,8 +20,7 @@ pub type BatchResult =
 /// Batch query function type - takes a list of URIs and field constraints,
 /// returns records grouped by the URI they match
 pub type BatchFetcher =
-  fn(List(String), String, Option(String)) ->
-    Result(BatchResult, String)
+  fn(List(String), String, Option(String)) -> Result(BatchResult, String)
 
 /// Pagination parameters for join queries
 /// Re-exported from db_schema_builder to avoid circular dependency
@@ -223,7 +222,10 @@ pub fn extract_uris_from_records(
 }
 
 /// Extract a field value from a GraphQL Value
-fn extract_field_value(value: value.Value, field_name: String) -> Option(Dynamic) {
+fn extract_field_value(
+  value: value.Value,
+  field_name: String,
+) -> Option(Dynamic) {
   case value {
     value.Object(fields) -> {
       // fields is a List(#(String, value.Value)), find the matching field

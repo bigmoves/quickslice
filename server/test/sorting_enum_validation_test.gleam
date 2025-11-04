@@ -23,10 +23,7 @@ pub fn sorting_enum_input_types_are_unique_per_collection_test() {
   let lexicons = load_social_grain_lexicons()
 
   // Create a stub fetcher that won't actually be called
-  let stub_fetcher = fn(
-    _uri: String,
-    _params: dataloader.PaginationParams,
-  ) -> Result(
+  let stub_fetcher = fn(_uri: String, _params: dataloader.PaginationParams) -> Result(
     #(
       List(#(value.Value, String)),
       option.Option(String),
@@ -52,7 +49,8 @@ pub fn sorting_enum_input_types_are_unique_per_collection_test() {
     )
 
   // Introspection query to check if SocialGrainGalleryItemSortFieldInput exists
-  let query = "
+  let query =
+    "
     {
       __type(name: \"SocialGrainGalleryItemSortFieldInput\") {
         name
@@ -88,54 +86,59 @@ pub fn sorting_enum_input_types_are_unique_per_collection_test() {
 
       case data {
         value.Object(fields) -> {
-      case list.key_find(fields, "__type") {
-        Ok(value.Object(type_fields)) -> {
-          // Verify type name
-          case list.key_find(type_fields, "name") {
-            Ok(value.String(name)) -> {
-              name
-              |> should.equal("SocialGrainGalleryItemSortFieldInput")
-            }
-            _ -> should.fail()
-          }
+          case list.key_find(fields, "__type") {
+            Ok(value.Object(type_fields)) -> {
+              // Verify type name
+              case list.key_find(type_fields, "name") {
+                Ok(value.String(name)) -> {
+                  name
+                  |> should.equal("SocialGrainGalleryItemSortFieldInput")
+                }
+                _ -> should.fail()
+              }
 
-          // Verify it's an INPUT_OBJECT
-          case list.key_find(type_fields, "kind") {
-            Ok(value.String(kind)) -> {
-              kind
-              |> should.equal("INPUT_OBJECT")
-            }
-            _ -> should.fail()
-          }
+              // Verify it's an INPUT_OBJECT
+              case list.key_find(type_fields, "kind") {
+                Ok(value.String(kind)) -> {
+                  kind
+                  |> should.equal("INPUT_OBJECT")
+                }
+                _ -> should.fail()
+              }
 
-          // Verify it has a "field" input field that uses the correct enum
-          case list.key_find(type_fields, "inputFields") {
-            Ok(value.List(input_fields)) -> {
-              // Find the "field" input field
-              let field_input =
-                list.find(input_fields, fn(f) {
-                  case f {
-                    value.Object(field_data) -> {
-                      case list.key_find(field_data, "name") {
-                        Ok(value.String("field")) -> True
+              // Verify it has a "field" input field that uses the correct enum
+              case list.key_find(type_fields, "inputFields") {
+                Ok(value.List(input_fields)) -> {
+                  // Find the "field" input field
+                  let field_input =
+                    list.find(input_fields, fn(f) {
+                      case f {
+                        value.Object(field_data) -> {
+                          case list.key_find(field_data, "name") {
+                            Ok(value.String("field")) -> True
+                            _ -> False
+                          }
+                        }
                         _ -> False
                       }
-                    }
-                    _ -> False
-                  }
-                })
+                    })
 
-              case field_input {
-                Ok(value.Object(field_data)) -> {
-                  // Check the type is SocialGrainGalleryItemSortField (wrapped in NON_NULL)
-                  case list.key_find(field_data, "type") {
-                    Ok(value.Object(type_data)) -> {
-                      case list.key_find(type_data, "ofType") {
-                        Ok(value.Object(inner_type)) -> {
-                          case list.key_find(inner_type, "name") {
-                            Ok(value.String(enum_name)) -> {
-                              enum_name
-                              |> should.equal("SocialGrainGalleryItemSortField")
+                  case field_input {
+                    Ok(value.Object(field_data)) -> {
+                      // Check the type is SocialGrainGalleryItemSortField (wrapped in NON_NULL)
+                      case list.key_find(field_data, "type") {
+                        Ok(value.Object(type_data)) -> {
+                          case list.key_find(type_data, "ofType") {
+                            Ok(value.Object(inner_type)) -> {
+                              case list.key_find(inner_type, "name") {
+                                Ok(value.String(enum_name)) -> {
+                                  enum_name
+                                  |> should.equal(
+                                    "SocialGrainGalleryItemSortField",
+                                  )
+                                }
+                                _ -> should.fail()
+                              }
                             }
                             _ -> should.fail()
                           }
@@ -154,9 +157,6 @@ pub fn sorting_enum_input_types_are_unique_per_collection_test() {
         }
         _ -> should.fail()
       }
-        }
-        _ -> should.fail()
-      }
     }
     _ -> should.fail()
   }
@@ -169,10 +169,7 @@ pub fn did_join_uses_correct_sort_enum_test() {
   let lexicons = load_social_grain_lexicons()
 
   // Create a stub fetcher that won't actually be called
-  let stub_fetcher = fn(
-    _uri: String,
-    _params: dataloader.PaginationParams,
-  ) -> Result(
+  let stub_fetcher = fn(_uri: String, _params: dataloader.PaginationParams) -> Result(
     #(
       List(#(value.Value, String)),
       option.Option(String),
@@ -198,7 +195,8 @@ pub fn did_join_uses_correct_sort_enum_test() {
     )
 
   // Introspection query to check socialGrainGalleryItemByDid's sortBy argument
-  let query = "
+  let query =
+    "
     {
       __type(name: \"SocialGrainGallery\") {
         fields {
@@ -234,59 +232,69 @@ pub fn did_join_uses_correct_sort_enum_test() {
 
       case data {
         value.Object(response_fields) -> {
-      case list.key_find(response_fields, "__type") {
-        Ok(value.Object(type_fields)) -> {
-          case list.key_find(type_fields, "fields") {
-            Ok(value.List(fields)) -> {
-              // Find socialGrainGalleryItemByDid field
-              let did_join_field =
-                list.find(fields, fn(field) {
-                  case field {
-                    value.Object(field_data) -> {
-                      case list.key_find(field_data, "name") {
-                        Ok(value.String("socialGrainGalleryItemByDid")) ->
-                          True
-                        _ -> False
-                      }
-                    }
-                    _ -> False
-                  }
-                })
-
-              case did_join_field {
-                Ok(value.Object(field_data)) -> {
-                  case list.key_find(field_data, "args") {
-                    Ok(value.List(args)) -> {
-                      // Find sortBy argument
-                      let sortby_arg =
-                        list.find(args, fn(arg) {
-                          case arg {
-                            value.Object(arg_data) -> {
-                              case list.key_find(arg_data, "name") {
-                                Ok(value.String("sortBy")) -> True
-                                _ -> False
-                              }
-                            }
+          case list.key_find(response_fields, "__type") {
+            Ok(value.Object(type_fields)) -> {
+              case list.key_find(type_fields, "fields") {
+                Ok(value.List(fields)) -> {
+                  // Find socialGrainGalleryItemByDid field
+                  let did_join_field =
+                    list.find(fields, fn(field) {
+                      case field {
+                        value.Object(field_data) -> {
+                          case list.key_find(field_data, "name") {
+                            Ok(value.String("socialGrainGalleryItemByDid")) ->
+                              True
                             _ -> False
                           }
-                        })
+                        }
+                        _ -> False
+                      }
+                    })
 
-                      case sortby_arg {
-                        Ok(value.Object(arg_data)) -> {
-                          // Get the input type name: [SocialGrainGalleryItemSortFieldInput!]
-                          case list.key_find(arg_data, "type") {
-                            Ok(value.Object(type_data)) -> {
-                              case list.key_find(type_data, "ofType") {
-                                Ok(value.Object(non_null_data)) -> {
-                                  case list.key_find(non_null_data, "ofType") {
-                                    Ok(value.Object(input_type_data)) -> {
-                                      case list.key_find(input_type_data, "name") {
-                                        Ok(value.String(input_type_name)) -> {
-                                          // Should use GalleryItem's input type, NOT Gallery's or Favorite's
-                                          input_type_name
-                                          |> should.equal(
-                                            "SocialGrainGalleryItemSortFieldInput",
-                                          )
+                  case did_join_field {
+                    Ok(value.Object(field_data)) -> {
+                      case list.key_find(field_data, "args") {
+                        Ok(value.List(args)) -> {
+                          // Find sortBy argument
+                          let sortby_arg =
+                            list.find(args, fn(arg) {
+                              case arg {
+                                value.Object(arg_data) -> {
+                                  case list.key_find(arg_data, "name") {
+                                    Ok(value.String("sortBy")) -> True
+                                    _ -> False
+                                  }
+                                }
+                                _ -> False
+                              }
+                            })
+
+                          case sortby_arg {
+                            Ok(value.Object(arg_data)) -> {
+                              // Get the input type name: [SocialGrainGalleryItemSortFieldInput!]
+                              case list.key_find(arg_data, "type") {
+                                Ok(value.Object(type_data)) -> {
+                                  case list.key_find(type_data, "ofType") {
+                                    Ok(value.Object(non_null_data)) -> {
+                                      case
+                                        list.key_find(non_null_data, "ofType")
+                                      {
+                                        Ok(value.Object(input_type_data)) -> {
+                                          case
+                                            list.key_find(
+                                              input_type_data,
+                                              "name",
+                                            )
+                                          {
+                                            Ok(value.String(input_type_name)) -> {
+                                              // Should use GalleryItem's input type, NOT Gallery's or Favorite's
+                                              input_type_name
+                                              |> should.equal(
+                                                "SocialGrainGalleryItemSortFieldInput",
+                                              )
+                                            }
+                                            _ -> should.fail()
+                                          }
                                         }
                                         _ -> should.fail()
                                       }
@@ -314,9 +322,6 @@ pub fn did_join_uses_correct_sort_enum_test() {
         }
         _ -> should.fail()
       }
-        }
-        _ -> should.fail()
-      }
     }
     _ -> should.fail()
   }
@@ -324,7 +329,8 @@ pub fn did_join_uses_correct_sort_enum_test() {
 
 // Helper to load social.grain lexicons for testing
 fn load_social_grain_lexicons() -> List(types.Lexicon) {
-  let gallery_json = "{
+  let gallery_json =
+    "{
     \"lexicon\": 1,
     \"id\": \"social.grain.gallery\",
     \"defs\": {
@@ -343,7 +349,8 @@ fn load_social_grain_lexicons() -> List(types.Lexicon) {
     }
   }"
 
-  let gallery_item_json = "{
+  let gallery_item_json =
+    "{
     \"lexicon\": 1,
     \"id\": \"social.grain.gallery.item\",
     \"defs\": {
@@ -363,7 +370,8 @@ fn load_social_grain_lexicons() -> List(types.Lexicon) {
     }
   }"
 
-  let favorite_json = "{
+  let favorite_json =
+    "{
     \"lexicon\": 1,
     \"id\": \"social.grain.favorite\",
     \"defs\": {
@@ -386,10 +394,14 @@ fn load_social_grain_lexicons() -> List(types.Lexicon) {
     lexicon_parser.parse_lexicon(gallery_json) |> result.unwrap(empty_lexicon()),
     lexicon_parser.parse_lexicon(gallery_item_json)
       |> result.unwrap(empty_lexicon()),
-    lexicon_parser.parse_lexicon(favorite_json) |> result.unwrap(empty_lexicon()),
+    lexicon_parser.parse_lexicon(favorite_json)
+      |> result.unwrap(empty_lexicon()),
   ]
 }
 
 fn empty_lexicon() -> types.Lexicon {
-  types.Lexicon(id: "empty", defs: types.Defs(main: option.None, others: dict.new()))
+  types.Lexicon(
+    id: "empty",
+    defs: types.Defs(main: option.None, others: dict.new()),
+  )
 }

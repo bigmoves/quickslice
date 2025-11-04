@@ -185,13 +185,15 @@ pub fn resolve_union_type_test() {
 
   // Create context with data that has __typename
   let data =
-    value.Object([#("__typename", value.String("Post")), #("title", value.String("Test"))])
+    value.Object([
+      #("__typename", value.String("Post")),
+      #("title", value.String("Test")),
+    ])
   let ctx = schema.context(option.Some(data))
   let result = schema.resolve_union_type(union_type, ctx)
 
   case result {
-    Ok(resolved_type) ->
-      should.equal(schema.type_name(resolved_type), "Post")
+    Ok(resolved_type) -> should.equal(schema.type_name(resolved_type), "Post")
     Error(_) -> should.be_true(False)
   }
 }
@@ -209,7 +211,12 @@ pub fn union_type_kind_test() {
   }
 
   let union_type =
-    schema.union_type("SearchResult", "A search result", [post_type], type_resolver)
+    schema.union_type(
+      "SearchResult",
+      "A search result",
+      [post_type],
+      type_resolver,
+    )
 
   should.equal(schema.type_kind(union_type), "UNION")
 }

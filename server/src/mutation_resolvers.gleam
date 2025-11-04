@@ -112,7 +112,8 @@ pub fn create_resolver_factory(
       atproto_auth.verify_oauth_token(token, ctx.auth_base_url)
       |> result.map_error(fn(err) {
         case err {
-          atproto_auth.UnauthorizedToken -> "Invalid or expired authentication token"
+          atproto_auth.UnauthorizedToken ->
+            "Invalid or expired authentication token"
           atproto_auth.MissingAuthHeader -> "Missing authentication"
           atproto_auth.InvalidAuthHeader -> "Invalid authentication header"
           _ -> "Authentication failed"
@@ -145,24 +146,26 @@ pub fn create_resolver_factory(
 
         // Step 6: Call createRecord via AT Protocol
         // Omit rkey field when not provided to let PDS auto-generate TID
-        let create_body = case rkey {
-          option.Some(r) ->
-            json.object([
-              #("repo", json.string(user_info.did)),
-              #("collection", json.string(collection)),
-              #("rkey", json.string(r)),
-              #("record", graphql_value_to_json_value(input)),
-            ])
-          option.None ->
-            json.object([
-              #("repo", json.string(user_info.did)),
-              #("collection", json.string(collection)),
-              #("record", graphql_value_to_json_value(input)),
-            ])
-        }
-        |> json.to_string
+        let create_body =
+          case rkey {
+            option.Some(r) ->
+              json.object([
+                #("repo", json.string(user_info.did)),
+                #("collection", json.string(collection)),
+                #("rkey", json.string(r)),
+                #("record", graphql_value_to_json_value(input)),
+              ])
+            option.None ->
+              json.object([
+                #("repo", json.string(user_info.did)),
+                #("collection", json.string(collection)),
+                #("record", graphql_value_to_json_value(input)),
+              ])
+          }
+          |> json.to_string
 
-        let pds_url = session.pds_endpoint <> "/xrpc/com.atproto.repo.createRecord"
+        let pds_url =
+          session.pds_endpoint <> "/xrpc/com.atproto.repo.createRecord"
 
         use response <- result.try(
           dpop.make_dpop_request("POST", pds_url, session, create_body)
@@ -271,7 +274,8 @@ pub fn update_resolver_factory(
       atproto_auth.verify_oauth_token(token, ctx.auth_base_url)
       |> result.map_error(fn(err) {
         case err {
-          atproto_auth.UnauthorizedToken -> "Invalid or expired authentication token"
+          atproto_auth.UnauthorizedToken ->
+            "Invalid or expired authentication token"
           atproto_auth.MissingAuthHeader -> "Missing authentication"
           atproto_auth.InvalidAuthHeader -> "Invalid authentication header"
           _ -> "Authentication failed"
@@ -406,7 +410,8 @@ pub fn delete_resolver_factory(
       atproto_auth.verify_oauth_token(token, ctx.auth_base_url)
       |> result.map_error(fn(err) {
         case err {
-          atproto_auth.UnauthorizedToken -> "Invalid or expired authentication token"
+          atproto_auth.UnauthorizedToken ->
+            "Invalid or expired authentication token"
           atproto_auth.MissingAuthHeader -> "Missing authentication"
           atproto_auth.InvalidAuthHeader -> "Invalid authentication header"
           _ -> "Authentication failed"
@@ -506,7 +511,8 @@ pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
       atproto_auth.verify_oauth_token(token, ctx.auth_base_url)
       |> result.map_error(fn(err) {
         case err {
-          atproto_auth.UnauthorizedToken -> "Invalid or expired authentication token"
+          atproto_auth.UnauthorizedToken ->
+            "Invalid or expired authentication token"
           atproto_auth.MissingAuthHeader -> "Missing authentication"
           atproto_auth.InvalidAuthHeader -> "Invalid authentication header"
           _ -> "Authentication failed"
@@ -554,9 +560,7 @@ pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
             extract_blob_from_dynamic(blob_dynamic, user_info.did)
           }
           Error(_) -> {
-            Error(
-              "Failed to parse PDS response. Body: " <> response.body,
-            )
+            Error("Failed to parse PDS response. Body: " <> response.body)
           }
         }
       }

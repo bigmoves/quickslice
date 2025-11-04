@@ -50,7 +50,13 @@ fn handle_graphql_post(
           // Parse JSON to extract query and variables
           case extract_request_from_json(body_string) {
             Ok(#(query, variables)) -> {
-              execute_graphql_query(db, query, variables, auth_token, auth_base_url)
+              execute_graphql_query(
+                db,
+                query,
+                variables,
+                auth_token,
+                auth_base_url,
+              )
             }
             Error(err) -> bad_request_response("Invalid JSON: " <> err)
           }

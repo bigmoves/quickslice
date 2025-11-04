@@ -78,7 +78,10 @@ fn extract_record_types(lexicons: List(Lexicon)) -> List(RecordType) {
 /// Parse a single lexicon into a RecordType
 fn parse_lexicon(lexicon: Lexicon) -> Result(RecordType, Nil) {
   case lexicon {
-    types.Lexicon(id, types.Defs(option.Some(types.RecordDef("record", _, properties)), _)) -> {
+    types.Lexicon(
+      id,
+      types.Defs(option.Some(types.RecordDef("record", _, properties)), _),
+    ) -> {
       let type_name = nsid.to_type_name(id)
       let field_name = nsid.to_field_name(id)
       let fields = build_fields(properties)

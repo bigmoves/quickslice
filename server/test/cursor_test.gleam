@@ -130,7 +130,8 @@ pub fn decode_cursor_valid_test() {
 pub fn decode_cursor_multi_field_test() {
   let sort_by = Some([#("text", "desc"), #("createdAt", "desc")])
 
-  let cursor_str = cursor.encode_base64("Hello|2025-01-15T12:00:00Z|bafytest123")
+  let cursor_str =
+    cursor.encode_base64("Hello|2025-01-15T12:00:00Z|bafytest123")
 
   let result = cursor.decode_cursor(cursor_str, sort_by)
 
@@ -149,7 +150,8 @@ pub fn decode_cursor_mismatch_test() {
   let sort_by = Some([#("text", "desc")])
 
   // Cursor has 2 fields but sort_by only has 1
-  let cursor_str = cursor.encode_base64("Hello|2025-01-15T12:00:00Z|bafytest123")
+  let cursor_str =
+    cursor.encode_base64("Hello|2025-01-15T12:00:00Z|bafytest123")
 
   let result = cursor.decode_cursor(cursor_str, sort_by)
 
@@ -257,10 +259,11 @@ pub fn extract_field_value_missing_test() {
 
 /// Test building WHERE clause for single field DESC
 pub fn build_where_single_field_desc_test() {
-  let decoded = cursor.DecodedCursor(
-    field_values: ["2025-01-15 12:00:00"],
-    cid: "bafytest123",
-  )
+  let decoded =
+    cursor.DecodedCursor(
+      field_values: ["2025-01-15 12:00:00"],
+      cid: "bafytest123",
+    )
 
   let sort_by = Some([#("indexed_at", "desc")])
 
@@ -280,10 +283,11 @@ pub fn build_where_single_field_desc_test() {
 
 /// Test building WHERE clause for single field ASC
 pub fn build_where_single_field_asc_test() {
-  let decoded = cursor.DecodedCursor(
-    field_values: ["2025-01-15 12:00:00"],
-    cid: "bafytest123",
-  )
+  let decoded =
+    cursor.DecodedCursor(
+      field_values: ["2025-01-15 12:00:00"],
+      cid: "bafytest123",
+    )
 
   let sort_by = Some([#("indexed_at", "asc")])
 
@@ -303,10 +307,8 @@ pub fn build_where_single_field_asc_test() {
 
 /// Test building WHERE clause for JSON field
 pub fn build_where_json_field_test() {
-  let decoded = cursor.DecodedCursor(
-    field_values: ["Hello world"],
-    cid: "bafytest123",
-  )
+  let decoded =
+    cursor.DecodedCursor(field_values: ["Hello world"], cid: "bafytest123")
 
   let sort_by = Some([#("text", "desc")])
 
@@ -324,10 +326,8 @@ pub fn build_where_json_field_test() {
 
 /// Test building WHERE clause for nested JSON field
 pub fn build_where_nested_json_field_test() {
-  let decoded = cursor.DecodedCursor(
-    field_values: ["Alice"],
-    cid: "bafytest123",
-  )
+  let decoded =
+    cursor.DecodedCursor(field_values: ["Alice"], cid: "bafytest123")
 
   let sort_by = Some([#("author.name", "asc")])
 
@@ -345,10 +345,11 @@ pub fn build_where_nested_json_field_test() {
 
 /// Test building WHERE clause for multiple fields
 pub fn build_where_multi_field_test() {
-  let decoded = cursor.DecodedCursor(
-    field_values: ["Hello", "2025-01-15T12:00:00Z"],
-    cid: "bafytest123",
-  )
+  let decoded =
+    cursor.DecodedCursor(
+      field_values: ["Hello", "2025-01-15T12:00:00Z"],
+      cid: "bafytest123",
+    )
 
   let sort_by = Some([#("text", "desc"), #("createdAt", "desc")])
 
@@ -374,10 +375,11 @@ pub fn build_where_multi_field_test() {
 
 /// Test building WHERE clause for backward pagination (before)
 pub fn build_where_backward_test() {
-  let decoded = cursor.DecodedCursor(
-    field_values: ["2025-01-15 12:00:00"],
-    cid: "bafytest123",
-  )
+  let decoded =
+    cursor.DecodedCursor(
+      field_values: ["2025-01-15 12:00:00"],
+      cid: "bafytest123",
+    )
 
   let sort_by = Some([#("indexed_at", "desc")])
 

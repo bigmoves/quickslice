@@ -103,4 +103,3 @@ pub fn parse_mutation_with_nested_selections_test() {
     content: format_ast(doc),
   )
 }
-

@@ -13,35 +13,37 @@ pub fn extract_metadata_with_strong_ref_test() {
     types.Lexicon(
       id: "app.bsky.actor.profile",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "displayName",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: None,
-              ref: None,
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "displayName",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
             ),
-          ),
-          #(
-            "pinnedPost",
-            types.Property(
-              type_: "ref",
-              required: False,
-              format: None,
-              ref: Some("com.atproto.repo.strongRef"),
+            #(
+              "pinnedPost",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("com.atproto.repo.strongRef"),
+              ),
             ),
-          ),
-          #(
-            "joinedViaStarterPack",
-            types.Property(
-              type_: "ref",
-              required: False,
-              format: None,
-              ref: Some("com.atproto.repo.strongRef"),
+            #(
+              "joinedViaStarterPack",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("com.atproto.repo.strongRef"),
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -77,26 +79,28 @@ pub fn extract_metadata_with_at_uri_test() {
     types.Lexicon(
       id: "app.bsky.feed.like",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "subject",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: Some("at-uri"),
-              ref: None,
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "subject",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: Some("at-uri"),
+                ref: None,
+              ),
             ),
-          ),
-          #(
-            "createdAt",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: Some("datetime"),
-              ref: None,
+            #(
+              "createdAt",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: Some("datetime"),
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -132,35 +136,37 @@ pub fn extract_metadata_with_mixed_fields_test() {
     types.Lexicon(
       id: "app.bsky.feed.post",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "text",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: None,
-              ref: None,
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
             ),
-          ),
-          #(
-            "reply",
-            types.Property(
-              type_: "ref",
-              required: False,
-              format: None,
-              ref: Some("com.atproto.repo.strongRef"),
+            #(
+              "reply",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("com.atproto.repo.strongRef"),
+              ),
             ),
-          ),
-          #(
-            "via",
-            types.Property(
-              type_: "string",
-              required: False,
-              format: Some("at-uri"),
-              ref: None,
+            #(
+              "via",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: Some("at-uri"),
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -192,26 +198,28 @@ pub fn extract_metadata_with_no_join_fields_test() {
     types.Lexicon(
       id: "xyz.statusphere.status",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "status",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: None,
-              ref: None,
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "status",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
             ),
-          ),
-          #(
-            "createdAt",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: Some("datetime"),
-              ref: None,
+            #(
+              "createdAt",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: Some("datetime"),
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -232,17 +240,19 @@ pub fn is_strong_ref_field_non_existent_test() {
     types.Lexicon(
       id: "test.collection",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "text",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: None,
-              ref: None,
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -259,17 +269,19 @@ pub fn is_at_uri_field_non_existent_test() {
     types.Lexicon(
       id: "test.collection",
       defs: types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #(
-            "text",
-            types.Property(
-              type_: "string",
-              required: True,
-              format: None,
-              ref: None,
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+              ),
             ),
-          ),
-        ])),
+          ]),
+        ),
         others: dict.new(),
       ),
     )

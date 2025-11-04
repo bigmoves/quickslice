@@ -2,7 +2,6 @@
 ///
 /// Uses birdie to capture and verify the GraphQL schema types
 /// generated for where input filtering
-
 import birdie
 import gleam/dict
 import gleam/list
@@ -150,8 +149,7 @@ pub fn related_types_snapshot_test() {
       schema.string_type(),
     )
 
-  let serialized =
-    sdl.print_types([where_input_type, condition_type])
+  let serialized = sdl.print_types([where_input_type, condition_type])
 
   birdie.snap(
     title: "WhereInput and FieldCondition types together",
@@ -175,8 +173,7 @@ pub fn multiple_record_types_snapshot_test() {
       "description",
     ])
 
-  let serialized =
-    sdl.print_types([post_where, profile_where])
+  let serialized = sdl.print_types([post_where, profile_where])
 
   birdie.snap(
     title: "Multiple record types with different WhereInput names",
@@ -209,16 +206,74 @@ pub fn where_input_excludes_blob_and_ref_types_test() {
     types.Lexicon(
       "app.bsky.test.record",
       types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          #("stringField", types.Property(type_: "string", required: False, format: None, ref: None)),
-          #("intField", types.Property(type_: "integer", required: False, format: None, ref: None)),
-          #("boolField", types.Property(type_: "boolean", required: False, format: None, ref: None)),
-          #("numberField", types.Property(type_: "number", required: False, format: None, ref: None)),
-          #("uriField", types.Property(type_: "string", required: False, format: Some("at-uri"), ref: None)),
-          // Non-sortable types that should be excluded
-          #("blobField", types.Property(type_: "blob", required: False, format: None, ref: None)),
-          #("refField", types.Property(type_: "ref", required: False, format: None, ref: Some("app.bsky.test.object"))),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            #(
+              "stringField",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "intField",
+              types.Property(
+                type_: "integer",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "boolField",
+              types.Property(
+                type_: "boolean",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "numberField",
+              types.Property(
+                type_: "number",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "uriField",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: Some("at-uri"),
+                ref: None,
+              ),
+            ),
+            // Non-sortable types that should be excluded
+            #(
+              "blobField",
+              types.Property(
+                type_: "blob",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "refField",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("app.bsky.test.object"),
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )
@@ -270,18 +325,84 @@ pub fn where_input_with_mixed_field_types_snapshot_test() {
     types.Lexicon(
       "app.bsky.test.record",
       types.Defs(
-        main: Some(types.RecordDef(type_: "record", key: None, properties: [
-          // Sortable primitive types
-          #("stringField", types.Property(type_: "string", required: False, format: None, ref: None)),
-          #("intField", types.Property(type_: "integer", required: False, format: None, ref: None)),
-          #("boolField", types.Property(type_: "boolean", required: False, format: None, ref: None)),
-          #("numberField", types.Property(type_: "number", required: False, format: None, ref: None)),
-          #("datetimeField", types.Property(type_: "string", required: False, format: Some("datetime"), ref: None)),
-          #("uriField", types.Property(type_: "string", required: False, format: Some("at-uri"), ref: None)),
-          // Non-sortable types
-          #("blobField", types.Property(type_: "blob", required: False, format: None, ref: None)),
-          #("refField", types.Property(type_: "ref", required: False, format: None, ref: Some("com.atproto.repo.strongRef"))),
-        ])),
+        main: Some(
+          types.RecordDef(type_: "record", key: None, properties: [
+            // Sortable primitive types
+            #(
+              "stringField",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "intField",
+              types.Property(
+                type_: "integer",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "boolField",
+              types.Property(
+                type_: "boolean",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "numberField",
+              types.Property(
+                type_: "number",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "datetimeField",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: Some("datetime"),
+                ref: None,
+              ),
+            ),
+            #(
+              "uriField",
+              types.Property(
+                type_: "string",
+                required: False,
+                format: Some("at-uri"),
+                ref: None,
+              ),
+            ),
+            // Non-sortable types
+            #(
+              "blobField",
+              types.Property(
+                type_: "blob",
+                required: False,
+                format: None,
+                ref: None,
+              ),
+            ),
+            #(
+              "refField",
+              types.Property(
+                type_: "ref",
+                required: False,
+                format: None,
+                ref: Some("com.atproto.repo.strongRef"),
+              ),
+            ),
+          ]),
+        ),
         others: dict.new(),
       ),
     )

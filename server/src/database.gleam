@@ -199,12 +199,9 @@ pub fn batch_insert_records(
       list.repeat("(?, ?, ?, ?, ?)", list.length(batch))
       |> string.join(", ")
 
-    let sql =
-      "
+    let sql = "
       INSERT INTO record (uri, cid, did, collection, json)
-      VALUES "
-      <> value_placeholders
-      <> "
+      VALUES " <> value_placeholders <> "
       ON CONFLICT(uri) DO UPDATE SET
         cid = excluded.cid,
         json = excluded.json,
@@ -703,10 +700,7 @@ pub fn get_records_by_collection_paginated(
 
           let new_where = list.append(where_parts, [cursor_where])
           let new_binds =
-            list.append(
-              bind_values,
-              list.map(cursor_params, sqlight.text),
-            )
+            list.append(bind_values, list.map(cursor_params, sqlight.text))
           #(new_where, new_binds)
         }
         Error(_) -> #(where_parts, bind_values)
@@ -719,18 +713,12 @@ pub fn get_records_by_collection_paginated(
   let fetch_limit = limit + 1
 
   // Build the SQL query
-  let sql =
-    "
+  let sql = "
     SELECT uri, cid, did, collection, json, indexed_at
     FROM record
-    WHERE "
-    <> string.join(final_where_parts, " AND ")
-    <> "
-    ORDER BY "
-    <> order_by_clause
-    <> "
-    LIMIT "
-    <> int.to_string(fetch_limit)
+    WHERE " <> string.join(final_where_parts, " AND ") <> "
+    ORDER BY " <> order_by_clause <> "
+    LIMIT " <> int.to_string(fetch_limit)
 
   // Execute query
   let decoder = {
@@ -869,10 +857,7 @@ pub fn get_records_by_collection_paginated_with_where(
 
           let new_where = list.append(where_parts, [cursor_where])
           let new_binds =
-            list.append(
-              bind_values,
-              list.map(cursor_params, sqlight.text),
-            )
+            list.append(bind_values, list.map(cursor_params, sqlight.text))
           #(new_where, new_binds)
         }
         Error(_) -> #(where_parts, bind_values)
@@ -885,20 +870,12 @@ pub fn get_records_by_collection_paginated_with_where(
   let fetch_limit = limit + 1
 
   // Build the SQL query
-  let sql =
-    "
+  let sql = "
     SELECT record.uri, record.cid, record.did, record.collection, record.json, record.indexed_at
-    FROM "
-    <> from_clause
-    <> "
-    WHERE "
-    <> string.join(final_where_parts, " AND ")
-    <> "
-    ORDER BY "
-    <> order_by_clause
-    <> "
-    LIMIT "
-    <> int.to_string(fetch_limit)
+    FROM " <> from_clause <> "
+    WHERE " <> string.join(final_where_parts, " AND ") <> "
+    ORDER BY " <> order_by_clause <> "
+    LIMIT " <> int.to_string(fetch_limit)
 
   // Execute query
   let decoder = {
@@ -994,14 +971,10 @@ pub fn get_collection_count_with_where(
   }
 
   // Build the SQL query
-  let sql =
-    "
+  let sql = "
     SELECT COUNT(*) as count
-    FROM "
-    <> from_clause
-    <> "
-    WHERE "
-    <> string.join(where_parts, " AND ")
+    FROM " <> from_clause <> "
+    WHERE " <> string.join(where_parts, " AND ")
 
   // Execute query
   let decoder = {
@@ -1111,8 +1084,7 @@ pub fn get_records_by_uris(
         list.map(uris, fn(_) { "?" })
         |> string.join(", ")
 
-      let sql =
-        "
+      let sql = "
         SELECT uri, cid, did, collection, json, indexed_at
         FROM record
         WHERE uri IN (" <> placeholders <> ")
@@ -1155,8 +1127,7 @@ pub fn get_records_by_reference_field(
 
       // Use SQLite JSON extraction to find records where field_name matches parent URIs
       // This supports both simple string fields and strongRef objects with a "uri" field
-      let sql =
-        "
+      let sql = "
         SELECT uri, cid, did, collection, json, indexed_at
         FROM record
         WHERE collection = ?
@@ -1233,7 +1204,11 @@ pub fn get_records_by_reference_field_paginated(
   // Build WHERE clause parts for reference field matching
   let base_where_parts = [
     "collection = ?",
-    "(json_extract(json, '$." <> field_name <> "') = ? OR json_extract(json, '$." <> field_name <> ".uri') = ?)",
+    "(json_extract(json, '$."
+      <> field_name
+      <> "') = ? OR json_extract(json, '$."
+      <> field_name
+      <> ".uri') = ?)",
   ]
   let base_bind_values = [
     sqlight.text(collection),
@@ -1271,7 +1246,10 @@ pub fn get_records_by_reference_field_paginated(
 
           let new_where = list.append(with_where_parts, [cursor_where])
           let new_binds =
-            list.append(with_where_values, list.map(cursor_params, sqlight.text))
+            list.append(
+              with_where_values,
+              list.map(cursor_params, sqlight.text),
+            )
           #(new_where, new_binds)
         }
         Error(_) -> #(with_where_parts, with_where_values)
@@ -1284,18 +1262,12 @@ pub fn get_records_by_reference_field_paginated(
   let fetch_limit = limit + 1
 
   // Build the SQL query
-  let sql =
-    "
+  let sql = "
     SELECT uri, cid, did, collection, json, indexed_at
     FROM record
-    WHERE "
-    <> string.join(final_where_parts, " AND ")
-    <> "
-    ORDER BY "
-    <> order_by_clause
-    <> "
-    LIMIT "
-    <> int.to_string(fetch_limit)
+    WHERE " <> string.join(final_where_parts, " AND ") <> "
+    ORDER BY " <> order_by_clause <> "
+    LIMIT " <> int.to_string(fetch_limit)
 
   // Execute query
   let decoder = {
@@ -1350,7 +1322,8 @@ pub fn get_records_by_reference_field_paginated(
 
   // Get total count using the WHERE clause (with where conditions, but without cursor conditions)
   let count_sql =
-    "SELECT COUNT(*) FROM record WHERE " <> string.join(with_where_parts, " AND ")
+    "SELECT COUNT(*) FROM record WHERE "
+    <> string.join(with_where_parts, " AND ")
 
   let count_decoder = {
     use count <- decode.field(0, decode.int)
@@ -1369,7 +1342,13 @@ pub fn get_records_by_reference_field_paginated(
     _ -> None
   }
 
-  Ok(#(final_records, next_cursor, has_next_page, has_previous_page, total_count))
+  Ok(#(
+    final_records,
+    next_cursor,
+    has_next_page,
+    has_previous_page,
+    total_count,
+  ))
 }
 
 /// Get records by DIDs and collection (for DID joins / DataLoader)
@@ -1388,8 +1367,7 @@ pub fn get_records_by_dids_and_collection(
         list.map(dids, fn(_) { "?" })
         |> string.join(", ")
 
-      let sql =
-        "
+      let sql = "
         SELECT uri, cid, did, collection, json, indexed_at
         FROM record
         WHERE did IN (" <> placeholders <> ")
@@ -1493,7 +1471,10 @@ pub fn get_records_by_dids_and_collection_paginated(
 
           let new_where = list.append(with_where_parts, [cursor_where])
           let new_binds =
-            list.append(with_where_values, list.map(cursor_params, sqlight.text))
+            list.append(
+              with_where_values,
+              list.map(cursor_params, sqlight.text),
+            )
           #(new_where, new_binds)
         }
         Error(_) -> #(with_where_parts, with_where_values)
@@ -1506,18 +1487,12 @@ pub fn get_records_by_dids_and_collection_paginated(
   let fetch_limit = limit + 1
 
   // Build the SQL query
-  let sql =
-    "
+  let sql = "
     SELECT uri, cid, did, collection, json, indexed_at
     FROM record
-    WHERE "
-    <> string.join(final_where_parts, " AND ")
-    <> "
-    ORDER BY "
-    <> order_by_clause
-    <> "
-    LIMIT "
-    <> int.to_string(fetch_limit)
+    WHERE " <> string.join(final_where_parts, " AND ") <> "
+    ORDER BY " <> order_by_clause <> "
+    LIMIT " <> int.to_string(fetch_limit)
 
   // Execute query
   let decoder = {
@@ -1572,7 +1547,8 @@ pub fn get_records_by_dids_and_collection_paginated(
 
   // Get total count using the WHERE clause (with where conditions, but without cursor conditions)
   let count_sql =
-    "SELECT COUNT(*) FROM record WHERE " <> string.join(with_where_parts, " AND ")
+    "SELECT COUNT(*) FROM record WHERE "
+    <> string.join(with_where_parts, " AND ")
 
   let count_decoder = {
     use count <- decode.field(0, decode.int)
@@ -1591,5 +1567,11 @@ pub fn get_records_by_dids_and_collection_paginated(
     _ -> None
   }
 
-  Ok(#(final_records, next_cursor, has_next_page, has_previous_page, total_count))
+  Ok(#(
+    final_records,
+    next_cursor,
+    has_next_page,
+    has_previous_page,
+    total_count,
+  ))
 }

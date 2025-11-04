@@ -1,12 +1,12 @@
+import database
+import gleam/dict
+import gleam/list
+import gleam/option.{None, Some}
+import gleam/result
+import gleam/string
 import gleeunit
 import gleeunit/should
-import gleam/dict
-import gleam/option.{None, Some}
-import gleam/list
-import gleam/string
-import gleam/result
 import sqlight
-import database
 import where_clause
 
 pub fn main() {
@@ -62,21 +62,25 @@ fn setup_test_db() -> Result(sqlight.Connection, sqlight.Error) {
 pub fn filter_by_did_test() {
   let assert Ok(conn) = setup_test_db()
 
-  let where_clause = where_clause.WhereClause(
-    conditions: dict.from_list([
-      #("did", where_clause.WhereCondition(
-        eq: Some(sqlight.text("did:plc:1")),
-        in_values: None,
-        contains: None,
-        gt: None,
-        gte: None,
-        lt: None,
-        lte: None,
-      )),
-    ]),
-    and: None,
-    or: None,
-  )
+  let where_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "did",
+          where_clause.WhereCondition(
+            eq: Some(sqlight.text("did:plc:1")),
+            in_values: None,
+            contains: None,
+            gt: None,
+            gte: None,
+            lt: None,
+            lte: None,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
 
   let result =
     database.get_records_by_collection_paginated_with_where(
@@ -106,21 +110,25 @@ pub fn filter_by_did_test() {
 pub fn filter_by_json_contains_test() {
   let assert Ok(conn) = setup_test_db()
 
-  let where_clause = where_clause.WhereClause(
-    conditions: dict.from_list([
-      #("text", where_clause.WhereCondition(
-        eq: None,
-        in_values: None,
-        contains: Some("Hello"),
-        gt: None,
-        gte: None,
-        lt: None,
-        lte: None,
-      )),
-    ]),
-    and: None,
-    or: None,
-  )
+  let where_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "text",
+          where_clause.WhereCondition(
+            eq: None,
+            in_values: None,
+            contains: Some("Hello"),
+            gt: None,
+            gte: None,
+            lt: None,
+            lte: None,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
 
   let result =
     database.get_records_by_collection_paginated_with_where(
@@ -150,21 +158,25 @@ pub fn filter_by_json_contains_test() {
 pub fn filter_by_json_comparison_test() {
   let assert Ok(conn) = setup_test_db()
 
-  let where_clause = where_clause.WhereClause(
-    conditions: dict.from_list([
-      #("likes", where_clause.WhereCondition(
-        eq: None,
-        in_values: None,
-        contains: None,
-        gt: Some(sqlight.int(75)),
-        gte: None,
-        lt: None,
-        lte: None,
-      )),
-    ]),
-    and: None,
-    or: None,
-  )
+  let where_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "likes",
+          where_clause.WhereCondition(
+            eq: None,
+            in_values: None,
+            contains: None,
+            gt: Some(sqlight.int(75)),
+            gte: None,
+            lt: None,
+            lte: None,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
 
   let result =
     database.get_records_by_collection_paginated_with_where(
@@ -191,21 +203,25 @@ pub fn filter_by_json_comparison_test() {
 pub fn filter_range_query_test() {
   let assert Ok(conn) = setup_test_db()
 
-  let where_clause = where_clause.WhereClause(
-    conditions: dict.from_list([
-      #("likes", where_clause.WhereCondition(
-        eq: None,
-        in_values: None,
-        contains: None,
-        gt: None,
-        gte: Some(sqlight.int(50)),
-        lt: Some(sqlight.int(150)),
-        lte: None,
-      )),
-    ]),
-    and: None,
-    or: None,
-  )
+  let where_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "likes",
+          where_clause.WhereCondition(
+            eq: None,
+            in_values: None,
+            contains: None,
+            gt: None,
+            gte: Some(sqlight.int(50)),
+            lt: Some(sqlight.int(150)),
+            lte: None,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
 
   let result =
     database.get_records_by_collection_paginated_with_where(
@@ -232,43 +248,52 @@ pub fn filter_range_query_test() {
 pub fn filter_nested_and_test() {
   let assert Ok(conn) = setup_test_db()
 
-  let did_clause = where_clause.WhereClause(
-    conditions: dict.from_list([
-      #("did", where_clause.WhereCondition(
-        eq: Some(sqlight.text("did:plc:1")),
-        in_values: None,
-        contains: None,
-        gt: None,
-        gte: None,
-        lt: None,
-        lte: None,
-      )),
-    ]),
-    and: None,
-    or: None,
-  )
+  let did_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "did",
+          where_clause.WhereCondition(
+            eq: Some(sqlight.text("did:plc:1")),
+            in_values: None,
+            contains: None,
+            gt: None,
+            gte: None,
+            lt: None,
+            lte: None,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
 
-  let likes_clause = where_clause.WhereClause(
-    conditions: dict.from_list([
-      #("likes", where_clause.WhereCondition(
-        eq: None,
-        in_values: None,
-        contains: None,
-        gt: Some(sqlight.int(50)),
-        gte: None,
-        lt: None,
-        lte: None,
-      )),
-    ]),
-    and: None,
-    or: None,
-  )
+  let likes_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "likes",
+          where_clause.WhereCondition(
+            eq: None,
+            in_values: None,
+            contains: None,
+            gt: Some(sqlight.int(50)),
+            gte: None,
+            lt: None,
+            lte: None,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
 
-  let root_clause = where_clause.WhereClause(
-    conditions: dict.new(),
-    and: Some([did_clause, likes_clause]),
-    or: None,
-  )
+  let root_clause =
+    where_clause.WhereClause(
+      conditions: dict.new(),
+      and: Some([did_clause, likes_clause]),
+      or: None,
+    )
 
   let result =
     database.get_records_by_collection_paginated_with_where(
@@ -302,43 +327,52 @@ pub fn filter_nested_and_test() {
 pub fn filter_nested_or_test() {
   let assert Ok(conn) = setup_test_db()
 
-  let did1_clause = where_clause.WhereClause(
-    conditions: dict.from_list([
-      #("did", where_clause.WhereCondition(
-        eq: Some(sqlight.text("did:plc:1")),
-        in_values: None,
-        contains: None,
-        gt: None,
-        gte: None,
-        lt: None,
-        lte: None,
-      )),
-    ]),
-    and: None,
-    or: None,
-  )
+  let did1_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "did",
+          where_clause.WhereCondition(
+            eq: Some(sqlight.text("did:plc:1")),
+            in_values: None,
+            contains: None,
+            gt: None,
+            gte: None,
+            lt: None,
+            lte: None,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
 
-  let did2_clause = where_clause.WhereClause(
-    conditions: dict.from_list([
-      #("did", where_clause.WhereCondition(
-        eq: Some(sqlight.text("did:plc:2")),
-        in_values: None,
-        contains: None,
-        gt: None,
-        gte: None,
-        lt: None,
-        lte: None,
-      )),
-    ]),
-    and: None,
-    or: None,
-  )
+  let did2_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "did",
+          where_clause.WhereCondition(
+            eq: Some(sqlight.text("did:plc:2")),
+            in_values: None,
+            contains: None,
+            gt: None,
+            gte: None,
+            lt: None,
+            lte: None,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
 
-  let root_clause = where_clause.WhereClause(
-    conditions: dict.new(),
-    and: None,
-    or: Some([did1_clause, did2_clause]),
-  )
+  let root_clause =
+    where_clause.WhereClause(
+      conditions: dict.new(),
+      and: None,
+      or: Some([did1_clause, did2_clause]),
+    )
 
   let result =
     database.get_records_by_collection_paginated_with_where(
@@ -392,21 +426,25 @@ pub fn filter_empty_where_test() {
 pub fn filter_with_pagination_test() {
   let assert Ok(conn) = setup_test_db()
 
-  let where_clause = where_clause.WhereClause(
-    conditions: dict.from_list([
-      #("likes", where_clause.WhereCondition(
-        eq: None,
-        in_values: None,
-        contains: None,
-        gt: Some(sqlight.int(25)),
-        gte: None,
-        lt: None,
-        lte: None,
-      )),
-    ]),
-    and: None,
-    or: None,
-  )
+  let where_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "likes",
+          where_clause.WhereCondition(
+            eq: None,
+            in_values: None,
+            contains: None,
+            gt: Some(sqlight.int(25)),
+            gte: None,
+            lt: None,
+            lte: None,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
 
   // First page: limit 2
   let result =
