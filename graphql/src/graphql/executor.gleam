@@ -4,6 +4,7 @@
 import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/set.{type Set}
 import graphql/introspection
 import graphql/parser
 import graphql/schema
@@ -17,6 +18,14 @@ pub type GraphQLError {
 /// GraphQL Response
 pub type Response {
   Response(data: value.Value, errors: List(GraphQLError))
+}
+
+/// Get the response key for a field (alias if present, otherwise field name)
+fn response_key(field_name: String, alias: option.Option(String)) -> String {
+  case alias {
+    option.Some(alias_name) -> alias_name
+    option.None -> field_name
+  }
 }
 
 /// Execute a GraphQL query
@@ -312,21 +321,24 @@ fn execute_selection(
         }
       }
     }
-    parser.Field(name, _alias, arguments, nested_selections) -> {
+    parser.Field(name, alias, arguments, nested_selections) -> {
       // Convert arguments to dict (with variable resolution from context)
       let args_dict = arguments_to_dict(arguments, ctx)
+
+      // Determine the response key (use alias if provided, otherwise field name)
+      let key = response_key(name, alias)
 
       // Handle introspection meta-fields
       case name {
         "__typename" -> {
           let type_name = schema.type_name(parent_type)
-          Ok(#("__typename", value.String(type_name), []))
+          Ok(#(key, value.String(type_name), []))
         }
         "__schema" -> {
           let schema_value = introspection.schema_introspection(graphql_schema)
           // Handle nested selections on __schema
           case nested_selections {
-            [] -> Ok(#("__schema", schema_value, []))
+            [] -> Ok(#(key, schema_value, []))
             _ -> {
               let selection_set = parser.SelectionSet(nested_selections)
               // We don't have an actual type for __Schema, so we'll handle it specially
@@ -339,15 +351,65 @@ fn execute_selection(
                   ctx,
                   fragments,
                   ["__schema", ..path],
+                  set.new(),
                 )
               {
                 Ok(#(nested_data, nested_errors)) ->
-                  Ok(#("__schema", nested_data, nested_errors))
+                  Ok(#(key, nested_data, nested_errors))
                 Error(err) -> {
                   let error = GraphQLError(err, ["__schema", ..path])
-                  Ok(#("__schema", value.Null, [error]))
+                  Ok(#(key, value.Null, [error]))
                 }
               }
+            }
+          }
+        }
+        "__type" -> {
+          // Extract the "name" argument
+          case dict.get(args_dict, "name") {
+            Ok(value.String(type_name)) -> {
+              // Look up the type in the schema
+              case introspection.type_by_name_introspection(graphql_schema, type_name) {
+                option.Some(type_value) -> {
+                  // Handle nested selections on __type
+                  case nested_selections {
+                    [] -> Ok(#(key, type_value, []))
+                    _ -> {
+                      let selection_set = parser.SelectionSet(nested_selections)
+                      case
+                        execute_introspection_selection_set(
+                          selection_set,
+                          type_value,
+                          graphql_schema,
+                          ctx,
+                          fragments,
+                          ["__type", ..path],
+                          set.new(),
+                        )
+                      {
+                        Ok(#(nested_data, nested_errors)) ->
+                          Ok(#(key, nested_data, nested_errors))
+                        Error(err) -> {
+                          let error = GraphQLError(err, ["__type", ..path])
+                          Ok(#(key, value.Null, [error]))
+                        }
+                      }
+                    }
+                  }
+                }
+                option.None -> {
+                  // Type not found, return null (per GraphQL spec)
+                  Ok(#(key, value.Null, []))
+                }
+              }
+            }
+            Ok(_) -> {
+              let error = GraphQLError("__type argument 'name' must be a String", path)
+              Ok(#(key, value.Null, [error]))
+            }
+            Error(_) -> {
+              let error = GraphQLError("__type requires a 'name' argument", path)
+              Ok(#(key, value.Null, [error]))
             }
           }
         }
@@ -356,7 +418,7 @@ fn execute_selection(
           case schema.get_field(parent_type, name) {
             None -> {
               let error = GraphQLError("Field '" <> name <> "' not found", path)
-              Ok(#(name, value.Null, [error]))
+              Ok(#(key, value.Null, [error]))
             }
             Some(field) -> {
               // Get the field's type for nested selections
@@ -369,17 +431,35 @@ fn execute_selection(
               case schema.resolve_field(field, field_ctx) {
                 Error(err) -> {
                   let error = GraphQLError(err, [name, ..path])
-                  Ok(#(name, value.Null, [error]))
+                  Ok(#(key, value.Null, [error]))
                 }
                 Ok(field_value) -> {
                   // If there are nested selections, recurse
                   case nested_selections {
-                    [] -> Ok(#(name, field_value, []))
+                    [] -> Ok(#(key, field_value, []))
                     _ -> {
                       // Need to resolve nested fields
                       case field_value {
                         value.Object(_) -> {
-                          // Execute nested selections using the field's type, not parent type
+                          // Check if field_type_def is a union type
+                          // If so, resolve it to the concrete type first
+                          let type_to_use = case schema.is_union(field_type_def) {
+                            True -> {
+                              // Create context with the field value for type resolution
+                              let resolve_ctx =
+                                schema.context(option.Some(field_value))
+                              case
+                                schema.resolve_union_type(field_type_def, resolve_ctx)
+                              {
+                                Ok(concrete_type) -> concrete_type
+                                Error(_) -> field_type_def
+                                // Fallback to union type if resolution fails
+                              }
+                            }
+                            False -> field_type_def
+                          }
+
+                          // Execute nested selections using the resolved type
                           // Create new context with this object's data
                           let object_ctx = schema.context(option.Some(field_value))
                           let selection_set =
@@ -387,7 +467,7 @@ fn execute_selection(
                           case
                             execute_selection_set(
                               selection_set,
-                              field_type_def,
+                              type_to_use,
                               graphql_schema,
                               object_ctx,
                               fragments,
@@ -395,10 +475,10 @@ fn execute_selection(
                             )
                           {
                             Ok(#(nested_data, nested_errors)) ->
-                              Ok(#(name, nested_data, nested_errors))
+                              Ok(#(key, nested_data, nested_errors))
                             Error(err) -> {
                               let error = GraphQLError(err, [name, ..path])
-                              Ok(#(name, value.Null, [error]))
+                              Ok(#(key, value.Null, [error]))
                             }
                           }
                         }
@@ -423,11 +503,24 @@ fn execute_selection(
                             parser.SelectionSet(nested_selections)
                           let results =
                             list.map(items, fn(item) {
+                              // Check if inner_type is a union and resolve it
+                              let item_type = case schema.is_union(inner_type) {
+                                True -> {
+                                  // Create context with the item value for type resolution
+                                  let resolve_ctx = schema.context(option.Some(item))
+                                  case schema.resolve_union_type(inner_type, resolve_ctx) {
+                                    Ok(concrete_type) -> concrete_type
+                                    Error(_) -> inner_type  // Fallback to union type if resolution fails
+                                  }
+                                }
+                                False -> inner_type
+                              }
+
                               // Create context with this item's data
                               let item_ctx = schema.context(option.Some(item))
                               execute_selection_set(
                                 selection_set,
-                                inner_type,
+                                item_type,
                                 graphql_schema,
                                 item_ctx,
                                 fragments,
@@ -454,9 +547,9 @@ fn execute_selection(
                               }
                             })
 
-                          Ok(#(name, value.List(processed_items), all_errors))
+                          Ok(#(key, value.List(processed_items), all_errors))
                         }
-                        _ -> Ok(#(name, field_value, []))
+                        _ -> Ok(#(key, field_value, []))
                       }
                     }
                   }
@@ -479,6 +572,7 @@ fn execute_introspection_selection_set(
   ctx: schema.Context,
   fragments: Dict(String, parser.Operation),
   path: List(String),
+  visited_types: Set(String),
 ) -> Result(#(value.Value, List(GraphQLError)), String) {
   case selection_set {
     parser.SelectionSet(selections) -> {
@@ -494,6 +588,7 @@ fn execute_introspection_selection_set(
                 ctx,
                 fragments,
                 path,
+                visited_types,
               )
             })
 
@@ -524,21 +619,62 @@ fn execute_introspection_selection_set(
           Ok(#(value.Null, []))
         }
         value.Object(fields) -> {
-          // For each selection, find the corresponding field in the object
-          let results =
+          // CYCLE DETECTION: Extract type name from object to detect circular references
+          let type_name = case list.key_find(fields, "name") {
+            Ok(value.String(name)) -> option.Some(name)
+            _ -> option.None
+          }
+
+          // Check if we've already visited this type to prevent infinite loops
+          let is_cycle = case type_name {
+            option.Some(name) -> set.contains(visited_types, name)
+            option.None -> False
+          }
+
+          // If we detected a cycle, return a minimal object to break the loop
+          case is_cycle {
+            True -> {
+              // Return just the type name and kind to break the cycle
+              let minimal_fields = case type_name {
+                option.Some(name) -> {
+                  let kind_value = case list.key_find(fields, "kind") {
+                    Ok(kind) -> kind
+                    Error(_) -> value.Null
+                  }
+                  [#("name", value.String(name)), #("kind", kind_value)]
+                }
+                option.None -> []
+              }
+              Ok(#(value.Object(minimal_fields), []))
+            }
+            False -> {
+              // Add current type to visited set before recursing
+              let new_visited = case type_name {
+                option.Some(name) -> set.insert(visited_types, name)
+                option.None -> visited_types
+              }
+
+              // For each selection, find the corresponding field in the object
+              let results =
             list.map(selections, fn(selection) {
               case selection {
                 parser.FragmentSpread(name) -> {
                   // Look up the fragment definition
                   case dict.get(fragments, name) {
-                    Error(_) -> Error(Nil)
-                    // Fragment not found, skip it
+                    Error(_) -> {
+                      // Fragment not found - return error
+                      let error = GraphQLError("Fragment '" <> name <> "' not found", path)
+                      Ok(#("__FRAGMENT_ERROR", value.String("Fragment not found: " <> name), [error]))
+                    }
                     Ok(parser.FragmentDefinition(
                       _fname,
                       _type_condition,
                       fragment_selection_set,
                     )) -> {
                       // For introspection, we don't check type conditions - just execute the fragment
+                      // IMPORTANT: Use visited_types (not new_visited) because we're selecting from
+                      // the SAME object, not recursing into it. The current object was already added
+                      // to new_visited, but the fragment is just selecting different fields.
                       case
                         execute_introspection_selection_set(
                           fragment_selection_set,
@@ -547,6 +683,7 @@ fn execute_introspection_selection_set(
                           ctx,
                           fragments,
                           path,
+                          visited_types,
                         )
                       {
                         Ok(#(value.Object(fragment_fields), errs)) ->
@@ -577,6 +714,7 @@ fn execute_introspection_selection_set(
                       ctx,
                       fragments,
                       path,
+                      new_visited,
                     )
                   {
                     Ok(#(value.Object(fragment_fields), errs)) ->
@@ -590,13 +728,16 @@ fn execute_introspection_selection_set(
                     Error(_err) -> Error(Nil)
                   }
                 }
-                parser.Field(name, _alias, _arguments, nested_selections) -> {
+                parser.Field(name, alias, _arguments, nested_selections) -> {
+                  // Determine the response key (use alias if provided, otherwise field name)
+                  let key = response_key(name, alias)
+
                   // Find the field in the object
                   case list.key_find(fields, name) {
                     Ok(field_value) -> {
                       // Handle nested selections
                       case nested_selections {
-                        [] -> Ok(#(name, field_value, []))
+                        [] -> Ok(#(key, field_value, []))
                         _ -> {
                           let selection_set =
                             parser.SelectionSet(nested_selections)
@@ -608,13 +749,14 @@ fn execute_introspection_selection_set(
                               ctx,
                               fragments,
                               [name, ..path],
+                              new_visited,
                             )
                           {
                             Ok(#(nested_data, nested_errors)) ->
-                              Ok(#(name, nested_data, nested_errors))
+                              Ok(#(key, nested_data, nested_errors))
                             Error(err) -> {
                               let error = GraphQLError(err, [name, ..path])
-                              Ok(#(name, value.Null, [error]))
+                              Ok(#(key, value.Null, [error]))
                             }
                           }
                         }
@@ -623,7 +765,7 @@ fn execute_introspection_selection_set(
                     Error(_) -> {
                       let error =
                         GraphQLError("Field '" <> name <> "' not found", path)
-                      Ok(#(name, value.Null, [error]))
+                      Ok(#(key, value.Null, [error]))
                     }
                   }
                 }
@@ -655,6 +797,8 @@ fn execute_introspection_selection_set(
             })
 
           Ok(#(value.Object(data), errors))
+            }
+          }
         }
         _ ->
           Error(

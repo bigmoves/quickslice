@@ -15,6 +15,7 @@ import gleam/string
 import graphql/executor
 import graphql/schema
 import graphql/value
+import lexicon_graphql/dataloader
 import lexicon_graphql/db_schema_builder
 import lexicon_graphql/lexicon_parser
 import mutation_resolvers
@@ -41,7 +42,12 @@ pub fn execute_query_with_db(
   // Step 2: Parse lexicon JSON into structured Lexicon types
   let parsed_lexicons =
     lexicon_records
-    |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
+    |> list.filter_map(fn(lex) {
+      case lexicon_parser.parse_lexicon(lex.json) {
+        Ok(parsed) -> Ok(parsed)
+        Error(_) -> Error(Nil)
+      }
+    })
 
   // Check if we got any valid lexicons
   case parsed_lexicons {
@@ -50,7 +56,7 @@ pub fn execute_query_with_db(
       // Step 3: Create a record fetcher function that queries the database with pagination
       let record_fetcher = fn(
         collection_nsid: String,
-        pagination_params: db_schema_builder.PaginationParams,
+        pagination_params: dataloader.PaginationParams,
       ) -> Result(
         #(
           List(#(value.Value, String)),
@@ -117,6 +123,200 @@ pub fn execute_query_with_db(
         }
       }
 
+      // Step 3.5: Create a batch fetcher function for join operations
+      let batch_fetcher = fn(
+        uris: List(String),
+        collection: String,
+        field: option.Option(String),
+      ) -> Result(dataloader.BatchResult, String) {
+        // Check if this is a forward join (field is None) or reverse join (field is Some)
+        case field {
+          option.None -> {
+            // Determine if we're dealing with DIDs or URIs
+            case uris {
+              [] -> Ok(dict.new())
+              [first, ..] -> {
+                case string.starts_with(first, "did:") {
+                  True -> {
+                    // DID join: fetch records by DID and collection
+                    case database.get_records_by_dids_and_collection(db, uris, collection) {
+                      Ok(records) -> {
+                        // Group records by DID
+                        let grouped =
+                          list.fold(records, dict.new(), fn(acc, record) {
+                            let graphql_value = record_to_graphql_value(record, db)
+                            let existing = dict.get(acc, record.did) |> result.unwrap([])
+                            dict.insert(acc, record.did, [graphql_value, ..existing])
+                          })
+                        Ok(grouped)
+                      }
+                      Error(_) -> Error("Failed to fetch records by DIDs")
+                    }
+                  }
+                  False -> {
+                    // Forward join: fetch records by their URIs
+                    case database.get_records_by_uris(db, uris) {
+                      Ok(records) -> {
+                        // Group records by URI
+                        let grouped =
+                          list.fold(records, dict.new(), fn(acc, record) {
+                            let graphql_value = record_to_graphql_value(record, db)
+                            // For forward joins, return single record per URI
+                            dict.insert(acc, record.uri, [graphql_value])
+                          })
+                        Ok(grouped)
+                      }
+                      Error(_) -> Error("Failed to fetch records by URIs")
+                    }
+                  }
+                }
+              }
+            }
+          }
+          option.Some(reference_field) -> {
+            // Reverse join: fetch records that reference the parent URIs
+            case
+              database.get_records_by_reference_field(
+                db,
+                collection,
+                reference_field,
+                uris,
+              )
+            {
+              Ok(records) -> {
+                // Group records by the parent URI they reference
+                // Parse each record's JSON to extract the reference field value
+                let grouped =
+                  list.fold(records, dict.new(), fn(acc, record) {
+                    let graphql_value = record_to_graphql_value(record, db)
+                    // Extract the reference field from the record JSON to find parent URI
+                    case extract_reference_uri(record.json, reference_field) {
+                      Ok(parent_uri) -> {
+                        let existing =
+                          dict.get(acc, parent_uri) |> result.unwrap([])
+                        dict.insert(acc, parent_uri, [graphql_value, ..existing])
+                      }
+                      Error(_) -> acc
+                    }
+                  })
+                Ok(grouped)
+              }
+              Error(_) ->
+                Error(
+                  "Failed to fetch records by reference field: " <> reference_field,
+                )
+            }
+          }
+        }
+      }
+
+      // Step 3.6: Create a paginated batch fetcher function for join operations with pagination
+      let paginated_batch_fetcher = fn(
+        key: String,
+        collection: String,
+        field: option.Option(String),
+        pagination_params: dataloader.PaginationParams,
+      ) -> Result(dataloader.PaginatedBatchResult, String) {
+        // Convert pagination params to database pagination params
+        let db_first = pagination_params.first
+        let db_after = pagination_params.after
+        let db_last = pagination_params.last
+        let db_before = pagination_params.before
+        let db_sort_by = pagination_params.sort_by
+
+        // Convert where clause from GraphQL to database format
+        let db_where = case pagination_params.where {
+          option.Some(where_clause) ->
+            option.Some(where_converter.convert_where_clause(where_clause))
+          option.None -> option.None
+        }
+
+        // Check if this is a DID join (field is None) or reverse join (field is Some)
+        case field {
+          option.None -> {
+            // DID join: key is the DID
+            case
+              database.get_records_by_dids_and_collection_paginated(
+                db,
+                key,
+                collection,
+                db_first,
+                db_after,
+                db_last,
+                db_before,
+                db_sort_by,
+                db_where,
+              )
+            {
+              Ok(#(records, _next_cursor, has_next_page, has_previous_page, total_count)) -> {
+                // Convert records to GraphQL values with cursors
+                let edges =
+                  list.map(records, fn(record) {
+                    let graphql_value = record_to_graphql_value(record, db)
+                    let cursor =
+                      cursor.generate_cursor_from_record(
+                        database.record_to_record_like(record),
+                        db_sort_by,
+                      )
+                    #(graphql_value, cursor)
+                  })
+
+                Ok(dataloader.PaginatedBatchResult(
+                  edges: edges,
+                  has_next_page: has_next_page,
+                  has_previous_page: has_previous_page,
+                  total_count: total_count,
+                ))
+              }
+              Error(_) -> Error("Failed to fetch paginated records by DID")
+            }
+          }
+          option.Some(reference_field) -> {
+            // Reverse join: key is the parent URI
+            case
+              database.get_records_by_reference_field_paginated(
+                db,
+                collection,
+                reference_field,
+                key,
+                db_first,
+                db_after,
+                db_last,
+                db_before,
+                db_sort_by,
+                db_where,
+              )
+            {
+              Ok(#(records, _next_cursor, has_next_page, has_previous_page, total_count)) -> {
+                // Convert records to GraphQL values with cursors
+                let edges =
+                  list.map(records, fn(record) {
+                    let graphql_value = record_to_graphql_value(record, db)
+                    let cursor =
+                      cursor.generate_cursor_from_record(
+                        database.record_to_record_like(record),
+                        db_sort_by,
+                      )
+                    #(graphql_value, cursor)
+                  })
+
+                Ok(dataloader.PaginatedBatchResult(
+                  edges: edges,
+                  has_next_page: has_next_page,
+                  has_previous_page: has_previous_page,
+                  total_count: total_count,
+                ))
+              }
+              Error(_) ->
+                Error(
+                  "Failed to fetch paginated records by reference field: "
+                  <> reference_field,
+                )
+            }
+          }
+        }
+      }
+
       // Step 4: Create mutation resolver factories
       let mutation_ctx =
         mutation_resolvers.MutationContext(db: db, auth_base_url: auth_base_url)
@@ -146,6 +346,8 @@ pub fn execute_query_with_db(
         db_schema_builder.build_schema_with_fetcher(
           parsed_lexicons,
           record_fetcher,
+          option.Some(batch_fetcher),
+          option.Some(paginated_batch_fetcher),
           create_factory,
           update_factory,
           delete_factory,
@@ -370,5 +572,28 @@ fn json_dynamic_to_value(dyn: dynamic.Dynamic) -> value.Value {
               }
           }
       }
+  }
+}
+
+/// Extract a reference URI from a record's JSON
+/// This handles both simple string fields (at-uri) and strongRef objects
+fn extract_reference_uri(json_str: String, field_name: String) -> Result(String, Nil) {
+  // Parse the JSON
+  case parse_json_to_value(json_str) {
+    Ok(value.Object(fields)) -> {
+      // Find the field
+      case list.key_find(fields, field_name) {
+        Ok(value.String(uri)) -> Ok(uri)
+        Ok(value.Object(ref_fields)) -> {
+          // Handle strongRef: { "uri": "...", "cid": "..." }
+          case list.key_find(ref_fields, "uri") {
+            Ok(value.String(uri)) -> Ok(uri)
+            _ -> Error(Nil)
+          }
+        }
+        _ -> Error(Nil)
+      }
+    }
+    _ -> Error(Nil)
   }
 }

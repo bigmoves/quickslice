@@ -82,3 +82,134 @@ pub fn scalar_types_exist_test() {
 
   should.be_true(True)
 }
+
+// Union type tests
+pub fn create_union_type_test() {
+  let post_type =
+    schema.object_type("Post", "A blog post", [
+      schema.field("title", schema.string_type(), "Post title", fn(_ctx) {
+        Ok(value.String("Hello"))
+      }),
+    ])
+
+  let comment_type =
+    schema.object_type("Comment", "A comment", [
+      schema.field("text", schema.string_type(), "Comment text", fn(_ctx) {
+        Ok(value.String("Nice post"))
+      }),
+    ])
+
+  let type_resolver = fn(_ctx: schema.Context) -> Result(String, String) {
+    Ok("Post")
+  }
+
+  let union_type =
+    schema.union_type(
+      "SearchResult",
+      "A search result",
+      [post_type, comment_type],
+      type_resolver,
+    )
+
+  should.equal(schema.type_name(union_type), "SearchResult")
+  should.be_true(schema.is_union(union_type))
+}
+
+pub fn union_possible_types_test() {
+  let post_type =
+    schema.object_type("Post", "A blog post", [
+      schema.field("title", schema.string_type(), "Post title", fn(_ctx) {
+        Ok(value.String("Hello"))
+      }),
+    ])
+
+  let comment_type =
+    schema.object_type("Comment", "A comment", [
+      schema.field("text", schema.string_type(), "Comment text", fn(_ctx) {
+        Ok(value.String("Nice post"))
+      }),
+    ])
+
+  let type_resolver = fn(_ctx: schema.Context) -> Result(String, String) {
+    Ok("Post")
+  }
+
+  let union_type =
+    schema.union_type(
+      "SearchResult",
+      "A search result",
+      [post_type, comment_type],
+      type_resolver,
+    )
+
+  let possible_types = schema.get_possible_types(union_type)
+  should.equal(possible_types, [post_type, comment_type])
+}
+
+pub fn resolve_union_type_test() {
+  let post_type =
+    schema.object_type("Post", "A blog post", [
+      schema.field("title", schema.string_type(), "Post title", fn(_ctx) {
+        Ok(value.String("Hello"))
+      }),
+    ])
+
+  let comment_type =
+    schema.object_type("Comment", "A comment", [
+      schema.field("text", schema.string_type(), "Comment text", fn(_ctx) {
+        Ok(value.String("Nice post"))
+      }),
+    ])
+
+  // Type resolver that examines the __typename field in the data
+  let type_resolver = fn(ctx: schema.Context) -> Result(String, String) {
+    case ctx.data {
+      None -> Error("No data")
+      option.Some(value.Object(fields)) -> {
+        case fields {
+          [#("__typename", value.String(type_name)), ..] -> Ok(type_name)
+          _ -> Error("No __typename field")
+        }
+      }
+      _ -> Error("Data is not an object")
+    }
+  }
+
+  let union_type =
+    schema.union_type(
+      "SearchResult",
+      "A search result",
+      [post_type, comment_type],
+      type_resolver,
+    )
+
+  // Create context with data that has __typename
+  let data =
+    value.Object([#("__typename", value.String("Post")), #("title", value.String("Test"))])
+  let ctx = schema.context(option.Some(data))
+  let result = schema.resolve_union_type(union_type, ctx)
+
+  case result {
+    Ok(resolved_type) ->
+      should.equal(schema.type_name(resolved_type), "Post")
+    Error(_) -> should.be_true(False)
+  }
+}
+
+pub fn union_type_kind_test() {
+  let post_type =
+    schema.object_type("Post", "A blog post", [
+      schema.field("title", schema.string_type(), "Post title", fn(_ctx) {
+        Ok(value.String("Hello"))
+      }),
+    ])
+
+  let type_resolver = fn(_ctx: schema.Context) -> Result(String, String) {
+    Ok("Post")
+  }
+
+  let union_type =
+    schema.union_type("SearchResult", "A search result", [post_type], type_resolver)
+
+  should.equal(schema.type_kind(union_type), "UNION")
+}

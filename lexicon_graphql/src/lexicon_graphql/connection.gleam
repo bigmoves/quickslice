@@ -54,10 +54,16 @@ pub fn lexicon_connection_args() -> List(schema.Argument) {
 }
 
 /// SortFieldInput type with a custom field enum
-pub fn sort_field_input_type_with_enum(field_enum: schema.Type) -> schema.Type {
+/// Creates a unique input type per collection (e.g., "SocialGrainGalleryItemSortFieldInput")
+pub fn sort_field_input_type_with_enum(
+  type_name: String,
+  field_enum: schema.Type,
+) -> schema.Type {
+  let input_type_name = type_name <> "SortFieldInput"
+
   schema.input_object_type(
-    "SortFieldInput",
-    "Specifies a field to sort by and its direction",
+    input_type_name,
+    "Specifies a field to sort by and its direction for " <> type_name,
     [
       schema.input_field(
         "field",
@@ -167,6 +173,7 @@ pub fn build_where_input_type(
 
 /// Connection arguments with sortBy using a custom field enum and where filtering
 pub fn lexicon_connection_args_with_field_enum_and_where(
+  type_name: String,
   field_enum: schema.Type,
   where_input_type: schema.Type,
 ) -> List(schema.Argument) {
@@ -177,7 +184,7 @@ pub fn lexicon_connection_args_with_field_enum_and_where(
       schema.argument(
         "sortBy",
         schema.list_type(schema.non_null(
-          sort_field_input_type_with_enum(field_enum),
+          sort_field_input_type_with_enum(type_name, field_enum),
         )),
         "Sort order for the connection",
         None,
@@ -194,6 +201,7 @@ pub fn lexicon_connection_args_with_field_enum_and_where(
 
 /// Connection arguments with sortBy using a custom field enum (backward compatibility)
 pub fn lexicon_connection_args_with_field_enum(
+  type_name: String,
   field_enum: schema.Type,
 ) -> List(schema.Argument) {
   list.flatten([
@@ -203,7 +211,7 @@ pub fn lexicon_connection_args_with_field_enum(
       schema.argument(
         "sortBy",
         schema.list_type(schema.non_null(
-          sort_field_input_type_with_enum(field_enum),
+          sort_field_input_type_with_enum(type_name, field_enum),
         )),
         "Sort order for the connection",
         None,

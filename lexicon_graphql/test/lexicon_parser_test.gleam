@@ -2,6 +2,7 @@
 ///
 /// Parses AT Protocol lexicon JSON into structured Lexicon types
 import gleam/list
+import gleam/option
 import gleeunit/should
 import lexicon_graphql/lexicon_parser
 import lexicon_graphql/types
@@ -37,11 +38,14 @@ pub fn parse_simple_record_lexicon_test() {
       should.equal(lexicon.id, "xyz.statusphere.status")
       // Verify it has properties
       case lexicon.defs.main {
-        types.RecordDef(type_: "record", properties: props) -> {
+        option.Some(types.RecordDef(type_: "record", key: _, properties: props)) -> {
           // Should have at least text and createdAt properties
           should.be_true(list.length(props) >= 2)
         }
-        types.RecordDef(type_: _, properties: _) -> {
+        option.Some(types.RecordDef(type_: _, key: _, properties: _)) -> {
+          should.fail()
+        }
+        option.None -> {
           should.fail()
         }
       }

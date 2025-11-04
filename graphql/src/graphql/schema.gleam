@@ -49,6 +49,12 @@ pub opaque type Type {
   ObjectType(name: String, description: String, fields: List(Field))
   InputObjectType(name: String, description: String, fields: List(InputField))
   EnumType(name: String, description: String, values: List(EnumValue))
+  UnionType(
+    name: String,
+    description: String,
+    possible_types: List(Type),
+    type_resolver: fn(Context) -> Result(String, String),
+  )
   ListType(inner_type: Type)
   NonNullType(inner_type: Type)
 }
@@ -140,6 +146,15 @@ pub fn input_object_type(
   InputObjectType(name, description, fields)
 }
 
+pub fn union_type(
+  name: String,
+  description: String,
+  possible_types: List(Type),
+  type_resolver: fn(Context) -> Result(String, String),
+) -> Type {
+  UnionType(name, description, possible_types, type_resolver)
+}
+
 pub fn list_type(inner_type: Type) -> Type {
   ListType(inner_type)
 }
@@ -205,6 +220,7 @@ pub fn type_name(t: Type) -> String {
     ObjectType(name, _, _) -> name
     InputObjectType(name, _, _) -> name
     EnumType(name, _, _) -> name
+    UnionType(name, _, _, _) -> name
     ListType(inner) -> "[" <> type_name(inner) <> "]"
     NonNullType(inner) -> type_name(inner) <> "!"
   }
@@ -405,6 +421,51 @@ pub fn is_enum(t: Type) -> Bool {
   }
 }
 
+/// Check if type is a union
+pub fn is_union(t: Type) -> Bool {
+  case t {
+    UnionType(_, _, _, _) -> True
+    _ -> False
+  }
+}
+
+/// Get the possible types from a union
+pub fn get_possible_types(t: Type) -> List(Type) {
+  case t {
+    UnionType(_, _, possible_types, _) -> possible_types
+    _ -> []
+  }
+}
+
+/// Resolve a union type to its concrete type using the type resolver
+pub fn resolve_union_type(t: Type, ctx: Context) -> Result(Type, String) {
+  case t {
+    UnionType(_, _, possible_types, type_resolver) -> {
+      // Call the type resolver to get the concrete type name
+      case type_resolver(ctx) {
+        Ok(resolved_type_name) -> {
+          // Find the concrete type in possible_types
+          case
+            list.find(possible_types, fn(pt) {
+              type_name(pt) == resolved_type_name
+            })
+          {
+            Ok(concrete_type) -> Ok(concrete_type)
+            Error(_) ->
+              Error(
+                "Type resolver returned '"
+                  <> resolved_type_name
+                  <> "' which is not a possible type of this union",
+              )
+          }
+        }
+        Error(err) -> Error(err)
+      }
+    }
+    _ -> Error("Cannot resolve non-union type")
+  }
+}
+
 /// Get the inner type from a wrapping type (List or NonNull)
 pub fn inner_type(t: Type) -> option.Option(Type) {
   case t {
@@ -421,6 +482,7 @@ pub fn type_kind(t: Type) -> String {
     ObjectType(_, _, _) -> "OBJECT"
     InputObjectType(_, _, _) -> "INPUT_OBJECT"
     EnumType(_, _, _) -> "ENUM"
+    UnionType(_, _, _, _) -> "UNION"
     ListType(_) -> "LIST"
     NonNullType(_) -> "NON_NULL"
   }

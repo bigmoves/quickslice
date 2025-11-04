@@ -4,13 +4,46 @@
 /// generated for where input filtering
 
 import birdie
-import lexicon_graphql/connection
+import gleam/dict
+import gleam/list
+import gleam/option.{None, Some}
 import gleeunit
+import gleeunit/should
+import graphql/introspection
 import graphql/schema
 import graphql/sdl
+import lexicon_graphql/connection
+import lexicon_graphql/db_schema_builder
+import lexicon_graphql/types
 
 pub fn main() {
   gleeunit.main()
+}
+
+// Helper to create a test schema with a mock fetcher
+fn create_test_schema_from_lexicons(
+  lexicons: List(types.Lexicon),
+) -> schema.Schema {
+  // Mock fetcher that returns empty results (we're only testing schema generation)
+  let fetcher = fn(_collection, _params) {
+    Ok(#([], option.None, False, False, option.None))
+  }
+
+  case
+    db_schema_builder.build_schema_with_fetcher(
+      lexicons,
+      fetcher,
+      option.None,
+      option.None,
+      option.None,
+      option.None,
+      option.None,
+      option.None,
+    )
+  {
+    Ok(s) -> s
+    Error(_) -> panic as "Failed to build test schema"
+  }
 }
 
 // ===== Simple Record Type =====
@@ -166,4 +199,110 @@ pub fn recursive_and_or_fields_snapshot_test() {
     title: "WhereInput showing recursive AND/OR fields",
     content: serialized,
   )
+}
+
+// ===== Integration Tests with db_schema_builder =====
+
+// Test: WHERE input only includes primitive types (string, integer, boolean, number)
+pub fn where_input_excludes_blob_and_ref_types_test() {
+  let lexicon =
+    types.Lexicon(
+      "app.bsky.test.record",
+      types.Defs(
+        main: Some(types.RecordDef(type_: "record", key: None, properties: [
+          #("stringField", types.Property(type_: "string", required: False, format: None, ref: None)),
+          #("intField", types.Property(type_: "integer", required: False, format: None, ref: None)),
+          #("boolField", types.Property(type_: "boolean", required: False, format: None, ref: None)),
+          #("numberField", types.Property(type_: "number", required: False, format: None, ref: None)),
+          #("uriField", types.Property(type_: "string", required: False, format: Some("at-uri"), ref: None)),
+          // Non-sortable types that should be excluded
+          #("blobField", types.Property(type_: "blob", required: False, format: None, ref: None)),
+          #("refField", types.Property(type_: "ref", required: False, format: None, ref: Some("app.bsky.test.object"))),
+        ])),
+        others: dict.new(),
+      ),
+    )
+
+  let test_schema = create_test_schema_from_lexicons([lexicon])
+  let all_types = introspection.get_all_schema_types(test_schema)
+
+  // Find the WhereInput type
+  let where_input =
+    list.find(all_types, fn(t) {
+      schema.type_name(t) == "AppBskyTestRecordWhereInput"
+    })
+
+  case where_input {
+    Ok(input_type) -> {
+      let input_fields = schema.get_input_fields(input_type)
+      let field_names = list.map(input_fields, schema.input_field_name)
+
+      // Should include primitive fields
+      should.be_true(list.contains(field_names, "stringField"))
+      should.be_true(list.contains(field_names, "intField"))
+      should.be_true(list.contains(field_names, "boolField"))
+      should.be_true(list.contains(field_names, "numberField"))
+      should.be_true(list.contains(field_names, "uriField"))
+
+      // Should include standard fields
+      should.be_true(list.contains(field_names, "uri"))
+      should.be_true(list.contains(field_names, "cid"))
+      should.be_true(list.contains(field_names, "did"))
+      should.be_true(list.contains(field_names, "collection"))
+      should.be_true(list.contains(field_names, "indexedAt"))
+      should.be_true(list.contains(field_names, "actorHandle"))
+
+      // Should include AND/OR fields
+      should.be_true(list.contains(field_names, "and"))
+      should.be_true(list.contains(field_names, "or"))
+
+      // Should NOT include blob or ref fields
+      should.be_false(list.contains(field_names, "blobField"))
+      should.be_false(list.contains(field_names, "refField"))
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+// Snapshot test: WHERE input with mixed field types
+pub fn where_input_with_mixed_field_types_snapshot_test() {
+  let lexicon =
+    types.Lexicon(
+      "app.bsky.test.record",
+      types.Defs(
+        main: Some(types.RecordDef(type_: "record", key: None, properties: [
+          // Sortable primitive types
+          #("stringField", types.Property(type_: "string", required: False, format: None, ref: None)),
+          #("intField", types.Property(type_: "integer", required: False, format: None, ref: None)),
+          #("boolField", types.Property(type_: "boolean", required: False, format: None, ref: None)),
+          #("numberField", types.Property(type_: "number", required: False, format: None, ref: None)),
+          #("datetimeField", types.Property(type_: "string", required: False, format: Some("datetime"), ref: None)),
+          #("uriField", types.Property(type_: "string", required: False, format: Some("at-uri"), ref: None)),
+          // Non-sortable types
+          #("blobField", types.Property(type_: "blob", required: False, format: None, ref: None)),
+          #("refField", types.Property(type_: "ref", required: False, format: None, ref: Some("com.atproto.repo.strongRef"))),
+        ])),
+        others: dict.new(),
+      ),
+    )
+
+  let test_schema = create_test_schema_from_lexicons([lexicon])
+  let all_types = introspection.get_all_schema_types(test_schema)
+
+  // Find and print the WhereInput type
+  let where_input =
+    list.find(all_types, fn(t) {
+      schema.type_name(t) == "AppBskyTestRecordWhereInput"
+    })
+
+  case where_input {
+    Ok(input_type) -> {
+      let serialized = sdl.print_type(input_type)
+      birdie.snap(
+        title: "WhereInput with mixed types - only includes primitives",
+        content: serialized,
+      )
+    }
+    Error(_) -> should.fail()
+  }
 }

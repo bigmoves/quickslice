@@ -4,6 +4,8 @@
 /// Simplified MVP version - handles basic types only.
 ///
 /// Based on the Elixir implementation but adapted for the pure Gleam GraphQL library.
+import gleam/dict.{type Dict}
+import gleam/option.{type Option}
 import graphql/schema
 import lexicon_graphql/blob_type
 
@@ -75,4 +77,32 @@ pub fn map_input_type(lexicon_type: String) -> schema.Type {
 /// Get the Blob output type (for mutations and queries)
 pub fn get_blob_type() -> schema.Type {
   blob_type.create_blob_type()
+}
+
+/// Maps a lexicon type to a GraphQL type, resolving refs using a registry
+/// and object types dict.
+///
+/// This function handles:
+/// - Regular types: maps using map_type()
+/// - Refs: looks up the ref in object_types_dict to get the actual object type
+///
+/// Used by object_type_builder to build nested object types.
+pub fn map_type_with_registry(
+  lexicon_type: String,
+  _format: Option(String),
+  ref: Option(String),
+  object_types_dict: Dict(String, schema.Type),
+) -> schema.Type {
+  case lexicon_type {
+    "ref" ->
+      case ref {
+        option.Some(ref_str) ->
+          case dict.get(object_types_dict, ref_str) {
+            Ok(object_type) -> object_type
+            Error(_) -> schema.string_type()
+          }
+        option.None -> schema.string_type()
+      }
+    _ -> map_type(lexicon_type)
+  }
 }

@@ -24,6 +24,7 @@ Authorization: Bearer <your-token>
 
 - **Records**: AT Protocol records automatically mapped to GraphQL types
 - **Queries**: Fetch records with filtering, sorting, and pagination
+- **Joins**: Traverse relationships between records (forward and reverse)
 - **Mutations**: Create, update, and delete records
 - **Blobs**: Upload and reference binary data (images, files)
 
@@ -76,10 +77,43 @@ mutation {
 }
 ```
 
+### Query with Joins
+
+```graphql
+query {
+  appBskyFeedPost(first: 10) {
+    edges {
+      node {
+        uri
+        text
+        # Forward join: Get parent post
+        replyToResolved {
+          ... on AppBskyFeedPost {
+            uri
+            text
+          }
+        }
+        # Reverse join: Get first 20 likes (paginated connection)
+        appBskyFeedLikeViaSubject(first: 20) {
+          totalCount  # Total likes
+          edges {
+            node {
+              uri
+              createdAt
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
 ## Documentation
 
 - [Queries](./queries.md) - Fetching records with filters and sorting
 - [Mutations](./mutations.md) - Creating, updating, and deleting records
+- [Joins](./joins.md) - Forward and reverse joins between records
 - [Variables](./variables.md) - Using GraphQL variables
 - [Blobs](./blobs.md) - Working with binary data
 

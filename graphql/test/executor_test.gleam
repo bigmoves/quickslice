@@ -579,3 +579,294 @@ pub fn execute_query_with_multiple_variables_test() {
     content: format_response(response),
   )
 }
+
+// Union type execution tests
+pub fn execute_union_with_inline_fragment_test() {
+  // Create object types that will be part of the union
+  let post_type =
+    schema.object_type("Post", "A blog post", [
+      schema.field("title", schema.string_type(), "Post title", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "title") {
+              Ok(title_val) -> Ok(title_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+      schema.field("content", schema.string_type(), "Post content", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "content") {
+              Ok(content_val) -> Ok(content_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+    ])
+
+  let comment_type =
+    schema.object_type("Comment", "A comment", [
+      schema.field("text", schema.string_type(), "Comment text", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "text") {
+              Ok(text_val) -> Ok(text_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+    ])
+
+  // Type resolver that examines the __typename field
+  let type_resolver = fn(ctx: schema.Context) -> Result(String, String) {
+    case ctx.data {
+      option.Some(value.Object(fields)) -> {
+        case list.key_find(fields, "__typename") {
+          Ok(value.String(type_name)) -> Ok(type_name)
+          _ -> Error("No __typename field found")
+        }
+      }
+      _ -> Error("No data")
+    }
+  }
+
+  // Create union type
+  let search_result_union =
+    schema.union_type(
+      "SearchResult",
+      "A search result",
+      [post_type, comment_type],
+      type_resolver,
+    )
+
+  // Create query type with a field returning the union
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      schema.field("search", search_result_union, "Search for content", fn(_ctx) {
+        // Return a Post
+        Ok(
+          value.Object([
+            #("__typename", value.String("Post")),
+            #("title", value.String("GraphQL is awesome")),
+            #("content", value.String("Learn all about GraphQL...")),
+          ]),
+        )
+      }),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+
+  // Query with inline fragment
+  let query =
+    "
+    {
+      search {
+        ... on Post {
+          title
+          content
+        }
+        ... on Comment {
+          text
+        }
+      }
+    }
+    "
+
+  let result = executor.execute(query, test_schema, schema.context(None))
+
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
+  }
+
+  birdie.snap(
+    title: "Execute union with inline fragment",
+    content: format_response(response),
+  )
+}
+
+pub fn execute_union_list_with_inline_fragments_test() {
+  // Create object types
+  let post_type =
+    schema.object_type("Post", "A blog post", [
+      schema.field("title", schema.string_type(), "Post title", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "title") {
+              Ok(title_val) -> Ok(title_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+    ])
+
+  let comment_type =
+    schema.object_type("Comment", "A comment", [
+      schema.field("text", schema.string_type(), "Comment text", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "text") {
+              Ok(text_val) -> Ok(text_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+    ])
+
+  // Type resolver
+  let type_resolver = fn(ctx: schema.Context) -> Result(String, String) {
+    case ctx.data {
+      option.Some(value.Object(fields)) -> {
+        case list.key_find(fields, "__typename") {
+          Ok(value.String(type_name)) -> Ok(type_name)
+          _ -> Error("No __typename field found")
+        }
+      }
+      _ -> Error("No data")
+    }
+  }
+
+  // Create union type
+  let search_result_union =
+    schema.union_type(
+      "SearchResult",
+      "A search result",
+      [post_type, comment_type],
+      type_resolver,
+    )
+
+  // Create query type with a list of unions
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      schema.field(
+        "searchAll",
+        schema.list_type(search_result_union),
+        "Search for all content",
+        fn(_ctx) {
+          // Return a list with mixed types
+          Ok(
+            value.List([
+              value.Object([
+                #("__typename", value.String("Post")),
+                #("title", value.String("First Post")),
+              ]),
+              value.Object([
+                #("__typename", value.String("Comment")),
+                #("text", value.String("Great article!")),
+              ]),
+              value.Object([
+                #("__typename", value.String("Post")),
+                #("title", value.String("Second Post")),
+              ]),
+            ]),
+          )
+        },
+      ),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+
+  // Query with inline fragments on list items
+  let query =
+    "
+    {
+      searchAll {
+        ... on Post {
+          title
+        }
+        ... on Comment {
+          text
+        }
+      }
+    }
+    "
+
+  let result = executor.execute(query, test_schema, schema.context(None))
+
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
+  }
+
+  birdie.snap(
+    title: "Execute union list with inline fragments",
+    content: format_response(response),
+  )
+}
+
+// Test field aliases
+pub fn execute_field_with_alias_test() {
+  let schema = test_schema()
+  let query = "{ greeting: hello }"
+
+  let result = executor.execute(query, schema, schema.context(None))
+
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
+  }
+
+  // Response should contain "greeting" as the key, not "hello"
+  case response.data {
+    value.Object(fields) -> {
+      case list.key_find(fields, "greeting") {
+        Ok(_) -> should.be_true(True)
+        Error(_) -> {
+          // Check if it incorrectly used "hello" instead
+          case list.key_find(fields, "hello") {
+            Ok(_) -> panic as "Alias not applied - used 'hello' instead of 'greeting'"
+            Error(_) -> panic as "Neither 'greeting' nor 'hello' found in response"
+          }
+        }
+      }
+    }
+    _ -> panic as "Expected object response"
+  }
+}
+
+// Test multiple aliases
+pub fn execute_multiple_fields_with_aliases_test() {
+  let schema = test_schema()
+  let query = "{ greeting: hello num: number }"
+
+  let result = executor.execute(query, schema, schema.context(None))
+
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
+  }
+
+  birdie.snap(
+    title: "Execute multiple fields with aliases",
+    content: format_response(response),
+  )
+}
+
+// Test mixed aliased and non-aliased fields
+pub fn execute_mixed_aliased_fields_test() {
+  let schema = test_schema()
+  let query = "{ greeting: hello number }"
+
+  let result = executor.execute(query, schema, schema.context(None))
+
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
+  }
+
+  birdie.snap(
+    title: "Execute mixed aliased and non-aliased fields",
+    content: format_response(response),
+  )
+}

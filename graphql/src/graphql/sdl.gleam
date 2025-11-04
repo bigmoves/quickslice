@@ -31,6 +31,7 @@ fn print_type_internal(
     "INPUT_OBJECT" -> print_input_object(type_, indent_level, inline)
     "OBJECT" -> print_object(type_, indent_level, inline)
     "ENUM" -> print_enum(type_, indent_level, inline)
+    "UNION" -> print_union(type_, indent_level, inline)
     "SCALAR" -> print_scalar(type_, indent_level, inline)
     "LIST" -> {
       case schema.inner_type(type_) {
@@ -62,6 +63,28 @@ fn print_scalar(type_: schema.Type, indent_level: Int, inline: Bool) -> String {
       }
 
       desc_block <> indent <> "scalar " <> schema.type_name(type_)
+    }
+  }
+}
+
+fn print_union(type_: schema.Type, indent_level: Int, inline: Bool) -> String {
+  case inline {
+    True -> schema.type_name(type_)
+    False -> {
+      let type_name = schema.type_name(type_)
+      let indent = string.repeat(" ", indent_level * 2)
+      let description = schema.type_description(type_)
+      let desc_block = case description {
+        "" -> ""
+        _ -> indent <> format_description(description) <> "\n"
+      }
+
+      let possible_types = schema.get_possible_types(type_)
+      let type_names =
+        list.map(possible_types, fn(t) { schema.type_name(t) })
+        |> string.join(" | ")
+
+      desc_block <> indent <> "union " <> type_name <> " = " <> type_names
     }
   }
 }

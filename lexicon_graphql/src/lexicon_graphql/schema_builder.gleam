@@ -2,6 +2,7 @@
 ///
 /// Builds GraphQL schemas from AT Protocol lexicon definitions.
 /// Simplified MVP version - handles basic record types only.
+import gleam/dict
 import gleam/list
 import gleam/option
 import graphql/schema
@@ -45,13 +46,17 @@ pub fn build_schema(lexicons: List(Lexicon)) -> Result(schema.Schema, String) {
       // Extract record types from lexicons
       let record_types = extract_record_types(lexicons)
 
-      // Build the query type with fields for each record
-      let query_type = build_query_type(record_types)
+      // Build object types dict for sharing between queries and mutations
+      let object_types = build_object_types_dict(record_types)
 
-      // Build the mutation type with stub resolvers
+      // Build the query type with fields for each record
+      let query_type = build_query_type(record_types, object_types)
+
+      // Build the mutation type with stub resolvers, using shared object types
       let mutation_type =
         mutation_builder.build_mutation_type(
           lexicons,
+          object_types,
           option.None,
           option.None,
           option.None,
@@ -73,7 +78,7 @@ fn extract_record_types(lexicons: List(Lexicon)) -> List(RecordType) {
 /// Parse a single lexicon into a RecordType
 fn parse_lexicon(lexicon: Lexicon) -> Result(RecordType, Nil) {
   case lexicon {
-    types.Lexicon(id, types.Defs(types.RecordDef("record", properties))) -> {
+    types.Lexicon(id, types.Defs(option.Some(types.RecordDef("record", _, properties)), _)) -> {
       let type_name = nsid.to_type_name(id)
       let field_name = nsid.to_field_name(id)
       let fields = build_fields(properties)
@@ -113,7 +118,7 @@ fn build_fields(properties: List(#(String, Property))) -> List(schema.Field) {
   // Build fields from lexicon properties
   let lexicon_fields =
     list.map(properties, fn(prop) {
-      let #(name, types.Property(type_, _required)) = prop
+      let #(name, types.Property(type_, _required, _, _)) = prop
       let graphql_type = type_mapper.map_type(type_)
 
       schema.field(name, graphql_type, "Field from lexicon", fn(_ctx) {
@@ -125,17 +130,30 @@ fn build_fields(properties: List(#(String, Property))) -> List(schema.Field) {
   list.append(standard_fields, lexicon_fields)
 }
 
+/// Build a dict of object types keyed by nsid
+fn build_object_types_dict(
+  record_types: List(RecordType),
+) -> dict.Dict(String, schema.Type) {
+  list.fold(record_types, dict.new(), fn(acc, record_type) {
+    let object_type =
+      schema.object_type(
+        record_type.type_name,
+        "Record type: " <> record_type.nsid,
+        record_type.fields,
+      )
+    dict.insert(acc, record_type.nsid, object_type)
+  })
+}
+
 /// Build the root Query type with fields for each record type
-fn build_query_type(record_types: List(RecordType)) -> schema.Type {
+fn build_query_type(
+  record_types: List(RecordType),
+  object_types: dict.Dict(String, schema.Type),
+) -> schema.Type {
   let query_fields =
     list.map(record_types, fn(record_type) {
-      // Build the object type for this record
-      let object_type =
-        schema.object_type(
-          record_type.type_name,
-          "Record type: " <> record_type.nsid,
-          record_type.fields,
-        )
+      // Get the pre-built object type from dict
+      let assert Ok(object_type) = dict.get(object_types, record_type.nsid)
 
       // Create a list type for the query field
       let list_type = schema.list_type(object_type)

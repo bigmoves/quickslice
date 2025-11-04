@@ -204,6 +204,8 @@ pub fn create_mutation_without_auth_fails_test() {
     db_schema_builder.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
+      option.None,
+      option.None,
       create_factory,
       option.None,
       option.None,
@@ -252,6 +254,8 @@ pub fn create_mutation_with_auth_succeeds_test() {
     db_schema_builder.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
+      option.None,
+      option.None,
       create_factory,
       option.None,
       option.None,
@@ -318,6 +322,8 @@ pub fn update_mutation_with_auth_succeeds_test() {
       parsed_lexicons,
       empty_fetcher,
       option.None,
+      option.None,
+      option.None,
       update_factory,
       option.None,
       option.None,
@@ -383,6 +389,8 @@ pub fn delete_mutation_with_auth_succeeds_test() {
       empty_fetcher,
       option.None,
       option.None,
+      option.None,
+      option.None,
       delete_factory,
       option.None,
     )
@@ -446,7 +454,9 @@ pub fn update_mutation_without_rkey_fails_test() {
       parsed_lexicons,
       empty_fetcher,
       option.None,
+      option.None,
       update_factory,
+      option.None,
       option.None,
       option.None,
     )
@@ -494,7 +504,9 @@ pub fn delete_mutation_without_rkey_fails_test() {
       empty_fetcher,
       option.None,
       option.None,
+      option.None,
       delete_factory,
+      option.None,
       option.None,
     )
 
@@ -550,6 +562,8 @@ pub fn test_upload_blob_mutation_success() {
     db_schema_builder.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
+      option.None,
+      option.None,
       option.None,
       option.None,
       option.None,
@@ -626,6 +640,8 @@ pub fn test_upload_blob_mutation_requires_auth() {
     db_schema_builder.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
+      option.None,
+      option.None,
       option.None,
       option.None,
       option.None,

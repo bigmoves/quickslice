@@ -47,13 +47,9 @@ fn handle_graphql_post(
     Ok(body) -> {
       case bit_array.to_string(body) {
         Ok(body_string) -> {
-          // Log the query for debugging (truncate if too long)
-          // io.println("Request body length: " <> string.inspect(string.length(body_string)))
-
           // Parse JSON to extract query and variables
           case extract_request_from_json(body_string) {
             Ok(#(query, variables)) -> {
-              // io.println("Query: " <> query)
               execute_graphql_query(db, query, variables, auth_token, auth_base_url)
             }
             Error(err) -> bad_request_response("Invalid JSON: " <> err)

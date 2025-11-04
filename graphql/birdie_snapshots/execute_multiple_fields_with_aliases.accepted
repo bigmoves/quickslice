@@ -1,0 +1,7 @@
+---
+version: 1.4.1
+title: Execute multiple fields with aliases
+file: ./test/executor_test.gleam
+test_name: execute_multiple_fields_with_aliases_test
+---
+Response(Object([#("greeting", String("world")), #("num", Int(42))]), [])

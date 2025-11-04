@@ -1,6 +1,8 @@
 /// Tests for Lexicon Reference Resolver
 ///
 /// Resolves ref types in lexicon definitions to their actual types
+import gleam/dict
+import gleam/option.{None, Some}
 import gleeunit/should
 import lexicon_graphql/ref_resolver
 import lexicon_graphql/types
@@ -12,10 +14,11 @@ pub fn resolve_local_ref_test() {
     types.Lexicon(
       id: "xyz.statusphere.post",
       defs: types.Defs(
-        main: types.RecordDef(type_: "record", properties: [
-          #("text", types.Property("string", True)),
-          #("embed", types.Property("ref", False)),
-        ]),
+        main: Some(types.RecordDef(type_: "record", key: None, properties: [
+          #("text", types.Property(type_: "string", required: True, format: None, ref: None)),
+          #("embed", types.Property(type_: "ref", required: False, format: None, ref: None)),
+        ])),
+        others: dict.new(),
       ),
     )
 
@@ -31,10 +34,11 @@ pub fn resolve_external_ref_test() {
     types.Lexicon(
       id: "xyz.statusphere.post",
       defs: types.Defs(
-        main: types.RecordDef(type_: "record", properties: [
-          #("text", types.Property("string", True)),
-          #("author", types.Property("ref", False)),
-        ]),
+        main: Some(types.RecordDef(type_: "record", key: None, properties: [
+          #("text", types.Property(type_: "string", required: True, format: None, ref: None)),
+          #("author", types.Property(type_: "ref", required: False, format: None, ref: None)),
+        ])),
+        others: dict.new(),
       ),
     )
 
@@ -42,9 +46,10 @@ pub fn resolve_external_ref_test() {
     types.Lexicon(
       id: "xyz.statusphere.profile",
       defs: types.Defs(
-        main: types.RecordDef(type_: "record", properties: [
-          #("displayName", types.Property("string", True)),
-        ]),
+        main: Some(types.RecordDef(type_: "record", key: None, properties: [
+          #("displayName", types.Property(type_: "string", required: True, format: None, ref: None)),
+        ])),
+        others: dict.new(),
       ),
     )
 
@@ -64,9 +69,10 @@ pub fn resolve_nonexistent_ref_test() {
     types.Lexicon(
       id: "xyz.statusphere.post",
       defs: types.Defs(
-        main: types.RecordDef(type_: "record", properties: [
-          #("text", types.Property("string", True)),
-        ]),
+        main: Some(types.RecordDef(type_: "record", key: None, properties: [
+          #("text", types.Property(type_: "string", required: True, format: None, ref: None)),
+        ])),
+        others: dict.new(),
       ),
     )
 

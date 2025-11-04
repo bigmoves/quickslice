@@ -212,11 +212,8 @@ fn parse_operations(
       case parse_selection_set(tokens) {
         Ok(#(selections, remaining)) -> {
           let op = Query(selections)
-          // Don't continue parsing if we have operations already - single anonymous query
-          case acc {
-            [] -> Ok(#(list.reverse([op]), remaining))
-            _ -> parse_operations(remaining, [op, ..acc])
-          }
+          // Continue parsing to see if there are more operations (e.g., fragment definitions)
+          parse_operations(remaining, [op, ..acc])
         }
         Error(err) -> Error(err)
       }
@@ -281,9 +278,19 @@ fn parse_selections(
       parse_selections(rest, [spread, ..acc])
     }
 
-    // Field
+    // Field with alias: "alias: fieldName"
+    [lexer.Name(alias), lexer.Colon, lexer.Name(field_name), ..rest] -> {
+      case parse_field_with_alias(field_name, Some(alias), rest) {
+        Ok(#(field, remaining)) -> {
+          parse_selections(remaining, [field, ..acc])
+        }
+        Error(err) -> Error(err)
+      }
+    }
+
+    // Field without alias
     [lexer.Name(name), ..rest] -> {
-      case parse_field(name, rest) {
+      case parse_field_with_alias(name, None, rest) {
         Ok(#(field, remaining)) -> {
           parse_selections(remaining, [field, ..acc])
         }
@@ -297,9 +304,10 @@ fn parse_selections(
   }
 }
 
-/// Parse a field with optional arguments and nested selections
-fn parse_field(
+/// Parse a field with optional alias, arguments and nested selections
+fn parse_field_with_alias(
   name: String,
+  alias: Option(String),
   tokens: List(lexer.Token),
 ) -> Result(#(Selection, List(lexer.Token)), ParseError) {
   // Parse arguments if present
@@ -319,11 +327,11 @@ fn parse_field(
     [lexer.BraceOpen, ..] -> {
       case parse_nested_selections(after_args) {
         Ok(#(nested, remaining)) ->
-          Ok(#(Field(name, None, arguments, nested), remaining))
+          Ok(#(Field(name, alias, arguments, nested), remaining))
         Error(err) -> Error(err)
       }
     }
-    _ -> Ok(#(Field(name, None, arguments, []), after_args))
+    _ -> Ok(#(Field(name, alias, arguments, []), after_args))
   }
 }
 

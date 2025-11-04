@@ -10,14 +10,6 @@ type DeleteResult {
   uri: String
 }
 
-"""Input type for XyzStatusphereStatusInput"""
-input XyzStatusphereStatusInput {
-  """Input field for text"""
-  text: String
-  """Input field for createdAt"""
-  createdAt: String!
-}
-
 """Root mutation type"""
 type Mutation {
   """Create a new xyz.statusphere.status record"""
@@ -26,6 +18,12 @@ type Mutation {
   updateXyzStatusphereStatus: XyzStatusphereStatus
   """Delete a xyz.statusphere.status record"""
   deleteXyzStatusphereStatus: DeleteResult
+}
+
+"""Root query type"""
+type Query {
+  """Query xyz.statusphere.status"""
+  xyzStatusphereStatus: [XyzStatusphereStatus]
 }
 
 scalar String
@@ -46,10 +44,12 @@ type XyzStatusphereStatus {
   createdAt: String
 }
 
-"""Root query type"""
-type Query {
-  """Query xyz.statusphere.status"""
-  xyzStatusphereStatus: [XyzStatusphereStatus]
+"""Input type for XyzStatusphereStatusInput"""
+input XyzStatusphereStatusInput {
+  """Input field for text"""
+  text: String
+  """Input field for createdAt"""
+  createdAt: String!
 }
 
 scalar Int

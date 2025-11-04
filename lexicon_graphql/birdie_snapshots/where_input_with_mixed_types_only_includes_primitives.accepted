@@ -1,0 +1,37 @@
+---
+version: 1.4.1
+title: WhereInput with mixed types - only includes primitives
+file: ./test/where_schema_test.gleam
+test_name: where_input_with_mixed_field_types_snapshot_test
+---
+"""Filter conditions for AppBskyTestRecord with nested AND/OR support"""
+input AppBskyTestRecordWhereInput {
+  """Filter by uri"""
+  uri: AppBskyTestRecordFieldCondition
+  """Filter by cid"""
+  cid: AppBskyTestRecordFieldCondition
+  """Filter by did"""
+  did: AppBskyTestRecordFieldCondition
+  """Filter by collection"""
+  collection: AppBskyTestRecordFieldCondition
+  """Filter by indexedAt"""
+  indexedAt: AppBskyTestRecordFieldCondition
+  """Filter by actorHandle"""
+  actorHandle: AppBskyTestRecordFieldCondition
+  """Filter by stringField"""
+  stringField: AppBskyTestRecordFieldCondition
+  """Filter by intField"""
+  intField: AppBskyTestRecordFieldCondition
+  """Filter by boolField"""
+  boolField: AppBskyTestRecordFieldCondition
+  """Filter by numberField"""
+  numberField: AppBskyTestRecordFieldCondition
+  """Filter by datetimeField"""
+  datetimeField: AppBskyTestRecordFieldCondition
+  """Filter by uriField"""
+  uriField: AppBskyTestRecordFieldCondition
+  """All conditions must match (AND logic)"""
+  and: [AppBskyTestRecordWhereInput!]
+  """Any condition must match (OR logic)"""
+  or: [AppBskyTestRecordWhereInput!]
+}

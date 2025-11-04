@@ -91,6 +91,8 @@ pub fn test_create_mutation_generates_correct_schema_test() {
       option.None,
       option.None,
       option.None,
+      option.None,
+      option.None,
     )
 
   // Test: Verify that the schema has mutation type
@@ -140,6 +142,8 @@ pub fn test_create_mutation_field_signature_test() {
     db_schema_builder.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
+      option.None,
+      option.None,
       option.None,
       option.None,
       option.None,
@@ -199,6 +203,8 @@ pub fn test_update_mutation_field_signature_test() {
       option.None,
       option.None,
       option.None,
+      option.None,
+      option.None,
     )
 
   // Get mutation type and find updateXyzStatusphereStatus field
@@ -249,6 +255,8 @@ pub fn test_delete_mutation_field_signature_test() {
     db_schema_builder.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
+      option.None,
+      option.None,
       option.None,
       option.None,
       option.None,

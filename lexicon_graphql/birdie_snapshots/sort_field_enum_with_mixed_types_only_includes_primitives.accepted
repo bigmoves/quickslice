@@ -1,0 +1,31 @@
+---
+version: 1.4.1
+title: SortField enum with mixed types - only includes primitives
+file: ./test/sorting_test.gleam
+test_name: sort_enum_with_mixed_field_types_snapshot_test
+---
+"""Available sort fields for AppBskyTestRecord"""
+enum AppBskyTestRecordSortField {
+  """Sort by uri"""
+  uri
+  """Sort by cid"""
+  cid
+  """Sort by did"""
+  did
+  """Sort by collection"""
+  collection
+  """Sort by indexedAt"""
+  indexedAt
+  """Sort by stringField"""
+  stringField
+  """Sort by intField"""
+  intField
+  """Sort by boolField"""
+  boolField
+  """Sort by numberField"""
+  numberField
+  """Sort by datetimeField"""
+  datetimeField
+  """Sort by uriField"""
+  uriField
+}

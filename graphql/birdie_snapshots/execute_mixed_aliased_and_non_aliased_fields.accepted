@@ -1,0 +1,7 @@
+---
+version: 1.4.1
+title: Execute mixed aliased and non-aliased fields
+file: ./test/executor_test.gleam
+test_name: execute_mixed_aliased_fields_test
+---
+Response(Object([#("greeting", String("world")), #("number", Int(42))]), [])

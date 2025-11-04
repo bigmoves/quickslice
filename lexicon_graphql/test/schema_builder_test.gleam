@@ -4,6 +4,8 @@
 /// Uses birdie to capture and verify the generated schemas
 
 import birdie
+import gleam/dict
+import gleam/option.{None, Some}
 import gleeunit/should
 import graphql/introspection
 import graphql/schema
@@ -18,10 +20,11 @@ pub fn simple_schema_snapshot_test() {
     types.Lexicon(
       id: "xyz.statusphere.status",
       defs: types.Defs(
-        main: types.RecordDef(type_: "record", properties: [
-          #("text", types.Property("string", False)),
-          #("createdAt", types.Property("string", True)),
-        ]),
+        main: Some(types.RecordDef(type_: "record", key: None, properties: [
+          #("text", types.Property(type_: "string", required: False, format: None, ref: None)),
+          #("createdAt", types.Property(type_: "string", required: True, format: None, ref: None)),
+        ])),
+        others: dict.new(),
       ),
     )
 
@@ -44,9 +47,10 @@ pub fn multiple_lexicons_snapshot_test() {
     types.Lexicon(
       id: "xyz.statusphere.status",
       defs: types.Defs(
-        main: types.RecordDef(type_: "record", properties: [
-          #("text", types.Property("string", False)),
-        ]),
+        main: Some(types.RecordDef(type_: "record", key: None, properties: [
+          #("text", types.Property(type_: "string", required: False, format: None, ref: None)),
+        ])),
+        others: dict.new(),
       ),
     )
 
@@ -54,9 +58,10 @@ pub fn multiple_lexicons_snapshot_test() {
     types.Lexicon(
       id: "xyz.statusphere.profile",
       defs: types.Defs(
-        main: types.RecordDef(type_: "record", properties: [
-          #("displayName", types.Property("string", False)),
-        ]),
+        main: Some(types.RecordDef(type_: "record", key: None, properties: [
+          #("displayName", types.Property(type_: "string", required: False, format: None, ref: None)),
+        ])),
+        others: dict.new(),
       ),
     )
 
@@ -79,10 +84,11 @@ pub fn correct_type_names_snapshot_test() {
     types.Lexicon(
       id: "app.bsky.feed.post",
       defs: types.Defs(
-        main: types.RecordDef(type_: "record", properties: [
-          #("text", types.Property("string", True)),
-          #("replyCount", types.Property("integer", False)),
-        ]),
+        main: Some(types.RecordDef(type_: "record", key: None, properties: [
+          #("text", types.Property(type_: "string", required: True, format: None, ref: None)),
+          #("replyCount", types.Property(type_: "integer", required: False, format: None, ref: None)),
+        ])),
+        others: dict.new(),
       ),
     )
 
@@ -113,10 +119,11 @@ pub fn simple_schema_all_types_snapshot_test() {
     types.Lexicon(
       id: "xyz.statusphere.status",
       defs: types.Defs(
-        main: types.RecordDef(type_: "record", properties: [
-          #("text", types.Property("string", False)),
-          #("createdAt", types.Property("string", True)),
-        ]),
+        main: Some(types.RecordDef(type_: "record", key: None, properties: [
+          #("text", types.Property(type_: "string", required: False, format: None, ref: None)),
+          #("createdAt", types.Property(type_: "string", required: True, format: None, ref: None)),
+        ])),
+        others: dict.new(),
       ),
     )
 

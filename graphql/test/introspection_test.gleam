@@ -309,3 +309,365 @@ pub fn schema_inline_fragment_test() {
   }
   |> should.be_true
 }
+
+/// Test: Basic __type query
+/// Verifies that __type(name: "TypeName") returns the correct type
+pub fn type_basic_query_test() {
+  let schema = test_schema()
+  let query = "{ __type(name: \"Query\") { name kind } }"
+
+  let result = executor.execute(query, schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(data: value.Object(fields), errors: []) -> {
+        case list.key_find(fields, "__type") {
+          Ok(value.Object(type_fields)) -> {
+            // Check name and kind
+            let has_correct_name = case list.key_find(type_fields, "name") {
+              Ok(value.String("Query")) -> True
+              _ -> False
+            }
+            let has_correct_kind = case list.key_find(type_fields, "kind") {
+              Ok(value.String("OBJECT")) -> True
+              _ -> False
+            }
+            has_correct_name && has_correct_kind
+          }
+          _ -> False
+        }
+      }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+/// Test: __type query with nested fields
+/// Verifies that nested selections work correctly on __type
+pub fn type_nested_fields_test() {
+  let schema = test_schema()
+  let query = "{ __type(name: \"Query\") { name kind fields { name type { name kind } } } }"
+
+  let result = executor.execute(query, schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(data: value.Object(fields), errors: []) -> {
+        case list.key_find(fields, "__type") {
+          Ok(value.Object(type_fields)) -> {
+            // Check that fields exists and is a list
+            case list.key_find(type_fields, "fields") {
+              Ok(value.List(field_list)) -> {
+                // Should have 2 fields (hello and number)
+                list.length(field_list) == 2
+                && list.all(field_list, fn(field_val) {
+                  case field_val {
+                    value.Object(field_fields) -> {
+                      let has_name = case list.key_find(field_fields, "name") {
+                        Ok(value.String(_)) -> True
+                        _ -> False
+                      }
+                      let has_type = case list.key_find(field_fields, "type") {
+                        Ok(value.Object(_)) -> True
+                        _ -> False
+                      }
+                      has_name && has_type
+                    }
+                    _ -> False
+                  }
+                })
+              }
+              _ -> False
+            }
+          }
+          _ -> False
+        }
+      }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+/// Test: __type query for scalar types
+/// Verifies that __type works for built-in scalar types
+pub fn type_scalar_query_test() {
+  let schema = test_schema()
+  let query = "{ __type(name: \"String\") { name kind } }"
+
+  let result = executor.execute(query, schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(data: value.Object(fields), errors: []) -> {
+        case list.key_find(fields, "__type") {
+          Ok(value.Object(type_fields)) -> {
+            // Check name and kind
+            let has_correct_name = case list.key_find(type_fields, "name") {
+              Ok(value.String("String")) -> True
+              _ -> False
+            }
+            let has_correct_kind = case list.key_find(type_fields, "kind") {
+              Ok(value.String("SCALAR")) -> True
+              _ -> False
+            }
+            has_correct_name && has_correct_kind
+          }
+          _ -> False
+        }
+      }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+/// Test: __type query for non-existent type
+/// Verifies that __type returns null for types that don't exist
+pub fn type_not_found_test() {
+  let schema = test_schema()
+  let query = "{ __type(name: \"NonExistentType\") { name kind } }"
+
+  let result = executor.execute(query, schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(data: value.Object(fields), errors: []) -> {
+        case list.key_find(fields, "__type") {
+          Ok(value.Null) -> True
+          _ -> False
+        }
+      }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+/// Test: __type query without name argument
+/// Verifies that __type returns an error when name argument is missing
+pub fn type_missing_argument_test() {
+  let schema = test_schema()
+  let query = "{ __type { name kind } }"
+
+  let result = executor.execute(query, schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(data: value.Object(fields), errors: errors) -> {
+        // Should have __type field as null
+        let has_null_type = case list.key_find(fields, "__type") {
+          Ok(value.Null) -> True
+          _ -> False
+        }
+        // Should have an error
+        let has_error = errors != []
+        has_null_type && has_error
+      }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+/// Test: Combined __type and __schema query
+/// Verifies that __type and __schema can be queried together
+pub fn type_and_schema_combined_test() {
+  let schema = test_schema()
+  let query = "{ __schema { queryType { name } } __type(name: \"String\") { name kind } }"
+
+  let result = executor.execute(query, schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(data: value.Object(fields), errors: []) -> {
+        let has_schema = case list.key_find(fields, "__schema") {
+          Ok(value.Object(_)) -> True
+          _ -> False
+        }
+        let has_type = case list.key_find(fields, "__type") {
+          Ok(value.Object(_)) -> True
+          _ -> False
+        }
+        has_schema && has_type
+      }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+/// Test: Deep introspection queries complete without hanging
+/// This test verifies that the cycle detection prevents infinite loops
+/// by successfully completing a deeply nested introspection query
+pub fn deep_introspection_test() {
+  let schema = test_schema()
+
+  // Query with deep nesting including ofType chains
+  // Without cycle detection, this could cause infinite loops
+  let query =
+    "{ __schema { types { name kind fields { name type { name kind ofType { name kind ofType { name } } } } } } }"
+
+  let result = executor.execute(query, schema, schema.context(None))
+
+  // The key test: should complete without hanging
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(data: value.Object(fields), errors: _errors) -> {
+        // Should have __schema field with types
+        case list.key_find(fields, "__schema") {
+          Ok(value.Object(schema_fields)) -> {
+            case list.key_find(schema_fields, "types") {
+              Ok(value.List(types)) -> types != []
+              _ -> False
+            }
+          }
+          _ -> False
+        }
+      }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+/// Test: Fragment spreads work in introspection queries
+/// Verifies that fragment spreads like those used by GraphiQL work correctly
+pub fn introspection_fragment_spread_test() {
+  // Create a schema with an ENUM type
+  let sort_enum =
+    schema.enum_type("SortDirection", "Sort direction", [
+      schema.enum_value("ASC", "Ascending"),
+      schema.enum_value("DESC", "Descending"),
+    ])
+
+  let query_type =
+    schema.object_type("Query", "Root query", [
+      schema.field("items", schema.list_type(schema.string_type()), "", fn(_) {
+        Ok(value.List([value.String("a"), value.String("b")]))
+      }),
+      schema.field("sort", sort_enum, "", fn(_) { Ok(value.String("ASC")) }),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+
+  // Use a fragment spread like GraphiQL does
+  let query =
+    "
+    query IntrospectionQuery {
+      __schema {
+        types {
+          ...FullType
+        }
+      }
+    }
+
+    fragment FullType on __Type {
+      kind
+      name
+      enumValues(includeDeprecated: true) {
+        name
+        description
+      }
+    }
+    "
+
+  let result = executor.execute(query, test_schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(data: value.Object(fields), errors: _) -> {
+        case list.key_find(fields, "__schema") {
+          Ok(value.Object(schema_fields)) -> {
+            case list.key_find(schema_fields, "types") {
+              Ok(value.List(types)) -> {
+                // Find the SortDirection enum
+                let enum_type =
+                  list.find(types, fn(t) {
+                    case t {
+                      value.Object(type_fields) -> {
+                        case list.key_find(type_fields, "name") {
+                          Ok(value.String("SortDirection")) -> True
+                          _ -> False
+                        }
+                      }
+                      _ -> False
+                    }
+                  })
+
+                case enum_type {
+                  Ok(value.Object(type_fields)) -> {
+                    // Should have kind field from fragment
+                    let has_kind = case list.key_find(type_fields, "kind") {
+                      Ok(value.String("ENUM")) -> True
+                      _ -> False
+                    }
+
+                    // Should have enumValues field from fragment
+                    let has_enum_values = case
+                      list.key_find(type_fields, "enumValues")
+                    {
+                      Ok(value.List(values)) -> list.length(values) == 2
+                      _ -> False
+                    }
+
+                    has_kind && has_enum_values
+                  }
+                  _ -> False
+                }
+              }
+              _ -> False
+            }
+          }
+          _ -> False
+        }
+      }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+/// Test: Simple fragment on __type
+pub fn simple_type_fragment_test() {
+  let schema = test_schema()
+
+  let query = "{ __type(name: \"Query\") { ...TypeFrag } } fragment TypeFrag on __Type { name kind }"
+
+  let result = executor.execute(query, schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(data: value.Object(fields), errors: _) -> {
+        case list.key_find(fields, "__type") {
+          Ok(value.Object(type_fields)) -> {
+            // Check if we got an error about fragment not found
+            case list.key_find(type_fields, "__FRAGMENT_ERROR") {
+              Ok(value.String(msg)) -> {
+                // Fragment wasn't found
+                panic as msg
+              }
+              _ -> {
+                // No error, check if we have actual fields
+                type_fields != []
+              }
+            }
+          }
+          _ -> False
+        }
+      }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}

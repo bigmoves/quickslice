@@ -2,6 +2,7 @@
 ///
 /// GraphQL spec Section 2 - Language
 /// Parse tokens into Abstract Syntax Tree
+import gleam/list
 import gleam/option.{None}
 import gleeunit/should
 import graphql/parser
@@ -246,6 +247,41 @@ pub fn parse_fragment_definition_test() {
         ])),
       ]) -> True
       _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_fragment_single_line_test() {
+  // The multiline version works - let's try it
+  "
+  { __type(name: \"Query\") { ...TypeFrag } }
+  fragment TypeFrag on __Type { name kind }
+  "
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document(operations) -> list.length(operations) == 2
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_fragment_truly_single_line_test() {
+  // This is the problematic single-line version
+  "{ __type(name: \"Query\") { ...TypeFrag } } fragment TypeFrag on __Type { name kind }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document(operations) -> {
+        // If we only got 1 operation, the parser stopped after the query
+        case operations {
+          [parser.Query(_)] -> panic as "Only got Query - fragment was not parsed"
+          _ -> list.length(operations) == 2
+        }
+      }
     }
   }
   |> should.be_true

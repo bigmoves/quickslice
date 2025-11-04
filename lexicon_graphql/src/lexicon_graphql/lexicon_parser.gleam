@@ -6,6 +6,7 @@ import gleam/dict
 import gleam/dynamic/decode
 import gleam/json
 import gleam/list
+import gleam/option.{None}
 import gleam/result
 import lexicon_graphql/types
 
@@ -24,15 +25,75 @@ pub fn parse_lexicon(json_str: String) -> Result(types.Lexicon, String) {
 
 /// Create a decoder for the defs object
 fn decode_defs() -> decode.Decoder(types.Defs) {
-  use main <- decode.field("main", decode_record_def())
-  decode.success(types.Defs(main:))
+  use main <- decode.optional_field("main", None, decode.optional(decode_record_def()))
+  use defs_dict <- decode.then(decode.dict(decode.string, decode.dynamic))
+
+  // Filter out "main" and parse remaining defs
+  let others_list =
+    defs_dict
+    |> dict.to_list
+    |> list.filter(fn(entry) { entry.0 != "main" })
+    |> list.filter_map(fn(entry) {
+      let #(name, def_dyn) = entry
+      case decode_def(def_dyn) {
+        Ok(def) -> Ok(#(name, def))
+        Error(_) -> Error(Nil)
+      }
+    })
+
+  let others = dict.from_list(others_list)
+  decode.success(types.Defs(main:, others:))
+}
+
+/// Decode a definition (either record or object)
+fn decode_def(dyn: decode.Dynamic) -> Result(types.Def, List(decode.DecodeError)) {
+  // Try to decode as object first (simpler structure)
+  case decode_object_def_inner(dyn) {
+    Ok(obj_def) -> Ok(types.Object(obj_def))
+    Error(_) -> {
+      // Try as record
+      case decode.run(dyn, decode_record_def()) {
+        Ok(rec_def) -> Ok(types.Record(rec_def))
+        Error(e) -> Error(e)
+      }
+    }
+  }
+}
+
+/// Decode an object definition (inner, returns ObjectDef not Def)
+fn decode_object_def_inner(dyn: decode.Dynamic) -> Result(types.ObjectDef, List(decode.DecodeError)) {
+  let decoder = {
+    use type_ <- decode.field("type", decode.string)
+    use required_fields <- decode.optional_field("required", [], decode.list(decode.string))
+    use properties_dict <- decode.field("properties", decode.dict(decode.string, decode.dynamic))
+
+    // Convert dict to list of properties
+    let properties =
+      properties_dict
+      |> dict.to_list
+      |> list.map(fn(entry) {
+        let #(name, prop_dyn) = entry
+        let is_required = list.contains(required_fields, name)
+
+        let #(prop_type, prop_format, prop_ref) = case decode_property(prop_dyn) {
+          Ok(#(t, f, r)) -> #(t, f, r)
+          Error(_) -> #("string", None, None)
+        }
+
+        #(name, types.Property(prop_type, is_required, prop_format, prop_ref))
+      })
+
+    decode.success(types.ObjectDef(type_:, required_fields:, properties:))
+  }
+  decode.run(dyn, decoder)
 }
 
 /// Create a decoder for a record definition
 fn decode_record_def() -> decode.Decoder(types.RecordDef) {
   use type_ <- decode.field("type", decode.string)
+  use key <- decode.optional_field("key", None, decode.optional(decode.string))
   use record <- decode.field("record", decode_record_object())
-  decode.success(types.RecordDef(type_:, properties: record))
+  decode.success(types.RecordDef(type_:, key:, properties: record))
 }
 
 /// Create a decoder for the record object which contains properties
@@ -56,26 +117,29 @@ fn decode_record_object() -> decode.Decoder(List(#(String, types.Property))) {
       let #(name, prop_dyn) = entry
       let is_required = list.contains(required_list, name)
 
-      // Extract the type from the property
-      let prop_type = case decode_property_type(prop_dyn) {
-        Ok(type_) -> type_
-        Error(_) -> "string"
+      // Extract type, format, and ref from the property
+      let #(prop_type, prop_format, prop_ref) = case decode_property(prop_dyn) {
+        Ok(#(t, f, r)) -> #(t, f, r)
+        Error(_) -> #("string", None, None)
         // Default fallback
       }
 
-      #(name, types.Property(prop_type, is_required))
+      #(name, types.Property(prop_type, is_required, prop_format, prop_ref))
     })
 
   decode.success(properties)
 }
 
-/// Decode a property's type field
-fn decode_property_type(
+/// Decode a property's type, format, and ref fields
+fn decode_property(
   dyn: decode.Dynamic,
-) -> Result(String, List(decode.DecodeError)) {
-  let type_decoder = {
+) -> Result(#(String, option.Option(String), option.Option(String)), List(decode.DecodeError)) {
+  let property_decoder = {
     use type_ <- decode.field("type", decode.string)
-    decode.success(type_)
+    use format <- decode.optional_field("format", None, decode.optional(decode.string))
+    use ref <- decode.optional_field("ref", None, decode.optional(decode.string))
+
+    decode.success(#(type_, format, ref))
   }
-  decode.run(dyn, type_decoder)
+  decode.run(dyn, property_decoder)
 }

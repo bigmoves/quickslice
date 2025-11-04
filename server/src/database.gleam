@@ -700,9 +700,15 @@ pub fn get_records_by_collection_paginated(
 
   // Check if there are more results
   let has_more = list.length(records) > limit
-  let final_records = case has_more {
+  let trimmed_records = case has_more {
     True -> list.take(records, limit)
     False -> records
+  }
+
+  // For backward pagination, reverse the results to restore original order
+  let final_records = case is_forward {
+    True -> trimmed_records
+    False -> list.reverse(trimmed_records)
   }
 
   // Calculate hasNextPage and hasPreviousPage
@@ -755,6 +761,12 @@ pub fn get_records_by_collection_paginated_with_where(
     None -> [#("indexed_at", "desc")]
   }
 
+  // For backward pagination (last/before), reverse the sort order
+  let query_sort_fields = case is_forward {
+    True -> sort_fields
+    False -> reverse_sort_fields(sort_fields)
+  }
+
   // Check if we need to join with actor table
   let needs_actor_join = case where {
     Some(wc) -> where_clause.requires_actor_join(wc)
@@ -762,7 +774,7 @@ pub fn get_records_by_collection_paginated_with_where(
   }
 
   // Build the ORDER BY clause (with table prefix if doing a join)
-  let order_by_clause = build_order_by(sort_fields, needs_actor_join)
+  let order_by_clause = build_order_by(query_sort_fields, needs_actor_join)
 
   // Build FROM clause with optional LEFT JOIN
   let from_clause = case needs_actor_join {
@@ -856,9 +868,15 @@ pub fn get_records_by_collection_paginated_with_where(
 
   // Check if there are more results
   let has_more = list.length(records) > limit
-  let final_records = case has_more {
+  let trimmed_records = case has_more {
     True -> list.take(records, limit)
     False -> records
+  }
+
+  // For backward pagination, reverse the results to restore original order
+  let final_records = case is_forward {
+    True -> trimmed_records
+    False -> list.reverse(trimmed_records)
   }
 
   // Calculate hasNextPage and hasPreviousPage
@@ -960,6 +978,25 @@ pub fn record_to_record_like(record: Record) -> cursor.RecordLike {
 
 /// Builds an ORDER BY clause from sort fields
 /// use_table_prefix: if True, prefixes table columns with "record." for joins
+/// Reverse sort direction for backward pagination
+fn reverse_sort_direction(direction: String) -> String {
+  case string.lowercase(direction) {
+    "asc" -> "desc"
+    "desc" -> "asc"
+    _ -> "asc"
+  }
+}
+
+/// Reverse sort fields for backward pagination
+fn reverse_sort_fields(
+  sort_fields: List(#(String, String)),
+) -> List(#(String, String)) {
+  list.map(sort_fields, fn(field) {
+    let #(field_name, direction) = field
+    #(field_name, reverse_sort_direction(direction))
+  })
+}
+
 fn build_order_by(
   sort_fields: List(#(String, String)),
   use_table_prefix: Bool,
@@ -1006,4 +1043,501 @@ fn build_order_by(
     }
     False -> string.join(order_parts, ", ")
   }
+}
+
+/// Get records by a list of URIs (for forward joins / DataLoader)
+/// Returns records in any order - caller must group them
+pub fn get_records_by_uris(
+  conn: sqlight.Connection,
+  uris: List(String),
+) -> Result(List(Record), sqlight.Error) {
+  case uris {
+    [] -> Ok([])
+    _ -> {
+      // Build placeholders for SQL IN clause
+      let placeholders =
+        list.map(uris, fn(_) { "?" })
+        |> string.join(", ")
+
+      let sql =
+        "
+        SELECT uri, cid, did, collection, json, indexed_at
+        FROM record
+        WHERE uri IN (" <> placeholders <> ")
+      "
+
+      // Convert URIs to sqlight.Value list
+      let params = list.map(uris, sqlight.text)
+
+      let decoder = {
+        use uri <- decode.field(0, decode.string)
+        use cid <- decode.field(1, decode.string)
+        use did <- decode.field(2, decode.string)
+        use collection <- decode.field(3, decode.string)
+        use json <- decode.field(4, decode.string)
+        use indexed_at <- decode.field(5, decode.string)
+        decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
+      }
+
+      sqlight.query(sql, on: conn, with: params, expecting: decoder)
+    }
+  }
+}
+
+/// Get records by reference field (for reverse joins / DataLoader)
+/// Finds all records in a collection where a field references one of the parent URIs
+/// Note: This does a JSON field extraction, so it may be slow on large datasets
+pub fn get_records_by_reference_field(
+  conn: sqlight.Connection,
+  collection: String,
+  field_name: String,
+  parent_uris: List(String),
+) -> Result(List(Record), sqlight.Error) {
+  case parent_uris {
+    [] -> Ok([])
+    _ -> {
+      // Build placeholders for SQL IN clause
+      let placeholders =
+        list.map(parent_uris, fn(_) { "?" })
+        |> string.join(", ")
+
+      // Use SQLite JSON extraction to find records where field_name matches parent URIs
+      // This supports both simple string fields and strongRef objects with a "uri" field
+      let sql =
+        "
+        SELECT uri, cid, did, collection, json, indexed_at
+        FROM record
+        WHERE collection = ?
+        AND (
+          json_extract(json, '$." <> field_name <> "') IN (" <> placeholders <> ")
+          OR json_extract(json, '$." <> field_name <> ".uri') IN (" <> placeholders <> ")
+        )
+      "
+
+      // Build params: collection + parent_uris twice (once for direct match, once for strongRef)
+      let params =
+        list.flatten([
+          [sqlight.text(collection)],
+          list.map(parent_uris, sqlight.text),
+          list.map(parent_uris, sqlight.text),
+        ])
+
+      let decoder = {
+        use uri <- decode.field(0, decode.string)
+        use cid <- decode.field(1, decode.string)
+        use did <- decode.field(2, decode.string)
+        use collection <- decode.field(3, decode.string)
+        use json <- decode.field(4, decode.string)
+        use indexed_at <- decode.field(5, decode.string)
+        decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
+      }
+
+      sqlight.query(sql, on: conn, with: params, expecting: decoder)
+    }
+  }
+}
+
+/// Get records by reference field with pagination (for reverse joins with connections)
+/// Similar to get_records_by_reference_field but supports cursor-based pagination
+/// Returns: (records, next_cursor, has_next_page, has_previous_page, total_count)
+pub fn get_records_by_reference_field_paginated(
+  conn: sqlight.Connection,
+  collection: String,
+  field_name: String,
+  parent_uri: String,
+  first: Option(Int),
+  after: Option(String),
+  last: Option(Int),
+  before: Option(String),
+  sort_by: Option(List(#(String, String))),
+  where_clause: Option(where_clause.WhereClause),
+) -> Result(
+  #(List(Record), Option(String), Bool, Bool, Option(Int)),
+  sqlight.Error,
+) {
+  // Validate pagination arguments
+  let #(limit, is_forward, cursor_opt) = case first, last {
+    Some(f), None -> #(f, True, after)
+    None, Some(l) -> #(l, False, before)
+    Some(f), Some(_) -> #(f, True, after)
+    None, None -> #(50, True, None)
+  }
+
+  // Default sort order if not specified
+  let sort_fields = case sort_by {
+    Some(fields) -> fields
+    None -> [#("indexed_at", "desc")]
+  }
+
+  // For backward pagination (last/before), reverse the sort order
+  let query_sort_fields = case is_forward {
+    True -> sort_fields
+    False -> reverse_sort_fields(sort_fields)
+  }
+
+  // Build the ORDER BY clause
+  let order_by_clause = build_order_by(query_sort_fields, False)
+
+  // Build WHERE clause parts for reference field matching
+  let base_where_parts = [
+    "collection = ?",
+    "(json_extract(json, '$." <> field_name <> "') = ? OR json_extract(json, '$." <> field_name <> ".uri') = ?)",
+  ]
+  let base_bind_values = [
+    sqlight.text(collection),
+    sqlight.text(parent_uri),
+    sqlight.text(parent_uri),
+  ]
+
+  // Add where clause conditions if present
+  let #(with_where_parts, with_where_values) = case where_clause {
+    Some(clause) -> {
+      let #(where_sql, where_params) =
+        where_clause.build_where_sql(clause, False)
+      case where_sql {
+        "" -> #(base_where_parts, base_bind_values)
+        _ -> #(
+          list.append(base_where_parts, [where_sql]),
+          list.append(base_bind_values, where_params),
+        )
+      }
+    }
+    None -> #(base_where_parts, base_bind_values)
+  }
+
+  // Add cursor condition if present
+  let #(final_where_parts, final_bind_values) = case cursor_opt {
+    Some(cursor_str) -> {
+      case cursor.decode_cursor(cursor_str, sort_by) {
+        Ok(decoded_cursor) -> {
+          let #(cursor_where, cursor_params) =
+            cursor.build_cursor_where_clause(
+              decoded_cursor,
+              sort_by,
+              !is_forward,
+            )
+
+          let new_where = list.append(with_where_parts, [cursor_where])
+          let new_binds =
+            list.append(with_where_values, list.map(cursor_params, sqlight.text))
+          #(new_where, new_binds)
+        }
+        Error(_) -> #(with_where_parts, with_where_values)
+      }
+    }
+    None -> #(with_where_parts, with_where_values)
+  }
+
+  // Fetch limit + 1 to detect if there are more pages
+  let fetch_limit = limit + 1
+
+  // Build the SQL query
+  let sql =
+    "
+    SELECT uri, cid, did, collection, json, indexed_at
+    FROM record
+    WHERE "
+    <> string.join(final_where_parts, " AND ")
+    <> "
+    ORDER BY "
+    <> order_by_clause
+    <> "
+    LIMIT "
+    <> int.to_string(fetch_limit)
+
+  // Execute query
+  let decoder = {
+    use uri <- decode.field(0, decode.string)
+    use cid <- decode.field(1, decode.string)
+    use did <- decode.field(2, decode.string)
+    use collection <- decode.field(3, decode.string)
+    use json <- decode.field(4, decode.string)
+    use indexed_at <- decode.field(5, decode.string)
+    decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
+  }
+
+  use records <- result.try(sqlight.query(
+    sql,
+    on: conn,
+    with: final_bind_values,
+    expecting: decoder,
+  ))
+
+  // Check if there are more results
+  let has_more = list.length(records) > limit
+  let trimmed_records = case has_more {
+    True -> list.take(records, limit)
+    False -> records
+  }
+
+  // For backward pagination, reverse the results to restore original order
+  let final_records = case is_forward {
+    True -> trimmed_records
+    False -> list.reverse(trimmed_records)
+  }
+
+  // Calculate hasNextPage and hasPreviousPage
+  let has_next_page = case is_forward {
+    True -> has_more
+    False -> option.is_some(cursor_opt)
+  }
+
+  let has_previous_page = case is_forward {
+    True -> option.is_some(cursor_opt)
+    False -> has_more
+  }
+
+  // Generate next cursor if there are more results
+  let next_cursor = case has_more, list.last(final_records) {
+    True, Ok(last_record) -> {
+      let record_like = record_to_record_like(last_record)
+      Some(cursor.generate_cursor_from_record(record_like, sort_by))
+    }
+    _, _ -> None
+  }
+
+  // Get total count using the WHERE clause (with where conditions, but without cursor conditions)
+  let count_sql =
+    "SELECT COUNT(*) FROM record WHERE " <> string.join(with_where_parts, " AND ")
+
+  let count_decoder = {
+    use count <- decode.field(0, decode.int)
+    decode.success(count)
+  }
+
+  let total_count = case
+    sqlight.query(
+      count_sql,
+      on: conn,
+      with: with_where_values,
+      expecting: count_decoder,
+    )
+  {
+    Ok([count]) -> Some(count)
+    _ -> None
+  }
+
+  Ok(#(final_records, next_cursor, has_next_page, has_previous_page, total_count))
+}
+
+/// Get records by DIDs and collection (for DID joins / DataLoader)
+/// Finds all records in a specific collection that belong to any of the given DIDs
+/// Uses the idx_record_did_collection index for efficient lookup
+pub fn get_records_by_dids_and_collection(
+  conn: sqlight.Connection,
+  dids: List(String),
+  collection: String,
+) -> Result(List(Record), sqlight.Error) {
+  case dids {
+    [] -> Ok([])
+    _ -> {
+      // Build placeholders for SQL IN clause
+      let placeholders =
+        list.map(dids, fn(_) { "?" })
+        |> string.join(", ")
+
+      let sql =
+        "
+        SELECT uri, cid, did, collection, json, indexed_at
+        FROM record
+        WHERE did IN (" <> placeholders <> ")
+        AND collection = ?
+        ORDER BY indexed_at DESC
+      "
+
+      // Build params: DIDs + collection
+      let params =
+        list.flatten([
+          list.map(dids, sqlight.text),
+          [sqlight.text(collection)],
+        ])
+
+      let decoder = {
+        use uri <- decode.field(0, decode.string)
+        use cid <- decode.field(1, decode.string)
+        use did <- decode.field(2, decode.string)
+        use collection <- decode.field(3, decode.string)
+        use json <- decode.field(4, decode.string)
+        use indexed_at <- decode.field(5, decode.string)
+        decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
+      }
+
+      sqlight.query(sql, on: conn, with: params, expecting: decoder)
+    }
+  }
+}
+
+/// Get records by DID and collection with pagination (for DID joins with connections)
+/// Similar to get_records_by_dids_and_collection but for a single DID with cursor-based pagination
+/// Returns: (records, next_cursor, has_next_page, has_previous_page, total_count)
+pub fn get_records_by_dids_and_collection_paginated(
+  conn: sqlight.Connection,
+  did: String,
+  collection: String,
+  first: Option(Int),
+  after: Option(String),
+  last: Option(Int),
+  before: Option(String),
+  sort_by: Option(List(#(String, String))),
+  where_clause: Option(where_clause.WhereClause),
+) -> Result(
+  #(List(Record), Option(String), Bool, Bool, Option(Int)),
+  sqlight.Error,
+) {
+  // Validate pagination arguments
+  let #(limit, is_forward, cursor_opt) = case first, last {
+    Some(f), None -> #(f, True, after)
+    None, Some(l) -> #(l, False, before)
+    Some(f), Some(_) -> #(f, True, after)
+    None, None -> #(50, True, None)
+  }
+
+  // Default sort order if not specified
+  let sort_fields = case sort_by {
+    Some(fields) -> fields
+    None -> [#("indexed_at", "desc")]
+  }
+
+  // For backward pagination (last/before), reverse the sort order
+  let query_sort_fields = case is_forward {
+    True -> sort_fields
+    False -> reverse_sort_fields(sort_fields)
+  }
+
+  // Build the ORDER BY clause
+  let order_by_clause = build_order_by(query_sort_fields, False)
+
+  // Build WHERE clause parts for DID and collection matching
+  let base_where_parts = ["did = ?", "collection = ?"]
+  let base_bind_values = [sqlight.text(did), sqlight.text(collection)]
+
+  // Add where clause conditions if present
+  let #(with_where_parts, with_where_values) = case where_clause {
+    Some(clause) -> {
+      let #(where_sql, where_params) =
+        where_clause.build_where_sql(clause, False)
+      case where_sql {
+        "" -> #(base_where_parts, base_bind_values)
+        _ -> #(
+          list.append(base_where_parts, [where_sql]),
+          list.append(base_bind_values, where_params),
+        )
+      }
+    }
+    None -> #(base_where_parts, base_bind_values)
+  }
+
+  // Add cursor condition if present
+  let #(final_where_parts, final_bind_values) = case cursor_opt {
+    Some(cursor_str) -> {
+      case cursor.decode_cursor(cursor_str, sort_by) {
+        Ok(decoded_cursor) -> {
+          let #(cursor_where, cursor_params) =
+            cursor.build_cursor_where_clause(
+              decoded_cursor,
+              sort_by,
+              !is_forward,
+            )
+
+          let new_where = list.append(with_where_parts, [cursor_where])
+          let new_binds =
+            list.append(with_where_values, list.map(cursor_params, sqlight.text))
+          #(new_where, new_binds)
+        }
+        Error(_) -> #(with_where_parts, with_where_values)
+      }
+    }
+    None -> #(with_where_parts, with_where_values)
+  }
+
+  // Fetch limit + 1 to detect if there are more pages
+  let fetch_limit = limit + 1
+
+  // Build the SQL query
+  let sql =
+    "
+    SELECT uri, cid, did, collection, json, indexed_at
+    FROM record
+    WHERE "
+    <> string.join(final_where_parts, " AND ")
+    <> "
+    ORDER BY "
+    <> order_by_clause
+    <> "
+    LIMIT "
+    <> int.to_string(fetch_limit)
+
+  // Execute query
+  let decoder = {
+    use uri <- decode.field(0, decode.string)
+    use cid <- decode.field(1, decode.string)
+    use did <- decode.field(2, decode.string)
+    use collection <- decode.field(3, decode.string)
+    use json <- decode.field(4, decode.string)
+    use indexed_at <- decode.field(5, decode.string)
+    decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
+  }
+
+  use records <- result.try(sqlight.query(
+    sql,
+    on: conn,
+    with: final_bind_values,
+    expecting: decoder,
+  ))
+
+  // Check if there are more results
+  let has_more = list.length(records) > limit
+  let trimmed_records = case has_more {
+    True -> list.take(records, limit)
+    False -> records
+  }
+
+  // For backward pagination, reverse the results to restore original order
+  let final_records = case is_forward {
+    True -> trimmed_records
+    False -> list.reverse(trimmed_records)
+  }
+
+  // Calculate hasNextPage and hasPreviousPage
+  let has_next_page = case is_forward {
+    True -> has_more
+    False -> option.is_some(cursor_opt)
+  }
+
+  let has_previous_page = case is_forward {
+    True -> option.is_some(cursor_opt)
+    False -> has_more
+  }
+
+  // Generate next cursor if there are more results
+  let next_cursor = case has_more, list.last(final_records) {
+    True, Ok(last_record) -> {
+      let record_like = record_to_record_like(last_record)
+      Some(cursor.generate_cursor_from_record(record_like, sort_by))
+    }
+    _, _ -> None
+  }
+
+  // Get total count using the WHERE clause (with where conditions, but without cursor conditions)
+  let count_sql =
+    "SELECT COUNT(*) FROM record WHERE " <> string.join(with_where_parts, " AND ")
+
+  let count_decoder = {
+    use count <- decode.field(0, decode.int)
+    decode.success(count)
+  }
+
+  let total_count = case
+    sqlight.query(
+      count_sql,
+      on: conn,
+      with: with_where_values,
+      expecting: count_decoder,
+    )
+  {
+    Ok([count]) -> Some(count)
+    _ -> None
+  }
+
+  Ok(#(final_records, next_cursor, has_next_page, has_previous_page, total_count))
 }
