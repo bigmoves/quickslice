@@ -5,3 +5,5 @@ erl_crash.dump
 *.db
 *.db-shm
 *.db-wal
+
+.DS_Store
