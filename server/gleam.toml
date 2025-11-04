@@ -34,7 +34,7 @@ jose = ">= 1.11.10 and < 2.0.0"
 envoy = ">= 1.0.2 and < 2.0.0"
 dotenv_gleam = ">= 2.0.1 and < 3.0.0"
 thoas = ">= 1.0.0 and < 2.0.0"
-goose = ">= 1.1.0 and < 2.0.0"
+goose = ">= 2.0.0 and < 3.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

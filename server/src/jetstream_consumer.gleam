@@ -31,16 +31,14 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
       let external_collection_ids =
         list.map(external_lexicons, fn(lex) { lex.id })
 
-      // For Jetstream, only subscribe to local collections
-      // External collections will be filtered in the event handler based on known DIDs
-      let wanted_collection_ids = local_collection_ids
+      // Combine all collections into a single list for unified consumer
+      let all_collection_ids =
+        list.append(local_collection_ids, external_collection_ids)
 
-      case wanted_collection_ids {
+      case all_collection_ids {
         [] -> {
-          io.println(
-            "⚠️  No local collections found - skipping Jetstream consumer",
-          )
-          io.println("   Import lexicons with matching domain authority first")
+          io.println("⚠️  No collections found - skipping Jetstream consumer")
+          io.println("   Import lexicons first")
           io.println("")
           Ok(Nil)
         }
@@ -59,7 +57,7 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
               io.println(
                 "📋 Tracking "
                 <> int.to_string(list.length(external_collection_ids))
-                <> " external collection(s) (known DIDs only):",
+                <> " external collection(s) (known DIDs only, filtered client-side):",
               )
               list.each(external_collection_ids, fn(col) {
                 io.println("   - " <> col)
@@ -70,102 +68,43 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
           // Get Jetstream URL from environment variable or use default
           let jetstream_url = case envoy.get("JETSTREAM_URL") {
             Ok(url) -> url
-            Error(_) -> "wss://jetstream2.us-east.bsky.network/subscribe"
+            Error(_) -> "wss://jetstream2.us-west.bsky.network/subscribe"
           }
 
-          // Create Jetstream config for local collections (no DID filter - listen to all)
-          let local_config =
+          // Create unified Jetstream config for all collections (no DID filter - listen to all)
+          let unified_config =
             goose.JetstreamConfig(
               endpoint: jetstream_url,
-              wanted_collections: local_collection_ids,
+              wanted_collections: all_collection_ids,
               wanted_dids: [],
               cursor: option.None,
               max_message_size_bytes: option.None,
-              compress: False,
+              compress: True,
               require_hello: False,
-              max_backoff_seconds: 60,
-              log_connection_events: True,
-              log_retry_attempts: False,
             )
 
           io.println("")
           io.println("Connecting to Jetstream...")
           io.println("   Endpoint: " <> jetstream_url)
           io.println(
-            "   Local collections: "
-            <> int.to_string(list.length(local_collection_ids))
-            <> " (all DIDs)",
+            "   Collections: "
+            <> int.to_string(list.length(all_collection_ids))
+            <> " (all DIDs, filtered client-side for external)",
           )
 
-          // Start the local collections consumer
+          // Start the unified consumer
           process.spawn_unlinked(fn() {
-            goose.start_consumer(local_config, fn(event_json) {
-              handle_jetstream_event(db, event_json)
+            goose.start_consumer(unified_config, fn(event_json) {
+              handle_jetstream_event(
+                db,
+                event_json,
+                external_collection_ids,
+              )
             })
           })
 
-          // If we have external collections, start a second consumer with DID filter
-          case external_collection_ids {
-            [] -> Nil
-            _ -> {
-              // Get all known DIDs from the database
-              case get_all_known_dids(db) {
-                Ok(known_dids) -> {
-                  case known_dids {
-                    [] -> {
-                      io.println(
-                        "   External collections: "
-                        <> int.to_string(list.length(external_collection_ids))
-                        <> " (0 known DIDs - skipping)",
-                      )
-                      Nil
-                    }
-                    _ -> {
-                      let external_config =
-                        goose.JetstreamConfig(
-                          endpoint: jetstream_url,
-                          wanted_collections: external_collection_ids,
-                          wanted_dids: known_dids,
-                          cursor: option.None,
-                          max_message_size_bytes: option.None,
-                          compress: False,
-                          require_hello: False,
-                          max_backoff_seconds: 60,
-                          log_connection_events: True,
-                          log_retry_attempts: False,
-                        )
-
-                      io.println(
-                        "   External collections: "
-                        <> int.to_string(list.length(external_collection_ids))
-                        <> " ("
-                        <> int.to_string(list.length(known_dids))
-                        <> " known DIDs)",
-                      )
-
-                      // Start the external collections consumer
-                      process.spawn_unlinked(fn() {
-                        goose.start_consumer(external_config, fn(event_json) {
-                          handle_jetstream_event(db, event_json)
-                        })
-                      })
-
-                      Nil
-                    }
-                  }
-                }
-                Error(_) -> {
-                  io.println(
-                    "   External collections: Failed to fetch known DIDs - skipping",
-                  )
-                  Nil
-                }
-              }
-            }
-          }
-
           io.println("")
-          io.println("Jetstream consumer(s) started")
+          io.println("Jetstream consumer started")
           io.println("")
 
           Ok(Nil)
@@ -178,28 +117,48 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
   }
 }
 
-/// Get all known DIDs from the actor table
-fn get_all_known_dids(db: sqlight.Connection) -> Result(List(String), String) {
-  let sql = "SELECT did FROM actor"
+/// Check if a DID exists in the actor table
+fn is_known_did(db: sqlight.Connection, did: String) -> Bool {
+  let sql = "SELECT 1 FROM actor WHERE did = ? LIMIT 1"
 
   case
     sqlight.query(
       sql,
       on: db,
-      with: [],
-      expecting: decode.at([0], decode.string),
+      with: [sqlight.text(did)],
+      expecting: decode.at([0], decode.int),
     )
   {
-    Ok(dids) -> Ok(dids)
-    Error(err) -> Error("Failed to fetch DIDs: " <> string.inspect(err))
+    Ok(results) -> results != []
+    Error(_) -> False
   }
 }
 
 /// Handle a raw Jetstream event JSON string
-fn handle_jetstream_event(db: sqlight.Connection, event_json: String) -> Nil {
+fn handle_jetstream_event(
+  db: sqlight.Connection,
+  event_json: String,
+  external_collection_ids: List(String),
+) -> Nil {
   case goose.parse_event(event_json) {
     goose.CommitEvent(did, _time_us, commit) -> {
-      event_handler.handle_commit_event(db, did, commit)
+      // Check if this is an external collection event
+      let is_external =
+        list.contains(external_collection_ids, commit.collection)
+
+      // If external, only process if DID is known
+      case is_external {
+        True -> {
+          case is_known_did(db, did) {
+            True -> event_handler.handle_commit_event(db, did, commit)
+            False -> Nil
+          }
+        }
+        False -> {
+          // Local collection - always process
+          event_handler.handle_commit_event(db, did, commit)
+        }
+      }
     }
     goose.IdentityEvent(_did, _time_us, _identity) -> {
       // Silently ignore identity events
