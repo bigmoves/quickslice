@@ -1,10 +1,11 @@
 import database
 import envoy
+import gleam/dict
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
+import gleam/hackney
 import gleam/http/request
-import gleam/httpc
 import gleam/io
 import gleam/json
 import gleam/list
@@ -65,12 +66,21 @@ pub fn default_config() -> BackfillConfig {
     Error(_) -> "https://plc.directory"
   }
 
+  // Configure hackney pool for better connection reuse
+  // We'll call directly into Erlang to set up the pool
+  configure_hackney_pool()
+
   BackfillConfig(
     plc_directory_url: plc_url,
     index_actors: True,
-    max_workers: 10,
+    max_workers: 100,
   )
 }
+
+/// Configure hackney connection pool with higher limits
+/// Called via Erlang FFI to avoid atom conversion issues
+@external(erlang, "backfill_ffi", "configure_pool")
+fn configure_hackney_pool() -> Nil
 
 /// Check if an NSID matches the configured domain authority
 /// NSID format is like "com.example.post" where "com.example" is the authority
@@ -92,7 +102,7 @@ pub fn resolve_did(did: String, plc_url: String) -> Result(AtprotoData, String) 
   case request.to(url) {
     Error(_) -> Error("Failed to create request for DID: " <> did)
     Ok(req) -> {
-      case httpc.send(req) {
+      case hackney.send(req) {
         Error(_) -> Error("Failed to fetch DID data for: " <> did)
         Ok(resp) -> {
           case resp.status {
@@ -182,40 +192,31 @@ fn resolve_did_worker(
   process.send(reply_to, result)
 }
 
-/// Get ATP data for a list of repos (DIDs) - concurrent version
+/// Get ATP data for a list of repos (DIDs) - fully concurrent version
 pub fn get_atp_data_for_repos(
   repos: List(String),
   config: BackfillConfig,
 ) -> List(AtprotoData) {
-  // Split repos into chunks based on max_workers to limit concurrency
-  let chunk_size = case list.length(repos) {
-    n if n <= config.max_workers -> 1
-    n -> { n + config.max_workers - 1 } / config.max_workers
-  }
+  // Spawn all workers at once - Erlang VM can handle it
+  let subject = process.new_subject()
+  let repo_count = list.length(repos)
 
-  repos
-  |> list.sized_chunk(chunk_size)
-  |> list.flat_map(fn(chunk) {
-    // Process each chunk concurrently
-    let subject = process.new_subject()
-
-    // Spawn workers for this chunk
-    let _workers =
-      chunk
-      |> list.map(fn(repo) {
-        process.spawn_unlinked(fn() {
-          resolve_did_worker(repo, config.plc_directory_url, subject)
-        })
+  // Spawn all workers concurrently
+  let _workers =
+    repos
+    |> list.map(fn(repo) {
+      process.spawn_unlinked(fn() {
+        resolve_did_worker(repo, config.plc_directory_url, subject)
       })
-
-    // Collect results from all workers in this chunk
-    list.range(1, list.length(chunk))
-    |> list.filter_map(fn(_) {
-      case process.receive(subject, 30_000) {
-        Ok(result) -> result
-        Error(_) -> Error(Nil)
-      }
     })
+
+  // Collect results from all workers
+  list.range(1, repo_count)
+  |> list.filter_map(fn(_) {
+    case process.receive(subject, 30_000) {
+      Ok(result) -> result
+      Error(_) -> Error(Nil)
+    }
   })
 }
 
@@ -256,11 +257,26 @@ fn fetch_records_paginated(
       acc
     }
     Ok(req) -> {
-      case httpc.send(req) {
-        Error(_) -> {
-          io.println_error(
-            "Failed to fetch records for " <> repo <> "/" <> collection,
-          )
+      case hackney.send(req) {
+        Error(err) -> {
+          // Only log unexpected errors (not TLS/DNS/timeout issues)
+          let err_str = string.inspect(err)
+          case
+            string.contains(err_str, "TlsAlert")
+            || string.contains(err_str, "Nxdomain")
+            || string.contains(err_str, "Timeout")
+          {
+            True -> Nil
+            False ->
+              io.println_error(
+                "Failed to fetch records for "
+                <> repo
+                <> "/"
+                <> collection
+                <> ": "
+                <> err_str,
+              )
+          }
           acc
         }
         Ok(resp) -> {
@@ -294,6 +310,13 @@ fn fetch_records_paginated(
                 }
               }
             }
+            // Expected errors - return empty silently
+            // 400/404: collection doesn't exist
+            // 302/308: redirect (PDS moved)
+            // 403: forbidden (private account)
+            // 502/520: bad gateway / cloudflare error (server down)
+            400 | 404 | 302 | 308 | 403 | 502 | 520 -> acc
+            // Other unexpected errors should be logged
             _ -> {
               io.println_error(
                 "Failed to fetch records for "
@@ -374,26 +397,109 @@ fn parse_list_records_response(
   }
 }
 
+/// Fetch records with retry logic (matches Rust implementation)
+/// If the first attempt fails, re-resolve the DID and retry once
+fn fetch_records_with_retry(
+  repo: String,
+  collection: String,
+  pds: String,
+  plc_url: String,
+) -> List(database.Record) {
+  // First attempt with provided PDS
+  let records = fetch_records_for_repo_collection(repo, collection, pds)
+
+  // If we got records, we're done
+  case list.is_empty(records) {
+    False -> records
+    True -> {
+      // Empty result - might be an error or truly no records
+      // Try re-resolving the DID in case PDS URL changed
+      case resolve_did(repo, plc_url) {
+        Ok(fresh_atp_data) -> {
+          // Retry with fresh PDS URL
+          fetch_records_for_repo_collection(
+            repo,
+            collection,
+            fresh_atp_data.pds,
+          )
+        }
+        Error(_) -> {
+          // Can't re-resolve, return empty
+          []
+        }
+      }
+    }
+  }
+}
+
 /// Worker function that fetches records for a repo/collection pair
 fn fetch_records_worker(
   repo: String,
   collection: String,
   pds: String,
+  plc_url: String,
   reply_to: Subject(List(database.Record)),
 ) -> Nil {
-  let records = fetch_records_for_repo_collection(repo, collection, pds)
+  let records = fetch_records_with_retry(repo, collection, pds, plc_url)
   process.send(reply_to, records)
 }
 
-/// Get all records for multiple repos and collections - concurrent version
+/// Worker that processes jobs for a single PDS with rate limiting
+fn pds_worker(
+  pds_url: String,
+  jobs: List(#(String, String)),
+  plc_url: String,
+  reply_to: Subject(List(database.Record)),
+) -> Nil {
+  // Process jobs in chunks of 3 to avoid overwhelming the PDS
+  let max_concurrent_per_pds = 3
+  let all_records =
+    jobs
+    |> list.sized_chunk(max_concurrent_per_pds)
+    |> list.flat_map(fn(chunk) {
+      // Spawn workers for this chunk
+      let chunk_subject = process.new_subject()
+
+      let _chunk_workers =
+        chunk
+        |> list.map(fn(job) {
+          let #(repo, collection) = job
+          process.spawn_unlinked(fn() {
+            fetch_records_worker(repo, collection, pds_url, plc_url, chunk_subject)
+          })
+        })
+
+      // Collect results from this chunk
+      let chunk_results =
+        list.range(1, list.length(chunk))
+        |> list.flat_map(fn(_) {
+          case process.receive(chunk_subject, 60_000) {
+            Ok(records) -> records
+            Error(_) -> []
+          }
+        })
+
+      // Small delay between chunks to be kind to PDS servers
+      case list.length(chunk) == max_concurrent_per_pds {
+        True -> process.sleep(100)
+        False -> Nil
+      }
+
+      chunk_results
+    })
+
+  process.send(reply_to, all_records)
+}
+
+/// Get all records for multiple repos and collections with PDS rate limiting
 pub fn get_records_for_repos(
   repos: List(String),
   collections: List(String),
   atp_data: List(AtprotoData),
   config: BackfillConfig,
 ) -> List(database.Record) {
-  // Create all repo/collection job pairs
-  let jobs =
+  // Create all repo/collection job pairs grouped by PDS
+  let jobs_by_pds =
     repos
     |> list.flat_map(fn(repo) {
       case list.find(atp_data, fn(data) { data.did == repo }) {
@@ -403,73 +509,60 @@ pub fn get_records_for_repos(
         }
         Ok(data) -> {
           collections
-          |> list.map(fn(collection) { #(repo, collection, data.pds) })
+          |> list.map(fn(collection) { #(data.pds, repo, collection) })
         }
       }
     })
-
-  // Split jobs into chunks based on max_workers
-  let chunk_size = case list.length(jobs) {
-    0 -> 1
-    n if n <= config.max_workers -> 1
-    n -> { n + config.max_workers - 1 } / config.max_workers
-  }
-
-  jobs
-  |> list.sized_chunk(chunk_size)
-  |> list.flat_map(fn(chunk) {
-    // Process each chunk concurrently
-    let subject = process.new_subject()
-
-    // Spawn workers for this chunk
-    let _workers =
-      chunk
-      |> list.map(fn(job) {
-        let #(repo, collection, pds) = job
-        process.spawn_unlinked(fn() {
-          fetch_records_worker(repo, collection, pds, subject)
-        })
-      })
-
-    // Collect results from all workers in this chunk
-    list.range(1, list.length(chunk))
-    |> list.flat_map(fn(_) {
-      case process.receive(subject, 60_000) {
-        Ok(records) -> records
-        Error(_) -> []
-      }
+    |> list.group(fn(job) {
+      let #(pds, _repo, _collection) = job
+      pds
     })
+
+  // Spawn one worker per PDS server
+  let subject = process.new_subject()
+  let pds_entries = dict.to_list(jobs_by_pds)
+  let pds_count = list.length(pds_entries)
+
+  let _pds_workers =
+    pds_entries
+    |> list.map(fn(pds_entry) {
+      let #(pds_url, jobs) = pds_entry
+      // Extract just the repo/collection pairs
+      let job_pairs =
+        jobs
+        |> list.map(fn(job) {
+          let #(_pds, repo, collection) = job
+          #(repo, collection)
+        })
+
+      process.spawn_unlinked(fn() {
+        pds_worker(pds_url, job_pairs, config.plc_directory_url, subject)
+      })
+    })
+
+  // Collect results from all PDS workers
+  list.range(1, pds_count)
+  |> list.flat_map(fn(_) {
+    case process.receive(subject, 120_000) {
+      Ok(records) -> records
+      Error(_) -> []
+    }
   })
 }
 
-/// Index records into the database
+/// Index records into the database using batch inserts
 pub fn index_records(
   records: List(database.Record),
   conn: sqlight.Connection,
 ) -> Nil {
-  records
-  |> list.each(fn(record) {
-    case
-      database.insert_record(
-        conn,
-        record.uri,
-        record.cid,
-        record.did,
-        record.collection,
-        record.json,
+  case database.batch_insert_records(conn, records) {
+    Ok(_) -> Nil
+    Error(err) -> {
+      io.println_error(
+        "Failed to batch insert records: " <> string.inspect(err),
       )
-    {
-      Ok(_) -> Nil
-      Error(err) -> {
-        io.println_error(
-          "Failed to insert record "
-          <> record.uri
-          <> ": "
-          <> string.inspect(err),
-        )
-      }
     }
-  })
+  }
 }
 
 /// Index actors into the database
@@ -524,7 +617,7 @@ fn fetch_repos_paginated(
   case request.to(url) {
     Error(_) -> Error("Failed to create request for collection: " <> collection)
     Ok(req) -> {
-      case httpc.send(req) {
+      case hackney.send(req) {
         Error(_) ->
           Error("Failed to fetch repos for collection: " <> collection)
         Ok(resp) -> {

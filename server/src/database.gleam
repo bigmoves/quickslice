@@ -181,6 +181,58 @@ pub fn insert_record(
   Ok(Nil)
 }
 
+/// Batch inserts or updates multiple records in the database
+/// More efficient than individual inserts for large datasets
+pub fn batch_insert_records(
+  conn: sqlight.Connection,
+  records: List(Record),
+) -> Result(Nil, sqlight.Error) {
+  // Process records in smaller batches to avoid SQL parameter limits
+  // SQLite has a default limit of 999 parameters
+  // Each record uses 5 parameters, so we can safely do 100 records at a time (500 params)
+  let batch_size = 100
+
+  list.sized_chunk(records, batch_size)
+  |> list.try_each(fn(batch) {
+    // Build the SQL with multiple value sets
+    let value_placeholders =
+      list.repeat("(?, ?, ?, ?, ?)", list.length(batch))
+      |> string.join(", ")
+
+    let sql =
+      "
+      INSERT INTO record (uri, cid, did, collection, json)
+      VALUES "
+      <> value_placeholders
+      <> "
+      ON CONFLICT(uri) DO UPDATE SET
+        cid = excluded.cid,
+        json = excluded.json,
+        indexed_at = datetime('now')
+    "
+
+    // Flatten all record parameters into a single list
+    let params =
+      list.flat_map(batch, fn(record) {
+        [
+          sqlight.text(record.uri),
+          sqlight.text(record.cid),
+          sqlight.text(record.did),
+          sqlight.text(record.collection),
+          sqlight.text(record.json),
+        ]
+      })
+
+    use _ <- result.try(sqlight.query(
+      sql,
+      on: conn,
+      with: params,
+      expecting: decode.string,
+    ))
+    Ok(Nil)
+  })
+}
+
 /// Gets a record by URI
 pub fn get_record(
   conn: sqlight.Connection,
