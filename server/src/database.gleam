@@ -6,6 +6,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+import oauth/session
 import sqlight
 import where_clause
 
@@ -142,6 +143,7 @@ pub fn initialize(path: String) -> Result(sqlight.Connection, sqlight.Error) {
   use _ <- result.try(create_record_table(conn))
   use _ <- result.try(create_actor_table(conn))
   use _ <- result.try(create_lexicon_table(conn))
+  use _ <- result.try(session.init_db(conn))
 
   io.println("✅ Database initialized at: " <> path)
   Ok(conn)

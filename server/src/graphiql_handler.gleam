@@ -1,13 +1,23 @@
 /// GraphiQL interface handler
 ///
 /// Serves the GraphiQL interactive GraphQL IDE
-import envoy
+import oauth/handlers
+import oauth/session
+import sqlight
 import wisp
 
-pub fn handle_graphiql_request(_req: wisp.Request) -> wisp.Response {
-  // Read optional OAuth token from environment for testing
-  let oauth_token = case envoy.get("GRAPHIQL_OAUTH_TOKEN") {
-    Ok(token) -> token
+pub fn handle_graphiql_request(
+  req: wisp.Request,
+  db: sqlight.Connection,
+  oauth_config: handlers.OAuthConfig,
+) -> wisp.Response {
+  // Get token from session if logged in (with automatic refresh)
+  let refresh_fn = fn(refresh_token) {
+    handlers.refresh_access_token(oauth_config, refresh_token)
+  }
+
+  let oauth_token = case session.get_current_user(req, db, refresh_fn) {
+    Ok(#(_did, _handle, access_token)) -> access_token
     Error(_) -> ""
   }
   let graphiql_html = "<!doctype html>

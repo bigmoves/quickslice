@@ -9,14 +9,16 @@ import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option
+import gleam/string
 import graphiql_handler
 import graphql_handler
 import importer
 import jetstream_consumer
-import lustre/attribute
 import lustre/element
-import lustre/element/html
 import mist
+import oauth/handlers
+import oauth/session
+import pages/index
 import sqlight
 import upload_handler
 import wisp
@@ -25,7 +27,12 @@ import xrpc_handlers
 import xrpc_router
 
 pub type Context {
-  Context(db: sqlight.Connection, auth_base_url: String)
+  Context(
+    db: sqlight.Connection,
+    auth_base_url: String,
+    oauth_config: handlers.OAuthConfig,
+    admin_dids: List(String),
+  )
 }
 
 pub fn main() {
@@ -191,13 +198,53 @@ fn start_server_normally() {
 
 fn start_server(db: sqlight.Connection) {
   wisp.configure_logger()
-  let secret_key_base = wisp.random_string(64)
+
+  // Get secret_key_base from environment or generate one
+  let secret_key_base = case envoy.get("SECRET_KEY_BASE") {
+    Ok(key) -> {
+      io.println("✓ Using SECRET_KEY_BASE from environment")
+      key
+    }
+    Error(_) -> {
+      io.println(
+        "⚠️  WARNING: SECRET_KEY_BASE not set, generating random key",
+      )
+      io.println(
+        "   Sessions will be invalidated on server restart. Set SECRET_KEY_BASE in .env for persistence.",
+      )
+      wisp.random_string(64)
+    }
+  }
 
   // Get auth_base_url from environment variable or use default
   let auth_base_url = case envoy.get("AIP_BASE_URL") {
     Ok(url) -> url
     Error(_) -> "https://tunnel.chadtmiller.com"
   }
+
+  // OAuth configuration
+  let oauth_client_id = case envoy.get("OAUTH_CLIENT_ID") {
+    Ok(id) -> id
+    Error(_) -> ""
+  }
+
+  let oauth_client_secret = case envoy.get("OAUTH_CLIENT_SECRET") {
+    Ok(secret) -> secret
+    Error(_) -> ""
+  }
+
+  let oauth_redirect_uri = case envoy.get("OAUTH_REDIRECT_URI") {
+    Ok(uri) -> uri
+    Error(_) -> "http://localhost:8000/oauth/callback"
+  }
+
+  let oauth_config =
+    handlers.OAuthConfig(
+      client_id: oauth_client_id,
+      client_secret: oauth_client_secret,
+      redirect_uri: oauth_redirect_uri,
+      auth_url: auth_base_url,
+    )
 
   // Get HOST and PORT from environment variables or use defaults
   let host = case envoy.get("HOST") {
@@ -216,7 +263,24 @@ fn start_server(db: sqlight.Connection) {
 
   io.println("🔐 Using AIP server: " <> auth_base_url)
 
-  let ctx = Context(db: db, auth_base_url: auth_base_url)
+  // Parse ADMIN_DIDS from environment variable (comma-separated list)
+  let admin_dids = case envoy.get("ADMIN_DIDS") {
+    Ok(dids_str) -> {
+      dids_str
+      |> string.split(",")
+      |> list.map(string.trim)
+      |> list.filter(fn(did) { !string.is_empty(did) })
+    }
+    Error(_) -> []
+  }
+
+  let ctx =
+    Context(
+      db: db,
+      auth_base_url: auth_base_url,
+      oauth_config: oauth_config,
+      admin_dids: admin_dids,
+    )
 
   let handler = fn(req) { handle_request(req, ctx) }
 
@@ -231,19 +295,31 @@ fn start_server(db: sqlight.Connection) {
   process.sleep_forever()
 }
 
+/// Check if a DID has admin access based on the ADMIN_DIDS list
+fn is_admin(did: String, admin_dids: List(String)) -> Bool {
+  list.contains(admin_dids, did)
+}
+
 fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
   use _req <- middleware(req)
 
   let segments = wisp.path_segments(req)
 
   case segments {
-    [] -> index_route(ctx)
+    [] -> index_route(req, ctx)
     ["health"] -> handle_health_check(ctx)
+    ["oauth", "authorize"] ->
+      handlers.handle_oauth_authorize(req, ctx.db, ctx.oauth_config)
+    ["oauth", "callback"] ->
+      handlers.handle_oauth_callback(req, ctx.db, ctx.oauth_config)
+    ["logout"] -> handlers.handle_logout(req, ctx.db)
     ["backfill"] -> handle_backfill_request(req, ctx.db)
     ["graphql"] ->
       graphql_handler.handle_graphql_request(req, ctx.db, ctx.auth_base_url)
-    ["graphiql"] -> graphiql_handler.handle_graphiql_request(req)
-    ["upload"] -> upload_handler.handle_upload_request(req)
+    ["graphiql"] ->
+      graphiql_handler.handle_graphiql_request(req, ctx.db, ctx.oauth_config)
+    ["upload"] ->
+      upload_handler.handle_upload_request(req, ctx.db, ctx.oauth_config)
     ["xrpc", _] -> {
       // Try to parse the XRPC route
       case xrpc_router.parse_xrpc_path(segments) {
@@ -395,228 +471,24 @@ fn handle_health_check(ctx: Context) -> wisp.Response {
   }
 }
 
-fn index_route(ctx: Context) -> wisp.Response {
-  // Query database stats
-  let collection_stats = case database.get_collection_stats(ctx.db) {
-    Ok(stats) -> stats
-    Error(_) -> []
+fn index_route(req: wisp.Request, ctx: Context) -> wisp.Response {
+  // Get current user from session (with automatic token refresh)
+  let refresh_fn = fn(refresh_token) {
+    handlers.refresh_access_token(ctx.oauth_config, refresh_token)
   }
 
-  let actor_count = case database.get_actor_count(ctx.db) {
-    Ok(count) -> count
-    Error(_) -> 0
-  }
+  let #(current_user, user_is_admin) =
+    case session.get_current_user(req, ctx.db, refresh_fn) {
+      Ok(#(did, handle, _access_token)) -> {
+        let admin = is_admin(did, ctx.admin_dids)
+        #(option.Some(#(did, handle)), admin)
+      }
+      Error(_) -> #(option.None, False)
+    }
 
-  let lexicon_count = case database.get_lexicon_count(ctx.db) {
-    Ok(count) -> count
-    Error(_) -> 0
-  }
-
-  // Get record-type lexicons (collections)
-  let record_lexicons = case database.get_record_type_lexicons(ctx.db) {
-    Ok(lexicons) -> lexicons
-    Error(_) -> []
-  }
-
-  // Build collection rows from actual records
-  let record_rows =
-    collection_stats
-    |> list.map(fn(stat) {
-      html.tr([attribute.class("hover:bg-gray-50 transition-colors")], [
-        html.td([attribute.class("px-4 py-3 text-sm text-gray-900")], [
-          element.text(stat.collection),
-        ]),
-        html.td([attribute.class("px-4 py-3 text-sm text-gray-700")], [
-          element.text(int.to_string(stat.count)),
-        ]),
-      ])
-    })
-
-  // Build lexicon rows (show lexicons that don't have records yet)
-  let lexicon_rows =
-    record_lexicons
-    |> list.filter(fn(lexicon) {
-      // Only show lexicons that don't already appear in collection_stats
-      !list.any(collection_stats, fn(stat) { stat.collection == lexicon.id })
-    })
-    |> list.map(fn(lexicon) {
-      html.tr([attribute.class("hover:bg-gray-50 transition-colors")], [
-        html.td([attribute.class("px-4 py-3 text-sm text-gray-900")], [
-          element.text(lexicon.id),
-        ]),
-        html.td([attribute.class("px-4 py-3 text-sm text-gray-500 italic")], [
-          element.text("0"),
-        ]),
-      ])
-    })
-
-  // Combine both types of rows
-  let collection_rows = list.append(record_rows, lexicon_rows)
-
-  let page =
-    html.html([attribute.class("h-full")], [
-      html.head([], [
-        html.title([], "ATProto Database Stats"),
-        element.element("meta", [attribute.attribute("charset", "UTF-8")], []),
-        element.element(
-          "meta",
-          [
-            attribute.attribute("name", "viewport"),
-            attribute.attribute(
-              "content",
-              "width=device-width, initial-scale=1.0",
-            ),
-          ],
-          [],
-        ),
-        element.element(
-          "script",
-          [attribute.attribute("src", "https://cdn.tailwindcss.com")],
-          [],
-        ),
-      ]),
-      html.body([attribute.class("bg-gray-50 min-h-screen p-8")], [
-        html.div([attribute.class("max-w-4xl mx-auto")], [
-          html.div([attribute.class("flex justify-between items-center mb-8")], [
-            html.h1([attribute.class("text-4xl font-bold text-gray-900")], [
-              element.text("quickslice"),
-            ]),
-            html.div([attribute.class("flex gap-3")], [
-              html.form(
-                [
-                  attribute.method("post"),
-                  attribute.action("/backfill"),
-                  attribute.class("inline"),
-                ],
-                [
-                  html.button(
-                    [
-                      attribute.type_("submit"),
-                      attribute.class(
-                        "bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-sm",
-                      ),
-                    ],
-                    [element.text("Backfill Collections")],
-                  ),
-                ],
-              ),
-              html.a(
-                [
-                  attribute.href("/graphiql"),
-                  attribute.class(
-                    "bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-sm",
-                  ),
-                ],
-                [element.text("Open GraphiQL")],
-              ),
-              html.a(
-                [
-                  attribute.href("/upload"),
-                  attribute.class(
-                    "bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors shadow-sm",
-                  ),
-                ],
-                [element.text("Upload Blob")],
-              ),
-            ]),
-          ]),
-          // Lexicons section
-          html.div([attribute.class("mb-8")], [
-            html.h2(
-              [attribute.class("text-2xl font-semibold text-gray-700 mb-4")],
-              [element.text("Lexicons")],
-            ),
-            html.div(
-              [
-                attribute.class(
-                  "bg-purple-50 rounded-lg p-6 border border-purple-100 shadow-sm",
-                ),
-              ],
-              [
-                html.div(
-                  [attribute.class("text-4xl font-bold text-purple-600 mb-2")],
-                  [element.text(int.to_string(lexicon_count))],
-                ),
-                html.div([attribute.class("text-gray-600")], [
-                  element.text("Lexicon schemas loaded"),
-                ]),
-              ],
-            ),
-          ]),
-          // Actors section
-          html.div([attribute.class("mb-8")], [
-            html.h2(
-              [attribute.class("text-2xl font-semibold text-gray-700 mb-4")],
-              [element.text("Actors")],
-            ),
-            html.div(
-              [
-                attribute.class(
-                  "bg-blue-50 rounded-lg p-6 border border-blue-100 shadow-sm",
-                ),
-              ],
-              [
-                html.div(
-                  [attribute.class("text-4xl font-bold text-blue-600 mb-2")],
-                  [element.text(int.to_string(actor_count))],
-                ),
-                html.div([attribute.class("text-gray-600")], [
-                  element.text("Total actors indexed"),
-                ]),
-              ],
-            ),
-          ]),
-          // Collections section
-          html.div([], [
-            html.h2(
-              [attribute.class("text-2xl font-semibold text-gray-700 mb-4")],
-              [element.text("Collections")],
-            ),
-            html.div(
-              [
-                attribute.class(
-                  "bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden",
-                ),
-              ],
-              [
-                html.table(
-                  [attribute.class("min-w-full divide-y divide-gray-200")],
-                  [
-                    html.thead([attribute.class("bg-gray-50")], [
-                      html.tr([], [
-                        html.th(
-                          [
-                            attribute.class(
-                              "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider",
-                            ),
-                          ],
-                          [element.text("Collection")],
-                        ),
-                        html.th(
-                          [
-                            attribute.class(
-                              "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider",
-                            ),
-                          ],
-                          [element.text("Record Count")],
-                        ),
-                      ]),
-                    ]),
-                    html.tbody(
-                      [attribute.class("bg-white divide-y divide-gray-200")],
-                      collection_rows,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ]),
-        ]),
-      ]),
-    ])
-
-  let html_string = element.to_document_string(page)
-  wisp.html_response(html_string, 200)
+  index.view(ctx.db, current_user, user_is_admin)
+  |> element.to_document_string
+  |> wisp.html_response(200)
 }
 
 fn middleware(
