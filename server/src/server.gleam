@@ -6,7 +6,6 @@ import envoy
 import gleam/erlang/process
 import gleam/http as gleam_http
 import gleam/int
-import gleam/io
 import gleam/list
 import gleam/option
 import gleam/string
@@ -14,6 +13,7 @@ import graphiql_handler
 import graphql_handler
 import importer
 import jetstream_consumer
+import logging
 import lustre/element
 import mist
 import oauth/handlers
@@ -45,35 +45,55 @@ pub fn main() {
 }
 
 fn run_import_command(directory: String) {
-  io.println("🔄 Importing lexicons from: " <> directory)
-  io.println("")
+  logging.log(logging.Info, "Importing lexicons from: " <> directory)
+  logging.log(logging.Info, "")
 
-  case importer.import_lexicons_from_directory(directory) {
+  // Get database URL from environment variable or use default
+  let database_url = case envoy.get("DATABASE_URL") {
+    Ok(url) -> url
+    Error(_) -> "quickslice.db"
+  }
+
+  // Initialize the database
+  let assert Ok(db) = database.initialize(database_url)
+
+  case importer.import_lexicons_from_directory(directory, db) {
     Ok(stats) -> {
-      io.println("")
-      io.println("✅ Import complete!")
-      io.println("   Total files: " <> int.to_string(stats.total))
-      io.println("   Imported: " <> int.to_string(stats.imported))
-      io.println("   Failed: " <> int.to_string(stats.failed))
+      logging.log(logging.Info, "")
+      logging.log(logging.Info, "Import complete!")
+      logging.log(
+        logging.Info,
+        "   Total files: " <> int.to_string(stats.total),
+      )
+      logging.log(
+        logging.Info,
+        "   Imported: " <> int.to_string(stats.imported),
+      )
+      logging.log(logging.Info, "   Failed: " <> int.to_string(stats.failed))
 
       case stats.errors {
         [] -> Nil
         errors -> {
-          io.println("")
-          io.println("⚠️ Errors:")
-          list.each(errors, fn(err) { io.println("   " <> err) })
+          logging.log(logging.Info, "")
+          logging.log(logging.Warning, "Errors:")
+          list.each(errors, fn(err) {
+            logging.log(logging.Warning, "   " <> err)
+          })
         }
       }
     }
     Error(err) -> {
-      io.println_error("❌ Import failed: " <> err)
+      logging.log(logging.Error, "Import failed: " <> err)
     }
   }
 }
 
 fn run_backfill_command() {
-  io.println("🔄 Starting backfill for record-type lexicon collections")
-  io.println("")
+  logging.log(
+    logging.Info,
+    "Starting backfill for record-type lexicon collections",
+  )
+  logging.log(logging.Info, "")
 
   // Get database URL from environment variable or use default
   let database_url = case envoy.get("DATABASE_URL") {
@@ -85,13 +105,17 @@ fn run_backfill_command() {
   let assert Ok(db) = database.initialize(database_url)
 
   // Get all record-type lexicons
-  io.println("📚 Fetching record-type lexicons from database...")
+  logging.log(logging.Info, "Fetching record-type lexicons from database...")
   case database.get_record_type_lexicons(db) {
     Ok(lexicons) -> {
       case lexicons {
         [] -> {
-          io.println("⚠️ No record-type lexicons found in database")
-          io.println(
+          logging.log(
+            logging.Warning,
+            "No record-type lexicons found in database",
+          )
+          logging.log(
+            logging.Info,
             "   Hint: Run 'gleam run -- import priv/lexicons' to import lexicons first",
           )
         }
@@ -107,29 +131,33 @@ fn run_backfill_command() {
           let external_collections =
             list.map(external_lexicons, fn(lex) { lex.id })
 
-          io.println(
-            "✓ Found "
-            <> int.to_string(list.length(collections))
-            <> " local collection(s):",
+          logging.log(
+            logging.Info,
+            "Found "
+              <> int.to_string(list.length(collections))
+              <> " local collection(s):",
           )
-          list.each(collections, fn(col) { io.println("  - " <> col) })
+          list.each(collections, fn(col) {
+            logging.log(logging.Info, "  - " <> col)
+          })
 
           case external_collections {
             [] -> Nil
             _ -> {
-              io.println("")
-              io.println(
-                "✓ Found "
-                <> int.to_string(list.length(external_collections))
-                <> " external collection(s):",
+              logging.log(logging.Info, "")
+              logging.log(
+                logging.Info,
+                "Found "
+                  <> int.to_string(list.length(external_collections))
+                  <> " external collection(s):",
               )
               list.each(external_collections, fn(col) {
-                io.println("  - " <> col)
+                logging.log(logging.Info, "  - " <> col)
               })
             }
           }
 
-          io.println("")
+          logging.log(logging.Info, "")
           let config = backfill.default_config()
           backfill.backfill_collections(
             [],
@@ -142,12 +170,16 @@ fn run_backfill_command() {
       }
     }
     Error(_) -> {
-      io.println_error("❌ Failed to fetch lexicons from database")
+      logging.log(logging.Error, "Failed to fetch lexicons from database")
     }
   }
 }
 
 fn start_server_normally() {
+  // Initialize logging
+  logging.configure()
+  logging.set_level(logging.Info)
+
   // Load environment variables from .env file
   let _ = dotenv_gleam.config()
 
@@ -161,21 +193,25 @@ fn start_server_normally() {
   let assert Ok(db) = database.initialize(database_url)
 
   // Auto-import lexicons from priv/lexicons if directory exists
-  io.println("")
-  io.println("🔍 Checking for lexicons in priv/lexicons...")
-  case importer.import_lexicons_from_directory("priv/lexicons") {
+  logging.log(logging.Info, "")
+  logging.log(logging.Info, "[server] Checking for lexicons in priv/lexicons...")
+  case importer.import_lexicons_from_directory("priv/lexicons", db) {
     Ok(stats) -> {
       case stats.imported {
-        0 -> io.println("  ℹ️  No lexicons found to import")
+        0 -> logging.log(logging.Info, "[server]   No lexicons found to import")
         _ -> {
-          io.println(
-            "  ✓ Imported " <> int.to_string(stats.imported) <> " lexicon(s)",
+          logging.log(
+            logging.Info,
+            "[server]   Imported " <> int.to_string(stats.imported) <> " lexicon(s)",
           )
         }
       }
     }
     Error(_) -> {
-      io.println("  ℹ️  No priv/lexicons directory found, skipping import")
+      logging.log(
+        logging.Info,
+        "[server]   No priv/lexicons directory found, skipping import",
+      )
     }
   }
 
@@ -183,14 +219,17 @@ fn start_server_normally() {
   case jetstream_consumer.start(db) {
     Ok(_) -> Nil
     Error(err) -> {
-      io.println_error("❌ Failed to start Jetstream consumer: " <> err)
-      io.println("   Server will continue without real-time indexing")
+      logging.log(logging.Error, "[server] Failed to start Jetstream consumer: " <> err)
+      logging.log(
+        logging.Warning,
+        "[server]    Server will continue without real-time indexing",
+      )
     }
   }
 
-  io.println("")
-  io.println("=== ATProto Gleam ===")
-  io.println("")
+  logging.log(logging.Info, "")
+  logging.log(logging.Info, "[server] === quickslice ===")
+  logging.log(logging.Info, "")
 
   // Start server immediately (this blocks)
   start_server(db)
@@ -202,15 +241,17 @@ fn start_server(db: sqlight.Connection) {
   // Get secret_key_base from environment or generate one
   let secret_key_base = case envoy.get("SECRET_KEY_BASE") {
     Ok(key) -> {
-      io.println("✓ Using SECRET_KEY_BASE from environment")
+      logging.log(logging.Info, "[server] Using SECRET_KEY_BASE from environment")
       key
     }
     Error(_) -> {
-      io.println(
-        "⚠️  WARNING: SECRET_KEY_BASE not set, generating random key",
+      logging.log(
+        logging.Warning,
+        "[server] WARNING: SECRET_KEY_BASE not set, generating random key",
       )
-      io.println(
-        "   Sessions will be invalidated on server restart. Set SECRET_KEY_BASE in .env for persistence.",
+      logging.log(
+        logging.Warning,
+        "[server]    Sessions will be invalidated on server restart. Set SECRET_KEY_BASE in .env for persistence.",
       )
       wisp.random_string(64)
     }
@@ -261,7 +302,7 @@ fn start_server(db: sqlight.Connection) {
     Error(_) -> 8000
   }
 
-  io.println("🔐 Using AIP server: " <> auth_base_url)
+  logging.log(logging.Info, "[server] Using AIP server: " <> auth_base_url)
 
   // Parse ADMIN_DIDS from environment variable (comma-separated list)
   let admin_dids = case envoy.get("ADMIN_DIDS") {
@@ -284,6 +325,11 @@ fn start_server(db: sqlight.Connection) {
 
   let handler = fn(req) { handle_request(req, ctx) }
 
+  logging.log(
+    logging.Info,
+    "[server] Server started on http://" <> host <> ":" <> int.to_string(port),
+  )
+
   let assert Ok(_) =
     wisp_mist.handler(handler, secret_key_base)
     |> mist.new
@@ -291,7 +337,6 @@ fn start_server(db: sqlight.Connection) {
     |> mist.port(port)
     |> mist.start
 
-  io.println("Server started on http://" <> host <> ":" <> int.to_string(port))
   process.sleep_forever()
 }
 
@@ -477,14 +522,15 @@ fn index_route(req: wisp.Request, ctx: Context) -> wisp.Response {
     handlers.refresh_access_token(ctx.oauth_config, refresh_token)
   }
 
-  let #(current_user, user_is_admin) =
-    case session.get_current_user(req, ctx.db, refresh_fn) {
-      Ok(#(did, handle, _access_token)) -> {
-        let admin = is_admin(did, ctx.admin_dids)
-        #(option.Some(#(did, handle)), admin)
-      }
-      Error(_) -> #(option.None, False)
+  let #(current_user, user_is_admin) = case
+    session.get_current_user(req, ctx.db, refresh_fn)
+  {
+    Ok(#(did, handle, _access_token)) -> {
+      let admin = is_admin(did, ctx.admin_dids)
+      #(option.Some(#(did, handle)), admin)
     }
+    Error(_) -> #(option.None, False)
+  }
 
   index.view(ctx.db, current_user, user_is_admin)
   |> element.to_document_string

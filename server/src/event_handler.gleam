@@ -1,7 +1,7 @@
 import database
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
-import gleam/io
+import logging
 import gleam/list
 import gleam/option
 import gleam/string
@@ -31,7 +31,7 @@ fn iolist_to_string(iolist: Dynamic) -> String {
   case decode.run(binary, decode.string) {
     Ok(str) -> str
     Error(_) -> {
-      io.println_error("⚠️  Failed to convert iolist to string")
+      logging.log(logging.Warning, "[jetstream] Failed to convert iolist to string")
       string.inspect(iolist)
     }
   }
@@ -79,19 +79,22 @@ pub fn handle_commit_event(
                     )
                   {
                     Ok(_) -> {
-                      io.println(
-                        "✅ "
+                      logging.log(
+                        logging.Info,
+                        "[jetstream] "
                         <> commit.operation
                         <> " "
                         <> commit.collection
                         <> " ("
                         <> commit.rkey
-                        <> ")",
+                        <> ") "
+                        <> did,
                       )
                     }
                     Error(err) -> {
-                      io.println_error(
-                        "❌ Failed to insert record "
+                      logging.log(
+                        logging.Error,
+                        "[jetstream] Failed to insert record "
                         <> uri
                         <> ": "
                         <> string.inspect(err),
@@ -100,8 +103,9 @@ pub fn handle_commit_event(
                   }
                 }
                 Error(validation_error) -> {
-                  io.println_error(
-                    "⚠️  Validation failed for "
+                  logging.log(
+                    logging.Warning,
+                    "[jetstream] Validation failed for "
                     <> uri
                     <> ": "
                     <> lexicon.describe_error(validation_error),
@@ -110,16 +114,18 @@ pub fn handle_commit_event(
               }
             }
             Error(db_err) -> {
-              io.println_error(
-                "❌ Failed to fetch lexicons for validation: "
+              logging.log(
+                logging.Error,
+                "[jetstream] Failed to fetch lexicons for validation: "
                 <> string.inspect(db_err),
               )
             }
           }
         }
         _, _ -> {
-          io.println_error(
-            "⚠️  "
+          logging.log(
+            logging.Warning,
+            "[jetstream] "
             <> commit.operation
             <> " event missing record or cid for "
             <> uri,
@@ -128,8 +134,9 @@ pub fn handle_commit_event(
       }
     }
     "delete" -> {
-      io.println(
-        "🗑️  delete " <> commit.collection <> " (" <> commit.rkey <> ")",
+      logging.log(
+        logging.Info,
+        "[jetstream] delete " <> commit.collection <> " (" <> commit.rkey <> ") " <> did,
       )
 
       case database.delete_record(db, uri) {
@@ -137,12 +144,12 @@ pub fn handle_commit_event(
           Nil
         }
         Error(err) -> {
-          io.println_error("    ❌ Failed to delete: " <> string.inspect(err))
+          logging.log(logging.Error, "[jetstream] Failed to delete: " <> string.inspect(err))
         }
       }
     }
     _ -> {
-      io.println_error("⚠️  Unknown operation: " <> commit.operation)
+      logging.log(logging.Warning, "[jetstream] Unknown operation: " <> commit.operation)
     }
   }
 }
@@ -154,13 +161,15 @@ pub fn handle_identity_event(
 ) -> Nil {
   case database.upsert_actor(db, identity.did, identity.handle) {
     Ok(_) -> {
-      io.println(
-        "👤 identity update: " <> identity.handle <> " (" <> identity.did <> ")",
+      logging.log(
+        logging.Info,
+        "[jetstream] identity update: " <> identity.handle <> " (" <> identity.did <> ")",
       )
     }
     Error(err) -> {
-      io.println_error(
-        "❌ Failed to upsert actor "
+      logging.log(
+        logging.Error,
+        "[jetstream] Failed to upsert actor "
         <> identity.did
         <> ": "
         <> string.inspect(err),
@@ -179,5 +188,5 @@ pub fn handle_account_event(
     True -> "active"
     False -> "inactive"
   }
-  io.println("🔐 account " <> status <> ": " <> account.did)
+  logging.log(logging.Info, "[jetstream] account " <> status <> ": " <> account.did)
 }

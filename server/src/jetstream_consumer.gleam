@@ -5,7 +5,7 @@ import event_handler
 import gleam/dynamic/decode
 import gleam/erlang/process
 import gleam/int
-import gleam/io
+import logging
 import gleam/list
 import gleam/option
 import gleam/string
@@ -14,8 +14,8 @@ import sqlight
 
 /// Start the Jetstream consumer in a background process
 pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
-  io.println("")
-  io.println("🚀 Starting Jetstream consumer...")
+  logging.log(logging.Info, "")
+  logging.log(logging.Info, "[jetstream] Starting Jetstream consumer...")
 
   // Get all record-type lexicons from the database
   case database.get_record_type_lexicons(db) {
@@ -37,30 +37,32 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
 
       case all_collection_ids {
         [] -> {
-          io.println("⚠️  No collections found - skipping Jetstream consumer")
-          io.println("   Import lexicons first")
-          io.println("")
+          logging.log(logging.Warning, "[jetstream] No collections found - skipping Jetstream consumer")
+          logging.log(logging.Info, "[jetstream]    Import lexicons first")
+          logging.log(logging.Info, "")
           Ok(Nil)
         }
         _ -> {
-          io.println(
-            "📋 Listening to "
+          logging.log(
+            logging.Info,
+            "[jetstream] Listening to "
             <> int.to_string(list.length(local_collection_ids))
             <> " local collection(s) (all DIDs):",
           )
-          list.each(local_collection_ids, fn(col) { io.println("   - " <> col) })
+          list.each(local_collection_ids, fn(col) { logging.log(logging.Info, "[jetstream]    - " <> col) })
 
           case external_collection_ids {
             [] -> Nil
             _ -> {
-              io.println("")
-              io.println(
-                "📋 Tracking "
+              logging.log(logging.Info, "")
+              logging.log(
+                logging.Info,
+                "[jetstream] Tracking "
                 <> int.to_string(list.length(external_collection_ids))
                 <> " external collection(s) (known DIDs only, filtered client-side):",
               )
               list.each(external_collection_ids, fn(col) {
-                io.println("   - " <> col)
+                logging.log(logging.Info, "[jetstream]    - " <> col)
               })
             }
           }
@@ -83,11 +85,12 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
               require_hello: False,
             )
 
-          io.println("")
-          io.println("Connecting to Jetstream...")
-          io.println("   Endpoint: " <> jetstream_url)
-          io.println(
-            "   Collections: "
+          logging.log(logging.Info, "")
+          logging.log(logging.Info, "[jetstream] Connecting to Jetstream...")
+          logging.log(logging.Info, "[jetstream]    Endpoint: " <> jetstream_url)
+          logging.log(
+            logging.Info,
+            "[jetstream]    Collections: "
             <> int.to_string(list.length(all_collection_ids))
             <> " (all DIDs, filtered client-side for external)",
           )
@@ -103,9 +106,9 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
             })
           })
 
-          io.println("")
-          io.println("Jetstream consumer started")
-          io.println("")
+          logging.log(logging.Info, "")
+          logging.log(logging.Info, "[jetstream] Jetstream consumer started")
+          logging.log(logging.Info, "")
 
           Ok(Nil)
         }

@@ -1,7 +1,6 @@
 import database
-import envoy
 import gleam/dynamic/decode
-import gleam/io
+import logging
 import gleam/json
 import gleam/list
 import gleam/result
@@ -17,27 +16,19 @@ pub type ImportStats {
 /// Imports lexicons from a directory into the database
 pub fn import_lexicons_from_directory(
   directory: String,
+  db: sqlight.Connection,
 ) -> Result(ImportStats, String) {
-  // Get database URL from environment variable or use default
-  let database_url = case envoy.get("DATABASE_URL") {
-    Ok(url) -> url
-    Error(_) -> "quickslice.db"
-  }
-
-  use db <- result.try(case database.initialize(database_url) {
-    Ok(conn) -> Ok(conn)
-    Error(_) -> Error("Failed to initialize database")
-  })
 
   // Scan directory for JSON files
-  io.println("📁 Scanning directory recursively...")
+  logging.log(logging.Info, "[import] Scanning directory recursively...")
   use file_paths <- result.try(scan_directory_recursive(directory))
 
-  io.println(
-    "  ✓ Found " <> string.inspect(list.length(file_paths)) <> " .json files",
+  logging.log(
+    logging.Info,
+    "[import]   Found " <> string.inspect(list.length(file_paths)) <> " .json files",
   )
-  io.println("")
-  io.println("📝 Reading all lexicon files...")
+  logging.log(logging.Info, "")
+  logging.log(logging.Info, "[import] Reading all lexicon files...")
 
   // Read all files first to get their content
   let file_contents =
@@ -49,7 +40,7 @@ pub fn import_lexicons_from_directory(
       }
     })
 
-  io.println("📝 Validating all lexicons together...")
+  logging.log(logging.Info, "[import] Validating all lexicons together...")
 
   // Extract all JSON strings for validation
   let all_json_strings = list.map(file_contents, fn(pair) { pair.1 })
@@ -57,19 +48,20 @@ pub fn import_lexicons_from_directory(
   // Validate all schemas together (this allows cross-references to be resolved)
   let validation_result = case lexicon.validate_schemas(all_json_strings) {
     Ok(_) -> {
-      io.println("  ✓ All lexicons validated successfully")
+      logging.log(logging.Info, "[import]   All lexicons validated successfully")
       Ok(Nil)
     }
     Error(err) -> {
-      io.println_error(
-        "  ✗ Validation failed: " <> format_validation_error(err),
+      logging.log(
+        logging.Error,
+        "[import]   Validation failed: " <> format_validation_error(err),
       )
       Error("Validation failed")
     }
   }
 
-  io.println("")
-  io.println("📝 Importing lexicons to database...")
+  logging.log(logging.Info, "")
+  logging.log(logging.Info, "[import] Importing lexicons to database...")
 
   // Import each file (skip individual validation since we already validated all together)
   let results = case validation_result {
@@ -221,19 +213,19 @@ pub fn import_single_lexicon(
     Ok(#(lexicon_id, json_content)) -> {
       case database.insert_lexicon(conn, lexicon_id, json_content) {
         Ok(_) -> {
-          io.println("  ✓ " <> lexicon_id)
+          logging.log(logging.Info, "[import]   " <> lexicon_id)
           Ok(lexicon_id)
         }
         Error(_) -> {
           let err_msg = file_name <> ": Database insertion failed"
-          io.println("  ✗ " <> err_msg)
+          logging.log(logging.Error, "[import]   " <> err_msg)
           Error(err_msg)
         }
       }
     }
     Error(err) -> {
       let err_msg = file_name <> ": " <> err
-      io.println("  ✗ " <> err_msg)
+      logging.log(logging.Error, "[import]   " <> err_msg)
       Error(err_msg)
     }
   }
@@ -255,19 +247,19 @@ fn import_validated_lexicon(
     Ok(lexicon_id) -> {
       case database.insert_lexicon(conn, lexicon_id, json_content) {
         Ok(_) -> {
-          io.println("  ✓ " <> lexicon_id)
+          logging.log(logging.Info, "[import]   " <> lexicon_id)
           Ok(lexicon_id)
         }
         Error(_) -> {
           let err_msg = file_name <> ": Database insertion failed"
-          io.println("  ✗ " <> err_msg)
+          logging.log(logging.Error, "[import]   " <> err_msg)
           Error(err_msg)
         }
       }
     }
     Error(err) -> {
       let err_msg = file_name <> ": " <> err
-      io.println("  ✗ " <> err_msg)
+      logging.log(logging.Error, "[import]   " <> err_msg)
       Error(err_msg)
     }
   }

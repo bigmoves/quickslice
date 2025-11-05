@@ -1,7 +1,7 @@
 import cursor
 import gleam/dynamic/decode
 import gleam/int
-import gleam/io
+import logging
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
@@ -145,7 +145,7 @@ pub fn initialize(path: String) -> Result(sqlight.Connection, sqlight.Error) {
   use _ <- result.try(create_lexicon_table(conn))
   use _ <- result.try(session.init_db(conn))
 
-  io.println("✅ Database initialized at: " <> path)
+  logging.log(logging.Info, "Database initialized at: " <> path)
   Ok(conn)
 }
 
