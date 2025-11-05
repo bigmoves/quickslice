@@ -14,6 +14,36 @@ Work in progress. APIs subject to change.
 
 ## Example
 
+The status lexicon (`xyz.statusphere.status`):
+
+```json
+{
+  "lexicon": 1,
+  "id": "xyz.statusphere.status",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["status", "createdAt"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxGraphemes": 1,
+            "maxLength": 32
+          },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}
+```
+
+Querying the status records:
+
 ```graphql
 query {
   xyzStatusphereStatus(
@@ -31,13 +61,6 @@ query {
         did
         status
         createdAt
-        appBskyActorProfileByDid {
-          displayName
-          avatar {
-            url
-          }
-          description
-        }
       }
       cursor
     }
