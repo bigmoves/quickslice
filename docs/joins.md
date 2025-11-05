@@ -1,6 +1,6 @@
 # Joins
 
-QuickSlice automatically generates **forward joins**, **reverse joins**, and **DID joins** based on AT Protocol lexicon schemas, allowing you to traverse relationships between records.
+quickslice automatically generates **forward joins**, **reverse joins**, and **DID joins** based on AT Protocol lexicon schemas, allowing you to traverse relationships between records.
 
 ## Overview
 
@@ -26,7 +26,7 @@ Forward joins are generated for fields that reference other records via:
 
 ### Basic Forward Join
 
-When a field references another record, QuickSlice creates a `*Resolved` field:
+When a field references another record, quickslice creates a `*Resolved` field:
 
 ```graphql
 query {

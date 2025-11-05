@@ -5,7 +5,7 @@ import lustre/element/html
 
 /// Render the upload blob page
 pub fn view(handle: String, oauth_token: String) -> Element(msg) {
-  layout.page(title: "QuickSlice - Upload Blob", content: [
+  layout.page(title: "quickslice - Upload Blob", content: [
     render_header(handle),
     render_upload_form(oauth_token),
   ])
@@ -42,70 +42,83 @@ fn render_header(handle: String) -> Element(msg) {
 
 /// Render the upload form with JavaScript
 fn render_upload_form(oauth_token: String) -> Element(msg) {
-  html.div([attribute.class("bg-white rounded-lg shadow-sm border border-gray-200 p-6")], [
-    html.form([attribute.id("uploadForm"), attribute.class("space-y-6")], [
-      html.input([
-        attribute.type_("hidden"),
-        attribute.id("token"),
-        attribute.value(oauth_token),
-      ]),
-      html.div([], [
-        html.label(
-          [
-            attribute.for("file"),
-            attribute.class("block text-sm font-medium text-gray-700 mb-2"),
-          ],
-          [element.text("File to Upload")],
-        ),
+  html.div(
+    [
+      attribute.class(
+        "bg-white rounded-lg shadow-sm border border-gray-200 p-6",
+      ),
+    ],
+    [
+      html.form([attribute.id("uploadForm"), attribute.class("space-y-6")], [
         html.input([
-          attribute.type_("file"),
-          attribute.id("file"),
-          attribute.name("file"),
-          attribute.class(
-            "w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500",
-          ),
-          attribute.attribute("required", ""),
+          attribute.type_("hidden"),
+          attribute.id("token"),
+          attribute.value(oauth_token),
         ]),
-        html.p([attribute.class("mt-1 text-sm text-gray-500")], [
-          element.text("Select an image or any file to upload as a blob"),
+        html.div([], [
+          html.label(
+            [
+              attribute.for("file"),
+              attribute.class("block text-sm font-medium text-gray-700 mb-2"),
+            ],
+            [element.text("File to Upload")],
+          ),
+          html.input([
+            attribute.type_("file"),
+            attribute.id("file"),
+            attribute.name("file"),
+            attribute.class(
+              "w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500",
+            ),
+            attribute.attribute("required", ""),
+          ]),
+          html.p([attribute.class("mt-1 text-sm text-gray-500")], [
+            element.text("Select an image or any file to upload as a blob"),
+          ]),
+        ]),
+        html.div([], [
+          html.button(
+            [
+              attribute.type_("submit"),
+              attribute.class(
+                "w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors shadow-sm",
+              ),
+            ],
+            [element.text("Upload Blob")],
+          ),
         ]),
       ]),
-      html.div([], [
-        html.button(
+      html.div([attribute.id("result"), attribute.class("mt-6 hidden")], [
+        html.h2([attribute.class("text-lg font-semibold text-gray-900 mb-2")], [
+          element.text("Result:"),
+        ]),
+        html.div(
           [
-            attribute.type_("submit"),
+            attribute.id("resultContent"),
             attribute.class(
-              "w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors shadow-sm",
+              "bg-gray-50 rounded-lg p-4 border border-gray-200 font-mono text-sm overflow-auto",
             ),
           ],
-          [element.text("Upload Blob")],
+          [],
         ),
       ]),
-    ]),
-    html.div([attribute.id("result"), attribute.class("mt-6 hidden")], [
-      html.h2([attribute.class("text-lg font-semibold text-gray-900 mb-2")], [
-        element.text("Result:"),
-      ]),
-      html.div([
-        attribute.id("resultContent"),
-        attribute.class(
-          "bg-gray-50 rounded-lg p-4 border border-gray-200 font-mono text-sm overflow-auto",
+      html.div([attribute.id("error"), attribute.class("mt-6 hidden")], [
+        html.h2([attribute.class("text-lg font-semibold text-red-900 mb-2")], [
+          element.text("Error:"),
+        ]),
+        html.div(
+          [
+            attribute.id("errorContent"),
+            attribute.class(
+              "bg-red-50 rounded-lg p-4 border border-red-200 text-red-700 font-mono text-sm overflow-auto",
+            ),
+          ],
+          [],
         ),
-      ], []),
-    ]),
-    html.div([attribute.id("error"), attribute.class("mt-6 hidden")], [
-      html.h2([attribute.class("text-lg font-semibold text-red-900 mb-2")], [
-        element.text("Error:"),
       ]),
-      html.div([
-        attribute.id("errorContent"),
-        attribute.class(
-          "bg-red-50 rounded-lg p-4 border border-red-200 text-red-700 font-mono text-sm overflow-auto",
-        ),
-      ], []),
-    ]),
-    render_upload_script(),
-  ])
+      render_upload_script(),
+    ],
+  )
 }
 
 /// Render the JavaScript for handling file upload

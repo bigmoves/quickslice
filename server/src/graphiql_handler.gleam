@@ -25,7 +25,7 @@ pub fn handle_graphiql_request(
   <head>
     <meta charset=\"UTF-8\" />
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
-    <title>QuickSlice GraphiQL</title>
+    <title>quickslice GraphiQL</title>
     <style>
       body {
         margin: 0;

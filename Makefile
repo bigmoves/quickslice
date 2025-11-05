@@ -1,7 +1,7 @@
 .PHONY: help test build clean run
 
 help:
-	@echo "QuickSlice - Makefile Commands"
+	@echo "quickslice - Makefile Commands"
 	@echo ""
 	@echo "  make run      - Start server"
 	@echo "  make test     - Run all tests"

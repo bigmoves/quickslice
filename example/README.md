@@ -1,6 +1,6 @@
-# QuickSlice Docker Example
+# quickslice Docker Example
 
-This example demonstrates how to run QuickSlice using the published Docker image with custom lexicons.
+This example demonstrates how to run quickslice using the published Docker image with custom lexicons.
 
 ## Directory Structure
 

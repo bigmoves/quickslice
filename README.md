@@ -1,4 +1,4 @@
-# QuickSlice
+# quickslice
 
 GraphQL API for AT Protocol records with automatic schema generation from Lexicon definitions.
 
