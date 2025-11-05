@@ -197,7 +197,10 @@ fn start_server_normally() {
 
   // Auto-import lexicons from priv/lexicons if directory exists
   logging.log(logging.Info, "")
-  logging.log(logging.Info, "[server] Checking for lexicons in priv/lexicons...")
+  logging.log(
+    logging.Info,
+    "[server] Checking for lexicons in priv/lexicons...",
+  )
   case importer.import_lexicons_from_directory("priv/lexicons", db) {
     Ok(stats) -> {
       case stats.imported {
@@ -205,7 +208,9 @@ fn start_server_normally() {
         _ -> {
           logging.log(
             logging.Info,
-            "[server]   Imported " <> int.to_string(stats.imported) <> " lexicon(s)",
+            "[server]   Imported "
+              <> int.to_string(stats.imported)
+              <> " lexicon(s)",
           )
         }
       }
@@ -226,7 +231,10 @@ fn start_server_normally() {
   case jetstream_consumer.start(db) {
     Ok(_) -> Nil
     Error(err) -> {
-      logging.log(logging.Error, "[server] Failed to start Jetstream consumer: " <> err)
+      logging.log(
+        logging.Error,
+        "[server] Failed to start Jetstream consumer: " <> err,
+      )
       logging.log(
         logging.Warning,
         "[server]    Server will continue without real-time indexing",
@@ -248,7 +256,10 @@ fn start_server(db: sqlight.Connection) {
   // Get secret_key_base from environment or generate one
   let secret_key_base = case envoy.get("SECRET_KEY_BASE") {
     Ok(key) -> {
-      logging.log(logging.Info, "[server] Using SECRET_KEY_BASE from environment")
+      logging.log(
+        logging.Info,
+        "[server] Using SECRET_KEY_BASE from environment",
+      )
       key
     }
     Error(_) -> {
@@ -267,7 +278,7 @@ fn start_server(db: sqlight.Connection) {
   // Get auth_base_url from environment variable or use default
   let auth_base_url = case envoy.get("AIP_BASE_URL") {
     Ok(url) -> url
-    Error(_) -> "https://tunnel.chadtmiller.com"
+    Error(_) -> "https://auth.example.com"
   }
 
   // OAuth configuration
@@ -351,12 +362,18 @@ fn start_server(db: sqlight.Connection) {
         // Check if upgrade header contains "websocket" (case-insensitive)
         case string.lowercase(upgrade_value) {
           "websocket" -> {
-            logging.log(logging.Info, "[server] Handling WebSocket upgrade for /graphql")
+            logging.log(
+              logging.Info,
+              "[server] Handling WebSocket upgrade for /graphql",
+            )
             // Handle WebSocket upgrade
             graphql_ws_handler.handle_websocket(req, ctx.db, ctx.auth_base_url)
           }
           _ -> {
-            logging.log(logging.Warning, "[server] Unknown upgrade type: " <> upgrade_value)
+            logging.log(
+              logging.Warning,
+              "[server] Unknown upgrade type: " <> upgrade_value,
+            )
             wisp_handler(req)
           }
         }

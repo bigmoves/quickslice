@@ -80,6 +80,7 @@ query {
 - [Subscriptions](docs/subscriptions.md)
 - [Blobs](docs/blobs.md)
 - [Variables](docs/variables.md)
+- [Deployment](docs/deployment.md)
 
 ## Architecture
 
