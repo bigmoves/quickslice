@@ -115,6 +115,58 @@ pub fn build_schema_with_fetcher(
   }
 }
 
+/// Build a GraphQL schema with subscriptions from lexicons
+///
+/// This extends build_schema_with_fetcher to also generate subscription fields
+/// for each record type: {collection}Created, {collection}Updated, {collection}Deleted
+pub fn build_schema_with_subscriptions(
+  lexicons: List(types.Lexicon),
+  fetcher: RecordFetcher,
+  batch_fetcher: option.Option(dataloader.BatchFetcher),
+  paginated_batch_fetcher: option.Option(dataloader.PaginatedBatchFetcher),
+  create_factory: option.Option(mutation_builder.ResolverFactory),
+  update_factory: option.Option(mutation_builder.ResolverFactory),
+  delete_factory: option.Option(mutation_builder.ResolverFactory),
+  upload_blob_factory: option.Option(mutation_builder.UploadBlobResolverFactory),
+) -> Result(schema.Schema, String) {
+  case lexicons {
+    [] -> Error("Cannot build schema from empty lexicon list")
+    _ -> {
+      // Extract record types and object types from lexicons
+      let #(record_types, object_types) =
+        extract_record_types_and_object_types(
+          lexicons,
+          batch_fetcher,
+          paginated_batch_fetcher,
+        )
+
+      // Build the query type
+      let query_type = build_query_type(record_types, object_types, fetcher)
+
+      // Build the mutation type
+      let mutation_type =
+        mutation_builder.build_mutation_type(
+          lexicons,
+          object_types,
+          create_factory,
+          update_factory,
+          delete_factory,
+          upload_blob_factory,
+        )
+
+      // Build the subscription type
+      let subscription_type = build_subscription_type(record_types, object_types)
+
+      // Create the schema with queries, mutations, and subscriptions
+      Ok(schema.schema_with_subscriptions(
+        query_type,
+        option.Some(mutation_type),
+        option.Some(subscription_type),
+      ))
+    }
+  }
+}
+
 /// Extract record types and object types from lexicon definitions
 ///
 /// NEW 3-PASS ARCHITECTURE:
@@ -1583,4 +1635,76 @@ fn extract_blob_data(
     }
     _ -> Error(Nil)
   }
+}
+
+/// Build subscription type with fields for each record type
+///
+/// Generates three subscription fields per record:
+/// - {collection}Created: Returns the full record type
+/// - {collection}Updated: Returns the full record type
+/// - {collection}Deleted: Returns String! (just the URI)
+fn build_subscription_type(
+  record_types: List(RecordType),
+  object_types: dict.Dict(String, schema.Type),
+) -> schema.Type {
+  let subscription_fields =
+    list.flat_map(record_types, fn(record_type) {
+      // Get the pre-built object type for Created/Updated
+      let assert Ok(object_type) = dict.get(object_types, record_type.nsid)
+
+      // Convert collection name to camelCase field name base
+      // e.g., "app.bsky.feed.post" -> "feedPost"
+      let field_base = record_type.field_name
+
+      // Created subscription - returns full record
+      let created_field =
+        schema.field(
+          field_base <> "Created",
+          schema.non_null(object_type),
+          "Emitted when a new " <> record_type.nsid <> " record is created",
+          fn(ctx) {
+            // For subscriptions, the event data is passed via ctx.data
+            // Return it directly without additional processing
+            case ctx.data {
+              option.Some(data) -> Ok(data)
+              option.None ->
+                Error("Subscription resolver called without event data")
+            }
+          },
+        )
+
+      // Updated subscription - returns full record
+      let updated_field =
+        schema.field(
+          field_base <> "Updated",
+          schema.non_null(object_type),
+          "Emitted when a " <> record_type.nsid <> " record is updated",
+          fn(ctx) {
+            case ctx.data {
+              option.Some(data) -> Ok(data)
+              option.None ->
+                Error("Subscription resolver called without event data")
+            }
+          },
+        )
+
+      // Deleted subscription
+      let deleted_field =
+        schema.field(
+          field_base <> "Deleted",
+          schema.non_null(object_type),
+          "Emitted when a " <> record_type.nsid <> " record is deleted",
+          fn(ctx) {
+            case ctx.data {
+              option.Some(data) -> Ok(data)
+              option.None ->
+                Error("Subscription resolver called without event data")
+            }
+          },
+        )
+
+      [created_field, updated_field, deleted_field]
+    })
+
+  schema.object_type("Subscription", "GraphQL subscription root", subscription_fields)
 }

@@ -563,3 +563,78 @@ pub fn parse_variable_value_in_argument_test() {
   }
   |> should.be_true
 }
+
+// Subscription tests
+pub fn parse_anonymous_subscription_with_keyword_test() {
+  "subscription { messageAdded }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.Subscription(parser.SelectionSet([
+          parser.Field("messageAdded", None, [], []),
+        ])),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_named_subscription_test() {
+  "subscription OnMessage { messageAdded { content } }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedSubscription(
+          "OnMessage",
+          [],
+          parser.SelectionSet([
+            parser.Field(
+              name: "messageAdded",
+              alias: None,
+              arguments: [],
+              selections: [parser.Field("content", None, [], [])],
+            ),
+          ]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_subscription_with_nested_fields_test() {
+  "subscription { postCreated { id title author { name } } }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.Subscription(parser.SelectionSet([
+          parser.Field(
+            name: "postCreated",
+            alias: None,
+            arguments: [],
+            selections: [
+              parser.Field("id", None, [], []),
+              parser.Field("title", None, [], []),
+              parser.Field(
+                name: "author",
+                alias: None,
+                arguments: [],
+                selections: [parser.Field("name", None, [], [])],
+              ),
+            ],
+          ),
+        ])),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}

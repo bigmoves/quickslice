@@ -97,7 +97,11 @@ pub opaque type EnumValue {
 
 /// GraphQL Schema
 pub opaque type Schema {
-  Schema(query_type: Type, mutation_type: Option(Type))
+  Schema(
+    query_type: Type,
+    mutation_type: Option(Type),
+    subscription_type: Option(Type),
+  )
 }
 
 // Built-in scalar types
@@ -210,7 +214,16 @@ pub fn enum_value(name: String, description: String) -> EnumValue {
 
 // Schema constructor
 pub fn schema(query_type: Type, mutation_type: Option(Type)) -> Schema {
-  Schema(query_type, mutation_type)
+  Schema(query_type, mutation_type, None)
+}
+
+// Schema constructor with subscriptions
+pub fn schema_with_subscriptions(
+  query_type: Type,
+  mutation_type: Option(Type),
+  subscription_type: Option(Type),
+) -> Schema {
+  Schema(query_type, mutation_type, subscription_type)
 }
 
 // Accessors
@@ -234,13 +247,19 @@ pub fn field_name(f: Field) -> String {
 
 pub fn query_type(s: Schema) -> Type {
   case s {
-    Schema(query_type, _) -> query_type
+    Schema(query_type, _, _) -> query_type
   }
 }
 
 pub fn get_mutation_type(s: Schema) -> Option(Type) {
   case s {
-    Schema(_, mutation_type) -> mutation_type
+    Schema(_, mutation_type, _) -> mutation_type
+  }
+}
+
+pub fn get_subscription_type(s: Schema) -> Option(Type) {
+  case s {
+    Schema(_, _, subscription_type) -> subscription_type
   }
 }
 

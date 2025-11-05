@@ -5,12 +5,14 @@ import dotenv_gleam
 import envoy
 import gleam/erlang/process
 import gleam/http as gleam_http
+import gleam/http/request
 import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string
 import graphiql_handler
 import graphql_handler
+import graphql_ws_handler
 import importer
 import jetstream_consumer
 import logging
@@ -19,6 +21,7 @@ import mist
 import oauth/handlers
 import oauth/session
 import pages/index
+import pubsub
 import sqlight
 import upload_handler
 import wisp
@@ -215,6 +218,10 @@ fn start_server_normally() {
     }
   }
 
+  // Initialize PubSub registry for subscriptions
+  pubsub.start()
+  logging.log(logging.Info, "[server] PubSub registry initialized")
+
   // Start Jetstream consumer in background
   case jetstream_consumer.start(db) {
     Ok(_) -> Nil
@@ -330,9 +337,39 @@ fn start_server(db: sqlight.Connection) {
     "[server] Server started on http://" <> host <> ":" <> int.to_string(port),
   )
 
+  // Create Wisp handler converted to Mist format
+  let wisp_handler = wisp_mist.handler(handler, secret_key_base)
+
+  // Wrap it to intercept WebSocket upgrades
+  let mist_handler = fn(req: request.Request(mist.Connection)) {
+    // Check if this is a WebSocket upgrade request to /graphql
+    let upgrade_header = request.get_header(req, "upgrade")
+    let path = request.path_segments(req)
+
+    case upgrade_header, path {
+      Ok(upgrade_value), ["graphql"] | Ok(upgrade_value), ["", "graphql"] -> {
+        // Check if upgrade header contains "websocket" (case-insensitive)
+        case string.lowercase(upgrade_value) {
+          "websocket" -> {
+            logging.log(logging.Info, "[server] Handling WebSocket upgrade for /graphql")
+            // Handle WebSocket upgrade
+            graphql_ws_handler.handle_websocket(req, ctx.db, ctx.auth_base_url)
+          }
+          _ -> {
+            logging.log(logging.Warning, "[server] Unknown upgrade type: " <> upgrade_value)
+            wisp_handler(req)
+          }
+        }
+      }
+      _, _ -> {
+        // Pass to Wisp handler for regular HTTP requests
+        wisp_handler(req)
+      }
+    }
+  }
+
   let assert Ok(_) =
-    wisp_mist.handler(handler, secret_key_base)
-    |> mist.new
+    mist.new(mist_handler)
     |> mist.bind(host)
     |> mist.port(port)
     |> mist.start

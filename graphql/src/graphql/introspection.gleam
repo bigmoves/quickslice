@@ -13,6 +13,7 @@ import graphql/value
 pub fn schema_introspection(graphql_schema: schema.Schema) -> value.Value {
   let query_type = schema.query_type(graphql_schema)
   let mutation_type_option = schema.get_mutation_type(graphql_schema)
+  let subscription_type_option = schema.get_subscription_type(graphql_schema)
 
   // Build list of all types in the schema
   let all_types = get_all_types(graphql_schema)
@@ -23,10 +24,16 @@ pub fn schema_introspection(graphql_schema: schema.Schema) -> value.Value {
     option.None -> value.Null
   }
 
+  // Build subscription type ref if it exists
+  let subscription_type_value = case subscription_type_option {
+    option.Some(subscription_type) -> type_ref(subscription_type)
+    option.None -> value.Null
+  }
+
   value.Object([
     #("queryType", type_ref(query_type)),
     #("mutationType", mutation_type_value),
-    #("subscriptionType", value.Null),
+    #("subscriptionType", subscription_type_value),
     #("types", value.List(all_types)),
     #("directives", value.List([])),
   ])
@@ -55,15 +62,23 @@ pub fn type_by_name_introspection(
 pub fn get_all_schema_types(graphql_schema: schema.Schema) -> List(schema.Type) {
   let query_type = schema.query_type(graphql_schema)
   let mutation_type_option = schema.get_mutation_type(graphql_schema)
+  let subscription_type_option = schema.get_subscription_type(graphql_schema)
 
   // Collect all types by traversing the query type
   let mut_collected_types = collect_types_from_type(query_type, [])
 
   // Also collect types from mutation type if it exists
-  let all_collected_types = case mutation_type_option {
+  let mutation_collected_types = case mutation_type_option {
     option.Some(mutation_type) ->
       collect_types_from_type(mutation_type, mut_collected_types)
     option.None -> mut_collected_types
+  }
+
+  // Also collect types from subscription type if it exists
+  let all_collected_types = case subscription_type_option {
+    option.Some(subscription_type) ->
+      collect_types_from_type(subscription_type, mutation_collected_types)
+    option.None -> mutation_collected_types
   }
 
   // Deduplicate by type name, preferring types with more fields

@@ -11,6 +11,7 @@ A GraphQL implementation in Gleam providing query parsing, execution, and intros
   - Aliases
   - Fragments (inline and named)
   - Mutations (named and anonymous)
+  - Subscriptions (named and anonymous)
 
 - **Schema Definition**: Type-safe schema builder with:
   - Object types
@@ -35,6 +36,14 @@ A GraphQL implementation in Gleam providing query parsing, execution, and intros
   - Input type validation
   - Context-based authentication and authorization
   - Error handling and reporting
+
+- **Subscription Execution**: Subscription engine with:
+  - Named subscriptions (`subscription OnMessage { ... }`)
+  - Anonymous subscriptions (`subscription { ... }`)
+  - Real-time event streaming via WebSocket
+  - Field selection and nested queries
+  - Context-based event data passing
+  - Full support for joins and complex resolvers
 
 - **Introspection**: Full GraphQL introspection support
   - Schema introspection queries
@@ -206,25 +215,152 @@ case result {
 }
 ```
 
+### Defining and Using Subscriptions
+
+```gleam
+import graphql/schema
+import graphql/executor
+import graphql/value
+
+// Define a Message type
+let message_type = schema.object_type(
+  "Message",
+  "A chat message",
+  [
+    schema.field("id", schema.id_type(), "Message ID", fn(ctx) {
+      // Extract from context data
+      case ctx.data {
+        option.Some(value.Object(fields)) -> {
+          case list.key_find(fields, "id") {
+            Ok(id_val) -> Ok(id_val)
+            Error(_) -> Ok(value.Null)
+          }
+        }
+        _ -> Ok(value.Null)
+      }
+    }),
+    schema.field("content", schema.string_type(), "Message content", fn(ctx) {
+      case ctx.data {
+        option.Some(value.Object(fields)) -> {
+          case list.key_find(fields, "content") {
+            Ok(content) -> Ok(content)
+            Error(_) -> Ok(value.Null)
+          }
+        }
+        _ -> Ok(value.Null)
+      }
+    }),
+  ]
+)
+
+// Define subscription type
+let subscription_type = schema.object_type(
+  "Subscription",
+  "Root subscription type",
+  [
+    schema.field(
+      "messageAdded",
+      message_type,
+      "Subscribe to new messages",
+      fn(ctx) {
+        // For subscriptions, the event data is passed via ctx.data
+        // Return it directly - the executor will handle field selection
+        case ctx.data {
+          option.Some(data) -> Ok(data)
+          option.None -> Error("Subscription called without event data")
+        }
+      }
+    ),
+  ]
+)
+
+// Create schema with subscriptions
+let my_schema = schema.schema_with_subscriptions(
+  query_type,
+  option.Some(mutation_type),
+  option.Some(subscription_type)
+)
+```
+
+### Executing Subscriptions
+
+```gleam
+import graphql/executor
+import graphql/schema
+import graphql/value
+
+// Subscription query with field selection
+let subscription = "
+  subscription {
+    messageAdded {
+      id
+      content
+    }
+  }
+"
+
+// When an event occurs, create context with the event data
+let event_data = value.Object([
+  #("id", value.String("msg_123")),
+  #("content", value.String("Hello, world!")),
+  #("timestamp", value.String("2024-01-01T00:00:00Z")),
+])
+
+let ctx = schema.context(option.Some(event_data))
+
+// Execute the subscription query with the event data
+let result = executor.execute(subscription, my_schema, ctx)
+
+case result {
+  Ok(executor.Response(data: data, errors: [])) -> {
+    // Subscription resolved successfully
+    // Only requested fields (id, content) will be in the response
+    // timestamp is filtered out by field selection
+    io.println("Event: " <> string.inspect(data))
+  }
+  Ok(executor.Response(data: data, errors: errors)) -> {
+    io.println("Errors: " <> string.inspect(errors))
+  }
+  Error(err) -> {
+    io.println("Error: " <> err)
+  }
+}
+```
+
+**Key Points for Subscriptions:**
+
+1. **Event Data via Context**: Unlike queries/mutations, subscription field resolvers receive event data through `ctx.data` and should return it directly.
+
+2. **Field Selection Works**: The executor automatically handles field selection - you pass the full event object, and only requested fields are returned.
+
+3. **Nested Queries Supported**: Subscriptions support the same nested queries, joins, and complex resolvers as regular queries.
+
+4. **WebSocket Integration**: In production, subscriptions are typically used with WebSocket connections where:
+   - Client subscribes via `subscription { ... }`
+   - Server listens for events (e.g., PubSub)
+   - When events occur, execute the subscription query with event data
+   - Send results back to client over WebSocket
+
 ## Test Coverage
 
-The package includes tests covering:
-- Query parsing (including mutations)
-- Query execution
-- Mutation execution
+The package includes comprehensive tests covering:
+- Query parsing (queries, mutations, subscriptions)
+- Query execution with field selection
+- Mutation execution with input types
+- Subscription execution with event data
 - Schema definition and validation
-- Introspection (queries and mutation types)
+- Introspection (queries, mutations, and subscription types)
 - Input type handling
-- Fragment support
+- Fragment support (inline and named)
 - Error handling and edge cases
+- Snapshot tests for parser validation
 
 ## Known Limitations
 
-- Subscriptions not yet implemented
 - Directives not yet implemented
-- Variables not yet implemented
+- Variables not yet fully implemented
 - Custom scalar types limited to built-in types
-- Union types not yet implemented
+- Union types not yet fully implemented
 - Interface types not yet implemented
 
 ## Dependencies

@@ -166,6 +166,36 @@ fn execute_operation(
         option.None -> Error("Schema does not define a mutation type")
       }
     }
+    parser.Subscription(selection_set) -> {
+      // Get subscription root type from schema
+      case schema.get_subscription_type(graphql_schema) {
+        option.Some(subscription_type) ->
+          execute_selection_set(
+            selection_set,
+            subscription_type,
+            graphql_schema,
+            ctx,
+            fragments,
+            [],
+          )
+        option.None -> Error("Schema does not define a subscription type")
+      }
+    }
+    parser.NamedSubscription(_, _, selection_set) -> {
+      // Get subscription root type from schema
+      case schema.get_subscription_type(graphql_schema) {
+        option.Some(subscription_type) ->
+          execute_selection_set(
+            selection_set,
+            subscription_type,
+            graphql_schema,
+            ctx,
+            fragments,
+            [],
+          )
+        option.None -> Error("Schema does not define a subscription type")
+      }
+    }
     parser.FragmentDefinition(_, _, _) ->
       Error("Fragment definitions are not executable operations")
   }

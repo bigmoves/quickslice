@@ -144,7 +144,7 @@ fn handle_jetstream_event(
   external_collection_ids: List(String),
 ) -> Nil {
   case goose.parse_event(event_json) {
-    goose.CommitEvent(did, _time_us, commit) -> {
+    goose.CommitEvent(did, time_us, commit) -> {
       // Check if this is an external collection event
       let is_external =
         list.contains(external_collection_ids, commit.collection)
@@ -153,13 +153,13 @@ fn handle_jetstream_event(
       case is_external {
         True -> {
           case is_known_did(db, did) {
-            True -> event_handler.handle_commit_event(db, did, commit)
+            True -> event_handler.handle_commit_event(db, did, time_us, commit)
             False -> Nil
           }
         }
         False -> {
           // Local collection - always process
-          event_handler.handle_commit_event(db, did, commit)
+          event_handler.handle_commit_event(db, did, time_us, commit)
         }
       }
     }

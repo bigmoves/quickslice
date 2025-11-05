@@ -22,6 +22,12 @@ pub type Operation {
     variables: List(Variable),
     selections: SelectionSet,
   )
+  Subscription(SelectionSet)
+  NamedSubscription(
+    name: String,
+    variables: List(Variable),
+    selections: SelectionSet,
+  )
   FragmentDefinition(
     name: String,
     type_condition: String,
@@ -168,6 +174,38 @@ fn parse_operations(
       }
     }
 
+    // Named subscription: "subscription Name(...) { ... }" or "subscription Name { ... }"
+    [lexer.Name("subscription"), lexer.Name(name), ..rest] -> {
+      // Check if there are variable definitions
+      case rest {
+        [lexer.ParenOpen, ..vars_rest] -> {
+          // Parse variable definitions
+          case parse_variable_definitions(vars_rest) {
+            Ok(#(variables, after_vars)) -> {
+              case parse_selection_set(after_vars) {
+                Ok(#(selections, remaining)) -> {
+                  let op = NamedSubscription(name, variables, selections)
+                  parse_operations(remaining, [op, ..acc])
+                }
+                Error(err) -> Error(err)
+              }
+            }
+            Error(err) -> Error(err)
+          }
+        }
+        _ -> {
+          // No variables, parse selection set directly
+          case parse_selection_set(rest) {
+            Ok(#(selections, remaining)) -> {
+              let op = NamedSubscription(name, [], selections)
+              parse_operations(remaining, [op, ..acc])
+            }
+            Error(err) -> Error(err)
+          }
+        }
+      }
+    }
+
     // Anonymous query: "query { ... }"
     [lexer.Name("query"), lexer.BraceOpen, ..] -> {
       case parse_selection_set(list.drop(tokens, 1)) {
@@ -184,6 +222,17 @@ fn parse_operations(
       case parse_selection_set(list.drop(tokens, 1)) {
         Ok(#(selections, remaining)) -> {
           let op = Mutation(selections)
+          parse_operations(remaining, [op, ..acc])
+        }
+        Error(err) -> Error(err)
+      }
+    }
+
+    // Anonymous subscription: "subscription { ... }"
+    [lexer.Name("subscription"), lexer.BraceOpen, ..] -> {
+      case parse_selection_set(list.drop(tokens, 1)) {
+        Ok(#(selections, remaining)) -> {
+          let op = Subscription(selections)
           parse_operations(remaining, [op, ..acc])
         }
         Error(err) -> Error(err)
@@ -225,7 +274,7 @@ fn parse_operations(
         [] ->
           Error(UnexpectedToken(
             list.first(tokens) |> result.unwrap(lexer.BraceClose),
-            "Expected query, mutation, fragment, or '{'",
+            "Expected query, mutation, subscription, fragment, or '{'",
           ))
         _ -> Ok(#(list.reverse(acc), tokens))
       }

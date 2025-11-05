@@ -113,6 +113,7 @@ query {
 
 - [Queries](./queries.md) - Fetching records with filters and sorting
 - [Mutations](./mutations.md) - Creating, updating, and deleting records
+- [Subscriptions](./subscriptions.md) - Real-time updates via WebSocket
 - [Joins](./joins.md) - Forward and reverse joins between records
 - [Variables](./variables.md) - Using GraphQL variables
 - [Blobs](./blobs.md) - Working with binary data

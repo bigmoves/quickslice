@@ -7,6 +7,7 @@ import gleam/option
 import gleam/string
 import goose
 import lexicon
+import pubsub
 import sqlight
 
 /// Convert a Dynamic value (Erlang term) to JSON string
@@ -37,10 +38,16 @@ fn iolist_to_string(iolist: Dynamic) -> String {
   }
 }
 
+/// Convert microseconds since Unix epoch to ISO8601 format
+/// Uses the event's original timestamp for accurate indexedAt values
+@external(erlang, "event_handler_ffi", "microseconds_to_iso8601")
+fn microseconds_to_iso8601(time_us: Int) -> String
+
 /// Handle a commit event (create, update, or delete)
 pub fn handle_commit_event(
   db: sqlight.Connection,
   did: String,
+  time_us: Int,
   commit: goose.CommitData,
 ) -> Nil {
   let uri = "at://" <> did <> "/" <> commit.collection <> "/" <> commit.rkey
@@ -67,6 +74,21 @@ pub fn handle_commit_event(
                 )
               {
                 Ok(_) -> {
+                  // Check if record already exists BEFORE inserting to determine operation type
+                  let existing_record = database.get_record(db, uri)
+                  let is_create = case existing_record {
+                    Ok([]) -> True  // Empty list means record doesn't exist
+                    Ok(_) -> False  // Non-empty list means record exists
+                    Error(_) -> {
+                      // Database error - log it and treat as update to be safe
+                      logging.log(
+                        logging.Warning,
+                        "[jetstream] Error checking existing record for " <> uri,
+                      )
+                      False
+                    }
+                  }
+
                   // Validation passed, insert record
                   case
                     database.insert_record(
@@ -82,7 +104,10 @@ pub fn handle_commit_event(
                       logging.log(
                         logging.Info,
                         "[jetstream] "
-                        <> commit.operation
+                        <> case is_create {
+                        True -> "create"
+                        False -> "update"
+                      }
                         <> " "
                         <> commit.collection
                         <> " ("
@@ -90,6 +115,28 @@ pub fn handle_commit_event(
                         <> ") "
                         <> did,
                       )
+
+                      // Publish event to PubSub for GraphQL subscriptions
+                      let operation = case is_create {
+                        True -> pubsub.Create
+                        False -> pubsub.Update
+                      }
+
+                      // Convert event timestamp from microseconds to ISO8601
+                      let indexed_at = microseconds_to_iso8601(time_us)
+
+                      let event =
+                        pubsub.RecordEvent(
+                          uri: uri,
+                          cid: cid_value,
+                          did: did,
+                          collection: commit.collection,
+                          value: json_string,
+                          indexed_at: indexed_at,
+                          operation: operation,
+                        )
+
+                      pubsub.publish(event)
                     }
                     Error(err) -> {
                       logging.log(
@@ -141,7 +188,22 @@ pub fn handle_commit_event(
 
       case database.delete_record(db, uri) {
         Ok(_) -> {
-          Nil
+          // Publish delete event to PubSub for GraphQL subscriptions
+          // Use the event timestamp from the Jetstream event
+          let indexed_at = microseconds_to_iso8601(time_us)
+
+          let event =
+            pubsub.RecordEvent(
+              uri: uri,
+              cid: "",
+              did: did,
+              collection: commit.collection,
+              value: "",
+              indexed_at: indexed_at,
+              operation: pubsub.Delete,
+            )
+
+          pubsub.publish(event)
         }
         Error(err) -> {
           logging.log(logging.Error, "[jetstream] Failed to delete: " <> string.inspect(err))

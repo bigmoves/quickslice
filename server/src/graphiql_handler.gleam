@@ -79,6 +79,7 @@ pub fn handle_graphiql_request(
       const token = '" <> oauth_token <> "';
       const fetcher = createGraphiQLFetcher({
         url: '/graphql',
+        subscriptionUrl: window.location.protocol === 'https:' ? 'wss://' + window.location.host + '/graphql' : 'ws://' + window.location.host + '/graphql',
         headers: token ? {
           'Authorization': token
         } : {}

@@ -22,17 +22,14 @@ import mutation_resolvers
 import sqlight
 import where_converter
 
-/// Execute a GraphQL query against lexicons in the database
+/// Build a GraphQL schema from database lexicons
 ///
-/// This fetches lexicons, builds a schema with database resolvers,
-/// executes the query, and returns the result as JSON.
-pub fn execute_query_with_db(
+/// This is exposed for WebSocket subscriptions to build the schema once
+/// and reuse it for multiple subscription executions.
+pub fn build_schema_from_db(
   db: sqlight.Connection,
-  query_string: String,
-  variables_json_str: String,
-  auth_token: Result(String, Nil),
   auth_base_url: String,
-) -> Result(String, String) {
+) -> Result(schema.Schema, String) {
   // Step 1: Fetch lexicons from database
   use lexicon_records <- result.try(
     database.get_all_lexicons(db)
@@ -366,51 +363,64 @@ pub fn execute_query_with_db(
           mutation_resolvers.upload_blob_resolver_factory(mutation_ctx)
         })
 
-      // Step 5: Build schema with database-backed resolvers and mutations
-      use graphql_schema <- result.try(
-        db_schema_builder.build_schema_with_fetcher(
-          parsed_lexicons,
-          record_fetcher,
-          option.Some(batch_fetcher),
-          option.Some(paginated_batch_fetcher),
-          create_factory,
-          update_factory,
-          delete_factory,
-          upload_blob_factory,
-        ),
+      // Step 5: Build schema with database-backed resolvers, mutations, and subscriptions
+      db_schema_builder.build_schema_with_subscriptions(
+        parsed_lexicons,
+        record_fetcher,
+        option.Some(batch_fetcher),
+        option.Some(paginated_batch_fetcher),
+        create_factory,
+        update_factory,
+        delete_factory,
+        upload_blob_factory,
       )
-
-      // Step 6: Create context with auth token if provided
-      let ctx_data = case auth_token {
-        Ok(token) -> {
-          // Add auth token to context for mutation resolvers
-          option.Some(value.Object([#("auth_token", value.String(token))]))
-        }
-        Error(_) -> option.None
-      }
-
-      // Convert json variables to Dict(String, value.Value)
-      let variables_dict = json_string_to_variables_dict(variables_json_str)
-
-      let ctx = schema.context_with_variables(ctx_data, variables_dict)
-
-      // Step 7: Execute the query
-      use response <- result.try(executor.execute(
-        query_string,
-        graphql_schema,
-        ctx,
-      ))
-
-      // Step 8: Format the response as JSON
-      Ok(format_response(response))
     }
   }
+}
+
+/// Execute a GraphQL query against lexicons in the database
+///
+/// This fetches lexicons, builds a schema with database resolvers,
+/// executes the query, and returns the result as JSON.
+pub fn execute_query_with_db(
+  db: sqlight.Connection,
+  query_string: String,
+  variables_json_str: String,
+  auth_token: Result(String, Nil),
+  auth_base_url: String,
+) -> Result(String, String) {
+  // Build the schema
+  use graphql_schema <- result.try(build_schema_from_db(db, auth_base_url))
+
+  // Create context with auth token if provided
+  let ctx_data = case auth_token {
+    Ok(token) -> {
+      // Add auth token to context for mutation resolvers
+      option.Some(value.Object([#("auth_token", value.String(token))]))
+    }
+    Error(_) -> option.None
+  }
+
+  // Convert json variables to Dict(String, value.Value)
+  let variables_dict = json_string_to_variables_dict(variables_json_str)
+
+  let ctx = schema.context_with_variables(ctx_data, variables_dict)
+
+  // Execute the query
+  use response <- result.try(executor.execute(
+    query_string,
+    graphql_schema,
+    ctx,
+  ))
+
+  // Format the response as JSON
+  Ok(format_response(response))
 }
 
 /// Convert a database Record to a GraphQL value.Value
 ///
 /// Creates an Object with all the record metadata plus the parsed JSON value
-fn record_to_graphql_value(
+pub fn record_to_graphql_value(
   record: database.Record,
   db: sqlight.Connection,
 ) -> value.Value {
@@ -440,7 +450,7 @@ fn record_to_graphql_value(
 }
 
 /// Parse a JSON string and convert it to a GraphQL value.Value
-fn parse_json_to_value(json_str: String) -> Result(value.Value, String) {
+pub fn parse_json_to_value(json_str: String) -> Result(value.Value, String) {
   // Parse JSON string to dynamic value
   case json.parse(json_str, decode.dynamic) {
     Ok(dyn) -> Ok(dynamic_to_value(dyn))
@@ -495,7 +505,7 @@ fn dynamic_to_value(dyn: dynamic.Dynamic) -> value.Value {
 }
 
 /// Format an executor.Response as JSON string
-fn format_response(response: executor.Response) -> String {
+pub fn format_response(response: executor.Response) -> String {
   let data_json = value_to_json(response.data)
 
   let errors_json = case response.errors {
@@ -544,7 +554,8 @@ fn value_to_json(val: value.Value) -> String {
 }
 
 /// Convert JSON string variables to Dict(String, value.Value)
-fn json_string_to_variables_dict(
+/// Exported for use by subscription handlers
+pub fn json_string_to_variables_dict(
   json_string: String,
 ) -> dict.Dict(String, value.Value) {
   // First try to extract the "variables" field from the JSON
