@@ -5,6 +5,7 @@
 /// managing component WebSocket connections.
 import backfill_state
 import components/backfill_button
+import config
 import gleam/bytes_tree
 import gleam/erlang/application
 import gleam/erlang/process
@@ -44,10 +45,11 @@ pub fn serve_backfill_button(
   req: request.Request(mist.Connection),
   db: sqlight.Connection,
   backfill_state_subject: process.Subject(backfill_state.Message),
+  config_subject: process.Subject(config.Message),
 ) -> response.Response(mist.ResponseData) {
   mist.websocket(
     request: req,
-    on_init: init_backfill_button_socket(db, backfill_state_subject, _),
+    on_init: init_backfill_button_socket(db, backfill_state_subject, config_subject, _),
     handler: loop_backfill_button_socket,
     on_close: close_backfill_button_socket,
   )
@@ -69,6 +71,7 @@ type BackfillButtonSocketInit =
 fn init_backfill_button_socket(
   db: sqlight.Connection,
   backfill_state_subject: process.Subject(backfill_state.Message),
+  config_subject: process.Subject(config.Message),
   _connection: mist.WebsocketConnection,
 ) -> BackfillButtonSocketInit {
   // TODO: Get is_admin from session
@@ -81,7 +84,7 @@ fn init_backfill_button_socket(
     sending: backfill_state.IsBackfilling,
   )
 
-  let component = backfill_button.component(db, backfill_state_subject)
+  let component = backfill_button.component(db, backfill_state_subject, config_subject)
   let assert Ok(runtime) =
     lustre.start_server_component(component, #(is_admin, backfilling))
 

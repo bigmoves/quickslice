@@ -180,6 +180,7 @@ pub fn handle_websocket(
   db: sqlight.Connection,
   auth_base_url: String,
   plc_url: String,
+  domain_authority: String,
 ) -> response.Response(ResponseData) {
   mist.websocket(
     request: req,
@@ -191,6 +192,7 @@ pub fn handle_websocket(
         db,
         auth_base_url,
         plc_url,
+        domain_authority,
       ) {
         Ok(schema) -> schema
         Error(err) -> {

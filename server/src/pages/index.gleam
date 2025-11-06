@@ -1,3 +1,4 @@
+import components/alert
 import components/button
 import components/collection_table
 import components/layout
@@ -28,9 +29,10 @@ pub fn view(
   db: sqlight.Connection,
   current_user: Option(#(String, String)),
   is_admin: Bool,
+  domain_authority: Option(String),
 ) -> Element(msg) {
   let data = fetch_data(db)
-  render(data, current_user, is_admin)
+  render(data, current_user, is_admin, domain_authority)
 }
 
 /// Fetch all data needed for the index page
@@ -80,11 +82,13 @@ fn render(
   data: IndexData,
   current_user: Option(#(String, String)),
   is_admin: Bool,
+  domain_authority: Option(String),
 ) -> Element(msg) {
-  layout.page(
+  layout.page_with_header(
     title: "ATProto Database Stats",
     content: [
-      render_header(current_user, is_admin),
+      render_alerts(domain_authority, data.lexicon_count),
+      render_action_buttons(current_user),
       render_stats_section(data.record_count, data.lexicon_count, data.actor_count),
       render_activity_section(data.record_activity),
       render_collections_section(
@@ -93,98 +97,60 @@ fn render(
         is_admin,
       ),
     ],
+    current_user: current_user,
+    domain_authority: domain_authority,
   )
 }
 
-/// Render the page header with title and action buttons
-fn render_header(
-  current_user: Option(#(String, String)),
-  _is_admin: Bool,
+/// Render configuration alerts if domain authority is missing or no lexicons loaded
+fn render_alerts(
+  domain_authority: Option(String),
+  lexicon_count: Int,
 ) -> Element(msg) {
-  let action_buttons = case current_user {
-    option.Some(_) -> {
-      let common_buttons = [
-        button.link(href: "/graphiql", text: "Open GraphiQL"),
-        button.link(href: "/upload", text: "Upload Blob"),
-      ]
-
-      [
-        html.div([attribute.class("flex gap-3")], common_buttons),
-      ]
-    }
-    option.None -> []
+  let domain_alert = case domain_authority {
+    option.None ->
+      alert.alert_with_link(
+        alert.Warning,
+        "No domain authority configured.",
+        "Settings",
+        "/settings",
+      )
+    option.Some(value) ->
+      case value {
+        "" ->
+          alert.alert_with_link(
+            alert.Warning,
+            "No domain authority configured.",
+            "Settings",
+            "/settings",
+          )
+        _ -> element.none()
+      }
   }
 
-  html.div([attribute.class("mb-8")], [
-    // Title and user info row
-    html.div([attribute.class("flex justify-between items-center mb-4")], [
-      html.h1([attribute.class("text-4xl font-bold text-zinc-200")], [
-        element.text("quickslice"),
-      ]),
-      render_user_section(current_user),
-    ]),
-    ..action_buttons
-  ])
+  let lexicon_alert = case lexicon_count {
+    0 ->
+      alert.alert_with_link(
+        alert.Info,
+        "No lexicons loaded.",
+        "Settings",
+        "/settings",
+      )
+    _ -> element.none()
+  }
+
+  html.div([], [domain_alert, lexicon_alert])
 }
 
-/// Render the user section showing login or user info
-fn render_user_section(current_user: Option(#(String, String))) -> Element(msg) {
+/// Render action buttons for authenticated users
+fn render_action_buttons(current_user: Option(#(String, String))) -> Element(msg) {
   case current_user {
-    option.Some(#(_did, handle)) -> {
-      // User is logged in
-      html.div([attribute.class("flex items-center gap-3")], [
-        html.span([attribute.class("text-zinc-300")], [
-          element.text("Logged in as "),
-          html.span([attribute.class("font-semibold text-zinc-200")], [
-            element.text("@" <> handle),
-          ]),
-        ]),
-        html.form(
-          [attribute.method("post"), attribute.action("/logout"), attribute.class("inline")],
-          [
-            html.button(
-              [
-                attribute.type_("submit"),
-                attribute.class(
-                  "px-4 py-2 text-sm text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300 rounded transition-colors cursor-pointer",
-                ),
-              ],
-              [element.text("Logout")],
-            ),
-          ],
-        ),
+    option.Some(_) -> {
+      html.div([attribute.class("mb-8 flex gap-3")], [
+        button.link(href: "/graphiql", text: "Open GraphiQL"),
       ])
     }
-    option.None -> {
-      // User is not logged in - show login form
-      html.form(
-        [
-          attribute.method("post"),
-          attribute.action("/oauth/authorize"),
-          attribute.class("flex items-center gap-2"),
-        ],
-        [
-          html.input([
-            attribute.type_("text"),
-            attribute.name("loginHint"),
-            attribute.placeholder("your-handle.bsky.social"),
-            attribute.class(
-              "px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-sm text-zinc-300 focus:outline-none focus:border-zinc-700",
-            ),
-            attribute.attribute("required", ""),
-          ]),
-          html.button(
-            [
-              attribute.type_("submit"),
-              attribute.class(
-                "px-4 py-2 text-sm text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded transition-colors cursor-pointer",
-              ),
-            ],
-            [element.text("Login")],
-          ),
-        ],
-      )
-    }
+    option.None -> element.none()
   }
 }
 

@@ -3,6 +3,7 @@
 /// This module provides GraphQL schema building and query execution using
 /// pure Gleam code, replacing the previous Elixir FFI implementation.
 import backfill
+import config
 import cursor
 import database
 import gleam/dict
@@ -31,6 +32,7 @@ pub fn build_schema_from_db(
   db: sqlight.Connection,
   auth_base_url: String,
   plc_url: String,
+  domain_authority: String,
 ) -> Result(schema.Schema, String) {
   // Step 1: Fetch lexicons from database
   use lexicon_records <- result.try(
@@ -345,7 +347,7 @@ pub fn build_schema_from_db(
       let external_collection_ids =
         parsed_lexicons
         |> list.filter_map(fn(lex) {
-          case backfill.nsid_matches_domain_authority(lex.id) {
+          case backfill.nsid_matches_domain_authority(lex.id, domain_authority) {
             True -> Error(Nil)  // Local collection, skip
             False -> Ok(lex.id)  // External collection, include
           }
@@ -407,11 +409,19 @@ pub fn execute_query_with_db(
   auth_base_url: String,
   plc_url: String,
 ) -> Result(String, String) {
+  // Start config cache actor to get domain authority
+  let assert Ok(config_subject) = config.start(db)
+  let domain_authority = case config.get_domain_authority(config_subject) {
+    option.Some(authority) -> authority
+    option.None -> ""
+  }
+
   // Build the schema
   use graphql_schema <- result.try(build_schema_from_db(
     db,
     auth_base_url,
     plc_url,
+    domain_authority,
   ))
 
   // Create context with auth token if provided

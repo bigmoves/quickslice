@@ -12,7 +12,6 @@ primary_region = 'sjc'
   DATABASE_URL = '/data/quickslice.db'
   HOST = '0.0.0.0'
   PORT = '8080'
-  DOMAIN_AUTHORITY = 'xyz.statusphere'
 
 [http_service]
   internal_port = 8080

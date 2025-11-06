@@ -19,6 +19,7 @@ lexicon_graphql = { path = "../lexicon_graphql" }
 gleam_stdlib = ">= 0.60.0 and < 1.0.0"
 mist = ">= 5.0.3 and < 6.0.0"
 wisp = ">= 2.1.0 and < 3.0.0"
+wisp_flash = ">= 2.0.0 and < 3.0.0"
 gleam_erlang = ">= 1.0.0 and < 2.0.0"
 gleam_otp = ">= 1.2.0 and < 2.0.0"
 gleam_http = ">= 4.0.0 and < 5.0.0"

@@ -1,6 +1,7 @@
 import argv
 import backfill
 import backfill_state
+import config
 import database
 import dotenv_gleam
 import envoy
@@ -23,10 +24,14 @@ import mist
 import oauth/handlers
 import oauth/session
 import pages/index
+import pages/settings
 import pubsub
+import simplifile
 import sqlight
 import upload_handler
 import wisp
+import wisp_flash
+import zip_helper
 import wisp/wisp_mist
 import xrpc_handlers
 import xrpc_router
@@ -39,6 +44,8 @@ pub type Context {
     oauth_config: handlers.OAuthConfig,
     admin_dids: List(String),
     backfill_state: process.Subject(backfill_state.Message),
+    config: process.Subject(config.Message),
+    jetstream_consumer: option.Option(process.Subject(jetstream_consumer.Message)),
   )
 }
 
@@ -111,6 +118,21 @@ fn run_backfill_command() {
   // Initialize the database
   let assert Ok(db) = database.initialize(database_url)
 
+  // Start config cache actor
+  let assert Ok(config_subject) = config.start(db)
+
+  // Get domain authority from config
+  let domain_authority = case config.get_domain_authority(config_subject) {
+    option.Some(authority) -> authority
+    option.None -> {
+      logging.log(
+        logging.Warning,
+        "No domain_authority configured. All collections will be treated as external.",
+      )
+      ""
+    }
+  }
+
   // Get all record-type lexicons
   logging.log(logging.Info, "Fetching record-type lexicons from database...")
   case database.get_record_type_lexicons(db) {
@@ -131,7 +153,7 @@ fn run_backfill_command() {
           let #(local_lexicons, external_lexicons) =
             lexicons
             |> list.partition(fn(lex) {
-              backfill.nsid_matches_domain_authority(lex.id)
+              backfill.nsid_matches_domain_authority(lex.id, domain_authority)
             })
 
           let collections = list.map(local_lexicons, fn(lex) { lex.id })
@@ -199,41 +221,16 @@ fn start_server_normally() {
   // Initialize the database
   let assert Ok(db) = database.initialize(database_url)
 
-  // Auto-import lexicons from priv/lexicons if directory exists
-  logging.log(logging.Info, "")
-  logging.log(
-    logging.Info,
-    "[server] Checking for lexicons in priv/lexicons...",
-  )
-  case importer.import_lexicons_from_directory("priv/lexicons", db) {
-    Ok(stats) -> {
-      case stats.imported {
-        0 -> logging.log(logging.Info, "[server]   No lexicons found to import")
-        _ -> {
-          logging.log(
-            logging.Info,
-            "[server]   Imported "
-              <> int.to_string(stats.imported)
-              <> " lexicon(s)",
-          )
-        }
-      }
-    }
-    Error(_) -> {
-      logging.log(
-        logging.Info,
-        "[server]   No priv/lexicons directory found, skipping import",
-      )
-    }
-  }
+  // Note: Lexicon import has been moved to the settings page (ZIP upload)
+  // Use the /settings page to upload a ZIP file containing lexicon JSON files
 
   // Initialize PubSub registry for subscriptions
   pubsub.start()
   logging.log(logging.Info, "[server] PubSub registry initialized")
 
   // Start Jetstream consumer in background
-  case jetstream_consumer.start(db) {
-    Ok(_) -> Nil
+  let jetstream_subject = case jetstream_consumer.start(db) {
+    Ok(subject) -> option.Some(subject)
     Error(err) -> {
       logging.log(
         logging.Error,
@@ -243,6 +240,7 @@ fn start_server_normally() {
         logging.Warning,
         "[server]    Server will continue without real-time indexing",
       )
+      option.None
     }
   }
 
@@ -251,10 +249,13 @@ fn start_server_normally() {
   logging.log(logging.Info, "")
 
   // Start server immediately (this blocks)
-  start_server(db)
+  start_server(db, jetstream_subject)
 }
 
-fn start_server(db: sqlight.Connection) {
+fn start_server(
+  db: sqlight.Connection,
+  jetstream_subject: option.Option(process.Subject(jetstream_consumer.Message)),
+) {
   wisp.configure_logger()
 
   // Get secret_key_base from environment or generate one
@@ -347,6 +348,10 @@ fn start_server(db: sqlight.Connection) {
   let assert Ok(backfill_state_subject) = backfill_state.start()
   logging.log(logging.Info, "[server] Backfill state actor initialized")
 
+  // Start config cache actor
+  let assert Ok(config_subject) = config.start(db)
+  logging.log(logging.Info, "[server] Config cache actor initialized")
+
   let ctx =
     Context(
       db: db,
@@ -355,6 +360,8 @@ fn start_server(db: sqlight.Connection) {
       oauth_config: oauth_config,
       admin_dids: admin_dids,
       backfill_state: backfill_state_subject,
+      config: config_subject,
+      jetstream_consumer: jetstream_subject,
     )
 
   let handler = fn(req) { handle_request(req, ctx) }
@@ -387,6 +394,7 @@ fn start_server(db: sqlight.Connection) {
                   req,
                   ctx.db,
                   ctx.backfill_state,
+                  ctx.config,
                 )
               }
               _ -> wisp_handler(req)
@@ -406,11 +414,16 @@ fn start_server(db: sqlight.Connection) {
                   logging.Info,
                   "[server] Handling WebSocket upgrade for /graphql",
                 )
+                let domain_authority = case config.get_domain_authority(ctx.config) {
+                  option.Some(authority) -> authority
+                  option.None -> ""
+                }
                 graphql_ws_handler.handle_websocket(
                   req,
                   ctx.db,
                   ctx.auth_base_url,
                   ctx.plc_url,
+                  domain_authority,
                 )
               }
               _ -> wisp_handler(req)
@@ -446,12 +459,13 @@ fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
   case segments {
     [] -> index_route(req, ctx)
     ["health"] -> handle_health_check(ctx)
+    ["settings"] -> settings_route(req, ctx)
     ["oauth", "authorize"] ->
       handlers.handle_oauth_authorize(req, ctx.db, ctx.oauth_config)
     ["oauth", "callback"] ->
       handlers.handle_oauth_callback(req, ctx.db, ctx.oauth_config)
     ["logout"] -> handlers.handle_logout(req, ctx.db)
-    ["backfill"] -> handle_backfill_request(req, ctx.db)
+    ["backfill"] -> handle_backfill_request(req, ctx)
     ["graphql"] ->
       graphql_handler.handle_graphql_request(
         req,
@@ -524,12 +538,18 @@ fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
 
 fn handle_backfill_request(
   req: wisp.Request,
-  db: sqlight.Connection,
+  ctx: Context,
 ) -> wisp.Response {
   case req.method {
     gleam_http.Post -> {
+      // Get domain authority from config
+      let domain_authority = case config.get_domain_authority(ctx.config) {
+        option.Some(authority) -> authority
+        option.None -> ""
+      }
+
       // Get all record-type lexicons
-      case database.get_record_type_lexicons(db) {
+      case database.get_record_type_lexicons(ctx.db) {
         Ok(lexicons) -> {
           case lexicons {
             [] -> {
@@ -544,7 +564,7 @@ fn handle_backfill_request(
               let #(collections, external_collections) =
                 lexicons
                 |> list.partition(fn(lex) {
-                  backfill.nsid_matches_domain_authority(lex.id)
+                  backfill.nsid_matches_domain_authority(lex.id, domain_authority)
                 })
 
               let collection_ids = list.map(collections, fn(lex) { lex.id })
@@ -552,14 +572,14 @@ fn handle_backfill_request(
                 list.map(external_collections, fn(lex) { lex.id })
 
               // Run backfill in background process
-              let config = backfill.default_config()
+              let backfill_config = backfill.default_config()
               process.spawn_unlinked(fn() {
                 backfill.backfill_collections(
                   [],
                   collection_ids,
                   external_collection_ids,
-                  config,
-                  db,
+                  backfill_config,
+                  ctx.db,
                 )
               })
 
@@ -630,9 +650,190 @@ fn index_route(req: wisp.Request, ctx: Context) -> wisp.Response {
     Error(_) -> #(option.None, False)
   }
 
-  index.view(ctx.db, current_user, user_is_admin)
+  // Get domain authority from config cache
+  let domain_authority = config.get_domain_authority(ctx.config)
+
+  index.view(ctx.db, current_user, user_is_admin, domain_authority)
   |> element.to_document_string
   |> wisp.html_response(200)
+}
+
+fn settings_route(req: wisp.Request, ctx: Context) -> wisp.Response {
+  // Get current user from session (with automatic token refresh)
+  let refresh_fn = fn(refresh_token) {
+    handlers.refresh_access_token(ctx.oauth_config, refresh_token)
+  }
+
+  let #(current_user, user_is_admin) = case
+    session.get_current_user(req, ctx.db, refresh_fn)
+  {
+    Ok(#(did, handle, _access_token)) -> {
+      let admin = is_admin(did, ctx.admin_dids)
+      #(option.Some(#(did, handle)), admin)
+    }
+    Error(_) -> #(option.None, False)
+  }
+
+  case req.method {
+    gleam_http.Get -> {
+      // Extract flash messages if present
+      use flash_kind, flash_message <- wisp_flash.get_flash(req)
+
+      settings.view(ctx.db, current_user, user_is_admin, flash_kind, flash_message)
+      |> element.to_document_string
+      |> wisp.html_response(200)
+    }
+    gleam_http.Post -> {
+      // Handle form submission (domain authority or lexicons upload)
+      use form_data <- wisp.require_form(req)
+
+      // Check if this is a lexicons upload
+      case list.key_find(form_data.files, "lexicons_zip") {
+        Ok(uploaded_file) -> {
+          // Handle lexicons ZIP upload
+          handle_lexicons_upload(req, uploaded_file, ctx)
+        }
+        Error(_) -> {
+          // Not a file upload, check for domain_authority field
+          case list.key_find(form_data.values, "domain_authority") {
+            Ok(domain_authority) -> {
+              // Save domain_authority to database and update cache
+              case config.set_domain_authority(ctx.config, ctx.db, domain_authority) {
+                Ok(_) -> {
+                  wisp.redirect("/settings")
+                  |> wisp_flash.set_flash(req, "success", "Domain authority saved successfully")
+                }
+                Error(_) -> {
+                  logging.log(logging.Error, "[settings] Failed to save domain_authority")
+                  wisp.redirect("/settings")
+                  |> wisp_flash.set_flash(req, "error", "Failed to save domain authority")
+                }
+              }
+            }
+            Error(_) -> {
+              logging.log(logging.Warning, "[settings] No form data received")
+              wisp.redirect("/settings")
+            }
+          }
+        }
+      }
+    }
+    _ -> {
+      wisp.response(405)
+      |> wisp.set_header("content-type", "text/html")
+      |> wisp.set_body(wisp.Text("<h1>Method Not Allowed</h1>"))
+    }
+  }
+}
+
+fn handle_lexicons_upload(
+  req: wisp.Request,
+  uploaded_file: wisp.UploadedFile,
+  ctx: Context,
+) -> wisp.Response {
+  logging.log(logging.Info, "[settings] Processing lexicons ZIP upload: " <> uploaded_file.file_name)
+
+  // Create temporary directory for extraction with random suffix
+  let temp_dir = "tmp/lexicon_upload_" <> wisp.random_string(16)
+
+  case simplifile.create_directory_all(temp_dir) {
+    Ok(_) -> {
+      logging.log(logging.Info, "[settings] Created temp directory: " <> temp_dir)
+
+      // Extract ZIP file to temp directory
+      case zip_helper.extract_zip(uploaded_file.path, temp_dir) {
+        Ok(_) -> {
+          logging.log(logging.Info, "[settings] Extracted ZIP file to: " <> temp_dir)
+
+          // Import lexicons from extracted directory
+          case importer.import_lexicons_from_directory(temp_dir, ctx.db) {
+            Ok(stats) -> {
+              // Clean up temp directory
+              let _ = simplifile.delete(temp_dir)
+
+              logging.log(
+                logging.Info,
+                "[settings] Lexicon import complete: "
+                  <> int.to_string(stats.imported)
+                  <> " imported, "
+                  <> int.to_string(stats.failed)
+                  <> " failed",
+              )
+
+              // Log any errors
+              case stats.errors {
+                [] -> Nil
+                errors -> {
+                  list.each(errors, fn(err) {
+                    logging.log(logging.Warning, "[settings] Import error: " <> err)
+                  })
+                }
+              }
+
+              // Restart Jetstream consumer to pick up newly imported collections
+              let restart_status = case ctx.jetstream_consumer {
+                option.Some(consumer) -> {
+                  logging.log(logging.Info, "[settings] Restarting Jetstream consumer with new lexicons...")
+                  case jetstream_consumer.restart(consumer) {
+                    Ok(_) -> {
+                      logging.log(logging.Info, "[settings] Jetstream consumer restarted successfully")
+                      "success"
+                    }
+                    Error(err) -> {
+                      logging.log(logging.Error, "[settings] Failed to restart Jetstream consumer: " <> err)
+                      "failed"
+                    }
+                  }
+                }
+                option.None -> {
+                  logging.log(logging.Info, "[settings] Jetstream consumer not running, skipping restart")
+                  "not_running"
+                }
+              }
+
+              // Build success message with import stats and restart status
+              let base_message = "Imported " <> int.to_string(stats.imported) <> " lexicon(s) successfully"
+              let message = case restart_status {
+                "success" -> base_message <> ". Jetstream consumer restarted."
+                "failed" -> base_message <> ". Warning: Jetstream consumer restart failed."
+                "not_running" -> base_message <> "."
+                _ -> base_message
+              }
+
+              let flash_kind = case restart_status {
+                "failed" -> "warning"
+                _ -> "success"
+              }
+
+              wisp.redirect("/settings")
+              |> wisp_flash.set_flash(req, flash_kind, message)
+            }
+            Error(err) -> {
+              // Clean up temp directory
+              let _ = simplifile.delete(temp_dir)
+
+              logging.log(logging.Error, "[settings] Failed to import lexicons: " <> err)
+              wisp.redirect("/settings")
+              |> wisp_flash.set_flash(req, "error", "Failed to import lexicons: " <> err)
+            }
+          }
+        }
+        Error(err) -> {
+          // Clean up temp directory
+          let _ = simplifile.delete(temp_dir)
+
+          logging.log(logging.Error, "[settings] Failed to extract ZIP: " <> err)
+          wisp.redirect("/settings")
+          |> wisp_flash.set_flash(req, "error", "Failed to extract ZIP file: " <> err)
+        }
+      }
+    }
+    Error(_) -> {
+      logging.log(logging.Error, "[settings] Failed to create temp directory")
+      wisp.redirect("/settings")
+      |> wisp_flash.set_flash(req, "error", "Failed to create temporary directory for upload")
+    }
+  }
 }
 
 fn middleware(

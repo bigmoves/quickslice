@@ -10,7 +10,6 @@ This guide covers deploying quickslice on Fly.io and Railway. Both platforms sup
 | `HOST` | No | `127.0.0.1` | Server bind address. Set to `0.0.0.0` for containers |
 | `PORT` | No | `8000` | Server port |
 | `SECRET_KEY_BASE` | Recommended | Auto-generated | Session encryption key (64+ chars). **Must persist across restarts** |
-| `DOMAIN_AUTHORITY` | Optional | - | Domain authority for lexicons (e.g., `xyz.statusphere`) |
 | `ADMIN_DIDS` | Optional | - | Comma-separated DIDs for admin access (e.g., `did:plc:abc,did:plc:xyz`) |
 | `OAUTH_CLIENT_ID` | Optional | - | OAuth client ID |
 | `OAUTH_CLIENT_SECRET` | Optional | - | OAuth client secret |
@@ -122,7 +121,6 @@ SECRET_KEY_BASE=<generate-with-openssl-rand>
 
 Optional variables:
 ```
-DOMAIN_AUTHORITY=your.domain
 ADMIN_DIDS=did:plc:your_did
 OAUTH_CLIENT_ID=your_client_id
 OAUTH_CLIENT_SECRET=your_client_secret
@@ -186,7 +184,6 @@ services:
       - PORT=8000
       - DATABASE_URL=/data/quickslice.db
       - SECRET_KEY_BASE=${SECRET_KEY_BASE}
-      - DOMAIN_AUTHORITY=your.domain
       - ADMIN_DIDS=${ADMIN_DIDS}
     restart: unless-stopped
     healthcheck:

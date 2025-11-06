@@ -49,6 +49,7 @@ packages = [
   { name = "thoas", version = "1.2.1", build_tools = ["rebar3"], requirements = [], otp_app = "thoas", source = "hex", outer_checksum = "E38697EDFFD6E91BD12CEA41B155115282630075C2A727E7A6B2947F5408B86A" },
   { name = "unicode_util_compat", version = "0.7.1", build_tools = ["rebar3"], requirements = [], otp_app = "unicode_util_compat", source = "hex", outer_checksum = "B3A917854CE3AE233619744AD1E0102E05673136776FB2FA76234F3E03B23642" },
   { name = "wisp", version = "2.1.0", build_tools = ["gleam"], requirements = ["directories", "exception", "filepath", "gleam_crypto", "gleam_erlang", "gleam_http", "gleam_json", "gleam_stdlib", "houdini", "logging", "marceau", "mist", "simplifile"], otp_app = "wisp", source = "hex", outer_checksum = "362BDDD11BF48EB38CDE51A73BC7D1B89581B395CA998E3F23F11EC026151C54" },
+  { name = "wisp_flash", version = "2.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "wisp"], otp_app = "wisp_flash", source = "hex", outer_checksum = "C67A295E42030EEB8A7D31CD64971790EC010FA2644CBDC0835BF88D97DE998D" },
 ]
 
 [requirements]
@@ -78,3 +79,4 @@ simplifile = { version = ">= 2.0.0 and < 3.0.0" }
 sqlight = { version = ">= 1.0.0 and < 2.0.0" }
 thoas = { version = ">= 1.0.0 and < 2.0.0" }
 wisp = { version = ">= 2.1.0 and < 3.0.0" }
+wisp_flash = { version = ">= 2.0.0 and < 3.0.0" }

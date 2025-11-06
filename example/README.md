@@ -85,7 +85,6 @@ You can customize the server configuration using environment variables in `docke
 
 - `HOST` - Server host (default: `0.0.0.0`)
 - `PORT` - Server port (default: `8000`)
-- `DOMAIN_AUTHORITY` - Domain authority (default: `xyz.statusphere`)
 
 ## GraphQL Endpoint
 

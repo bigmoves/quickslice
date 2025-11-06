@@ -237,6 +237,22 @@ fn migration_v1(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   Ok(Nil)
 }
 
+/// Migration v2: Add config table
+fn migration_v2(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+  logging.log(logging.Info, "Running migration v2 (config table)...")
+
+  let create_table_sql =
+    "
+    CREATE TABLE IF NOT EXISTS config (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  "
+
+  sqlight.exec(create_table_sql, conn)
+}
+
 /// Runs all pending migrations based on current schema version
 fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   use current_version <- result.try(get_current_version(conn))
@@ -249,17 +265,23 @@ fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   // Apply migrations sequentially based on current version
   case current_version {
     // Fresh database or pre-migration database - run v1
-    0 -> apply_migration(conn, 1, migration_v1)
+    0 -> {
+      use _ <- result.try(apply_migration(conn, 1, migration_v1))
+      apply_migration(conn, 2, migration_v2)
+    }
+
+    // Run v2 migration
+    1 -> apply_migration(conn, 2, migration_v2)
 
     // Already at latest version
-    1 -> {
-      logging.log(logging.Info, "Schema is up to date (v1)")
+    2 -> {
+      logging.log(logging.Info, "Schema is up to date (v2)")
       Ok(Nil)
     }
 
     // Future versions would be handled here:
-    // 1 -> apply_migration(conn, 2, migration_v2)
     // 2 -> apply_migration(conn, 3, migration_v3)
+    // 3 -> apply_migration(conn, 4, migration_v4)
     _ -> {
       logging.log(
         logging.Error,
@@ -283,6 +305,58 @@ pub fn initialize(path: String) -> Result(sqlight.Connection, sqlight.Error) {
   logging.log(logging.Info, "Database initialized at: " <> path)
   Ok(conn)
 }
+
+// ===== Config Functions =====
+
+/// Get a config value by key
+pub fn get_config(
+  conn: sqlight.Connection,
+  key: String,
+) -> Result(String, sqlight.Error) {
+  let sql =
+    "
+    SELECT value
+    FROM config
+    WHERE key = ?
+  "
+
+  let decoder = {
+    use value <- decode.field(0, decode.string)
+    decode.success(value)
+  }
+
+  case sqlight.query(sql, on: conn, with: [sqlight.text(key)], expecting: decoder) {
+    Ok([value, ..]) -> Ok(value)
+    Ok([]) -> Error(sqlight.SqlightError(sqlight.ConstraintForeignkey, "Config key not found", -1))
+    Error(err) -> Error(err)
+  }
+}
+
+/// Set or update a config value
+pub fn set_config(
+  conn: sqlight.Connection,
+  key: String,
+  value: String,
+) -> Result(Nil, sqlight.Error) {
+  let sql =
+    "
+    INSERT INTO config (key, value, updated_at)
+    VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_at = datetime('now')
+  "
+
+  use _ <- result.try(sqlight.query(
+    sql,
+    on: conn,
+    with: [sqlight.text(key), sqlight.text(value)],
+    expecting: decode.string,
+  ))
+  Ok(Nil)
+}
+
+// ===== Record Functions =====
 
 /// Inserts or updates a record in the database
 pub fn insert_record(

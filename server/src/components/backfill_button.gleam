@@ -1,10 +1,12 @@
 import backfill
 import backfill_state
 import components/button
+import config
 import database
 import gleam/erlang/process
 import gleam/json
 import gleam/list
+import gleam/option
 import gleam/otp/actor
 import lustre
 import lustre/attribute
@@ -19,8 +21,9 @@ import sqlight
 pub fn component(
   db: sqlight.Connection,
   backfill_state_subject: process.Subject(backfill_state.Message),
+  config_subject: process.Subject(config.Message),
 ) {
-  lustre.application(init(db, backfill_state_subject, _), update, view)
+  lustre.application(init(db, backfill_state_subject, config_subject, _), update, view)
 }
 
 // MODEL
@@ -31,12 +34,14 @@ pub type Model {
     is_admin: Bool,
     db: sqlight.Connection,
     backfill_state: process.Subject(backfill_state.Message),
+    config: process.Subject(config.Message),
   )
 }
 
 fn init(
   db: sqlight.Connection,
   backfill_state_subject: process.Subject(backfill_state.Message),
+  config_subject: process.Subject(config.Message),
   flags: #(Bool, Bool),
 ) -> #(Model, effect.Effect(Msg)) {
   let #(is_admin, backfilling) = flags
@@ -51,6 +56,7 @@ fn init(
       is_admin: is_admin,
       db: db,
       backfill_state: backfill_state_subject,
+      config: config_subject,
     ),
     initial_effect,
   )
@@ -68,7 +74,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     UserClickedBackfill -> #(
       Model(..model, backfilling: True),
       effect.batch([
-        do_backfill(model.db, model.backfill_state),
+        do_backfill(model.db, model.backfill_state, model.config),
         start_polling(),
       ]),
     )
@@ -103,10 +109,17 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 fn do_backfill(
   db: sqlight.Connection,
   backfill_state_subject: process.Subject(backfill_state.Message),
+  config_subject: process.Subject(config.Message),
 ) -> effect.Effect(Msg) {
   effect.from(fn(_dispatch) {
     // Update global state to indicate backfill is starting
     process.send(backfill_state_subject, backfill_state.StartBackfill)
+
+    // Get domain authority from config
+    let domain_authority = case config.get_domain_authority(config_subject) {
+      option.Some(authority) -> authority
+      option.None -> ""
+    }
 
     // Spawn async process to run backfill without blocking the UI
     let _ =
@@ -117,7 +130,7 @@ fn do_backfill(
             let #(collections, external_collections) =
               lexicons
               |> list.partition(fn(lex) {
-                backfill.nsid_matches_domain_authority(lex.id)
+                backfill.nsid_matches_domain_authority(lex.id, domain_authority)
               })
 
             let collection_ids = list.map(collections, fn(lex) { lex.id })

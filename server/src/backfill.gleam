@@ -84,15 +84,10 @@ fn configure_hackney_pool() -> Nil
 
 /// Check if an NSID matches the configured domain authority
 /// NSID format is like "com.example.post" where "com.example" is the authority
-pub fn nsid_matches_domain_authority(nsid: String) -> Bool {
-  case envoy.get("DOMAIN_AUTHORITY") {
-    Error(_) -> False
-    Ok(domain_authority) -> {
-      // NSID format: authority.name (e.g., "com.example.post")
-      // We need to check if the NSID starts with the domain authority
-      string.starts_with(nsid, domain_authority <> ".")
-    }
-  }
+pub fn nsid_matches_domain_authority(nsid: String, domain_authority: String) -> Bool {
+  // NSID format: authority.name (e.g., "com.example.post")
+  // We need to check if the NSID starts with the domain authority
+  string.starts_with(nsid, domain_authority <> ".")
 }
 
 /// Resolve a DID to get ATP data (PDS endpoint and handle)
