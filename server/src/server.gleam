@@ -1,5 +1,6 @@
 import argv
 import backfill
+import backfill_state
 import database
 import dotenv_gleam
 import envoy
@@ -17,6 +18,7 @@ import importer
 import jetstream_consumer
 import logging
 import lustre/element
+import lustre_handlers
 import mist
 import oauth/handlers
 import oauth/session
@@ -36,6 +38,7 @@ pub type Context {
     plc_url: String,
     oauth_config: handlers.OAuthConfig,
     admin_dids: List(String),
+    backfill_state: process.Subject(backfill_state.Message),
   )
 }
 
@@ -340,6 +343,10 @@ fn start_server(db: sqlight.Connection) {
     Error(_) -> "https://plc.directory"
   }
 
+  // Start backfill state actor to track backfill status across requests
+  let assert Ok(backfill_state_subject) = backfill_state.start()
+  logging.log(logging.Info, "[server] Backfill state actor initialized")
+
   let ctx =
     Context(
       db: db,
@@ -347,6 +354,7 @@ fn start_server(db: sqlight.Connection) {
       plc_url: plc_url,
       oauth_config: oauth_config,
       admin_dids: admin_dids,
+      backfill_state: backfill_state_subject,
     )
 
   let handler = fn(req) { handle_request(req, ctx) }
@@ -359,42 +367,60 @@ fn start_server(db: sqlight.Connection) {
   // Create Wisp handler converted to Mist format
   let wisp_handler = wisp_mist.handler(handler, secret_key_base)
 
-  // Wrap it to intercept WebSocket upgrades
+  // Wrap it to intercept WebSocket upgrades and serve Lustre runtime
   let mist_handler = fn(req: request.Request(mist.Connection)) {
-    // Check if this is a WebSocket upgrade request to /graphql
     let upgrade_header = request.get_header(req, "upgrade")
     let path = request.path_segments(req)
 
-    case upgrade_header, path {
-      Ok(upgrade_value), ["graphql"] | Ok(upgrade_value), ["", "graphql"] -> {
-        // Check if upgrade header contains "websocket" (case-insensitive)
-        case string.lowercase(upgrade_value) {
-          "websocket" -> {
-            logging.log(
-              logging.Info,
-              "[server] Handling WebSocket upgrade for /graphql",
-            )
-            // Handle WebSocket upgrade
-            graphql_ws_handler.handle_websocket(
-              req,
-              ctx.db,
-              ctx.auth_base_url,
-              ctx.plc_url,
-            )
+    case path {
+      // Serve Lustre client runtime
+      ["lustre", "runtime.mjs"] -> lustre_handlers.serve_lustre_runtime()
+
+      // Backfill button WebSocket
+      ["backfill-ws"] -> {
+        case upgrade_header {
+          Ok(upgrade_value) -> {
+            case string.lowercase(upgrade_value) {
+              "websocket" -> {
+                logging.log(logging.Info, "[server] WebSocket upgrade for /backfill-ws")
+                lustre_handlers.serve_backfill_button(
+                  req,
+                  ctx.db,
+                  ctx.backfill_state,
+                )
+              }
+              _ -> wisp_handler(req)
+            }
           }
-          _ -> {
-            logging.log(
-              logging.Warning,
-              "[server] Unknown upgrade type: " <> upgrade_value,
-            )
-            wisp_handler(req)
-          }
+          _ -> wisp_handler(req)
         }
       }
-      _, _ -> {
-        // Pass to Wisp handler for regular HTTP requests
-        wisp_handler(req)
+
+      // GraphQL WebSocket
+      ["graphql"] | ["", "graphql"] -> {
+        case upgrade_header {
+          Ok(upgrade_value) -> {
+            case string.lowercase(upgrade_value) {
+              "websocket" -> {
+                logging.log(
+                  logging.Info,
+                  "[server] Handling WebSocket upgrade for /graphql",
+                )
+                graphql_ws_handler.handle_websocket(
+                  req,
+                  ctx.db,
+                  ctx.auth_base_url,
+                  ctx.plc_url,
+                )
+              }
+              _ -> wisp_handler(req)
+            }
+          }
+          _ -> wisp_handler(req)
+        }
       }
+
+      _ -> wisp_handler(req)
     }
   }
 

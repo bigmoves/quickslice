@@ -1,5 +1,5 @@
 import database
-import gleam/int
+import format
 import gleam/list
 import lustre/attribute
 import lustre/element.{type Element}
@@ -15,13 +15,13 @@ pub fn view(
   html.div(
     [
       attribute.class(
-        "bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden",
+        "bg-zinc-900 rounded-lg shadow-sm border border-zinc-800 overflow-hidden",
       ),
     ],
     [
-      html.table([attribute.class("min-w-full divide-y divide-gray-200")], [
+      html.table([attribute.class("min-w-full divide-y divide-zinc-800")], [
         render_header(),
-        html.tbody([attribute.class("bg-white divide-y divide-gray-200")], rows),
+        html.tbody([attribute.class("bg-zinc-900 divide-y divide-zinc-800")], rows),
       ]),
     ],
   )
@@ -29,12 +29,12 @@ pub fn view(
 
 /// Render the table header
 fn render_header() -> Element(msg) {
-  html.thead([attribute.class("bg-gray-50")], [
+  html.thead([attribute.class("bg-zinc-900")], [
     html.tr([], [
       html.th(
         [
           attribute.class(
-            "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider",
+            "px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider",
           ),
         ],
         [element.text("Collection")],
@@ -42,7 +42,7 @@ fn render_header() -> Element(msg) {
       html.th(
         [
           attribute.class(
-            "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider",
+            "px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider",
           ),
         ],
         [element.text("Record Count")],
@@ -76,23 +76,23 @@ fn build_rows(
 
 /// Render a row for a collection with records
 fn render_stat_row(collection: String, count: Int) -> Element(msg) {
-  html.tr([attribute.class("hover:bg-gray-50 transition-colors")], [
-    html.td([attribute.class("px-4 py-3 text-sm text-gray-900")], [
+  html.tr([attribute.class("hover:bg-zinc-800 transition-colors")], [
+    html.td([attribute.class("px-4 py-3 text-sm text-zinc-200")], [
       element.text(collection),
     ]),
-    html.td([attribute.class("px-4 py-3 text-sm text-gray-700")], [
-      element.text(int.to_string(count)),
+    html.td([attribute.class("px-4 py-3 text-sm text-zinc-300")], [
+      element.text(format.format_number(count)),
     ]),
   ])
 }
 
 /// Render a row for a lexicon without records yet
 fn render_empty_row(collection: String) -> Element(msg) {
-  html.tr([attribute.class("hover:bg-gray-50 transition-colors")], [
-    html.td([attribute.class("px-4 py-3 text-sm text-gray-900")], [
+  html.tr([attribute.class("hover:bg-zinc-800 transition-colors")], [
+    html.td([attribute.class("px-4 py-3 text-sm text-zinc-200")], [
       element.text(collection),
     ]),
-    html.td([attribute.class("px-4 py-3 text-sm text-gray-500 italic")], [
+    html.td([attribute.class("px-4 py-3 text-sm text-zinc-500 italic")], [
       element.text("0"),
     ]),
   ])

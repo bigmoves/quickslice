@@ -606,6 +606,26 @@ pub fn get_actor_count(conn: sqlight.Connection) -> Result(Int, sqlight.Error) {
   }
 }
 
+/// Gets the total number of records in the database
+pub fn get_record_count(conn: sqlight.Connection) -> Result(Int, sqlight.Error) {
+  let sql =
+    "
+    SELECT COUNT(*) as count
+    FROM record
+  "
+
+  let decoder = {
+    use count <- decode.field(0, decode.int)
+    decode.success(count)
+  }
+
+  case sqlight.query(sql, on: conn, with: [], expecting: decoder) {
+    Ok([count]) -> Ok(count)
+    Ok(_) -> Ok(0)
+    Error(err) -> Error(err)
+  }
+}
+
 /// Checks if a lexicon exists for a given collection NSID
 /// First checks the dedicated lexicon table, then falls back to record table
 pub fn has_lexicon_for_collection(
@@ -780,6 +800,47 @@ pub fn get_record_type_lexicons(
     use json <- decode.field(1, decode.string)
     use created_at <- decode.field(2, decode.string)
     decode.success(Lexicon(id:, json:, created_at:))
+  }
+
+  sqlight.query(sql, on: conn, with: [], expecting: decoder)
+}
+
+pub type ActivityPoint {
+  ActivityPoint(timestamp: String, count: Int)
+}
+
+/// Gets record indexing activity over time
+/// Returns hourly counts for the specified duration
+pub fn get_record_activity(
+  conn: sqlight.Connection,
+  duration_hours: Int,
+) -> Result(List(ActivityPoint), sqlight.Error) {
+  // SQLite datetime calculation for cutoff time
+  let sql =
+    "
+    WITH RECURSIVE time_series AS (
+      SELECT datetime('now', '-" <> int.to_string(duration_hours) <> " hours') AS bucket
+      UNION ALL
+      SELECT datetime(bucket, '+1 hour')
+      FROM time_series
+      WHERE bucket < datetime('now')
+    )
+    SELECT
+      strftime('%Y-%m-%dT%H:00:00Z', ts.bucket) as timestamp,
+      COALESCE(COUNT(r.uri), 0) as count
+    FROM time_series ts
+    LEFT JOIN record r ON
+      datetime(r.indexed_at) >= datetime(ts.bucket)
+      AND datetime(r.indexed_at) < datetime(ts.bucket, '+1 hour')
+      AND datetime(r.indexed_at) >= datetime('now', '-" <> int.to_string(duration_hours) <> " hours')
+    GROUP BY ts.bucket
+    ORDER BY ts.bucket ASC
+  "
+
+  let decoder = {
+    use timestamp <- decode.field(0, decode.string)
+    use count <- decode.field(1, decode.int)
+    decode.success(ActivityPoint(timestamp:, count:))
   }
 
   sqlight.query(sql, on: conn, with: [], expecting: decoder)

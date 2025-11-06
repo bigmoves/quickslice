@@ -9,21 +9,21 @@ pub fn card(
   description description: String,
   color color: String,
 ) -> Element(msg) {
-  let bg_class = "bg-" <> color <> "-50"
-  let border_class = "border-" <> color <> "-100"
-  let text_class = "text-" <> color <> "-600"
+  let bg_class = "bg-" <> color <> "-900/20"
+  let border_class = "border-" <> color <> "-800"
+  let text_class = "text-" <> color <> "-400"
 
   html.div(
     [
       attribute.class(
-        bg_class <> " rounded-lg p-6 border " <> border_class <> " shadow-sm",
+        "bg-zinc-900 " <> bg_class <> " rounded-lg p-6 border " <> border_class <> " shadow-sm",
       ),
     ],
     [
       html.div([attribute.class("text-4xl font-bold " <> text_class <> " mb-2")], [
         element.text(int.to_string(count)),
       ]),
-      html.div([attribute.class("text-gray-600")], [element.text(description)]),
+      html.div([attribute.class("text-zinc-400")], [element.text(description)]),
     ],
   )
 }
