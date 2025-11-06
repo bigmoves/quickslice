@@ -771,8 +771,11 @@ pub fn backfill_collections(
   logging.log(logging.Info, "[backfill] Starting backfill operation")
 
   case collections {
-    [] -> logging.log(logging.Warning, "[backfill] No collections specified for backfill")
-    _ ->
+    [] -> {
+      logging.log(logging.Error, "[backfill] No collections specified for backfill")
+      Nil
+    }
+    _ -> {
       logging.log(
         logging.Info,
         "[backfill] Processing "
@@ -780,7 +783,19 @@ pub fn backfill_collections(
         <> " collections: "
         <> string.join(collections, ", "),
       )
+
+      run_backfill(repos, collections, external_collections, config, conn)
+    }
   }
+}
+
+fn run_backfill(
+  repos: List(String),
+  collections: List(String),
+  external_collections: List(String),
+  config: BackfillConfig,
+  conn: sqlight.Connection,
+) -> Nil {
 
   case external_collections {
     [] -> Nil

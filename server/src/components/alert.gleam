@@ -12,11 +12,11 @@ pub type AlertKind {
 
 /// Render an alert message with appropriate styling
 pub fn alert(kind: AlertKind, message: String) -> Element(msg) {
-  let #(bg_class, border_class, text_class, icon) = case kind {
-    Success -> #("bg-green-900/30", "border-green-800", "text-green-300", "✓")
-    Error -> #("bg-red-900/30", "border-red-800", "text-red-300", "✗")
-    Info -> #("bg-blue-900/30", "border-blue-800", "text-blue-300", "ℹ")
-    Warning -> #("bg-yellow-900/30", "border-yellow-800", "text-yellow-300", "⚠")
+  let #(bg_class, border_class, text_class) = case kind {
+    Success -> #("bg-green-900/30", "border-green-800", "text-green-300")
+    Error -> #("bg-red-900/30", "border-red-800", "text-red-300")
+    Info -> #("bg-blue-900/30", "border-blue-800", "text-blue-300")
+    Warning -> #("bg-yellow-900/30", "border-yellow-800", "text-yellow-300")
   }
 
   html.div(
@@ -26,13 +26,8 @@ pub fn alert(kind: AlertKind, message: String) -> Element(msg) {
       ),
     ],
     [
-      html.div([attribute.class("flex items-center gap-3")], [
-        html.span([attribute.class("text-lg " <> text_class)], [
-          element.text(icon),
-        ]),
-        html.span([attribute.class("text-sm " <> text_class)], [
-          element.text(message),
-        ]),
+      html.span([attribute.class("text-sm " <> text_class)], [
+        element.text(message),
       ]),
     ],
   )
@@ -45,11 +40,11 @@ pub fn alert_with_link(
   link_text: String,
   link_url: String,
 ) -> Element(msg) {
-  let #(bg_class, border_class, text_class, icon) = case kind {
-    Success -> #("bg-green-900/30", "border-green-800", "text-green-300", "✓")
-    Error -> #("bg-red-900/30", "border-red-800", "text-red-300", "✗")
-    Info -> #("bg-blue-900/30", "border-blue-800", "text-blue-300", "ℹ")
-    Warning -> #("bg-yellow-900/30", "border-yellow-800", "text-yellow-300", "⚠")
+  let #(bg_class, border_class, text_class) = case kind {
+    Success -> #("bg-green-900/30", "border-green-800", "text-green-300")
+    Error -> #("bg-red-900/30", "border-red-800", "text-red-300")
+    Info -> #("bg-blue-900/30", "border-blue-800", "text-blue-300")
+    Warning -> #("bg-yellow-900/30", "border-yellow-800", "text-yellow-300")
   }
 
   html.div(
@@ -59,20 +54,15 @@ pub fn alert_with_link(
       ),
     ],
     [
-      html.div([attribute.class("flex items-center gap-3")], [
-        html.span([attribute.class("text-lg " <> text_class)], [
-          element.text(icon),
-        ]),
-        html.span([attribute.class("text-sm " <> text_class)], [
-          element.text(message <> " "),
-          html.a(
-            [
-              attribute.href(link_url),
-              attribute.class("underline hover:no-underline"),
-            ],
-            [element.text(link_text)],
-          ),
-        ]),
+      html.span([attribute.class("text-sm " <> text_class)], [
+        element.text(message <> " "),
+        html.a(
+          [
+            attribute.href(link_url),
+            attribute.class("underline hover:no-underline"),
+          ],
+          [element.text(link_text)],
+        ),
       ]),
     ],
   )

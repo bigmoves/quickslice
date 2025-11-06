@@ -356,6 +356,51 @@ pub fn set_config(
   Ok(Nil)
 }
 
+/// Deletes the domain_authority config entry
+pub fn delete_domain_authority(
+  conn: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
+  let sql = "DELETE FROM config WHERE key = ?"
+
+  use _ <- result.try(sqlight.query(
+    sql,
+    on: conn,
+    with: [sqlight.text("domain_authority")],
+    expecting: decode.string,
+  ))
+  Ok(Nil)
+}
+
+/// Deletes all lexicons from the database
+pub fn delete_all_lexicons(
+  conn: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
+  let sql = "DELETE FROM lexicon"
+
+  sqlight.exec(sql, conn)
+  |> result.map(fn(_) { Nil })
+}
+
+/// Deletes all records from the database
+pub fn delete_all_records(
+  conn: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
+  let sql = "DELETE FROM record"
+
+  sqlight.exec(sql, conn)
+  |> result.map(fn(_) { Nil })
+}
+
+/// Deletes all actors from the database
+pub fn delete_all_actors(
+  conn: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
+  let sql = "DELETE FROM actor"
+
+  sqlight.exec(sql, conn)
+  |> result.map(fn(_) { Nil })
+}
+
 // ===== Record Functions =====
 
 /// Inserts or updates a record in the database

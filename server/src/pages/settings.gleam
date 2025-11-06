@@ -12,12 +12,12 @@ import sqlight
 pub fn view(
   db: sqlight.Connection,
   current_user: Option(#(String, String)),
-  _is_admin: Bool,
+  is_admin: Bool,
   flash_kind: Option(String),
   flash_message: Option(String),
 ) -> Element(msg) {
   let data = fetch_settings(db)
-  render(data, current_user, flash_kind, flash_message)
+  render(data, current_user, is_admin, flash_kind, flash_message)
 }
 
 /// Settings data
@@ -39,6 +39,7 @@ fn fetch_settings(db: sqlight.Connection) -> SettingsData {
 fn render(
   data: SettingsData,
   current_user: Option(#(String, String)),
+  is_admin: Bool,
   flash_kind: Option(String),
   flash_message: Option(String),
 ) -> Element(msg) {
@@ -49,7 +50,7 @@ fn render(
         element.text("Settings"),
       ]),
       alert.maybe_alert(flash_kind, flash_message),
-      render_settings_form(data),
+      render_settings_form(data, is_admin),
     ],
     current_user: current_user,
     domain_authority: option.None,
@@ -57,7 +58,7 @@ fn render(
 }
 
 /// Render the settings form
-fn render_settings_form(data: SettingsData) -> Element(msg) {
+fn render_settings_form(data: SettingsData, is_admin: Bool) -> Element(msg) {
   html.div([attribute.class("max-w-2xl space-y-6")], [
     // Domain Authority Section
     html.div([attribute.class("bg-zinc-800/50 rounded p-6")], [
@@ -133,7 +134,60 @@ fn render_settings_form(data: SettingsData) -> Element(msg) {
         ],
       ),
     ]),
-    // Sign Out Section
+    // Danger Zone Section (admin only)
+    case is_admin {
+      True ->
+        html.div([attribute.class("bg-zinc-800/50 rounded p-6")], [
+          html.h2([attribute.class("text-xl font-semibold text-zinc-300 mb-4")], [
+            element.text("Danger Zone"),
+          ]),
+          html.p([attribute.class("text-sm text-zinc-400 mb-4")], [
+            element.text("This will clear all indexed data:"),
+          ]),
+          html.ul([attribute.class("text-sm text-zinc-400 mb-4 ml-4 list-disc")], [
+            html.li([], [element.text("Domain authority configuration")]),
+            html.li([], [element.text("All lexicon definitions")]),
+            html.li([], [element.text("All indexed records")]),
+            html.li([], [element.text("All actors")]),
+          ]),
+          html.p([attribute.class("text-sm text-zinc-400 mb-4")], [
+            element.text("Records can be re-indexed via backfill."),
+          ]),
+          html.form(
+            [
+              attribute.method("post"),
+              attribute.action("/settings"),
+            ],
+            [
+              html.input([
+                attribute.type_("hidden"),
+                attribute.name("action"),
+                attribute.value("reset"),
+              ]),
+              input.form_text_input(
+                label: "Type RESET to confirm",
+                name: "confirm",
+                value: "",
+                placeholder: "RESET",
+                required: True,
+              ),
+              html.div([attribute.class("flex gap-3")], [
+                html.button(
+                  [
+                    attribute.type_("submit"),
+                    attribute.class(
+                      "font-mono px-4 py-2 text-sm text-red-400 border border-red-900 hover:bg-red-900/30 rounded transition-colors cursor-pointer",
+                    ),
+                  ],
+                  [element.text("Reset Everything")],
+                ),
+              ]),
+            ],
+          ),
+        ])
+      False -> element.none()
+    },
+    // Account Section
     html.div([attribute.class("bg-zinc-800/50 rounded p-6")], [
       html.h2([attribute.class("text-xl font-semibold text-zinc-300 mb-4")], [
         element.text("Account"),
