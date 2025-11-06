@@ -167,7 +167,7 @@ pub fn graphql_post_request_with_records_test() {
     |> simulate.header("content-type", "application/json")
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
 
   // Verify response
   response.status
@@ -235,7 +235,7 @@ pub fn graphql_post_request_empty_results_test() {
     |> simulate.header("content-type", "application/json")
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
 
   // Verify response
   response.status
@@ -271,7 +271,7 @@ pub fn graphql_get_request_test() {
     )
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
 
   // Verify response
   response.status
@@ -300,7 +300,7 @@ pub fn graphql_invalid_json_request_test() {
     |> simulate.header("content-type", "application/json")
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
 
   // Should return 400 Bad Request
   response.status
@@ -333,7 +333,7 @@ pub fn graphql_missing_query_field_test() {
     |> simulate.header("content-type", "application/json")
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
 
   // Should return 400 Bad Request
   response.status
@@ -358,7 +358,7 @@ pub fn graphql_method_not_allowed_test() {
   let request = simulate.request(http.Delete, "/graphql")
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
 
   // Should return 405 Method Not Allowed
   response.status
@@ -456,6 +456,7 @@ pub fn graphql_multiple_lexicons_test() {
       request1,
       db,
       "http://localhost:3000",
+      "https://plc.directory",
     )
 
   response1.status
@@ -505,6 +506,7 @@ pub fn graphql_multiple_lexicons_test() {
       request2,
       db,
       "http://localhost:3000",
+      "https://plc.directory",
     )
 
   response2.status
@@ -568,7 +570,7 @@ pub fn graphql_record_limit_test() {
     |> simulate.header("content-type", "application/json")
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
 
   response.status
   |> should.equal(200)
@@ -677,7 +679,7 @@ pub fn graphql_actor_handle_lookup_test() {
     |> simulate.header("content-type", "application/json")
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
 
   // Verify response
   response.status
@@ -789,7 +791,7 @@ pub fn graphql_filter_by_actor_handle_test() {
     |> simulate.header("content-type", "application/json")
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000")
+    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
 
   // Verify response
   response.status

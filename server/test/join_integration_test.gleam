@@ -222,7 +222,7 @@ pub fn forward_join_at_uri_resolves_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "")
+    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
 
   // Verify the response contains resolved join with parent URI
   string.contains(response_json, reply_uri)
@@ -311,7 +311,7 @@ pub fn forward_join_strong_ref_resolves_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "")
+    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
 
   // Verify the response contains resolved strongRef join with post URI
   string.contains(response_json, profile_uri)
@@ -418,7 +418,7 @@ pub fn reverse_join_resolves_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "")
+    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
 
   // Verify the response contains reverse join results
   string.contains(response_json, post_uri)
@@ -535,7 +535,7 @@ pub fn dataloader_batches_forward_joins_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "")
+    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
 
   // Verify all posts appear
   string.contains(response_json, reply1_uri)
@@ -656,7 +656,7 @@ pub fn reverse_join_with_strong_ref_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "")
+    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
 
   // Verify the reverse join through strongRef works
   string.contains(response_json, post_uri)
@@ -788,7 +788,7 @@ pub fn forward_join_union_inline_fragments_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "")
+    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
 
   // Verify we can access type-specific fields through inline fragments
 
@@ -929,7 +929,7 @@ pub fn did_join_to_literal_self_returns_single_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "")
+    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
 
   // Verify the response contains the DID-joined profile as a single object (not array)
   string.contains(response_json, post_uri)
@@ -1038,7 +1038,7 @@ pub fn did_join_to_non_literal_self_returns_list_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "")
+    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
 
   // Verify the response contains the DID-joined posts as a list
   string.contains(response_json, profile_uri)
@@ -1165,7 +1165,7 @@ pub fn did_join_batches_queries_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "")
+    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
 
   // Verify all posts and their associated profiles appear
   string.contains(response_json, post1_uri)

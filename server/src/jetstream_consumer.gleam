@@ -17,6 +17,12 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
   logging.log(logging.Info, "")
   logging.log(logging.Info, "[jetstream] Starting Jetstream consumer...")
 
+  // Get PLC directory URL from environment variable or use default
+  let plc_url = case envoy.get("PLC_DIRECTORY_URL") {
+    Ok(url) -> url
+    Error(_) -> "https://plc.directory"
+  }
+
   // Get all record-type lexicons from the database
   case database.get_record_type_lexicons(db) {
     Ok(lexicons) -> {
@@ -96,13 +102,19 @@ pub fn start(db: sqlight.Connection) -> Result(Nil, String) {
           )
 
           // Start the unified consumer
+          let ext_collections = external_collection_ids
           process.spawn_unlinked(fn() {
             goose.start_consumer(unified_config, fn(event_json) {
-              handle_jetstream_event(
-                db,
-                event_json,
-                external_collection_ids,
-              )
+              // Spawn each event into its own process so they don't block each other
+              let _pid = process.spawn_unlinked(fn() {
+                handle_jetstream_event(
+                  db,
+                  event_json,
+                  ext_collections,
+                  plc_url,
+                )
+              })
+              Nil
             })
           })
 
@@ -142,6 +154,7 @@ fn handle_jetstream_event(
   db: sqlight.Connection,
   event_json: String,
   external_collection_ids: List(String),
+  plc_url: String,
 ) -> Nil {
   case goose.parse_event(event_json) {
     goose.CommitEvent(did, time_us, commit) -> {
@@ -153,13 +166,28 @@ fn handle_jetstream_event(
       case is_external {
         True -> {
           case is_known_did(db, did) {
-            True -> event_handler.handle_commit_event(db, did, time_us, commit)
+            True ->
+              event_handler.handle_commit_event(
+                db,
+                did,
+                time_us,
+                commit,
+                plc_url,
+                external_collection_ids,
+              )
             False -> Nil
           }
         }
         False -> {
           // Local collection - always process
-          event_handler.handle_commit_event(db, did, time_us, commit)
+          event_handler.handle_commit_event(
+            db,
+            did,
+            time_us,
+            commit,
+            plc_url,
+            external_collection_ids,
+          )
         }
       }
     }

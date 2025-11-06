@@ -594,6 +594,64 @@ pub fn index_actors(
   })
 }
 
+/// Backfill all external collections for a newly discovered actor
+/// This is called when a new actor is created via Jetstream or GraphQL mutations
+pub fn backfill_external_collections_for_actor(
+  db: sqlight.Connection,
+  did: String,
+  external_collection_ids: List(String),
+  plc_url: String,
+) -> Nil {
+  logging.log(
+    logging.Info,
+    "[backfill] Starting background sync for new actor: "
+      <> did
+      <> " ("
+      <> string.inspect(list.length(external_collection_ids))
+      <> " external collections)",
+  )
+
+  // Resolve DID to get PDS endpoint
+  case resolve_did(did, plc_url) {
+    Ok(atp_data) -> {
+      // Fetch and index records for each external collection
+      list.each(external_collection_ids, fn(collection) {
+        logging.log(
+          logging.Info,
+          "[backfill] Fetching " <> collection <> " for " <> did,
+        )
+
+        let records =
+          fetch_records_for_repo_collection(did, collection, atp_data.pds)
+
+        logging.log(
+          logging.Info,
+          "[backfill] Fetched "
+            <> string.inspect(list.length(records))
+            <> " records from "
+            <> collection
+            <> " for "
+            <> did,
+        )
+
+        // Index the records
+        index_records(records, db)
+      })
+
+      logging.log(
+        logging.Info,
+        "[backfill] Completed sync for " <> did,
+      )
+    }
+    Error(err) -> {
+      logging.log(
+        logging.Error,
+        "[backfill] Failed to resolve DID for backfill: " <> did <> " - " <> err,
+      )
+    }
+  }
+}
+
 /// Fetch repos that have records for a specific collection from the relay with pagination
 fn fetch_repos_for_collection(
   collection: String,

@@ -1,3 +1,5 @@
+import actor_validator
+import backfill
 import database
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
@@ -49,6 +51,8 @@ pub fn handle_commit_event(
   did: String,
   time_us: Int,
   commit: goose.CommitData,
+  plc_url: String,
+  external_collection_ids: List(String),
 ) -> Nil {
   let uri = "at://" <> did <> "/" <> commit.collection <> "/" <> commit.rkey
 
@@ -89,9 +93,28 @@ pub fn handle_commit_event(
                     }
                   }
 
-                  // Validation passed, insert record
-                  case
-                    database.insert_record(
+                  // Ensure actor exists before inserting record
+                  case actor_validator.ensure_actor_exists(db, did, plc_url) {
+                    Ok(is_new_actor) -> {
+                      // If this is a new actor, synchronously backfill external collections
+                      // This ensures subscription joins have complete data immediately
+                      // We're already in a spawned process per event, so blocking is fine
+                      case is_new_actor {
+                        True -> {
+                          backfill.backfill_external_collections_for_actor(
+                            db,
+                            did,
+                            external_collection_ids,
+                            plc_url,
+                          )
+                        }
+                        False -> Nil
+                      }
+
+                      // Continue with record insertion
+                      // Validation passed, insert record
+                      case
+                        database.insert_record(
                       db,
                       uri,
                       cid_value,
@@ -145,6 +168,17 @@ pub fn handle_commit_event(
                         <> uri
                         <> ": "
                         <> string.inspect(err),
+                      )
+                    }
+                  }
+                    }
+                    Error(actor_err) -> {
+                      logging.log(
+                        logging.Error,
+                        "[jetstream] Failed to validate/create actor for "
+                        <> uri
+                        <> ": "
+                        <> actor_err,
                       )
                     }
                   }

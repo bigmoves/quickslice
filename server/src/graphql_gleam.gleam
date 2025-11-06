@@ -2,6 +2,7 @@
 ///
 /// This module provides GraphQL schema building and query execution using
 /// pure Gleam code, replacing the previous Elixir FFI implementation.
+import backfill
 import cursor
 import database
 import gleam/dict
@@ -29,6 +30,7 @@ import where_converter
 pub fn build_schema_from_db(
   db: sqlight.Connection,
   auth_base_url: String,
+  plc_url: String,
 ) -> Result(schema.Schema, String) {
   // Step 1: Fetch lexicons from database
   use lexicon_records <- result.try(
@@ -339,9 +341,24 @@ pub fn build_schema_from_db(
         }
       }
 
-      // Step 4: Create mutation resolver factories
+      // Step 4: Determine external collections for backfill
+      let external_collection_ids =
+        parsed_lexicons
+        |> list.filter_map(fn(lex) {
+          case backfill.nsid_matches_domain_authority(lex.id) {
+            True -> Error(Nil)  // Local collection, skip
+            False -> Ok(lex.id)  // External collection, include
+          }
+        })
+
+      // Step 5: Create mutation resolver factories
       let mutation_ctx =
-        mutation_resolvers.MutationContext(db: db, auth_base_url: auth_base_url)
+        mutation_resolvers.MutationContext(
+          db: db,
+          auth_base_url: auth_base_url,
+          plc_url: plc_url,
+          external_collection_ids: external_collection_ids,
+        )
 
       let create_factory =
         option.Some(fn(collection) {
@@ -363,7 +380,7 @@ pub fn build_schema_from_db(
           mutation_resolvers.upload_blob_resolver_factory(mutation_ctx)
         })
 
-      // Step 5: Build schema with database-backed resolvers, mutations, and subscriptions
+      // Step 6: Build schema with database-backed resolvers, mutations, and subscriptions
       db_schema_builder.build_schema_with_subscriptions(
         parsed_lexicons,
         record_fetcher,
@@ -388,9 +405,14 @@ pub fn execute_query_with_db(
   variables_json_str: String,
   auth_token: Result(String, Nil),
   auth_base_url: String,
+  plc_url: String,
 ) -> Result(String, String) {
   // Build the schema
-  use graphql_schema <- result.try(build_schema_from_db(db, auth_base_url))
+  use graphql_schema <- result.try(build_schema_from_db(
+    db,
+    auth_base_url,
+    plc_url,
+  ))
 
   // Create context with auth token if provided
   let ctx_data = case auth_token {

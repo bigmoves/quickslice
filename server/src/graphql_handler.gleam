@@ -23,10 +23,11 @@ pub fn handle_graphql_request(
   req: wisp.Request,
   db: sqlight.Connection,
   auth_base_url: String,
+  plc_url: String,
 ) -> wisp.Response {
   case req.method {
-    http.Post -> handle_graphql_post(req, db, auth_base_url)
-    http.Get -> handle_graphql_get(req, db, auth_base_url)
+    http.Post -> handle_graphql_post(req, db, auth_base_url, plc_url)
+    http.Get -> handle_graphql_get(req, db, auth_base_url, plc_url)
     _ -> method_not_allowed_response()
   }
 }
@@ -35,6 +36,7 @@ fn handle_graphql_post(
   req: wisp.Request,
   db: sqlight.Connection,
   auth_base_url: String,
+  plc_url: String,
 ) -> wisp.Response {
   // Extract Authorization header (optional for queries, required for mutations)
   // Strip "Bearer " prefix if present
@@ -56,6 +58,7 @@ fn handle_graphql_post(
                 variables,
                 auth_token,
                 auth_base_url,
+                plc_url,
               )
             }
             Error(err) -> bad_request_response("Invalid JSON: " <> err)
@@ -72,6 +75,7 @@ fn handle_graphql_get(
   req: wisp.Request,
   db: sqlight.Connection,
   auth_base_url: String,
+  plc_url: String,
 ) -> wisp.Response {
   // Extract Authorization header (optional for queries, required for mutations)
   // Strip "Bearer " prefix if present
@@ -83,7 +87,7 @@ fn handle_graphql_get(
   let query_params = wisp.get_query(req)
   case list.key_find(query_params, "query") {
     Ok(query) ->
-      execute_graphql_query(db, query, "{}", auth_token, auth_base_url)
+      execute_graphql_query(db, query, "{}", auth_token, auth_base_url, plc_url)
     Error(_) -> bad_request_response("Missing 'query' parameter")
   }
 }
@@ -94,6 +98,7 @@ fn execute_graphql_query(
   variables_json_str: String,
   auth_token: Result(String, Nil),
   auth_base_url: String,
+  plc_url: String,
 ) -> wisp.Response {
   // Use the new pure Gleam GraphQL implementation
   case
@@ -103,6 +108,7 @@ fn execute_graphql_query(
       variables_json_str,
       auth_token,
       auth_base_url,
+      plc_url,
     )
   {
     Ok(result_json) -> success_response(result_json)

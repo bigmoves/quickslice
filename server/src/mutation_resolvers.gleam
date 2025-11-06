@@ -2,11 +2,14 @@
 ///
 /// Implements GraphQL mutation resolvers with AT Protocol integration.
 /// These resolvers handle authentication, validation, and database operations.
+import actor_validator
 import atproto_auth
+import backfill
 import database
 import dpop
 import gleam/dynamic
 import gleam/dynamic/decode
+import gleam/erlang/process
 import gleam/int
 import gleam/json
 import gleam/list
@@ -19,7 +22,12 @@ import sqlight
 
 /// Context for mutation execution
 pub type MutationContext {
-  MutationContext(db: sqlight.Connection, auth_base_url: String)
+  MutationContext(
+    db: sqlight.Connection,
+    auth_base_url: String,
+    plc_url: String,
+    external_collection_ids: List(String),
+  )
 }
 
 /// Convert GraphQL value to JSON string for AT Protocol
@@ -121,15 +129,36 @@ pub fn create_resolver_factory(
       }),
     )
 
+    // Step 4: Ensure actor exists in database
+    use is_new_actor <- result.try(
+      actor_validator.ensure_actor_exists(ctx.db, user_info.did, ctx.plc_url),
+    )
+
+    // If new actor, spawn backfill for external collections
+    case is_new_actor {
+      True -> {
+        process.spawn_unlinked(fn() {
+          backfill.backfill_external_collections_for_actor(
+            ctx.db,
+            user_info.did,
+            ctx.external_collection_ids,
+            ctx.plc_url,
+          )
+        })
+        Nil
+      }
+      False -> Nil
+    }
+
     use session <- result.try(
       atproto_auth.get_atproto_session(token, ctx.auth_base_url)
       |> result.map_error(fn(_) { "Failed to get AT Protocol session" }),
     )
 
-    // Step 4: Convert input to JSON for validation and AT Protocol
+    // Step 5: Convert input to JSON for validation and AT Protocol
     let record_json = graphql_value_to_json(input)
 
-    // Step 5: Validate against lexicon
+    // Step 6: Validate against lexicon
     use lexicon_records <- result.try(
       database.get_lexicon(ctx.db, collection)
       |> result.map_error(fn(_) { "Failed to fetch lexicon" }),
@@ -144,7 +173,7 @@ pub fn create_resolver_factory(
           }),
         )
 
-        // Step 6: Call createRecord via AT Protocol
+        // Step 7: Call createRecord via AT Protocol
         // Omit rkey field when not provided to let PDS auto-generate TID
         let create_body =
           case rkey {
@@ -172,7 +201,7 @@ pub fn create_resolver_factory(
           |> result.map_error(fn(_) { "Failed to create record on PDS" }),
         )
 
-        // Step 7: Check HTTP status and parse response
+        // Step 8: Check HTTP status and parse response
         use #(uri, cid) <- result.try(case response.status {
           200 | 201 -> {
             // Parse successful response
@@ -198,7 +227,7 @@ pub fn create_resolver_factory(
           }
         })
 
-        // Step 8: Index the created record in the database
+        // Step 9: Index the created record in the database
         use _ <- result.try(
           database.insert_record(
             ctx.db,
@@ -211,7 +240,7 @@ pub fn create_resolver_factory(
           |> result.map_error(fn(_) { "Failed to index record in database" }),
         )
 
-        // Step 9: Return the created record as a GraphQL value
+        // Step 10: Return the created record as a GraphQL value
         // Build the GraphQL object with all fields
         Ok(
           value.Object([
@@ -283,15 +312,36 @@ pub fn update_resolver_factory(
       }),
     )
 
+    // Step 4: Ensure actor exists in database
+    use is_new_actor <- result.try(
+      actor_validator.ensure_actor_exists(ctx.db, user_info.did, ctx.plc_url),
+    )
+
+    // If new actor, spawn backfill for external collections
+    case is_new_actor {
+      True -> {
+        process.spawn_unlinked(fn() {
+          backfill.backfill_external_collections_for_actor(
+            ctx.db,
+            user_info.did,
+            ctx.external_collection_ids,
+            ctx.plc_url,
+          )
+        })
+        Nil
+      }
+      False -> Nil
+    }
+
     use session <- result.try(
       atproto_auth.get_atproto_session(token, ctx.auth_base_url)
       |> result.map_error(fn(_) { "Failed to get AT Protocol session" }),
     )
 
-    // Step 4: Convert input to JSON for validation and AT Protocol
+    // Step 5: Convert input to JSON for validation and AT Protocol
     let record_json = graphql_value_to_json(input)
 
-    // Step 5: Validate against lexicon
+    // Step 6: Validate against lexicon
     use lexicon_records <- result.try(
       database.get_lexicon(ctx.db, collection)
       |> result.map_error(fn(_) { "Failed to fetch lexicon" }),
@@ -306,7 +356,7 @@ pub fn update_resolver_factory(
           }),
         )
 
-        // Step 6: Call putRecord via AT Protocol
+        // Step 7: Call putRecord via AT Protocol
         let update_body =
           json.object([
             #("repo", json.string(user_info.did)),
@@ -323,7 +373,7 @@ pub fn update_resolver_factory(
           |> result.map_error(fn(_) { "Failed to update record on PDS" }),
         )
 
-        // Step 7: Check HTTP status and parse response
+        // Step 8: Check HTTP status and parse response
         use #(uri, cid) <- result.try(case response.status {
           200 | 201 -> {
             // Parse successful response
@@ -349,13 +399,13 @@ pub fn update_resolver_factory(
           }
         })
 
-        // Step 8: Update the record in the database
+        // Step 9: Update the record in the database
         use _ <- result.try(
           database.update_record(ctx.db, uri, cid, record_json)
           |> result.map_error(fn(_) { "Failed to update record in database" }),
         )
 
-        // Step 9: Return the updated record as a GraphQL value
+        // Step 10: Return the updated record as a GraphQL value
         Ok(
           value.Object([
             #("uri", value.String(uri)),
@@ -419,15 +469,36 @@ pub fn delete_resolver_factory(
       }),
     )
 
+    // Step 4: Ensure actor exists in database
+    use is_new_actor <- result.try(
+      actor_validator.ensure_actor_exists(ctx.db, user_info.did, ctx.plc_url),
+    )
+
+    // If new actor, spawn backfill for external collections
+    case is_new_actor {
+      True -> {
+        process.spawn_unlinked(fn() {
+          backfill.backfill_external_collections_for_actor(
+            ctx.db,
+            user_info.did,
+            ctx.external_collection_ids,
+            ctx.plc_url,
+          )
+        })
+        Nil
+      }
+      False -> Nil
+    }
+
     use session <- result.try(
       atproto_auth.get_atproto_session(token, ctx.auth_base_url)
       |> result.map_error(fn(_) { "Failed to get AT Protocol session" }),
     )
 
-    // Step 4: Build the record URI to be deleted
+    // Step 5: Build the record URI to be deleted
     let uri = "at://" <> user_info.did <> "/" <> collection <> "/" <> rkey
 
-    // Step 5: Call deleteRecord via AT Protocol
+    // Step 6: Call deleteRecord via AT Protocol
     let delete_body =
       json.object([
         #("repo", json.string(user_info.did)),
@@ -443,7 +514,7 @@ pub fn delete_resolver_factory(
       |> result.map_error(fn(_) { "Failed to delete record on PDS" }),
     )
 
-    // Check HTTP status
+    // Step 7: Check HTTP status
     use _ <- result.try(case response.status {
       200 | 201 | 204 -> Ok(Nil)
       _ -> {
@@ -457,13 +528,13 @@ pub fn delete_resolver_factory(
       }
     })
 
-    // Step 6: Delete the record from the database
+    // Step 8: Delete the record from the database
     use _ <- result.try(
       database.delete_record(ctx.db, uri)
       |> result.map_error(fn(_) { "Failed to delete record from database" }),
     )
 
-    // Step 7: Return the URI of the deleted record
+    // Step 9: Return the URI of the deleted record
     Ok(value.Object([#("uri", value.String(uri))]))
   }
 }
@@ -520,18 +591,39 @@ pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
       }),
     )
 
+    // Step 4: Ensure actor exists in database
+    use is_new_actor <- result.try(
+      actor_validator.ensure_actor_exists(ctx.db, user_info.did, ctx.plc_url),
+    )
+
+    // If new actor, spawn backfill for external collections
+    case is_new_actor {
+      True -> {
+        process.spawn_unlinked(fn() {
+          backfill.backfill_external_collections_for_actor(
+            ctx.db,
+            user_info.did,
+            ctx.external_collection_ids,
+            ctx.plc_url,
+          )
+        })
+        Nil
+      }
+      False -> Nil
+    }
+
     use session <- result.try(
       atproto_auth.get_atproto_session(token, ctx.auth_base_url)
       |> result.map_error(fn(_) { "Failed to get AT Protocol session" }),
     )
 
-    // Step 4: Decode base64 data to binary
+    // Step 5: Decode base64 data to binary
     use binary_data <- result.try(
       decode_base64(data_base64)
       |> result.map_error(fn(_) { "Failed to decode base64 data" }),
     )
 
-    // Step 5: Upload blob to PDS
+    // Step 6: Upload blob to PDS
     let pds_url = session.pds_endpoint <> "/xrpc/com.atproto.repo.uploadBlob"
 
     use response <- result.try(
@@ -545,7 +637,7 @@ pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
       |> result.map_error(fn(_) { "Failed to upload blob to PDS" }),
     )
 
-    // Step 6: Check HTTP status and parse response
+    // Step 7: Check HTTP status and parse response
     use blob_ref <- result.try(case response.status {
       200 | 201 -> {
         // Parse PDS response: { blob: { $type: "blob", ref: { $link: "..." }, mimeType: "...", size: 123 } }
@@ -575,7 +667,7 @@ pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
       }
     })
 
-    // Step 7: Return the BlobUploadResponse directly (flat structure)
+    // Step 8: Return the BlobUploadResponse directly (flat structure)
     Ok(blob_ref)
   }
 }

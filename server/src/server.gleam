@@ -33,6 +33,7 @@ pub type Context {
   Context(
     db: sqlight.Connection,
     auth_base_url: String,
+    plc_url: String,
     oauth_config: handlers.OAuthConfig,
     admin_dids: List(String),
   )
@@ -333,10 +334,17 @@ fn start_server(db: sqlight.Connection) {
     Error(_) -> []
   }
 
+  // Get PLC directory URL from environment variable or use default
+  let plc_url = case envoy.get("PLC_DIRECTORY_URL") {
+    Ok(url) -> url
+    Error(_) -> "https://plc.directory"
+  }
+
   let ctx =
     Context(
       db: db,
       auth_base_url: auth_base_url,
+      plc_url: plc_url,
       oauth_config: oauth_config,
       admin_dids: admin_dids,
     )
@@ -367,7 +375,12 @@ fn start_server(db: sqlight.Connection) {
               "[server] Handling WebSocket upgrade for /graphql",
             )
             // Handle WebSocket upgrade
-            graphql_ws_handler.handle_websocket(req, ctx.db, ctx.auth_base_url)
+            graphql_ws_handler.handle_websocket(
+              req,
+              ctx.db,
+              ctx.auth_base_url,
+              ctx.plc_url,
+            )
           }
           _ -> {
             logging.log(
@@ -414,7 +427,12 @@ fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
     ["logout"] -> handlers.handle_logout(req, ctx.db)
     ["backfill"] -> handle_backfill_request(req, ctx.db)
     ["graphql"] ->
-      graphql_handler.handle_graphql_request(req, ctx.db, ctx.auth_base_url)
+      graphql_handler.handle_graphql_request(
+        req,
+        ctx.db,
+        ctx.auth_base_url,
+        ctx.plc_url,
+      )
     ["graphiql"] ->
       graphiql_handler.handle_graphiql_request(req, ctx.db, ctx.oauth_config)
     ["upload"] ->

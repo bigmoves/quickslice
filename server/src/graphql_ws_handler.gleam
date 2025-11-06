@@ -179,6 +179,7 @@ pub fn handle_websocket(
   req: Request(Connection),
   db: sqlight.Connection,
   auth_base_url: String,
+  plc_url: String,
 ) -> response.Response(ResponseData) {
   mist.websocket(
     request: req,
@@ -186,7 +187,11 @@ pub fn handle_websocket(
       logging.log(logging.Info, "[websocket] Client connected")
 
       // Build GraphQL schema for subscriptions
-      let graphql_schema = case graphql_gleam.build_schema_from_db(db, auth_base_url) {
+      let graphql_schema = case graphql_gleam.build_schema_from_db(
+        db,
+        auth_base_url,
+        plc_url,
+      ) {
         Ok(schema) -> schema
         Error(err) -> {
           // Schema build failed - this is a critical error for subscriptions
