@@ -284,16 +284,32 @@ fn start_server(
     Error(_) -> "https://auth.example.com"
   }
 
+  // Get HOST and PORT from environment variables or use defaults
+  let host = case envoy.get("HOST") {
+    Ok(h) -> h
+    Error(_) -> "127.0.0.1"
+  }
+
+  let port = case envoy.get("PORT") {
+    Ok(p) ->
+      case int.parse(p) {
+        Ok(port_num) -> port_num
+        Error(_) -> 8000
+      }
+    Error(_) -> 8000
+  }
+
   // OAuth configuration - check environment variables first for backwards compatibility
   let enable_auto_register = case envoy.get("ENABLE_OAUTH_AUTO_REGISTER") {
     Ok(val) -> val == "true" || val == "1"
     Error(_) -> False
   }
 
-  // Determine redirect URI from environment or use default
-  let oauth_redirect_uri = case envoy.get("OAUTH_REDIRECT_URI") {
-    Ok(uri) -> uri
-    Error(_) -> "http://localhost:8000/oauth/callback"
+  // Determine redirect URI from EXTERNAL_BASE_URL environment variable
+  let oauth_redirect_uri = case envoy.get("EXTERNAL_BASE_URL") {
+    Ok(base_url) -> base_url <> "/oauth/callback"
+    Error(_) ->
+      "http://" <> host <> ":" <> int.to_string(port) <> "/oauth/callback"
   }
 
   let oauth_config = case
@@ -395,21 +411,6 @@ fn start_server(
         }
       }
     }
-  }
-
-  // Get HOST and PORT from environment variables or use defaults
-  let host = case envoy.get("HOST") {
-    Ok(h) -> h
-    Error(_) -> "127.0.0.1"
-  }
-
-  let port = case envoy.get("PORT") {
-    Ok(p) ->
-      case int.parse(p) {
-        Ok(port_num) -> port_num
-        Error(_) -> 8000
-      }
-    Error(_) -> 8000
   }
 
   logging.log(logging.Info, "[server] Using AIP server: " <> auth_base_url)

@@ -96,8 +96,8 @@ cat > "$CONFIG_FILE" <<EOF
 
 OAUTH_CLIENT_ID=$CLIENT_ID
 OAUTH_CLIENT_SECRET=$CLIENT_SECRET
-OAUTH_REDIRECT_URI=$REDIRECT_URI
 AIP_BASE_URL=$AIP_BASE
+EXTERNAL_BASE_URL=$CLIENT_BASE_URL
 EOF
 
 echo "✅ Client registration complete!"
@@ -112,8 +112,8 @@ echo
 echo "🔧 Environment variables saved to $CONFIG_FILE:"
 echo "  OAUTH_CLIENT_ID"
 echo "  OAUTH_CLIENT_SECRET"
-echo "  OAUTH_REDIRECT_URI"
-echo "  OAUTH_AIP_BASE_URL"
+echo "  AIP_BASE_URL"
+echo "  EXTERNAL_BASE_URL"
 echo
 echo "💡 To use these credentials in your application:"
 echo "  source $CONFIG_FILE"

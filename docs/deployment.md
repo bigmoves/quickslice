@@ -14,7 +14,7 @@ This guide covers deploying quickslice on Fly.io and Railway. Both platforms sup
 | `ENABLE_OAUTH_AUTO_REGISTER` | Optional | `false` | Enable automatic OAuth client registration with AIP on server boot |
 | `OAUTH_CLIENT_ID` | Optional | - | OAuth client ID (auto-registered if `ENABLE_OAUTH_AUTO_REGISTER=true`) |
 | `OAUTH_CLIENT_SECRET` | Optional | - | OAuth client secret (auto-registered if `ENABLE_OAUTH_AUTO_REGISTER=true`) |
-| `OAUTH_REDIRECT_URI` | Optional | `http://localhost:8000/oauth/callback` | OAuth callback URL |
+| `EXTERNAL_BASE_URL` | Optional | `http://localhost:8000` | Base URL of your application (used for OAuth redirect: `${EXTERNAL_BASE_URL}/oauth/callback`) |
 | `AIP_BASE_URL` | Optional | `https://auth.example.com` | AT Protocol Identity Provider URL |
 | `JETSTREAM_URL` | No | `wss://jetstream2.us-west.bsky.network/subscribe` | Jetstream WebSocket endpoint |
 | `RELAY_URL` | No | `https://relay1.us-west.bsky.network` | AT Protocol relay URL |
@@ -166,12 +166,12 @@ ADMIN_DIDS=did:plc:your_did
 # OAuth - Option A: Auto-registration (recommended)
 ENABLE_OAUTH_AUTO_REGISTER=true
 AIP_BASE_URL=https://your-aip-server.com
-OAUTH_REDIRECT_URI=https://your-app.up.railway.app/oauth/callback
+EXTERNAL_BASE_URL=https://your-app.up.railway.app
 
 # OAuth - Option B: Manual configuration
 # OAUTH_CLIENT_ID=your_client_id
 # OAUTH_CLIENT_SECRET=your_client_secret
-# OAUTH_REDIRECT_URI=https://your-app.up.railway.app/oauth/callback
+# EXTERNAL_BASE_URL=https://your-app.up.railway.app
 ```
 
 ### 3. Add a volume
