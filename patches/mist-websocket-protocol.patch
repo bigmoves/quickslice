@@ -1,0 +1,25 @@
+--- a/server/build/packages/mist/src/mist/internal/http.gleam
++++ b/server/build/packages/mist/src/mist/internal/http.gleam
+@@ -489,6 +489,9 @@ pub fn upgrade_socket(
+     |> result.replace_error(req),
+   )
+
++  // Check for WebSocket subprotocol (e.g., graphql-transport-ws)
++  let protocol = request.get_header(req, "sec-websocket-protocol")
++
+   let permessage_deflate = websocket.has_deflate(extensions)
+
+   let accept_key = parse_websocket_key(key)
+@@ -500,6 +503,12 @@ pub fn upgrade_socket(
+     |> response.prepend_header("connection", "Upgrade")
+     |> response.prepend_header("sec-websocket-accept", accept_key)
+
++  // Add subprotocol header if requested
++  let resp = case protocol {
++    Ok(proto) -> response.prepend_header(resp, "sec-websocket-protocol", proto)
++    Error(_) -> resp
++  }
++
+   case permessage_deflate {
+     True ->
+       Ok(response.prepend_header(

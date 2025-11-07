@@ -22,6 +22,9 @@ COPY ./lexicon_graphql /build/lexicon_graphql
 # Add server code
 COPY ./server /build/server
 
+# Add patches directory
+COPY ./patches /build/patches
+
 # Build Rust NIFs for lexicon package (Linux build produces .so)
 RUN cd /build/lexicon/native/lexicon_nif && cargo build --release && \
     mkdir -p /build/lexicon/priv && \
@@ -31,6 +34,9 @@ RUN cd /build/lexicon/native/lexicon_nif && cargo build --release && \
 RUN cd /build/lexicon && gleam deps download
 RUN cd /build/lexicon_graphql && gleam deps download
 RUN cd /build/server && gleam deps download
+
+# Apply patches to dependencies
+RUN cd /build && patch -p1 < patches/mist-websocket-protocol.patch
 
 # Compile the server code
 RUN cd /build/server \
