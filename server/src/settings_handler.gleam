@@ -45,12 +45,27 @@ pub fn handle(req: wisp.Request, ctx: Context) -> wisp.Response {
     Error(_) -> #(option.None, False)
   }
 
+  // Require admin access for the entire settings page
+  case user_is_admin {
+    False -> {
+      logging.log(logging.Warning, "[settings] Non-admin user attempted to access settings page")
+      wisp.redirect("/")
+    }
+    True -> handle_admin_request(req, ctx, current_user)
+  }
+}
+
+fn handle_admin_request(
+  req: wisp.Request,
+  ctx: Context,
+  current_user: option.Option(#(String, String)),
+) -> wisp.Response {
   case req.method {
     gleam_http.Get -> {
       // Extract flash messages if present
       use flash_kind, flash_message <- wisp_flash.get_flash(req)
 
-      settings.view(ctx.db, current_user, user_is_admin, flash_kind, flash_message)
+      settings.view(ctx.db, current_user, flash_kind, flash_message)
       |> element.to_document_string
       |> wisp.html_response(200)
     }
@@ -61,8 +76,8 @@ pub fn handle(req: wisp.Request, ctx: Context) -> wisp.Response {
       // Check if this is a reset action
       case list.key_find(form_data.values, "action") {
         Ok("reset") -> {
-          // Handle reset action
-          handle_reset(req, form_data, ctx, user_is_admin)
+          // Handle reset action (admin-only, already verified)
+          handle_reset(req, form_data, ctx)
         }
         _ -> {
           // Check if this is a lexicons upload
@@ -266,66 +281,61 @@ fn handle_reset(
   req: wisp.Request,
   form_data: wisp.FormData,
   ctx: Context,
-  is_admin: Bool,
 ) -> wisp.Response {
-  // Check admin access
-  case is_admin {
-    False -> {
-      logging.log(logging.Error, "[settings] Non-admin user attempted reset")
-      wisp.redirect("/settings")
-      |> wisp_flash.set_flash(req, "error", "Unauthorized: Admin access required")
-    }
-    True -> {
-      // Verify confirmation
-      case list.key_find(form_data.values, "confirm") {
-        Ok("RESET") -> {
-          // Delete all data
-          let domain_result = database.delete_domain_authority(ctx.db)
-          let lexicons_result = database.delete_all_lexicons(ctx.db)
-          let records_result = database.delete_all_records(ctx.db)
-          let actors_result = database.delete_all_actors(ctx.db)
+  // Admin access already verified by page-level check
+  // Verify confirmation
+  case list.key_find(form_data.values, "confirm") {
+    Ok("RESET") -> {
+      // Delete all data
+      let domain_result = database.delete_domain_authority(ctx.db)
+      let lexicons_result = database.delete_all_lexicons(ctx.db)
+      let records_result = database.delete_all_records(ctx.db)
+      let actors_result = database.delete_all_actors(ctx.db)
+      let oauth_result = database.delete_oauth_credentials(ctx.db)
 
-          case domain_result, lexicons_result, records_result, actors_result {
-            Ok(_), Ok(_), Ok(_), Ok(_) -> {
-              // Reload config cache
-              let _ = config.reload(ctx.config, ctx.db)
-
-              // Restart Jetstream consumer if it exists
-              let restart_message = case ctx.jetstream_consumer {
-                option.Some(consumer) -> {
-                  case jetstream_consumer.restart(consumer) {
-                    Ok(_) -> "All data has been reset successfully"
-                    Error(_) ->
-                      "Data reset completed (Jetstream consumer may need manual restart)"
-                  }
-                }
-                option.None -> "All data has been reset successfully"
-              }
-
-              logging.log(logging.Info, "[settings] System reset completed")
-              wisp.redirect("/settings")
-              |> wisp_flash.set_flash(req, "success", restart_message)
-            }
-            _, _, _, _ -> {
-              logging.log(logging.Error, "[settings] Failed to reset some data")
-              wisp.redirect("/settings")
-              |> wisp_flash.set_flash(req, "error", "Failed to reset all data")
-            }
-          }
-        }
-        _ -> {
+      case domain_result, lexicons_result, records_result, actors_result, oauth_result {
+        Ok(_), Ok(_), Ok(_), Ok(_), Ok(_) -> {
           logging.log(
-            logging.Warning,
-            "[settings] Reset attempted without proper confirmation",
+            logging.Info,
+            "[settings] OAuth credentials deleted, re-registration will occur on next interaction",
           )
+          // Reload config cache
+          let _ = config.reload(ctx.config, ctx.db)
+
+          // Restart Jetstream consumer if it exists
+          let restart_message = case ctx.jetstream_consumer {
+            option.Some(consumer) -> {
+              case jetstream_consumer.restart(consumer) {
+                Ok(_) -> "All data has been reset successfully"
+                Error(_) ->
+                  "Data reset completed (Jetstream consumer may need manual restart)"
+              }
+            }
+            option.None -> "All data has been reset successfully"
+          }
+
+          logging.log(logging.Info, "[settings] System reset completed")
           wisp.redirect("/settings")
-          |> wisp_flash.set_flash(
-            req,
-            "error",
-            "Confirmation failed: Please type RESET exactly",
-          )
+          |> wisp_flash.set_flash(req, "success", restart_message)
+        }
+        _, _, _, _, _ -> {
+          logging.log(logging.Error, "[settings] Failed to reset some data")
+          wisp.redirect("/settings")
+          |> wisp_flash.set_flash(req, "error", "Failed to reset all data")
         }
       }
+    }
+    _ -> {
+      logging.log(
+        logging.Warning,
+        "[settings] Reset attempted without proper confirmation",
+      )
+      wisp.redirect("/settings")
+      |> wisp_flash.set_flash(
+        req,
+        "error",
+        "Confirmation failed: Please type RESET exactly",
+      )
     }
   }
 }

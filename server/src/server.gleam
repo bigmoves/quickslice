@@ -22,6 +22,7 @@ import lustre/element
 import lustre_handlers
 import mist
 import oauth/handlers
+import oauth/registration
 import oauth/session
 import pages/index
 import pubsub
@@ -283,29 +284,118 @@ fn start_server(
     Error(_) -> "https://auth.example.com"
   }
 
-  // OAuth configuration
-  let oauth_client_id = case envoy.get("OAUTH_CLIENT_ID") {
-    Ok(id) -> id
-    Error(_) -> ""
+  // OAuth configuration - check environment variables first for backwards compatibility
+  let enable_auto_register = case envoy.get("ENABLE_OAUTH_AUTO_REGISTER") {
+    Ok(val) -> val == "true" || val == "1"
+    Error(_) -> False
   }
 
-  let oauth_client_secret = case envoy.get("OAUTH_CLIENT_SECRET") {
-    Ok(secret) -> secret
-    Error(_) -> ""
-  }
-
+  // Determine redirect URI from environment or use default
   let oauth_redirect_uri = case envoy.get("OAUTH_REDIRECT_URI") {
     Ok(uri) -> uri
     Error(_) -> "http://localhost:8000/oauth/callback"
   }
 
-  let oauth_config =
-    handlers.OAuthConfig(
-      client_id: oauth_client_id,
-      client_secret: oauth_client_secret,
-      redirect_uri: oauth_redirect_uri,
-      auth_url: auth_base_url,
-    )
+  let oauth_config = case
+    envoy.get("OAUTH_CLIENT_ID"),
+    envoy.get("OAUTH_CLIENT_SECRET")
+  {
+    Ok(id), Ok(secret) if id != "" && secret != "" -> {
+      // Use environment variables if provided (backwards compatibility)
+      logging.log(
+        logging.Info,
+        "[oauth] Using OAuth credentials from environment variables",
+      )
+      handlers.OAuthConfig(
+        client_id: id,
+        client_secret: secret,
+        redirect_uri: oauth_redirect_uri,
+        auth_url: auth_base_url,
+      )
+    }
+    _, _ -> {
+      // Try auto-registration if enabled
+      case enable_auto_register {
+        True -> {
+          logging.log(
+            logging.Info,
+            "[oauth] Auto-registration enabled, checking for stored credentials...",
+          )
+
+          case
+            registration.ensure_oauth_client(
+              db,
+              auth_base_url,
+              oauth_redirect_uri,
+              "Quickslice Server",
+            )
+          {
+            Ok(config) -> config
+            Error(err) -> {
+              logging.log(
+                logging.Error,
+                "[oauth] OAuth auto-registration failed: " <> err,
+              )
+              logging.log(
+                logging.Warning,
+                "[oauth] Starting retry actor to attempt registration in background...",
+              )
+
+              // Start retry actor in background
+              case
+                registration.start_retry_actor(
+                  db,
+                  auth_base_url,
+                  oauth_redirect_uri,
+                  "Quickslice Server",
+                )
+              {
+                Ok(retry_subject) -> {
+                  logging.log(
+                    logging.Info,
+                    "[oauth] Retry actor started successfully",
+                  )
+                  // Trigger first retry attempt immediately
+                  registration.trigger_retry(retry_subject)
+                }
+                Error(_) -> {
+                  logging.log(
+                    logging.Error,
+                    "[oauth] Failed to start retry actor",
+                  )
+                }
+              }
+
+              // Return empty credentials for now
+              logging.log(
+                logging.Warning,
+                "[oauth] Server will start without OAuth support until registration succeeds",
+              )
+              handlers.OAuthConfig(
+                client_id: "",
+                client_secret: "",
+                redirect_uri: oauth_redirect_uri,
+                auth_url: auth_base_url,
+              )
+            }
+          }
+        }
+        False -> {
+          // Auto-registration disabled, use empty credentials
+          logging.log(
+            logging.Info,
+            "[oauth] Auto-registration disabled, OAuth will not be available",
+          )
+          handlers.OAuthConfig(
+            client_id: "",
+            client_secret: "",
+            redirect_uri: oauth_redirect_uri,
+            auth_url: auth_base_url,
+          )
+        }
+      }
+    }
+  }
 
   // Get HOST and PORT from environment variables or use defaults
   let host = case envoy.get("HOST") {

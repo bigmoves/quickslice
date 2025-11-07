@@ -371,6 +371,50 @@ pub fn delete_domain_authority(
   Ok(Nil)
 }
 
+/// Get OAuth client credentials from config table
+/// Returns a tuple of (client_id, client_secret, redirect_uri) if all values exist
+pub fn get_oauth_credentials(
+  conn: sqlight.Connection,
+) -> Result(Option(#(String, String, String)), sqlight.Error) {
+  case get_config(conn, "oauth_client_id"), get_config(conn, "oauth_client_secret") {
+    Ok(client_id), Ok(client_secret) -> {
+      let redirect_uri = case get_config(conn, "oauth_redirect_uri") {
+        Ok(uri) -> uri
+        Error(_) -> ""
+      }
+      Ok(Some(#(client_id, client_secret, redirect_uri)))
+    }
+    Error(_), _ -> Ok(None)
+    _, Error(_) -> Ok(None)
+  }
+}
+
+/// Delete OAuth credentials from config table
+pub fn delete_oauth_credentials(
+  conn: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
+  use _ <- result.try(delete_config(conn, "oauth_client_id"))
+  use _ <- result.try(delete_config(conn, "oauth_client_secret"))
+  use _ <- result.try(delete_config(conn, "oauth_redirect_uri"))
+  Ok(Nil)
+}
+
+/// Generic config deletion function
+fn delete_config(
+  conn: sqlight.Connection,
+  key: String,
+) -> Result(Nil, sqlight.Error) {
+  let sql = "DELETE FROM config WHERE key = ?"
+
+  use _ <- result.try(sqlight.query(
+    sql,
+    on: conn,
+    with: [sqlight.text(key)],
+    expecting: decode.string,
+  ))
+  Ok(Nil)
+}
+
 /// Deletes all lexicons from the database
 pub fn delete_all_lexicons(
   conn: sqlight.Connection,

@@ -12,17 +12,19 @@ import sqlight
 pub fn view(
   db: sqlight.Connection,
   current_user: Option(#(String, String)),
-  is_admin: Bool,
   flash_kind: Option(String),
   flash_message: Option(String),
 ) -> Element(msg) {
   let data = fetch_settings(db)
-  render(data, current_user, is_admin, flash_kind, flash_message)
+  render(data, current_user, flash_kind, flash_message)
 }
 
 /// Settings data
 pub type SettingsData {
-  SettingsData(domain_authority: String)
+  SettingsData(
+    domain_authority: String,
+    oauth_client_id: Option(String),
+  )
 }
 
 /// Fetch current settings
@@ -32,14 +34,18 @@ fn fetch_settings(db: sqlight.Connection) -> SettingsData {
     Error(_) -> ""
   }
 
-  SettingsData(domain_authority: domain_authority)
+  let oauth_client_id = case database.get_oauth_credentials(db) {
+    Ok(option.Some(#(client_id, _secret, _uri))) -> option.Some(client_id)
+    _ -> option.None
+  }
+
+  SettingsData(domain_authority: domain_authority, oauth_client_id: oauth_client_id)
 }
 
 /// Render the complete settings page
 fn render(
   data: SettingsData,
   current_user: Option(#(String, String)),
-  is_admin: Bool,
   flash_kind: Option(String),
   flash_message: Option(String),
 ) -> Element(msg) {
@@ -50,7 +56,7 @@ fn render(
         element.text("Settings"),
       ]),
       alert.maybe_alert(flash_kind, flash_message),
-      render_settings_form(data, is_admin),
+      render_settings_form(data),
     ],
     current_user: current_user,
     domain_authority: option.None,
@@ -58,7 +64,7 @@ fn render(
 }
 
 /// Render the settings form
-fn render_settings_form(data: SettingsData, is_admin: Bool) -> Element(msg) {
+fn render_settings_form(data: SettingsData) -> Element(msg) {
   html.div([attribute.class("max-w-2xl space-y-6")], [
     // Domain Authority Section
     html.div([attribute.class("bg-zinc-800/50 rounded p-6")], [
@@ -134,59 +140,110 @@ fn render_settings_form(data: SettingsData, is_admin: Bool) -> Element(msg) {
         ],
       ),
     ]),
-    // Danger Zone Section (admin only)
-    case is_admin {
-      True ->
-        html.div([attribute.class("bg-zinc-800/50 rounded p-6")], [
-          html.h2([attribute.class("text-xl font-semibold text-zinc-300 mb-4")], [
-            element.text("Danger Zone"),
-          ]),
-          html.p([attribute.class("text-sm text-zinc-400 mb-4")], [
-            element.text("This will clear all indexed data:"),
-          ]),
-          html.ul([attribute.class("text-sm text-zinc-400 mb-4 ml-4 list-disc")], [
-            html.li([], [element.text("Domain authority configuration")]),
-            html.li([], [element.text("All lexicon definitions")]),
-            html.li([], [element.text("All indexed records")]),
-            html.li([], [element.text("All actors")]),
-          ]),
-          html.p([attribute.class("text-sm text-zinc-400 mb-4")], [
-            element.text("Records can be re-indexed via backfill."),
-          ]),
-          html.form(
-            [
-              attribute.method("post"),
-              attribute.action("/settings"),
-            ],
-            [
-              html.input([
-                attribute.type_("hidden"),
-                attribute.name("action"),
-                attribute.value("reset"),
-              ]),
-              input.form_text_input(
-                label: "Type RESET to confirm",
-                name: "confirm",
-                value: "",
-                placeholder: "RESET",
-                required: True,
-              ),
-              html.div([attribute.class("flex gap-3")], [
-                html.button(
-                  [
-                    attribute.type_("submit"),
-                    attribute.class(
-                      "font-mono px-4 py-2 text-sm text-red-400 border border-red-900 hover:bg-red-900/30 rounded transition-colors cursor-pointer",
-                    ),
-                  ],
-                  [element.text("Reset Everything")],
+    // OAuth Registration Section
+    html.div([attribute.class("bg-zinc-800/50 rounded p-6")], [
+      html.h2([attribute.class("text-xl font-semibold text-zinc-300 mb-4")], [
+        element.text("OAuth Configuration"),
+      ]),
+      case data.oauth_client_id {
+        option.Some(client_id) -> {
+          html.div([attribute.class("space-y-3")], [
+            html.div([attribute.class("flex items-center gap-2")], [
+              html.div([
+                attribute.class(
+                  "w-2 h-2 bg-green-500 rounded-full",
                 ),
+              ], []),
+              html.p([attribute.class("text-sm text-zinc-300")], [
+                element.text("OAuth client registered"),
               ]),
-            ],
+            ]),
+            html.div([attribute.class("bg-zinc-900/50 rounded p-3")], [
+              html.p([attribute.class("text-xs text-zinc-500 mb-1")], [
+                element.text("Client ID:"),
+              ]),
+              html.p([attribute.class("text-sm text-zinc-300 font-mono")], [
+                element.text(client_id),
+              ]),
+            ]),
+            html.p([attribute.class("text-sm text-zinc-500")], [
+              element.text(
+                "OAuth client credentials are stored in the database. Use \"Reset Everything\" to clear and trigger re-registration.",
+              ),
+            ]),
+          ])
+        }
+        option.None -> {
+          html.div([attribute.class("space-y-3")], [
+            html.div([attribute.class("flex items-center gap-2")], [
+              html.div([
+                attribute.class(
+                  "w-2 h-2 bg-zinc-500 rounded-full",
+                ),
+              ], []),
+              html.p([attribute.class("text-sm text-zinc-400")], [
+                element.text("OAuth client not registered"),
+              ]),
+            ]),
+            html.p([attribute.class("text-sm text-zinc-500")], [
+              element.text(
+                "Set ENABLE_OAUTH_AUTO_REGISTER=true in your .env file to enable automatic OAuth client registration. The server will automatically register with your configured AIP server on startup.",
+              ),
+            ]),
+          ])
+        }
+      },
+    ]),
+    // Danger Zone Section
+    html.div([attribute.class("bg-zinc-800/50 rounded p-6")], [
+      html.h2([attribute.class("text-xl font-semibold text-zinc-300 mb-4")], [
+        element.text("Danger Zone"),
+      ]),
+      html.p([attribute.class("text-sm text-zinc-400 mb-4")], [
+        element.text("This will clear all indexed data:"),
+      ]),
+      html.ul([attribute.class("text-sm text-zinc-400 mb-4 ml-4 list-disc")], [
+        html.li([], [element.text("Domain authority configuration")]),
+        html.li([], [element.text("OAuth client credentials")]),
+        html.li([], [element.text("All lexicon definitions")]),
+        html.li([], [element.text("All indexed records")]),
+        html.li([], [element.text("All actors")]),
+      ]),
+      html.p([attribute.class("text-sm text-zinc-400 mb-4")], [
+        element.text("Records can be re-indexed via backfill."),
+      ]),
+      html.form(
+        [
+          attribute.method("post"),
+          attribute.action("/settings"),
+        ],
+        [
+          html.input([
+            attribute.type_("hidden"),
+            attribute.name("action"),
+            attribute.value("reset"),
+          ]),
+          input.form_text_input(
+            label: "Type RESET to confirm",
+            name: "confirm",
+            value: "",
+            placeholder: "RESET",
+            required: True,
           ),
-        ])
-      False -> element.none()
-    },
+          html.div([attribute.class("flex gap-3")], [
+            html.button(
+              [
+                attribute.type_("submit"),
+                attribute.class(
+                  "font-mono px-4 py-2 text-sm text-red-400 border border-red-900 hover:bg-red-900/30 rounded transition-colors cursor-pointer",
+                ),
+              ],
+              [element.text("Reset Everything")],
+            ),
+          ]),
+        ],
+      ),
+    ]),
     // Account Section
     html.div([attribute.class("bg-zinc-800/50 rounded p-6")], [
       html.h2([attribute.class("text-xl font-semibold text-zinc-300 mb-4")], [
