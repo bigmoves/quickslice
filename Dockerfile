@@ -51,9 +51,6 @@ RUN apk add --no-cache sqlite-libs
 # Copy the compiled server code from the builder stage
 COPY --from=builder /build/server/build/erlang-shipment /app
 
-# Copy lexicons directory to the runtime image
-COPY --from=builder /build/server/priv/lexicons /app/priv/lexicons
-
 # Set up the entrypoint
 WORKDIR /app
 
