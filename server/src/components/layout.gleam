@@ -13,17 +13,23 @@ pub fn page_with_header(
 ) -> Element(msg) {
   html.html([attribute.class("h-full")], [
     head(title),
-    html.body([attribute.class("bg-zinc-950 text-zinc-300 font-mono min-h-screen")], [
-      html.div([attribute.class("max-w-4xl mx-auto px-6 py-12")], [
-        render_header(current_user, domain_authority),
-        ..content
-      ]),
-    ]),
+    html.body(
+      [attribute.class("bg-zinc-950 text-zinc-300 font-mono min-h-screen")],
+      [
+        html.div([attribute.class("max-w-4xl mx-auto px-6 py-12")], [
+          render_header(current_user, domain_authority),
+          ..content
+        ]),
+      ],
+    ),
   ])
 }
 
 /// Renders a complete HTML page with the given title and content
-pub fn page(title title: String, content content: List(Element(msg))) -> Element(msg) {
+pub fn page(
+  title title: String,
+  content content: List(Element(msg)),
+) -> Element(msg) {
   html.html([attribute.class("h-full")], [
     head(title),
     body(content),
@@ -77,10 +83,13 @@ fn head(title: String) -> Element(msg) {
 
 /// Renders the HTML body with a max-width container and navigation
 fn body(content: List(Element(msg))) -> Element(msg) {
-  html.body([attribute.class("bg-zinc-950 text-zinc-300 font-mono min-h-screen")], [
-    nav_header(),
-    html.div([attribute.class("max-w-4xl mx-auto px-6 py-12")], content),
-  ])
+  html.body(
+    [attribute.class("bg-zinc-950 text-zinc-300 font-mono min-h-screen")],
+    [
+      nav_header(),
+      html.div([attribute.class("max-w-4xl mx-auto px-6 py-12")], content),
+    ],
+  )
 }
 
 /// Renders the navigation header
@@ -91,7 +100,9 @@ fn nav_header() -> Element(msg) {
         html.a(
           [
             attribute.href("/"),
-            attribute.class("text-zinc-300 hover:text-zinc-100 transition-colors"),
+            attribute.class(
+              "text-zinc-300 hover:text-zinc-100 transition-colors",
+            ),
           ],
           [element.text("quickslice")],
         ),

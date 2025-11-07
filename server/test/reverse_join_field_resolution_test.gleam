@@ -343,7 +343,14 @@ pub fn reverse_join_includes_forward_join_fields_test() {
   }"
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(conn, query, "{}", Error(Nil), "", "https://plc.directory")
+    graphql_gleam.execute_query_with_db(
+      conn,
+      query,
+      "{}",
+      Error(Nil),
+      "",
+      "https://plc.directory",
+    )
 
   // Verify the response includes the gallery
   string.contains(response_json, "Test Gallery")
@@ -415,7 +422,14 @@ pub fn integer_field_resolves_correctly_test() {
   }"
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(conn, query, "{}", Error(Nil), "", "https://plc.directory")
+    graphql_gleam.execute_query_with_db(
+      conn,
+      query,
+      "{}",
+      Error(Nil),
+      "",
+      "https://plc.directory",
+    )
 
   // Verify position is returned as integer, not string or null
   { string.contains(response_json, "\"position\":42") }
@@ -571,7 +585,14 @@ pub fn nested_query_profile_to_photos_test() {
   }"
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(conn, query, "{}", Error(Nil), "", "https://plc.directory")
+    graphql_gleam.execute_query_with_db(
+      conn,
+      query,
+      "{}",
+      Error(Nil),
+      "",
+      "https://plc.directory",
+    )
 
   // Verify all levels of nesting work
   string.contains(response_json, "Alice")

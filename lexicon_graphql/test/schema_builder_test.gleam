@@ -6,11 +6,11 @@ import birdie
 import gleam/dict
 import gleam/option.{None, Some}
 import gleeunit/should
-import graphql/introspection
-import graphql/schema
-import graphql/sdl
 import lexicon_graphql/schema_builder
 import lexicon_graphql/types
+import swell/introspection
+import swell/schema
+import swell/sdl
 
 // Test building a schema from a simple lexicon
 pub fn simple_schema_snapshot_test() {

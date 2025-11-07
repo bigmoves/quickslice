@@ -84,6 +84,5 @@ query {
 
 ## Architecture
 
-- `graphql/` - Core GraphQL implementation
 - `lexicon_graphql/` - Schema generation from Lexicons
 - `server/` - Database layer and record storage

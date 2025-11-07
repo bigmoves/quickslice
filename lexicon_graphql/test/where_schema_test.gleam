@@ -8,12 +8,12 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
-import graphql/introspection
-import graphql/schema
-import graphql/sdl
 import lexicon_graphql/connection
 import lexicon_graphql/db_schema_builder
 import lexicon_graphql/types
+import swell/introspection
+import swell/schema
+import swell/sdl
 
 pub fn main() {
   gleeunit.main()

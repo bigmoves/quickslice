@@ -4,9 +4,9 @@
 import gleam/dict
 import gleam/option.{Some}
 import gleeunit/should
-import graphql/schema
-import graphql/value
 import lexicon_graphql/blob_type
+import swell/schema
+import swell/value
 
 pub fn create_blob_type_test() {
   let blob_type = blob_type.create_blob_type()

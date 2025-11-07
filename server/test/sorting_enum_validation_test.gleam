@@ -8,13 +8,13 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleeunit/should
-import graphql/executor
-import graphql/schema
-import graphql/value
 import lexicon_graphql/dataloader
 import lexicon_graphql/db_schema_builder
 import lexicon_graphql/lexicon_parser
 import lexicon_graphql/types
+import swell/executor
+import swell/schema
+import swell/value
 
 pub fn sorting_enum_input_types_are_unique_per_collection_test() {
   // Test: Each collection should have its own SortFieldInput type

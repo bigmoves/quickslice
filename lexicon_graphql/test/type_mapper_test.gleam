@@ -2,8 +2,8 @@
 ///
 /// Maps AT Protocol lexicon types to GraphQL types
 import gleeunit/should
-import graphql/schema
 import lexicon_graphql/type_mapper
+import swell/schema
 
 pub fn map_string_type_test() {
   type_mapper.map_type("string")

@@ -43,7 +43,9 @@ pub type Context {
     admin_dids: List(String),
     backfill_state: process.Subject(backfill_state.Message),
     config: process.Subject(config.Message),
-    jetstream_consumer: option.Option(process.Subject(jetstream_consumer.Message)),
+    jetstream_consumer: option.Option(
+      process.Subject(jetstream_consumer.Message),
+    ),
   )
 }
 
@@ -477,7 +479,10 @@ fn start_server(
           Ok(upgrade_value) -> {
             case string.lowercase(upgrade_value) {
               "websocket" -> {
-                logging.log(logging.Info, "[server] WebSocket upgrade for /backfill-ws")
+                logging.log(
+                  logging.Info,
+                  "[server] WebSocket upgrade for /backfill-ws",
+                )
                 lustre_handlers.serve_backfill_button(
                   req,
                   ctx.db,
@@ -502,7 +507,9 @@ fn start_server(
                   logging.Info,
                   "[server] Handling WebSocket upgrade for /graphql",
                 )
-                let domain_authority = case config.get_domain_authority(ctx.config) {
+                let domain_authority = case
+                  config.get_domain_authority(ctx.config)
+                {
                   option.Some(authority) -> authority
                   option.None -> ""
                 }
@@ -634,10 +641,7 @@ fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
   }
 }
 
-fn handle_backfill_request(
-  req: wisp.Request,
-  ctx: Context,
-) -> wisp.Response {
+fn handle_backfill_request(req: wisp.Request, ctx: Context) -> wisp.Response {
   case req.method {
     gleam_http.Post -> {
       // Get domain authority from config
@@ -662,7 +666,10 @@ fn handle_backfill_request(
               let #(collections, external_collections) =
                 lexicons
                 |> list.partition(fn(lex) {
-                  backfill.nsid_matches_domain_authority(lex.id, domain_authority)
+                  backfill.nsid_matches_domain_authority(
+                    lex.id,
+                    domain_authority,
+                  )
                 })
 
               let collection_ids = list.map(collections, fn(lex) { lex.id })

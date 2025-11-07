@@ -225,7 +225,14 @@ pub fn did_join_first_one_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
+    graphql_gleam.execute_query_with_db(
+      db,
+      query,
+      "{}",
+      Error(Nil),
+      "",
+      "https://plc.directory",
+    )
 
   // Verify only 1 post is returned
   string.contains(response_json, "\"edges\"")
@@ -335,7 +342,14 @@ pub fn did_join_first_two_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
+    graphql_gleam.execute_query_with_db(
+      db,
+      query,
+      "{}",
+      Error(Nil),
+      "",
+      "https://plc.directory",
+    )
 
   // Count how many post URIs appear (should be 2)
   let post_count =
@@ -444,7 +458,14 @@ pub fn reverse_join_first_one_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
+    graphql_gleam.execute_query_with_db(
+      db,
+      query,
+      "{}",
+      Error(Nil),
+      "",
+      "https://plc.directory",
+    )
 
   // Count how many like URIs appear (should be 1)
   let like_count =
@@ -553,7 +574,14 @@ pub fn did_join_default_pagination_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
+    graphql_gleam.execute_query_with_db(
+      db,
+      query,
+      "{}",
+      Error(Nil),
+      "",
+      "https://plc.directory",
+    )
 
   // All 3 posts should be returned (within default limit of 50)
   let post_count =

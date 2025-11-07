@@ -9,9 +9,6 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
-import graphql/connection
-import graphql/schema
-import graphql/value
 import lexicon_graphql/collection_meta
 import lexicon_graphql/connection as lexicon_connection
 import lexicon_graphql/dataloader
@@ -23,6 +20,9 @@ import lexicon_graphql/type_mapper
 import lexicon_graphql/types
 import lexicon_graphql/uri_extractor
 import lexicon_graphql/where_input
+import swell/connection
+import swell/schema
+import swell/value
 
 /// Represents a reverse join relationship discovered from lexicon analysis
 type ReverseJoinRelationship {
@@ -155,7 +155,8 @@ pub fn build_schema_with_subscriptions(
         )
 
       // Build the subscription type
-      let subscription_type = build_subscription_type(record_types, object_types)
+      let subscription_type =
+        build_subscription_type(record_types, object_types)
 
       // Create the schema with queries, mutations, and subscriptions
       Ok(schema.schema_with_subscriptions(
@@ -1706,5 +1707,9 @@ fn build_subscription_type(
       [created_field, updated_field, deleted_field]
     })
 
-  schema.object_type("Subscription", "GraphQL subscription root", subscription_fields)
+  schema.object_type(
+    "Subscription",
+    "GraphQL subscription root",
+    subscription_fields,
+  )
 }

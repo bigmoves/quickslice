@@ -3,10 +3,10 @@ import gleam/json
 import gleam/list
 import gleam/option
 import gleeunit/should
-import graphql/schema
 import lexicon_graphql/db_schema_builder
 import lexicon_graphql/lexicon_parser
 import sqlight
+import swell/schema
 
 // Helper to create a status lexicon JSON
 fn create_status_lexicon() -> String {

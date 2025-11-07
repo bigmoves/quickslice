@@ -2,8 +2,8 @@
 ///
 /// Tests the creation of unique SortFieldInput types per collection
 import gleeunit/should
-import graphql/schema
 import lexicon_graphql/connection as lexicon_connection
+import swell/schema
 
 pub fn sort_field_input_type_with_enum_creates_types_test() {
   // Test: sort_field_input_type_with_enum should create input object types

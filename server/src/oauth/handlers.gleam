@@ -278,7 +278,10 @@ pub fn refresh_access_token(
                   let new_refresh_token = case
                     decode.run(
                       parsed,
-                      decode.at(["refresh_token"], decode.optional(decode.string)),
+                      decode.at(
+                        ["refresh_token"],
+                        decode.optional(decode.string),
+                      ),
                     )
                   {
                     Ok(token) -> token
@@ -286,7 +289,10 @@ pub fn refresh_access_token(
                   }
 
                   let expires_in = case
-                    decode.run(parsed, decode.at(["expires_in"], decode.optional(decode.int)))
+                    decode.run(
+                      parsed,
+                      decode.at(["expires_in"], decode.optional(decode.int)),
+                    )
                   {
                     Ok(exp) -> exp
                     Error(_) -> option.None
@@ -384,7 +390,10 @@ fn exchange_code_for_tokens(
                   let refresh_token = case
                     decode.run(
                       parsed,
-                      decode.at(["refresh_token"], decode.optional(decode.string)),
+                      decode.at(
+                        ["refresh_token"],
+                        decode.optional(decode.string),
+                      ),
                     )
                   {
                     Ok(token) -> token

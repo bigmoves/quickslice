@@ -6,8 +6,8 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
-import graphql/value
 import lexicon_graphql/where_input
+import swell/value
 
 pub fn main() {
   gleeunit.main()

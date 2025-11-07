@@ -55,17 +55,15 @@ pub fn form_text_input(
         False -> element.none()
       },
     ]),
-    html.input(
-      [
-        attribute.type_("text"),
-        attribute.name(name),
-        attribute.id(name),
-        attribute.value(value),
-        attribute.placeholder(placeholder),
-        attribute.class(input_classes),
-        ..required_attr
-      ],
-    ),
+    html.input([
+      attribute.type_("text"),
+      attribute.name(name),
+      attribute.id(name),
+      attribute.value(value),
+      attribute.placeholder(placeholder),
+      attribute.class(input_classes),
+      ..required_attr
+    ]),
   ])
 }
 
@@ -90,16 +88,13 @@ pub fn form_file_input(
         False -> element.none()
       },
     ]),
-    html.input(
-      [
-        attribute.type_("file"),
-        attribute.name(name),
-        attribute.id(name),
-        attribute.attribute("accept", accept),
-        attribute.class(input_classes),
-        ..required_attr
-      ],
-    ),
+    html.input([
+      attribute.type_("file"),
+      attribute.name(name),
+      attribute.id(name),
+      attribute.attribute("accept", accept),
+      attribute.class(input_classes),
+      ..required_attr
+    ]),
   ])
 }
-

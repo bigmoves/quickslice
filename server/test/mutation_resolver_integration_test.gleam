@@ -10,12 +10,12 @@ import gleam/json
 import gleam/list
 import gleam/option
 import gleeunit/should
-import graphql/executor
-import graphql/schema
-import graphql/value
 import lexicon_graphql/db_schema_builder
 import lexicon_graphql/lexicon_parser
 import sqlight
+import swell/executor
+import swell/schema
+import swell/value
 
 // Helper to create a status lexicon JSON
 fn create_status_lexicon() -> String {

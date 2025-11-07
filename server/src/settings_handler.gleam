@@ -25,7 +25,9 @@ pub type Context {
     oauth_config: handlers.OAuthConfig,
     admin_dids: List(String),
     config: process.Subject(config.Message),
-    jetstream_consumer: option.Option(process.Subject(jetstream_consumer.Message)),
+    jetstream_consumer: option.Option(
+      process.Subject(jetstream_consumer.Message),
+    ),
   )
 }
 
@@ -48,7 +50,10 @@ pub fn handle(req: wisp.Request, ctx: Context) -> wisp.Response {
   // Require admin access for the entire settings page
   case user_is_admin {
     False -> {
-      logging.log(logging.Warning, "[settings] Non-admin user attempted to access settings page")
+      logging.log(
+        logging.Warning,
+        "[settings] Non-admin user attempted to access settings page",
+      )
       wisp.redirect("/")
     }
     True -> handle_admin_request(req, ctx, current_user)
@@ -94,27 +99,50 @@ fn handle_admin_request(
                   case validate_domain_authority(domain_authority) {
                     Ok(_) -> {
                       // Save domain_authority to database and update cache
-                      case config.set_domain_authority(ctx.config, ctx.db, domain_authority) {
+                      case
+                        config.set_domain_authority(
+                          ctx.config,
+                          ctx.db,
+                          domain_authority,
+                        )
+                      {
                         Ok(_) -> {
                           wisp.redirect("/settings")
-                          |> wisp_flash.set_flash(req, "success", "Domain authority saved successfully")
+                          |> wisp_flash.set_flash(
+                            req,
+                            "success",
+                            "Domain authority saved successfully",
+                          )
                         }
                         Error(_) -> {
-                          logging.log(logging.Error, "[settings] Failed to save domain_authority")
+                          logging.log(
+                            logging.Error,
+                            "[settings] Failed to save domain_authority",
+                          )
                           wisp.redirect("/settings")
-                          |> wisp_flash.set_flash(req, "error", "Failed to save domain authority")
+                          |> wisp_flash.set_flash(
+                            req,
+                            "error",
+                            "Failed to save domain authority",
+                          )
                         }
                       }
                     }
                     Error(error_message) -> {
-                      logging.log(logging.Warning, "[settings] Invalid domain authority: " <> error_message)
+                      logging.log(
+                        logging.Warning,
+                        "[settings] Invalid domain authority: " <> error_message,
+                      )
                       wisp.redirect("/settings")
                       |> wisp_flash.set_flash(req, "error", error_message)
                     }
                   }
                 }
                 Error(_) -> {
-                  logging.log(logging.Warning, "[settings] No form data received")
+                  logging.log(
+                    logging.Warning,
+                    "[settings] No form data received",
+                  )
                   wisp.redirect("/settings")
                 }
               }
@@ -140,19 +168,28 @@ fn handle_lexicons_upload(
   uploaded_file: wisp.UploadedFile,
   ctx: Context,
 ) -> wisp.Response {
-  logging.log(logging.Info, "[settings] Processing lexicons ZIP upload: " <> uploaded_file.file_name)
+  logging.log(
+    logging.Info,
+    "[settings] Processing lexicons ZIP upload: " <> uploaded_file.file_name,
+  )
 
   // Create temporary directory for extraction with random suffix
   let temp_dir = "tmp/lexicon_upload_" <> wisp.random_string(16)
 
   case simplifile.create_directory_all(temp_dir) {
     Ok(_) -> {
-      logging.log(logging.Info, "[settings] Created temp directory: " <> temp_dir)
+      logging.log(
+        logging.Info,
+        "[settings] Created temp directory: " <> temp_dir,
+      )
 
       // Extract ZIP file to temp directory
       case zip_helper.extract_zip(uploaded_file.path, temp_dir) {
         Ok(_) -> {
-          logging.log(logging.Info, "[settings] Extracted ZIP file to: " <> temp_dir)
+          logging.log(
+            logging.Info,
+            "[settings] Extracted ZIP file to: " <> temp_dir,
+          )
 
           // Import lexicons from extracted directory
           case importer.import_lexicons_from_directory(temp_dir, ctx.db) {
@@ -174,7 +211,10 @@ fn handle_lexicons_upload(
                 [] -> Nil
                 errors -> {
                   list.each(errors, fn(err) {
-                    logging.log(logging.Warning, "[settings] Import error: " <> err)
+                    logging.log(
+                      logging.Warning,
+                      "[settings] Import error: " <> err,
+                    )
                   })
                 }
               }
@@ -182,29 +222,47 @@ fn handle_lexicons_upload(
               // Restart Jetstream consumer to pick up newly imported collections
               let restart_status = case ctx.jetstream_consumer {
                 option.Some(consumer) -> {
-                  logging.log(logging.Info, "[settings] Restarting Jetstream consumer with new lexicons...")
+                  logging.log(
+                    logging.Info,
+                    "[settings] Restarting Jetstream consumer with new lexicons...",
+                  )
                   case jetstream_consumer.restart(consumer) {
                     Ok(_) -> {
-                      logging.log(logging.Info, "[settings] Jetstream consumer restarted successfully")
+                      logging.log(
+                        logging.Info,
+                        "[settings] Jetstream consumer restarted successfully",
+                      )
                       "success"
                     }
                     Error(err) -> {
-                      logging.log(logging.Error, "[settings] Failed to restart Jetstream consumer: " <> err)
+                      logging.log(
+                        logging.Error,
+                        "[settings] Failed to restart Jetstream consumer: "
+                          <> err,
+                      )
                       "failed"
                     }
                   }
                 }
                 option.None -> {
-                  logging.log(logging.Info, "[settings] Jetstream consumer not running, skipping restart")
+                  logging.log(
+                    logging.Info,
+                    "[settings] Jetstream consumer not running, skipping restart",
+                  )
                   "not_running"
                 }
               }
 
               // Build success message with import stats and restart status
-              let base_message = "Imported " <> int.to_string(stats.imported) <> " lexicon(s) successfully"
+              let base_message =
+                "Imported "
+                <> int.to_string(stats.imported)
+                <> " lexicon(s) successfully"
               let message = case restart_status {
                 "success" -> base_message <> ". Jetstream consumer restarted."
-                "failed" -> base_message <> ". Warning: Jetstream consumer restart failed."
+                "failed" ->
+                  base_message
+                  <> ". Warning: Jetstream consumer restart failed."
                 "not_running" -> base_message <> "."
                 _ -> base_message
               }
@@ -221,9 +279,16 @@ fn handle_lexicons_upload(
               // Clean up temp directory
               let _ = simplifile.delete(temp_dir)
 
-              logging.log(logging.Error, "[settings] Failed to import lexicons: " <> err)
+              logging.log(
+                logging.Error,
+                "[settings] Failed to import lexicons: " <> err,
+              )
               wisp.redirect("/settings")
-              |> wisp_flash.set_flash(req, "error", "Failed to import lexicons: " <> err)
+              |> wisp_flash.set_flash(
+                req,
+                "error",
+                "Failed to import lexicons: " <> err,
+              )
             }
           }
         }
@@ -231,16 +296,27 @@ fn handle_lexicons_upload(
           // Clean up temp directory
           let _ = simplifile.delete(temp_dir)
 
-          logging.log(logging.Error, "[settings] Failed to extract ZIP: " <> err)
+          logging.log(
+            logging.Error,
+            "[settings] Failed to extract ZIP: " <> err,
+          )
           wisp.redirect("/settings")
-          |> wisp_flash.set_flash(req, "error", "Failed to extract ZIP file: " <> err)
+          |> wisp_flash.set_flash(
+            req,
+            "error",
+            "Failed to extract ZIP file: " <> err,
+          )
         }
       }
     }
     Error(_) -> {
       logging.log(logging.Error, "[settings] Failed to create temp directory")
       wisp.redirect("/settings")
-      |> wisp_flash.set_flash(req, "error", "Failed to create temporary directory for upload")
+      |> wisp_flash.set_flash(
+        req,
+        "error",
+        "Failed to create temporary directory for upload",
+      )
     }
   }
 }
@@ -268,7 +344,9 @@ fn validate_domain_authority(domain_authority: String) -> Result(Nil, String) {
           // Check that no parts are empty
           case list.all(parts, fn(part) { string.length(part) > 0 }) {
             False ->
-              Error("Domain authority parts cannot be empty (e.g., com.example)")
+              Error(
+                "Domain authority parts cannot be empty (e.g., com.example)",
+              )
             True -> Ok(Nil)
           }
         }
@@ -293,7 +371,13 @@ fn handle_reset(
       let actors_result = database.delete_all_actors(ctx.db)
       let oauth_result = database.delete_oauth_credentials(ctx.db)
 
-      case domain_result, lexicons_result, records_result, actors_result, oauth_result {
+      case
+        domain_result,
+        lexicons_result,
+        records_result,
+        actors_result,
+        oauth_result
+      {
         Ok(_), Ok(_), Ok(_), Ok(_), Ok(_) -> {
           logging.log(
             logging.Info,

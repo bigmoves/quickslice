@@ -6,7 +6,6 @@ import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
 import gleam/hackney
 import gleam/http/request
-import logging
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -14,6 +13,7 @@ import gleam/result
 import gleam/string
 import gleam/time/duration
 import gleam/time/timestamp
+import logging
 import sqlight
 
 /// Convert a Dynamic value (Erlang term) to JSON string
@@ -38,7 +38,10 @@ fn iolist_to_string(iolist: Dynamic) -> String {
   case decode.run(binary, decode.string) {
     Ok(str) -> str
     Error(_) -> {
-      logging.log(logging.Warning, "[backfill] Failed to convert iolist to string")
+      logging.log(
+        logging.Warning,
+        "[backfill] Failed to convert iolist to string",
+      )
       string.inspect(iolist)
     }
   }
@@ -84,7 +87,10 @@ fn configure_hackney_pool() -> Nil
 
 /// Check if an NSID matches the configured domain authority
 /// NSID format is like "com.example.post" where "com.example" is the authority
-pub fn nsid_matches_domain_authority(nsid: String, domain_authority: String) -> Bool {
+pub fn nsid_matches_domain_authority(
+  nsid: String,
+  domain_authority: String,
+) -> Bool {
   // NSID format: authority.name (e.g., "com.example.post")
   // We need to check if the NSID starts with the domain authority
   string.starts_with(nsid, domain_authority <> ".")
@@ -180,7 +186,10 @@ fn resolve_did_worker(
   let result = case resolve_did(did, plc_url) {
     Ok(atp_data) -> Ok(atp_data)
     Error(err) -> {
-      logging.log(logging.Error, "[backfill] Error resolving DID " <> did <> ": " <> err)
+      logging.log(
+        logging.Error,
+        "[backfill] Error resolving DID " <> did <> ": " <> err,
+      )
       Error(Nil)
     }
   }
@@ -248,7 +257,10 @@ fn fetch_records_paginated(
 
   case request.to(url) {
     Error(_) -> {
-      logging.log(logging.Error, "[backfill] Failed to create request for: " <> url)
+      logging.log(
+        logging.Error,
+        "[backfill] Failed to create request for: " <> url,
+      )
       acc
     }
     Ok(req) -> {
@@ -266,11 +278,11 @@ fn fetch_records_paginated(
               logging.log(
                 logging.Error,
                 "[backfill] Failed to fetch records for "
-                <> repo
-                <> "/"
-                <> collection
-                <> ": "
-                <> err_str,
+                  <> repo
+                  <> "/"
+                  <> collection
+                  <> ": "
+                  <> err_str,
               )
           }
           acc
@@ -297,11 +309,11 @@ fn fetch_records_paginated(
                   logging.log(
                     logging.Error,
                     "[backfill] Failed to parse records for "
-                    <> repo
-                    <> "/"
-                    <> collection
-                    <> ": "
-                    <> err,
+                      <> repo
+                      <> "/"
+                      <> collection
+                      <> ": "
+                      <> err,
                   )
                   acc
                 }
@@ -318,12 +330,12 @@ fn fetch_records_paginated(
               logging.log(
                 logging.Error,
                 "[backfill] Failed to fetch records for "
-                <> repo
-                <> "/"
-                <> collection
-                <> " (status: "
-                <> string.inspect(resp.status)
-                <> ")",
+                  <> repo
+                  <> "/"
+                  <> collection
+                  <> " (status: "
+                  <> string.inspect(resp.status)
+                  <> ")",
               )
               acc
             }
@@ -357,8 +369,14 @@ fn parse_list_records_response(
   // Parse the records first
   case json.parse(body, decoder) {
     Error(err) -> {
-      logging.log(logging.Error, "[backfill] Failed to parse records: " <> string.inspect(err))
-      logging.log(logging.Error, "[backfill] Response body snippet: " <> string.slice(body, 0, 200))
+      logging.log(
+        logging.Error,
+        "[backfill] Failed to parse records: " <> string.inspect(err),
+      )
+      logging.log(
+        logging.Error,
+        "[backfill] Response body snippet: " <> string.slice(body, 0, 200),
+      )
       Error("Failed to parse listRecords response")
     }
     Ok(record_tuples) -> {
@@ -508,7 +526,10 @@ pub fn get_records_for_repos(
     |> list.flat_map(fn(repo) {
       case list.find(atp_data, fn(data) { data.did == repo }) {
         Error(_) -> {
-          logging.log(logging.Error, "[backfill] No ATP data found for repo: " <> repo)
+          logging.log(
+            logging.Error,
+            "[backfill] No ATP data found for repo: " <> repo,
+          )
           []
         }
         Ok(data) -> {
@@ -582,7 +603,10 @@ pub fn index_actors(
       Error(err) -> {
         logging.log(
           logging.Error,
-          "[backfill] Failed to upsert actor " <> data.did <> ": " <> string.inspect(err),
+          "[backfill] Failed to upsert actor "
+            <> data.did
+            <> ": "
+            <> string.inspect(err),
         )
       }
     }
@@ -633,10 +657,7 @@ pub fn backfill_external_collections_for_actor(
         index_records(records, db)
       })
 
-      logging.log(
-        logging.Info,
-        "[backfill] Completed sync for " <> did,
-      )
+      logging.log(logging.Info, "[backfill] Completed sync for " <> did)
     }
     Error(err) -> {
       logging.log(
@@ -697,10 +718,10 @@ fn fetch_repos_paginated(
                       logging.log(
                         logging.Info,
                         "[backfill] Found "
-                        <> string.inspect(list.length(new_acc))
-                        <> " total repositories for collection \""
-                        <> collection
-                        <> "\"",
+                          <> string.inspect(list.length(new_acc))
+                          <> " total repositories for collection \""
+                          <> collection
+                          <> "\"",
                       )
                       Ok(new_acc)
                     }
@@ -772,16 +793,19 @@ pub fn backfill_collections(
 
   case collections {
     [] -> {
-      logging.log(logging.Error, "[backfill] No collections specified for backfill")
+      logging.log(
+        logging.Error,
+        "[backfill] No collections specified for backfill",
+      )
       Nil
     }
     _ -> {
       logging.log(
         logging.Info,
         "[backfill] Processing "
-        <> string.inspect(list.length(collections))
-        <> " collections: "
-        <> string.join(collections, ", "),
+          <> string.inspect(list.length(collections))
+          <> " collections: "
+          <> string.join(collections, ", "),
       )
 
       run_backfill(repos, collections, external_collections, config, conn)
@@ -796,16 +820,15 @@ fn run_backfill(
   config: BackfillConfig,
   conn: sqlight.Connection,
 ) -> Nil {
-
   case external_collections {
     [] -> Nil
     _ ->
       logging.log(
         logging.Info,
         "[backfill] Including "
-        <> string.inspect(list.length(external_collections))
-        <> " external collections: "
-        <> string.join(external_collections, ", "),
+          <> string.inspect(list.length(external_collections))
+          <> " external collections: "
+          <> string.join(external_collections, ", "),
       )
   }
 
@@ -813,7 +836,10 @@ fn run_backfill(
   let all_repos = case repos {
     [] -> {
       // Fetch repos for all collections from the relay
-      logging.log(logging.Info, "[backfill] Fetching repositories for collections...")
+      logging.log(
+        logging.Info,
+        "[backfill] Fetching repositories for collections...",
+      )
       let fetched_repos =
         collections
         |> list.filter_map(fn(collection) {
@@ -831,8 +857,8 @@ fn run_backfill(
       logging.log(
         logging.Info,
         "[backfill] Processing "
-        <> string.inspect(list.length(fetched_repos))
-        <> " unique repositories",
+          <> string.inspect(list.length(fetched_repos))
+          <> " unique repositories",
       )
       fetched_repos
     }
@@ -840,8 +866,8 @@ fn run_backfill(
       logging.log(
         logging.Info,
         "[backfill] Using "
-        <> string.inspect(list.length(provided_repos))
-        <> " provided repositories",
+          <> string.inspect(list.length(provided_repos))
+          <> " provided repositories",
       )
       provided_repos
     }
@@ -853,14 +879,17 @@ fn run_backfill(
   logging.log(
     logging.Info,
     "[backfill] Resolved ATP data for "
-    <> string.inspect(list.length(atp_data))
-    <> "/"
-    <> string.inspect(list.length(all_repos))
-    <> " repositories",
+      <> string.inspect(list.length(atp_data))
+      <> "/"
+      <> string.inspect(list.length(all_repos))
+      <> " repositories",
   )
 
   // Get all records for all repos and collections (main collections only)
-  logging.log(logging.Info, "[backfill] Fetching records for repositories and collections...")
+  logging.log(
+    logging.Info,
+    "[backfill] Fetching records for repositories and collections...",
+  )
   let main_records =
     get_records_for_repos(all_repos, collections, atp_data, config)
 
@@ -874,7 +903,9 @@ fn run_backfill(
   let all_records = list.append(main_records, external_records)
   logging.log(
     logging.Info,
-    "[backfill] Fetched " <> string.inspect(list.length(all_records)) <> " total records",
+    "[backfill] Fetched "
+      <> string.inspect(list.length(all_records))
+      <> " total records",
   )
 
   // Index actors (if enabled in config)
@@ -884,16 +915,24 @@ fn run_backfill(
       index_actors(atp_data, conn)
       logging.log(
         logging.Info,
-        "[backfill] Indexed " <> string.inspect(list.length(atp_data)) <> " actors",
+        "[backfill] Indexed "
+          <> string.inspect(list.length(atp_data))
+          <> " actors",
       )
     }
-    False -> logging.log(logging.Info, "[backfill] Skipping actor indexing (disabled in config)")
+    False ->
+      logging.log(
+        logging.Info,
+        "[backfill] Skipping actor indexing (disabled in config)",
+      )
   }
 
   // Index records
   logging.log(
     logging.Info,
-    "[backfill] Indexing " <> string.inspect(list.length(all_records)) <> " records...",
+    "[backfill] Indexing "
+      <> string.inspect(list.length(all_records))
+      <> " records...",
   )
   index_records(all_records, conn)
   logging.log(logging.Info, "[backfill] Backfill complete!")

@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Execute query with multiple variables
-file: ./test/executor_test.gleam
-test_name: execute_query_with_multiple_variables_test
----
-Response(Object([#("search", String("Searching for 'graphql' (limit: 10)"))]), [])

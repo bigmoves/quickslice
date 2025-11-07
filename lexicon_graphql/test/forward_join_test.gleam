@@ -5,11 +5,11 @@ import gleam/dict
 import gleam/option.{None, Some}
 import gleam/string
 import gleeunit/should
-import graphql/introspection
-import graphql/schema
-import graphql/sdl
 import lexicon_graphql/db_schema_builder
 import lexicon_graphql/types
+import swell/introspection
+import swell/schema
+import swell/sdl
 
 // Helper to create a test schema with a mock fetcher
 fn create_test_schema_from_lexicons(

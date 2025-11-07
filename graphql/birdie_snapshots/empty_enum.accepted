@@ -1,8 +1,0 @@
----
-version: 1.4.1
-title: Empty enum
-file: ./test/sdl_test.gleam
-test_name: empty_enum_test
----
-"""An empty enum"""
-enum EmptyEnum {}

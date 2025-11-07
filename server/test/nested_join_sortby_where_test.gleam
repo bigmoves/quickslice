@@ -191,7 +191,14 @@ pub fn did_join_sortby_createdat_desc_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
+    graphql_gleam.execute_query_with_db(
+      db,
+      query,
+      "{}",
+      Error(Nil),
+      "",
+      "https://plc.directory",
+    )
 
   // Verify totalCount is 5 (all statuses)
   {
@@ -327,7 +334,14 @@ pub fn did_join_sortby_createdat_asc_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
+    graphql_gleam.execute_query_with_db(
+      db,
+      query,
+      "{}",
+      Error(Nil),
+      "",
+      "https://plc.directory",
+    )
 
   // With sortBy createdAt ASC, first:3 should return Status 1, 2, 3 (oldest first)
   string.contains(response_json, "Status #1")
@@ -438,7 +452,14 @@ pub fn did_join_where_filter_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
+    graphql_gleam.execute_query_with_db(
+      db,
+      query,
+      "{}",
+      Error(Nil),
+      "",
+      "https://plc.directory",
+    )
 
   // totalCount should be 3 (only statuses containing "gleam")
   {
@@ -558,7 +579,14 @@ pub fn did_join_sortby_where_first_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
+    graphql_gleam.execute_query_with_db(
+      db,
+      query,
+      "{}",
+      Error(Nil),
+      "",
+      "https://plc.directory",
+    )
 
   // totalCount should be 3 (all rust posts)
   {
@@ -719,7 +747,14 @@ pub fn user_query_pattern_test() {
   "
 
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(db, query, "{}", Error(Nil), "", "https://plc.directory")
+    graphql_gleam.execute_query_with_db(
+      db,
+      query,
+      "{}",
+      Error(Nil),
+      "",
+      "https://plc.directory",
+    )
 
   // Should only return 1 profile (chadtmiller.com)
   {

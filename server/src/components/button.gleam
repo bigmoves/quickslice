@@ -25,8 +25,7 @@ pub fn button(
 
 /// Render a link styled as a button
 pub fn link(href href: String, text text: String) -> Element(msg) {
-  html.a(
-    [attribute.href(href), attribute.class(button_classes)],
-    [html.text(text)],
-  )
+  html.a([attribute.href(href), attribute.class(button_classes)], [
+    html.text(text),
+  ])
 }

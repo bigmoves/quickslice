@@ -23,7 +23,11 @@ pub fn component(
   backfill_state_subject: process.Subject(backfill_state.Message),
   config_subject: process.Subject(config.Message),
 ) {
-  lustre.application(init(db, backfill_state_subject, config_subject, _), update, view)
+  lustre.application(
+    init(db, backfill_state_subject, config_subject, _),
+    update,
+    view,
+  )
 }
 
 // MODEL

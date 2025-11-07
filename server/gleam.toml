@@ -14,7 +14,6 @@ version = "1.0.0"
 
 [dependencies]
 lexicon = { path = "../lexicon" }
-graphql = { path = "../graphql" }
 lexicon_graphql = { path = "../lexicon_graphql" }
 gleam_stdlib = ">= 0.60.0 and < 1.0.0"
 mist = ">= 5.0.3 and < 6.0.0"
@@ -39,6 +38,7 @@ goose = ">= 2.0.0 and < 3.0.0"
 gleam_crypto = ">= 1.5.1 and < 2.0.0"
 logging = ">= 1.3.0 and < 2.0.0"
 group_registry = ">= 1.0.0 and < 2.0.0"
+swell = ">= 1.0.0 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

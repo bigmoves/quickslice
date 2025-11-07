@@ -11,9 +11,6 @@ help:
 
 # Build all projects
 build:
-	@echo "Building graphql package..."
-	@cd graphql && gleam build
-	@echo ""
 	@echo "Building lexicon_graphql package..."
 	@cd lexicon_graphql && gleam build
 	@echo ""
@@ -24,9 +21,6 @@ build:
 
 # Run all tests
 test: build
-	@echo "Running graphql tests..."
-	@cd graphql && gleam test
-	@echo ""
 	@echo "Running lexicon_graphql tests..."
 	@cd lexicon_graphql && gleam test
 	@echo ""
@@ -42,8 +36,6 @@ run: build
 
 # Clean build artifacts
 clean:
-	@echo "Cleaning build artifacts..."
-	@cd graphql && gleam clean
 	@cd lexicon_graphql && gleam clean
 	@cd server && gleam clean
 	@echo "Clean complete"

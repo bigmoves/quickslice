@@ -43,7 +43,10 @@ fn render_chart(data: List(database.ActivityPoint)) -> Element(msg) {
     |> list.index_map(fn(point, index) {
       let x = case data_length {
         1 -> int.to_float(width) /. 2.0
-        _ -> int.to_float(index) /. int.to_float(data_length - 1) *. int.to_float(width)
+        _ ->
+          int.to_float(index)
+          /. int.to_float(data_length - 1)
+          *. int.to_float(width)
       }
       let y_normalized = int.to_float(point.count - min) /. range_float
       let y = int.to_float(height) -. y_normalized *. max_height
@@ -54,9 +57,14 @@ fn render_chart(data: List(database.ActivityPoint)) -> Element(msg) {
 
   // Generate area path for gradient fill
   let area_path =
-    "M 0," <> int.to_string(height)
-    <> " L " <> points_string
-    <> " L " <> int.to_string(width) <> "," <> int.to_string(height)
+    "M 0,"
+    <> int.to_string(height)
+    <> " L "
+    <> points_string
+    <> " L "
+    <> int.to_string(width)
+    <> ","
+    <> int.to_string(height)
     <> " Z"
 
   // Create SVG element
@@ -66,47 +74,46 @@ fn render_chart(data: List(database.ActivityPoint)) -> Element(msg) {
       attribute.attribute("width", int.to_string(width)),
       attribute.attribute("height", int.to_string(height)),
       attribute.class("w-full"),
-      attribute.attribute("viewBox", "0 0 " <> int.to_string(width) <> " " <> int.to_string(height)),
+      attribute.attribute(
+        "viewBox",
+        "0 0 " <> int.to_string(width) <> " " <> int.to_string(height),
+      ),
       attribute.attribute("preserveAspectRatio", "none"),
     ],
     [
       // Define gradient
-      element.element(
-        "defs",
-        [],
-        [
-          element.element(
-            "linearGradient",
-            [
-              attribute.id("sparklineGradient"),
-              attribute.attribute("x1", "0%"),
-              attribute.attribute("y1", "0%"),
-              attribute.attribute("x2", "0%"),
-              attribute.attribute("y2", "100%"),
-            ],
-            [
-              element.element(
-                "stop",
-                [
-                  attribute.attribute("offset", "0%"),
-                  attribute.attribute("stop-color", "#22d3ee"),
-                  attribute.attribute("stop-opacity", "0.5"),
-                ],
-                [],
-              ),
-              element.element(
-                "stop",
-                [
-                  attribute.attribute("offset", "100%"),
-                  attribute.attribute("stop-color", "#22d3ee"),
-                  attribute.attribute("stop-opacity", "0.1"),
-                ],
-                [],
-              ),
-            ],
-          ),
-        ],
-      ),
+      element.element("defs", [], [
+        element.element(
+          "linearGradient",
+          [
+            attribute.id("sparklineGradient"),
+            attribute.attribute("x1", "0%"),
+            attribute.attribute("y1", "0%"),
+            attribute.attribute("x2", "0%"),
+            attribute.attribute("y2", "100%"),
+          ],
+          [
+            element.element(
+              "stop",
+              [
+                attribute.attribute("offset", "0%"),
+                attribute.attribute("stop-color", "#22d3ee"),
+                attribute.attribute("stop-opacity", "0.5"),
+              ],
+              [],
+            ),
+            element.element(
+              "stop",
+              [
+                attribute.attribute("offset", "100%"),
+                attribute.attribute("stop-color", "#22d3ee"),
+                attribute.attribute("stop-opacity", "0.1"),
+              ],
+              [],
+            ),
+          ],
+        ),
+      ]),
       // Area fill
       element.element(
         "path",

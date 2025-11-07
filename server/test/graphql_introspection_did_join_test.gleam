@@ -120,7 +120,12 @@ pub fn introspection_query_includes_did_join_fields_test() {
     |> simulate.header("content-type", "application/json")
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
+    graphql_handler.handle_graphql_request(
+      request,
+      db,
+      "http://localhost:3000",
+      "https://plc.directory",
+    )
 
   // Verify response
   response.status
@@ -201,7 +206,12 @@ pub fn introspection_query_profile_join_fields_test() {
     |> simulate.header("content-type", "application/json")
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
+    graphql_handler.handle_graphql_request(
+      request,
+      db,
+      "http://localhost:3000",
+      "https://plc.directory",
+    )
 
   // Verify response
   response.status
@@ -363,7 +373,12 @@ pub fn introspection_query_did_join_field_structure_test() {
     |> simulate.header("content-type", "application/json")
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
+    graphql_handler.handle_graphql_request(
+      request,
+      db,
+      "http://localhost:3000",
+      "https://plc.directory",
+    )
 
   // Verify response
   response.status
@@ -480,7 +495,12 @@ pub fn did_join_field_query_execution_test() {
     |> simulate.header("content-type", "application/json")
 
   let response =
-    graphql_handler.handle_graphql_request(request, db, "http://localhost:3000", "https://plc.directory")
+    graphql_handler.handle_graphql_request(
+      request,
+      db,
+      "http://localhost:3000",
+      "https://plc.directory",
+    )
 
   // Verify response
   response.status

@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Named subscription
-file: ./test/subscription_parser_test.gleam
-test_name: parse_named_subscription_test
----
-Document([NamedSubscription("OnMessage", [], SelectionSet([Field("messageAdded", None, [], [Field("id", None, [], []), Field("content", None, [], [])])]))])

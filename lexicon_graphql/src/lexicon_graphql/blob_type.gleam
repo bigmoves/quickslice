@@ -40,8 +40,8 @@ import gleam/int
 import gleam/list
 import gleam/option.{Some}
 import gleam/result
-import graphql/schema
-import graphql/value
+import swell/schema
+import swell/value
 
 /// Create the Blob GraphQL object type (output type)
 pub fn create_blob_type() -> schema.Type {

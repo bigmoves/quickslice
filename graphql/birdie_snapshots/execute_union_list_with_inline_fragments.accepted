@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Execute union list with inline fragments
-file: ./test/executor_test.gleam
-test_name: execute_union_list_with_inline_fragments_test
----
-Response(Object([#("searchAll", List([Object([#("title", String("First Post"))]), Object([#("text", String("Great article!"))]), Object([#("title", String("Second Post"))])]))]), [])

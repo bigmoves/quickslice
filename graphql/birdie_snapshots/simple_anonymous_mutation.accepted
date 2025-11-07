@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Simple anonymous mutation
-file: ./test/mutation_parser_test.gleam
-test_name: parse_simple_anonymous_mutation_test
----
-Document([Mutation(SelectionSet([Field("createUser", None, [Argument("name", StringValue("Alice"))], [Field("id", None, [], []), Field("name", None, [], [])])]))])

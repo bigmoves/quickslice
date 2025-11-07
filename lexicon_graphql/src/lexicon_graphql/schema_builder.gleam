@@ -5,12 +5,12 @@
 import gleam/dict
 import gleam/list
 import gleam/option
-import graphql/schema
-import graphql/value
 import lexicon_graphql/mutation_builder
 import lexicon_graphql/nsid
 import lexicon_graphql/type_mapper
 import lexicon_graphql/types
+import swell/schema
+import swell/value
 
 /// Re-export types for backwards compatibility
 pub type Lexicon =

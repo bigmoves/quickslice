@@ -3,12 +3,12 @@ import backfill
 import database
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
-import logging
 import gleam/list
 import gleam/option
 import gleam/string
 import goose
 import lexicon
+import logging
 import pubsub
 import sqlight
 
@@ -34,7 +34,10 @@ fn iolist_to_string(iolist: Dynamic) -> String {
   case decode.run(binary, decode.string) {
     Ok(str) -> str
     Error(_) -> {
-      logging.log(logging.Warning, "[jetstream] Failed to convert iolist to string")
+      logging.log(
+        logging.Warning,
+        "[jetstream] Failed to convert iolist to string",
+      )
       string.inspect(iolist)
     }
   }
@@ -81,8 +84,10 @@ pub fn handle_commit_event(
                   // Check if record already exists BEFORE inserting to determine operation type
                   let existing_record = database.get_record(db, uri)
                   let is_create = case existing_record {
-                    Ok([]) -> True  // Empty list means record doesn't exist
-                    Ok(_) -> False  // Non-empty list means record exists
+                    Ok([]) -> True
+                    // Empty list means record doesn't exist
+                    Ok(_) -> False
+                    // Non-empty list means record exists
                     Error(_) -> {
                       // Database error - log it and treat as update to be safe
                       logging.log(
@@ -115,70 +120,70 @@ pub fn handle_commit_event(
                       // Validation passed, insert record
                       case
                         database.insert_record(
-                      db,
-                      uri,
-                      cid_value,
-                      did,
-                      commit.collection,
-                      json_string,
-                    )
-                  {
-                    Ok(_) -> {
-                      logging.log(
-                        logging.Info,
-                        "[jetstream] "
-                        <> case is_create {
-                        True -> "create"
-                        False -> "update"
-                      }
-                        <> " "
-                        <> commit.collection
-                        <> " ("
-                        <> commit.rkey
-                        <> ") "
-                        <> did,
-                      )
-
-                      // Publish event to PubSub for GraphQL subscriptions
-                      let operation = case is_create {
-                        True -> pubsub.Create
-                        False -> pubsub.Update
-                      }
-
-                      // Convert event timestamp from microseconds to ISO8601
-                      let indexed_at = microseconds_to_iso8601(time_us)
-
-                      let event =
-                        pubsub.RecordEvent(
-                          uri: uri,
-                          cid: cid_value,
-                          did: did,
-                          collection: commit.collection,
-                          value: json_string,
-                          indexed_at: indexed_at,
-                          operation: operation,
+                          db,
+                          uri,
+                          cid_value,
+                          did,
+                          commit.collection,
+                          json_string,
                         )
+                      {
+                        Ok(_) -> {
+                          logging.log(
+                            logging.Info,
+                            "[jetstream] "
+                              <> case is_create {
+                              True -> "create"
+                              False -> "update"
+                            }
+                              <> " "
+                              <> commit.collection
+                              <> " ("
+                              <> commit.rkey
+                              <> ") "
+                              <> did,
+                          )
 
-                      pubsub.publish(event)
-                    }
-                    Error(err) -> {
-                      logging.log(
-                        logging.Error,
-                        "[jetstream] Failed to insert record "
-                        <> uri
-                        <> ": "
-                        <> string.inspect(err),
-                      )
-                    }
-                  }
+                          // Publish event to PubSub for GraphQL subscriptions
+                          let operation = case is_create {
+                            True -> pubsub.Create
+                            False -> pubsub.Update
+                          }
+
+                          // Convert event timestamp from microseconds to ISO8601
+                          let indexed_at = microseconds_to_iso8601(time_us)
+
+                          let event =
+                            pubsub.RecordEvent(
+                              uri: uri,
+                              cid: cid_value,
+                              did: did,
+                              collection: commit.collection,
+                              value: json_string,
+                              indexed_at: indexed_at,
+                              operation: operation,
+                            )
+
+                          pubsub.publish(event)
+                        }
+                        Error(err) -> {
+                          logging.log(
+                            logging.Error,
+                            "[jetstream] Failed to insert record "
+                              <> uri
+                              <> ": "
+                              <> string.inspect(err),
+                          )
+                        }
+                      }
                     }
                     Error(actor_err) -> {
                       logging.log(
                         logging.Error,
                         "[jetstream] Failed to validate/create actor for "
-                        <> uri
-                        <> ": "
-                        <> actor_err,
+                          <> uri
+                          <> ": "
+                          <> actor_err,
                       )
                     }
                   }
@@ -187,9 +192,9 @@ pub fn handle_commit_event(
                   logging.log(
                     logging.Warning,
                     "[jetstream] Validation failed for "
-                    <> uri
-                    <> ": "
-                    <> lexicon.describe_error(validation_error),
+                      <> uri
+                      <> ": "
+                      <> lexicon.describe_error(validation_error),
                   )
                 }
               }
@@ -198,7 +203,7 @@ pub fn handle_commit_event(
               logging.log(
                 logging.Error,
                 "[jetstream] Failed to fetch lexicons for validation: "
-                <> string.inspect(db_err),
+                  <> string.inspect(db_err),
               )
             }
           }
@@ -207,9 +212,9 @@ pub fn handle_commit_event(
           logging.log(
             logging.Warning,
             "[jetstream] "
-            <> commit.operation
-            <> " event missing record or cid for "
-            <> uri,
+              <> commit.operation
+              <> " event missing record or cid for "
+              <> uri,
           )
         }
       }
@@ -217,7 +222,12 @@ pub fn handle_commit_event(
     "delete" -> {
       logging.log(
         logging.Info,
-        "[jetstream] delete " <> commit.collection <> " (" <> commit.rkey <> ") " <> did,
+        "[jetstream] delete "
+          <> commit.collection
+          <> " ("
+          <> commit.rkey
+          <> ") "
+          <> did,
       )
 
       case database.delete_record(db, uri) {
@@ -240,12 +250,18 @@ pub fn handle_commit_event(
           pubsub.publish(event)
         }
         Error(err) -> {
-          logging.log(logging.Error, "[jetstream] Failed to delete: " <> string.inspect(err))
+          logging.log(
+            logging.Error,
+            "[jetstream] Failed to delete: " <> string.inspect(err),
+          )
         }
       }
     }
     _ -> {
-      logging.log(logging.Warning, "[jetstream] Unknown operation: " <> commit.operation)
+      logging.log(
+        logging.Warning,
+        "[jetstream] Unknown operation: " <> commit.operation,
+      )
     }
   }
 }
@@ -259,16 +275,20 @@ pub fn handle_identity_event(
     Ok(_) -> {
       logging.log(
         logging.Info,
-        "[jetstream] identity update: " <> identity.handle <> " (" <> identity.did <> ")",
+        "[jetstream] identity update: "
+          <> identity.handle
+          <> " ("
+          <> identity.did
+          <> ")",
       )
     }
     Error(err) -> {
       logging.log(
         logging.Error,
         "[jetstream] Failed to upsert actor "
-        <> identity.did
-        <> ": "
-        <> string.inspect(err),
+          <> identity.did
+          <> ": "
+          <> string.inspect(err),
       )
     }
   }
@@ -284,5 +304,8 @@ pub fn handle_account_event(
     True -> "active"
     False -> "inactive"
   }
-  logging.log(logging.Info, "[jetstream] account " <> status <> ": " <> account.did)
+  logging.log(
+    logging.Info,
+    "[jetstream] account " <> status <> ": " <> account.did,
+  )
 }

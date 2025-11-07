@@ -49,7 +49,12 @@ pub fn serve_backfill_button(
 ) -> response.Response(mist.ResponseData) {
   mist.websocket(
     request: req,
-    on_init: init_backfill_button_socket(db, backfill_state_subject, config_subject, _),
+    on_init: init_backfill_button_socket(
+      db,
+      backfill_state_subject,
+      config_subject,
+      _,
+    ),
     handler: loop_backfill_button_socket,
     on_close: close_backfill_button_socket,
   )
@@ -66,7 +71,10 @@ type BackfillButtonSocketMessage =
   server_component.ClientMessage(backfill_button.Msg)
 
 type BackfillButtonSocketInit =
-  #(BackfillButtonSocket, option.Option(process.Selector(BackfillButtonSocketMessage)))
+  #(
+    BackfillButtonSocket,
+    option.Option(process.Selector(BackfillButtonSocketMessage)),
+  )
 
 fn init_backfill_button_socket(
   db: sqlight.Connection,
@@ -78,13 +86,15 @@ fn init_backfill_button_socket(
   let is_admin = True
 
   // Query current backfill state
-  let backfilling = actor.call(
-    backfill_state_subject,
-    waiting: 100,
-    sending: backfill_state.IsBackfilling,
-  )
+  let backfilling =
+    actor.call(
+      backfill_state_subject,
+      waiting: 100,
+      sending: backfill_state.IsBackfilling,
+    )
 
-  let component = backfill_button.component(db, backfill_state_subject, config_subject)
+  let component =
+    backfill_button.component(db, backfill_state_subject, config_subject)
   let assert Ok(runtime) =
     lustre.start_server_component(component, #(is_admin, backfilling))
 

@@ -22,18 +22,12 @@ pub fn ensure_actor_exists(
       case list.is_empty(actors) {
         False -> {
           // Actor exists, nothing to do
-          logging.log(
-            logging.Debug,
-            "Actor already exists: " <> did,
-          )
+          logging.log(logging.Debug, "Actor already exists: " <> did)
           Ok(False)
         }
         True -> {
           // Actor not found, need to resolve and create
-          logging.log(
-            logging.Info,
-            "Actor not found, resolving DID: " <> did,
-          )
+          logging.log(logging.Info, "Actor not found, resolving DID: " <> did)
 
           case backfill.resolve_did(did, plc_url) {
             Ok(atp_data) -> {

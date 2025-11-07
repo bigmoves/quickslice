@@ -36,9 +36,7 @@ type ClientRegistrationResponse {
 }
 
 /// Check registration status by looking at database
-pub fn check_registration_status(
-  db: sqlight.Connection,
-) -> RegistrationStatus {
+pub fn check_registration_status(db: sqlight.Connection) -> RegistrationStatus {
   case database.get_oauth_credentials(db) {
     Ok(option.Some(#(client_id, _client_secret, _redirect_uri))) ->
       Registered(client_id)
@@ -81,7 +79,9 @@ pub fn ensure_oauth_client(
           )
 
           // Store credentials in database
-          case store_oauth_credentials(db, client_id, client_secret, redirect_uri) {
+          case
+            store_oauth_credentials(db, client_id, client_secret, redirect_uri)
+          {
             Ok(_) -> {
               logging.log(
                 logging.Info,
@@ -161,7 +161,8 @@ pub fn register_new_client(
               case json.parse(resp.body, decode.dynamic) {
                 Ok(parsed) -> {
                   case decode_registration_response(parsed) {
-                    Ok(response) -> Ok(#(response.client_id, response.client_secret))
+                    Ok(response) ->
+                      Ok(#(response.client_id, response.client_secret))
                     Error(err) -> Error(err)
                   }
                 }
@@ -192,16 +193,22 @@ pub fn store_oauth_credentials(
   redirect_uri: String,
 ) -> Result(Nil, sqlight.Error) {
   use _ <- result.try(database.set_config(db, "oauth_client_id", client_id))
-  use _ <- result.try(database.set_config(db, "oauth_client_secret", client_secret))
-  use _ <- result.try(database.set_config(db, "oauth_redirect_uri", redirect_uri))
+  use _ <- result.try(database.set_config(
+    db,
+    "oauth_client_secret",
+    client_secret,
+  ))
+  use _ <- result.try(database.set_config(
+    db,
+    "oauth_redirect_uri",
+    redirect_uri,
+  ))
   Ok(Nil)
 }
 
 // Helper Functions ---------------------------------------------------------------
 
-fn encode_registration_request(
-  req: ClientRegistrationRequest,
-) -> json.Json {
+fn encode_registration_request(req: ClientRegistrationRequest) -> json.Json {
   json.object([
     #("client_name", json.string(req.client_name)),
     #(
@@ -216,10 +223,7 @@ fn encode_registration_request(
       "response_types",
       json.array(req.response_types, fn(response) { json.string(response) }),
     ),
-    #(
-      "token_endpoint_auth_method",
-      json.string(req.token_endpoint_auth_method),
-    ),
+    #("token_endpoint_auth_method", json.string(req.token_endpoint_auth_method)),
     #("scope", json.string(req.scope)),
   ])
 }

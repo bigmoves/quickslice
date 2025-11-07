@@ -21,7 +21,10 @@ pub fn view(
     [
       html.table([attribute.class("min-w-full divide-y divide-zinc-800")], [
         render_header(),
-        html.tbody([attribute.class("bg-zinc-900 divide-y divide-zinc-800")], rows),
+        html.tbody(
+          [attribute.class("bg-zinc-900 divide-y divide-zinc-800")],
+          rows,
+        ),
       ]),
     ],
   )

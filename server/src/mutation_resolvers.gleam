@@ -15,10 +15,10 @@ import gleam/json
 import gleam/list
 import gleam/option
 import gleam/result
-import graphql/schema
-import graphql/value
 import lexicon
 import sqlight
+import swell/schema
+import swell/value
 
 /// Context for mutation execution
 pub type MutationContext {
@@ -130,9 +130,11 @@ pub fn create_resolver_factory(
     )
 
     // Step 4: Ensure actor exists in database
-    use is_new_actor <- result.try(
-      actor_validator.ensure_actor_exists(ctx.db, user_info.did, ctx.plc_url),
-    )
+    use is_new_actor <- result.try(actor_validator.ensure_actor_exists(
+      ctx.db,
+      user_info.did,
+      ctx.plc_url,
+    ))
 
     // If new actor, spawn backfill for external collections
     case is_new_actor {
@@ -313,9 +315,11 @@ pub fn update_resolver_factory(
     )
 
     // Step 4: Ensure actor exists in database
-    use is_new_actor <- result.try(
-      actor_validator.ensure_actor_exists(ctx.db, user_info.did, ctx.plc_url),
-    )
+    use is_new_actor <- result.try(actor_validator.ensure_actor_exists(
+      ctx.db,
+      user_info.did,
+      ctx.plc_url,
+    ))
 
     // If new actor, spawn backfill for external collections
     case is_new_actor {
@@ -470,9 +474,11 @@ pub fn delete_resolver_factory(
     )
 
     // Step 4: Ensure actor exists in database
-    use is_new_actor <- result.try(
-      actor_validator.ensure_actor_exists(ctx.db, user_info.did, ctx.plc_url),
-    )
+    use is_new_actor <- result.try(actor_validator.ensure_actor_exists(
+      ctx.db,
+      user_info.did,
+      ctx.plc_url,
+    ))
 
     // If new actor, spawn backfill for external collections
     case is_new_actor {
@@ -592,9 +598,11 @@ pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
     )
 
     // Step 4: Ensure actor exists in database
-    use is_new_actor <- result.try(
-      actor_validator.ensure_actor_exists(ctx.db, user_info.did, ctx.plc_url),
-    )
+    use is_new_actor <- result.try(actor_validator.ensure_actor_exists(
+      ctx.db,
+      user_info.did,
+      ctx.plc_url,
+    ))
 
     // If new actor, spawn backfill for external collections
     case is_new_actor {

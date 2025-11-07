@@ -10,16 +10,19 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
-import graphql/executor
-import graphql/parser
-import graphql/schema
-import graphql/value
 import graphql_gleam
 import graphql_ws
 import logging
-import mist.{type Connection, type ResponseData, type WebsocketConnection, type WebsocketMessage}
+import mist.{
+  type Connection, type ResponseData, type WebsocketConnection,
+  type WebsocketMessage,
+}
 import pubsub
 import sqlight
+import swell/executor
+import swell/parser
+import swell/schema
+import swell/value
 import websocket_ffi
 
 /// Configuration constants
@@ -97,7 +100,8 @@ fn collection_to_graphql_name(collection: String) -> String {
   |> string.split(".")
   |> list.index_map(fn(part, index) {
     case index {
-      0 -> part  // Keep first segment lowercase
+      0 -> part
+      // Keep first segment lowercase
       _ -> {
         // Capitalize first letter of subsequent segments
         case string.pop_grapheme(part) {
@@ -149,7 +153,6 @@ fn extract_subscription_field(query: String) -> Result(String, String) {
   }
 }
 
-
 /// Subscription metadata
 pub type SubscriptionInfo {
   SubscriptionInfo(
@@ -188,12 +191,14 @@ pub fn handle_websocket(
       logging.log(logging.Info, "[websocket] Client connected")
 
       // Build GraphQL schema for subscriptions
-      let graphql_schema = case graphql_gleam.build_schema_from_db(
-        db,
-        auth_base_url,
-        plc_url,
-        domain_authority,
-      ) {
+      let graphql_schema = case
+        graphql_gleam.build_schema_from_db(
+          db,
+          auth_base_url,
+          plc_url,
+          domain_authority,
+        )
+      {
         Ok(schema) -> schema
         Error(err) -> {
           // Schema build failed - this is a critical error for subscriptions
@@ -261,7 +266,10 @@ fn handle_ws_message(
       handle_text_message(state, conn, text)
     }
     mist.Binary(_) -> {
-      logging.log(logging.Warning, "[websocket] Received binary message, ignoring")
+      logging.log(
+        logging.Warning,
+        "[websocket] Received binary message, ignoring",
+      )
       mist.continue(state)
     }
     mist.Closed | mist.Shutdown -> {
@@ -276,13 +284,8 @@ fn handle_ws_message(
   }
 }
 
-
 /// Handle text messages (GraphQL-WS protocol)
-fn handle_text_message(
-  state: State,
-  conn: WebsocketConnection,
-  text: String,
-) {
+fn handle_text_message(state: State, conn: WebsocketConnection, text: String) {
   case graphql_ws.parse_message(text) {
     Ok(graphql_ws.ConnectionInit(_payload)) -> {
       // Send connection_ack
@@ -356,21 +359,26 @@ fn handle_text_message(
 
                   logging.log(
                     logging.Info,
-                    "[websocket] Subscription started: " <> id <> " (field: " <> field_name <> ")",
+                    "[websocket] Subscription started: "
+                      <> id
+                      <> " (field: "
+                      <> field_name
+                      <> ")",
                   )
 
                   // Spawn an unlinked process to listen for PubSub events
-                  let listener_pid = process.spawn_unlinked(fn() {
-                    subscription_listener(
-                      state.subscription_subject,
-                      id,
-                      query,
-                      field_name,
-                      variables,
-                      state.db,
-                      state.schema,
-                    )
-                  })
+                  let listener_pid =
+                    process.spawn_unlinked(fn() {
+                      subscription_listener(
+                        state.subscription_subject,
+                        id,
+                        query,
+                        field_name,
+                        variables,
+                        state.db,
+                        state.schema,
+                      )
+                    })
 
                   // Increment global counter
                   let _ = increment_global_subscriptions()
@@ -380,7 +388,8 @@ fn handle_text_message(
                     SubscriptionInfo(listener_pid, field_name, variables)
                   let new_subscriptions =
                     dict.insert(state.subscriptions, id, subscription_info)
-                  let new_state = State(..state, subscriptions: new_subscriptions)
+                  let new_state =
+                    State(..state, subscriptions: new_subscriptions)
 
                   mist.continue(new_state)
                 }
@@ -404,7 +413,10 @@ fn handle_text_message(
           let new_subscriptions = dict.delete(state.subscriptions, id)
           let new_state = State(..state, subscriptions: new_subscriptions)
 
-          logging.log(logging.Info, "[websocket] Subscription completed: " <> id)
+          logging.log(
+            logging.Info,
+            "[websocket] Subscription completed: " <> id,
+          )
 
           mist.continue(new_state)
         }
@@ -481,7 +493,9 @@ fn process_event(
   case event_matches_subscription(event, subscription_field) {
     True -> {
       // Execute the GraphQL subscription query with the event data and variables
-      case execute_subscription_query(query, variables, graphql_schema, event, db) {
+      case
+        execute_subscription_query(query, variables, graphql_schema, event, db)
+      {
         Ok(result_json) -> {
           // Send message to handler via Subject
           process.send(

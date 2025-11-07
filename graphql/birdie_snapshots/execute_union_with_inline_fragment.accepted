@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Execute union with inline fragment
-file: ./test/executor_test.gleam
-test_name: execute_union_with_inline_fragment_test
----
-Response(Object([#("search", Object([#("title", String("GraphQL is awesome")), #("content", String("Learn all about GraphQL..."))]))]), [])

@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Execute simple fragment spread
-file: ./test/executor_test.gleam
-test_name: execute_simple_fragment_spread_test
----
-Response(Object([#("user", Object([#("id", String("123")), #("name", String("Alice"))]))]), [])

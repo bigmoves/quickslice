@@ -43,7 +43,7 @@ The package consists of several modules:
 ```gleam
 import lexicon_graphql
 import lexicon_graphql/db_schema_builder
-import graphql/schema
+import swell/schema
 
 // Parse a lexicon file
 let lexicon_json = "{ \"lexicon\": 1, \"id\": \"xyz.statusphere.status\", ... }"
@@ -152,21 +152,21 @@ These functions handle:
 
 ## Testing
 
-The package uses the `graphql` package's test suite to verify schema generation and execution.
+The package uses the `swell` package's test suite to verify schema generation and execution.
 
 ## Dependencies
 
 - `gleam_stdlib` >= 0.44.0
 - `gleam_json` >= 3.0.0
-- `graphql` (local package)
+- `swell` >= 1.0.0
 
 ## Integration Example
 
 ```gleam
 import lexicon_graphql/db_schema_builder
 import database
-import graphql/schema
-import graphql/executor
+import swell/schema
+import swell/executor
 
 // Load lexicon
 let lexicon_json = load_lexicon("priv/lexicons/xyz/statusphere/status.json")

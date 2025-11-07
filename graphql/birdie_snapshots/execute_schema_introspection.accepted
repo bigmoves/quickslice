@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Execute __schema introspection
-file: ./test/executor_test.gleam
-test_name: execute_schema_introspection_query_type_test
----
-Response(Object([#("__schema", Object([#("queryType", Object([#("name", String("Query"))]))]))]), [])

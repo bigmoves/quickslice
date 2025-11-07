@@ -74,8 +74,7 @@ pub fn create_session(
   let session_id = generate_session_id()
 
   let sql = case expires_in {
-    option.Some(seconds) ->
-      "
+    option.Some(seconds) -> "
       INSERT INTO oauth_sessions (session_id, access_token, refresh_token, did, handle, expires_at)
       VALUES (?, ?, ?, ?, ?, unixepoch() + " <> int.to_string(seconds) <> ")
     "
@@ -164,8 +163,7 @@ pub fn update_session_tokens(
   expires_in: Option(Int),
 ) -> Result(Nil, sqlight.Error) {
   let sql = case expires_in {
-    option.Some(seconds) ->
-      "
+    option.Some(seconds) -> "
       UPDATE oauth_sessions
       SET access_token = ?,
           refresh_token = ?,
@@ -244,7 +242,8 @@ pub fn clear_session_cookie(response: Response, req: Request) -> Response {
 pub fn get_current_user(
   req: Request,
   db: Connection,
-  refresh_fn: fn(String) -> Result(#(String, Option(String), Option(Int)), String),
+  refresh_fn: fn(String) ->
+    Result(#(String, Option(String), Option(Int)), String),
 ) -> Result(#(String, String, String), Nil) {
   // Get the full session to check expiration
   use sess <- result.try(get_current_session(req, db))
@@ -259,7 +258,8 @@ pub fn get_current_user(
           case refresh_fn(refresh_tok) {
             Ok(#(new_access_token, new_refresh_token, expires_in)) -> {
               // Update session with new tokens
-              let final_refresh = option.or(new_refresh_token, sess.refresh_token)
+              let final_refresh =
+                option.or(new_refresh_token, sess.refresh_token)
               let _ =
                 update_session_tokens(
                   db,

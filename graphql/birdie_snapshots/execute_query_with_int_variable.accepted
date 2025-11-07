@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Execute query with int variable
-file: ./test/executor_test.gleam
-test_name: execute_query_with_variable_int_test
----
-Response(Object([#("user", String("User #42"))]), [])

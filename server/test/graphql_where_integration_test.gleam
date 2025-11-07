@@ -8,9 +8,9 @@ import gleam/result
 import gleam/string
 import gleeunit
 import gleeunit/should
-import graphql/value
 import lexicon_graphql/where_input
 import sqlight
+import swell/value
 import where_converter
 
 pub fn main() {

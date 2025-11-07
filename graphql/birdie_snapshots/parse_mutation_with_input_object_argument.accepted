@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Parse mutation with input object argument
-file: ./test/mutation_parser_test.gleam
-test_name: parse_mutation_with_input_object_test
----
-Document([Mutation(SelectionSet([Field("createUser", None, [Argument("input", ObjectValue([#("name", StringValue("Alice")), #("email", StringValue("alice@example.com")), #("age", IntValue("30"))]))], [Field("id", None, [], []), Field("name", None, [], []), Field("email", None, [], [])])]))])

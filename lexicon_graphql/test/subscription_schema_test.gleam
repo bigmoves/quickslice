@@ -7,9 +7,9 @@ import gleam/option.{None, Some}
 import gleam/string
 import gleeunit
 import gleeunit/should
-import graphql/schema
 import lexicon_graphql/db_schema_builder
 import lexicon_graphql/types
+import swell/schema
 
 pub fn main() {
   gleeunit.main()

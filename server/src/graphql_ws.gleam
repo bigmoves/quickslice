@@ -41,7 +41,8 @@ pub fn parse_message(json_str: String) -> Result(Message, String) {
   case message_type {
     "connection_init" -> {
       // Try to extract payload, but it's optional
-      let payload = extract_string_payload(json_str) |> option.unwrap(dict.new())
+      let payload =
+        extract_string_payload(json_str) |> option.unwrap(dict.new())
       Ok(ConnectionInit(payload))
     }
 
@@ -137,7 +138,10 @@ pub fn format_message(message: Message) -> String {
 // Helper to extract payload field as dict of strings
 fn extract_string_payload(json_str: String) -> Option(Dict(String, String)) {
   let decoder = {
-    use payload <- decode.field("payload", decode.dict(decode.string, decode.string))
+    use payload <- decode.field(
+      "payload",
+      decode.dict(decode.string, decode.string),
+    )
     decode.success(payload)
   }
 

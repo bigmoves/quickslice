@@ -6,10 +6,10 @@ import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
 import gleeunit/should
-import graphql/value
 import lexicon_graphql/collection_meta
 import lexicon_graphql/dataloader
 import lexicon_graphql/types
+import swell/value
 
 // Test URI-to-collection extraction
 pub fn uri_to_collection_test() {

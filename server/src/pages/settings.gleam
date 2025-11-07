@@ -21,10 +21,7 @@ pub fn view(
 
 /// Settings data
 pub type SettingsData {
-  SettingsData(
-    domain_authority: String,
-    oauth_client_id: Option(String),
-  )
+  SettingsData(domain_authority: String, oauth_client_id: Option(String))
 }
 
 /// Fetch current settings
@@ -39,7 +36,10 @@ fn fetch_settings(db: sqlight.Connection) -> SettingsData {
     _ -> option.None
   }
 
-  SettingsData(domain_authority: domain_authority, oauth_client_id: oauth_client_id)
+  SettingsData(
+    domain_authority: domain_authority,
+    oauth_client_id: oauth_client_id,
+  )
 }
 
 /// Render the complete settings page
@@ -149,11 +149,12 @@ fn render_settings_form(data: SettingsData) -> Element(msg) {
         option.Some(client_id) -> {
           html.div([attribute.class("space-y-3")], [
             html.div([attribute.class("flex items-center gap-2")], [
-              html.div([
-                attribute.class(
-                  "w-2 h-2 bg-green-500 rounded-full",
-                ),
-              ], []),
+              html.div(
+                [
+                  attribute.class("w-2 h-2 bg-green-500 rounded-full"),
+                ],
+                [],
+              ),
               html.p([attribute.class("text-sm text-zinc-300")], [
                 element.text("OAuth client registered"),
               ]),
@@ -176,11 +177,12 @@ fn render_settings_form(data: SettingsData) -> Element(msg) {
         option.None -> {
           html.div([attribute.class("space-y-3")], [
             html.div([attribute.class("flex items-center gap-2")], [
-              html.div([
-                attribute.class(
-                  "w-2 h-2 bg-zinc-500 rounded-full",
-                ),
-              ], []),
+              html.div(
+                [
+                  attribute.class("w-2 h-2 bg-zinc-500 rounded-full"),
+                ],
+                [],
+              ),
               html.p([attribute.class("text-sm text-zinc-400")], [
                 element.text("OAuth client not registered"),
               ]),
@@ -249,20 +251,17 @@ fn render_settings_form(data: SettingsData) -> Element(msg) {
       html.h2([attribute.class("text-xl font-semibold text-zinc-300 mb-4")], [
         element.text("Account"),
       ]),
-      html.form(
-        [attribute.method("post"), attribute.action("/logout")],
-        [
-          html.button(
-            [
-              attribute.type_("submit"),
-              attribute.class(
-                "font-mono px-4 py-2 text-sm text-zinc-400 border border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 rounded transition-colors cursor-pointer",
-              ),
-            ],
-            [element.text("Sign Out")],
-          ),
-        ],
-      ),
+      html.form([attribute.method("post"), attribute.action("/logout")], [
+        html.button(
+          [
+            attribute.type_("submit"),
+            attribute.class(
+              "font-mono px-4 py-2 text-sm text-zinc-400 border border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 rounded transition-colors cursor-pointer",
+            ),
+          ],
+          [element.text("Sign Out")],
+        ),
+      ]),
     ]),
   ])
 }

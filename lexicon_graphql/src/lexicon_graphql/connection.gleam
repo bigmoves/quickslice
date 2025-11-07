@@ -3,8 +3,8 @@
 /// Adds sortBy support to the base Relay Connection specification
 import gleam/list
 import gleam/option.{None}
-import graphql/connection
-import graphql/schema
+import swell/connection
+import swell/schema
 
 /// SortDirection enum type for lexicon queries
 pub fn sort_direction_enum() -> schema.Type {

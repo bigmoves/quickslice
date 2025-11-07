@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Mutation with nested selections
-file: ./test/mutation_parser_test.gleam
-test_name: parse_mutation_with_nested_selections_test
----
-Document([Mutation(SelectionSet([Field("createPost", None, [Argument("input", ObjectValue([#("title", StringValue("Hello"))]))], [Field("id", None, [], []), Field("author", None, [], [Field("id", None, [], []), Field("name", None, [], [])]), Field("tags", None, [], [])])]))])

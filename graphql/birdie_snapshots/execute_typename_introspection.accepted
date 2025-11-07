@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Execute __typename introspection
-file: ./test/executor_test.gleam
-test_name: execute_typename_introspection_test
----
-Response(Object([#("__typename", String("Query"))]), [])

@@ -12,53 +12,50 @@ pub fn view(class: String) -> Element(msg) {
     ],
     [
       // Define gradients
-      svg.defs(
-        [],
-        [
-          svg.linear_gradient(
-            [
-              attribute.id("board1"),
-              attribute.attribute("x1", "0%"),
-              attribute.attribute("y1", "0%"),
-              attribute.attribute("x2", "100%"),
-              attribute.attribute("y2", "100%"),
-            ],
-            [
-              svg.stop([
-                attribute.attribute("offset", "0%"),
-                attribute.attribute("stop-color", "#FF6347"),
-                attribute.attribute("stop-opacity", "1"),
-              ]),
-              svg.stop([
-                attribute.attribute("offset", "100%"),
-                attribute.attribute("stop-color", "#FF4500"),
-                attribute.attribute("stop-opacity", "1"),
-              ]),
-            ],
-          ),
-          svg.linear_gradient(
-            [
-              attribute.id("board2"),
-              attribute.attribute("x1", "0%"),
-              attribute.attribute("y1", "0%"),
-              attribute.attribute("x2", "100%"),
-              attribute.attribute("y2", "100%"),
-            ],
-            [
-              svg.stop([
-                attribute.attribute("offset", "0%"),
-                attribute.attribute("stop-color", "#00CED1"),
-                attribute.attribute("stop-opacity", "1"),
-              ]),
-              svg.stop([
-                attribute.attribute("offset", "100%"),
-                attribute.attribute("stop-color", "#4682B4"),
-                attribute.attribute("stop-opacity", "1"),
-              ]),
-            ],
-          ),
-        ],
-      ),
+      svg.defs([], [
+        svg.linear_gradient(
+          [
+            attribute.id("board1"),
+            attribute.attribute("x1", "0%"),
+            attribute.attribute("y1", "0%"),
+            attribute.attribute("x2", "100%"),
+            attribute.attribute("y2", "100%"),
+          ],
+          [
+            svg.stop([
+              attribute.attribute("offset", "0%"),
+              attribute.attribute("stop-color", "#FF6347"),
+              attribute.attribute("stop-opacity", "1"),
+            ]),
+            svg.stop([
+              attribute.attribute("offset", "100%"),
+              attribute.attribute("stop-color", "#FF4500"),
+              attribute.attribute("stop-opacity", "1"),
+            ]),
+          ],
+        ),
+        svg.linear_gradient(
+          [
+            attribute.id("board2"),
+            attribute.attribute("x1", "0%"),
+            attribute.attribute("y1", "0%"),
+            attribute.attribute("x2", "100%"),
+            attribute.attribute("y2", "100%"),
+          ],
+          [
+            svg.stop([
+              attribute.attribute("offset", "0%"),
+              attribute.attribute("stop-color", "#00CED1"),
+              attribute.attribute("stop-opacity", "1"),
+            ]),
+            svg.stop([
+              attribute.attribute("offset", "100%"),
+              attribute.attribute("stop-color", "#4682B4"),
+              attribute.attribute("stop-opacity", "1"),
+            ]),
+          ],
+        ),
+      ]),
       // Surfboard/skateboard deck shapes stacked
       svg.g([attribute.attribute("transform", "translate(30, 30)")], [
         // Top board slice

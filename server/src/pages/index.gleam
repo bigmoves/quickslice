@@ -89,7 +89,11 @@ fn render(
     content: [
       render_alerts(domain_authority, data.lexicon_count),
       render_action_buttons(current_user),
-      render_stats_section(data.record_count, data.lexicon_count, data.actor_count),
+      render_stats_section(
+        data.record_count,
+        data.lexicon_count,
+        data.actor_count,
+      ),
       render_activity_section(data.record_activity),
       render_collections_section(
         data.collection_stats,
@@ -143,7 +147,9 @@ fn render_alerts(
 }
 
 /// Render action buttons for authenticated users
-fn render_action_buttons(current_user: Option(#(String, String))) -> Element(msg) {
+fn render_action_buttons(
+  current_user: Option(#(String, String)),
+) -> Element(msg) {
   case current_user {
     option.Some(_) -> {
       html.div([attribute.class("mb-8 flex gap-3")], [
@@ -155,7 +161,11 @@ fn render_action_buttons(current_user: Option(#(String, String))) -> Element(msg
 }
 
 /// Render the combined statistics section
-fn render_stats_section(record_count: Int, lexicon_count: Int, actor_count: Int) -> Element(msg) {
+fn render_stats_section(
+  record_count: Int,
+  lexicon_count: Int,
+  actor_count: Int,
+) -> Element(msg) {
   html.div([attribute.class("mb-8 grid grid-cols-3 gap-4")], [
     // Total records stat card
     html.div([attribute.class("bg-zinc-800/50 rounded p-4")], [
@@ -210,7 +220,10 @@ fn render_collections_section(
   let backfill_button = case is_admin {
     True ->
       server_component.element(
-        [attribute.id("backfill-button"), server_component.route("/backfill-ws")],
+        [
+          attribute.id("backfill-button"),
+          server_component.route("/backfill-ws"),
+        ],
         [],
       )
     False -> element.none()

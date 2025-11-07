@@ -5,7 +5,7 @@
 import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import graphql/value
+import swell/value
 
 /// Simple value type that can represent strings, ints, or other primitives
 pub type WhereValue {

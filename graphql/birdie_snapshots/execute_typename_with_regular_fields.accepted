@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Execute __typename with regular fields
-file: ./test/executor_test.gleam
-test_name: execute_typename_with_regular_fields_test
----
-Response(Object([#("__typename", String("Query")), #("hello", String("world"))]), [])

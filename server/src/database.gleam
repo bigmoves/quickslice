@@ -325,9 +325,16 @@ pub fn get_config(
     decode.success(value)
   }
 
-  case sqlight.query(sql, on: conn, with: [sqlight.text(key)], expecting: decoder) {
+  case
+    sqlight.query(sql, on: conn, with: [sqlight.text(key)], expecting: decoder)
+  {
     Ok([value, ..]) -> Ok(value)
-    Ok([]) -> Error(sqlight.SqlightError(sqlight.ConstraintForeignkey, "Config key not found", -1))
+    Ok([]) ->
+      Error(sqlight.SqlightError(
+        sqlight.ConstraintForeignkey,
+        "Config key not found",
+        -1,
+      ))
     Error(err) -> Error(err)
   }
 }
@@ -376,7 +383,10 @@ pub fn delete_domain_authority(
 pub fn get_oauth_credentials(
   conn: sqlight.Connection,
 ) -> Result(Option(#(String, String, String)), sqlight.Error) {
-  case get_config(conn, "oauth_client_id"), get_config(conn, "oauth_client_secret") {
+  case
+    get_config(conn, "oauth_client_id"),
+    get_config(conn, "oauth_client_secret")
+  {
     Ok(client_id), Ok(client_secret) -> {
       let redirect_uri = case get_config(conn, "oauth_redirect_uri") {
         Ok(uri) -> uri
@@ -436,9 +446,7 @@ pub fn delete_all_records(
 }
 
 /// Deletes all actors from the database
-pub fn delete_all_actors(
-  conn: sqlight.Connection,
-) -> Result(Nil, sqlight.Error) {
+pub fn delete_all_actors(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   let sql = "DELETE FROM actor"
 
   sqlight.exec(sql, conn)
@@ -979,8 +987,7 @@ pub fn get_record_activity(
   duration_hours: Int,
 ) -> Result(List(ActivityPoint), sqlight.Error) {
   // SQLite datetime calculation for cutoff time
-  let sql =
-    "
+  let sql = "
     WITH RECURSIVE time_series AS (
       SELECT datetime('now', '-" <> int.to_string(duration_hours) <> " hours') AS bucket
       UNION ALL
@@ -995,7 +1002,9 @@ pub fn get_record_activity(
     LEFT JOIN record r ON
       datetime(r.indexed_at) >= datetime(ts.bucket)
       AND datetime(r.indexed_at) < datetime(ts.bucket, '+1 hour')
-      AND datetime(r.indexed_at) >= datetime('now', '-" <> int.to_string(duration_hours) <> " hours')
+      AND datetime(r.indexed_at) >= datetime('now', '-" <> int.to_string(
+      duration_hours,
+    ) <> " hours')
     GROUP BY ts.bucket
     ORDER BY ts.bucket ASC
   "

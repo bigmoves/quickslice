@@ -8,10 +8,10 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
-import graphql/value
 import lexicon_graphql/collection_meta
 import lexicon_graphql/uri_extractor
 import lexicon_graphql/where_input.{type WhereClause}
+import swell/value
 
 /// Result of a batch query: maps URIs to their records
 pub type BatchResult =

@@ -17,7 +17,6 @@ ENV GIT_TERMINAL_PROMPT=0
 
 # Add local dependencies first (these change less frequently)
 COPY ./lexicon /build/lexicon
-COPY ./graphql /build/graphql
 COPY ./lexicon_graphql /build/lexicon_graphql
 
 # Add server code
@@ -30,7 +29,6 @@ RUN cd /build/lexicon/native/lexicon_nif && cargo build --release && \
 
 # Install dependencies for all projects
 RUN cd /build/lexicon && gleam deps download
-RUN cd /build/graphql && gleam deps download
 RUN cd /build/lexicon_graphql && gleam deps download
 RUN cd /build/server && gleam deps download
 

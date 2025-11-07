@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Execute simple mutation
-file: ./test/mutation_execution_test.gleam
-test_name: execute_simple_mutation_test
----
-Response(Object([#("createUser", Object([#("id", String("123")), #("name", String("Alice"))]))]), [])

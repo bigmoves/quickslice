@@ -14,14 +14,14 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
-import graphql/executor
-import graphql/schema
-import graphql/value
 import lexicon_graphql/dataloader
 import lexicon_graphql/db_schema_builder
 import lexicon_graphql/lexicon_parser
 import mutation_resolvers
 import sqlight
+import swell/executor
+import swell/schema
+import swell/value
 import where_converter
 
 /// Build a GraphQL schema from database lexicons
@@ -347,9 +347,13 @@ pub fn build_schema_from_db(
       let external_collection_ids =
         parsed_lexicons
         |> list.filter_map(fn(lex) {
-          case backfill.nsid_matches_domain_authority(lex.id, domain_authority) {
-            True -> Error(Nil)  // Local collection, skip
-            False -> Ok(lex.id)  // External collection, include
+          case
+            backfill.nsid_matches_domain_authority(lex.id, domain_authority)
+          {
+            True -> Error(Nil)
+            // Local collection, skip
+            False -> Ok(lex.id)
+            // External collection, include
           }
         })
 
@@ -439,11 +443,7 @@ pub fn execute_query_with_db(
   let ctx = schema.context_with_variables(ctx_data, variables_dict)
 
   // Execute the query
-  use response <- result.try(executor.execute(
-    query_string,
-    graphql_schema,
-    ctx,
-  ))
+  use response <- result.try(executor.execute(query_string, graphql_schema, ctx))
 
   // Format the response as JSON
   Ok(format_response(response))

@@ -6,12 +6,12 @@ import event_handler
 import gleam/dynamic/decode
 import gleam/erlang/process
 import gleam/int
-import gleam/otp/actor
-import logging
 import gleam/list
 import gleam/option
+import gleam/otp/actor
 import gleam/string
 import goose
+import logging
 import sqlight
 
 /// Messages that can be sent to the Jetstream consumer actor
@@ -22,10 +22,7 @@ pub type Message {
 
 /// Internal state of the Jetstream consumer actor
 type State {
-  State(
-    db: sqlight.Connection,
-    consumer_pid: option.Option(process.Pid),
-  )
+  State(db: sqlight.Connection, consumer_pid: option.Option(process.Pid))
 }
 
 /// Start the Jetstream consumer actor
@@ -41,7 +38,8 @@ pub fn start(db: sqlight.Connection) -> Result(process.Subject(Message), String)
 
       case result {
         Ok(started) -> Ok(started.data)
-        Error(err) -> Error("Failed to start consumer actor: " <> string.inspect(err))
+        Error(err) ->
+          Error("Failed to start consumer actor: " <> string.inspect(err))
       }
     }
     Error(err) -> {
@@ -56,7 +54,8 @@ pub fn start(db: sqlight.Connection) -> Result(process.Subject(Message), String)
 
       case result {
         Ok(started) -> Ok(started.data)
-        Error(actor_err) -> Error("Failed to start consumer actor: " <> string.inspect(actor_err))
+        Error(actor_err) ->
+          Error("Failed to start consumer actor: " <> string.inspect(actor_err))
       }
     }
   }
@@ -68,9 +67,7 @@ pub fn stop(consumer: process.Subject(Message)) -> Nil {
 }
 
 /// Restart the Jetstream consumer with fresh lexicon data
-pub fn restart(
-  consumer: process.Subject(Message),
-) -> Result(Nil, String) {
+pub fn restart(consumer: process.Subject(Message)) -> Result(Nil, String) {
   actor.call(consumer, waiting: 5000, sending: Restart)
 }
 
@@ -158,7 +155,10 @@ fn start_consumer_process(db: sqlight.Connection) -> Result(process.Pid, String)
 
       case all_collection_ids {
         [] -> {
-          logging.log(logging.Warning, "[jetstream] No collections found - skipping Jetstream consumer")
+          logging.log(
+            logging.Warning,
+            "[jetstream] No collections found - skipping Jetstream consumer",
+          )
           logging.log(logging.Info, "[jetstream]    Import lexicons first")
           logging.log(logging.Info, "")
           Error("No collections found")
@@ -167,10 +167,12 @@ fn start_consumer_process(db: sqlight.Connection) -> Result(process.Pid, String)
           logging.log(
             logging.Info,
             "[jetstream] Listening to "
-            <> int.to_string(list.length(local_collection_ids))
-            <> " local collection(s) (all DIDs):",
+              <> int.to_string(list.length(local_collection_ids))
+              <> " local collection(s) (all DIDs):",
           )
-          list.each(local_collection_ids, fn(col) { logging.log(logging.Info, "[jetstream]    - " <> col) })
+          list.each(local_collection_ids, fn(col) {
+            logging.log(logging.Info, "[jetstream]    - " <> col)
+          })
 
           case external_collection_ids {
             [] -> Nil
@@ -179,8 +181,8 @@ fn start_consumer_process(db: sqlight.Connection) -> Result(process.Pid, String)
               logging.log(
                 logging.Info,
                 "[jetstream] Tracking "
-                <> int.to_string(list.length(external_collection_ids))
-                <> " external collection(s) (known DIDs only, filtered client-side):",
+                  <> int.to_string(list.length(external_collection_ids))
+                  <> " external collection(s) (known DIDs only, filtered client-side):",
               )
               list.each(external_collection_ids, fn(col) {
                 logging.log(logging.Info, "[jetstream]    - " <> col)
@@ -208,30 +210,35 @@ fn start_consumer_process(db: sqlight.Connection) -> Result(process.Pid, String)
 
           logging.log(logging.Info, "")
           logging.log(logging.Info, "[jetstream] Connecting to Jetstream...")
-          logging.log(logging.Info, "[jetstream]    Endpoint: " <> jetstream_url)
+          logging.log(
+            logging.Info,
+            "[jetstream]    Endpoint: " <> jetstream_url,
+          )
           logging.log(
             logging.Info,
             "[jetstream]    Collections: "
-            <> int.to_string(list.length(all_collection_ids))
-            <> " (all DIDs, filtered client-side for external)",
+              <> int.to_string(list.length(all_collection_ids))
+              <> " (all DIDs, filtered client-side for external)",
           )
 
           // Start the unified consumer
           let ext_collections = external_collection_ids
-          let pid = process.spawn_unlinked(fn() {
-            goose.start_consumer(unified_config, fn(event_json) {
-              // Spawn each event into its own process so they don't block each other
-              let _pid = process.spawn_unlinked(fn() {
-                handle_jetstream_event(
-                  db,
-                  event_json,
-                  ext_collections,
-                  plc_url,
-                )
+          let pid =
+            process.spawn_unlinked(fn() {
+              goose.start_consumer(unified_config, fn(event_json) {
+                // Spawn each event into its own process so they don't block each other
+                let _pid =
+                  process.spawn_unlinked(fn() {
+                    handle_jetstream_event(
+                      db,
+                      event_json,
+                      ext_collections,
+                      plc_url,
+                    )
+                  })
+                Nil
               })
-              Nil
             })
-          })
 
           logging.log(logging.Info, "")
           logging.log(logging.Info, "[jetstream] Jetstream consumer started")

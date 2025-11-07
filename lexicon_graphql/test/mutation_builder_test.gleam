@@ -5,9 +5,9 @@ import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
 import gleeunit/should
-import graphql/schema
-import graphql/value
 import lexicon_graphql/mutation_builder
+import swell/schema
+import swell/value
 
 /// Test that uploadBlob mutation is added when factory is provided
 pub fn build_mutation_type_includes_upload_blob_test() {

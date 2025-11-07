@@ -42,7 +42,9 @@ fn handle_message(
 }
 
 /// Start the config cache actor
-pub fn start(db: sqlight.Connection) -> Result(process.Subject(Message), actor.StartError) {
+pub fn start(
+  db: sqlight.Connection,
+) -> Result(process.Subject(Message), actor.StartError) {
   // Load initial domain authority from database
   let initial_state = case database.get_config(db, "domain_authority") {
     Ok(value) -> ConfigCache(domain_authority: Some(value))
@@ -67,9 +69,7 @@ pub fn start(db: sqlight.Connection) -> Result(process.Subject(Message), actor.S
 }
 
 /// Get the current domain authority from cache
-pub fn get_domain_authority(
-  config: process.Subject(Message),
-) -> Option(String) {
+pub fn get_domain_authority(config: process.Subject(Message)) -> Option(String) {
   actor.call(config, waiting: 100, sending: GetDomainAuthority)
 }
 
@@ -84,10 +84,7 @@ pub fn set_domain_authority(
     Ok(_) -> {
       // Update cache
       actor.call(config, waiting: 100, sending: SetDomainAuthority(value, _))
-      logging.log(
-        logging.Info,
-        "[config] Updated domain_authority: " <> value,
-      )
+      logging.log(logging.Info, "[config] Updated domain_authority: " <> value)
       Ok(Nil)
     }
     Error(err) -> Error(err)
@@ -95,9 +92,6 @@ pub fn set_domain_authority(
 }
 
 /// Reload config from database (useful after external updates)
-pub fn reload(
-  config: process.Subject(Message),
-  db: sqlight.Connection,
-) -> Nil {
+pub fn reload(config: process.Subject(Message), db: sqlight.Connection) -> Nil {
   actor.call(config, waiting: 100, sending: Reload(db, _))
 }

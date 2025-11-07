@@ -1,11 +1,11 @@
 import database
 import gleam/dynamic/decode
-import logging
 import gleam/json
 import gleam/list
 import gleam/result
 import gleam/string
 import lexicon
+import logging
 import simplifile
 import sqlight
 
@@ -18,14 +18,15 @@ pub fn import_lexicons_from_directory(
   directory: String,
   db: sqlight.Connection,
 ) -> Result(ImportStats, String) {
-
   // Scan directory for JSON files
   logging.log(logging.Info, "[import] Scanning directory recursively...")
   use file_paths <- result.try(scan_directory_recursive(directory))
 
   logging.log(
     logging.Info,
-    "[import]   Found " <> string.inspect(list.length(file_paths)) <> " .json files",
+    "[import]   Found "
+      <> string.inspect(list.length(file_paths))
+      <> " .json files",
   )
   logging.log(logging.Info, "")
   logging.log(logging.Info, "[import] Reading all lexicon files...")
@@ -48,7 +49,10 @@ pub fn import_lexicons_from_directory(
   // Validate all schemas together (this allows cross-references to be resolved)
   let validation_result = case lexicon.validate_schemas(all_json_strings) {
     Ok(_) -> {
-      logging.log(logging.Info, "[import]   All lexicons validated successfully")
+      logging.log(
+        logging.Info,
+        "[import]   All lexicons validated successfully",
+      )
       Ok(Nil)
     }
     Error(err) -> {

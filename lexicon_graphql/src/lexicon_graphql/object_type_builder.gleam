@@ -7,12 +7,12 @@ import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option
 import gleam/string
-import graphql/schema
-import graphql/value
 import lexicon_graphql/lexicon_registry
 import lexicon_graphql/nsid
 import lexicon_graphql/type_mapper
 import lexicon_graphql/types
+import swell/schema
+import swell/value
 
 /// Build a GraphQL object type from an ObjectDef
 /// object_types_dict is used to resolve refs to other object types

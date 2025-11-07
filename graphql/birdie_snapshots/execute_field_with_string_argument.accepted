@@ -1,7 +1,0 @@
----
-version: 1.4.1
-title: Execute field with string argument
-file: ./test/executor_test.gleam
-test_name: execute_field_receives_string_argument_test
----
-Response(Object([#("echo", String("Echo: hello"))]), [])
