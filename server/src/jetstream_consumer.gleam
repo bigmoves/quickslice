@@ -204,7 +204,7 @@ fn start_consumer_process(db: sqlight.Connection) -> Result(process.Pid, String)
               wanted_dids: [],
               cursor: option.None,
               max_message_size_bytes: option.None,
-              compress: True,
+              compress: False,
               require_hello: False,
             )
 
