@@ -106,7 +106,6 @@ echo "📋 Summary:"
 echo "  - Client ID: $CLIENT_ID"
 echo "  - Client Name: $CLIENT_NAME"
 echo "  - Redirect URI: $REDIRECT_URI"
-echo "  - Scopes: openid email profile atproto transition:generic account:email blob:image/* repo:network.slices.slice repo:network.slices.lexicon repo:network.slices.actor.profile repo:network.slices.waitlist.request"
 echo "  - Config saved to: $CONFIG_FILE"
 echo
 echo "🔧 Environment variables saved to $CONFIG_FILE:"
