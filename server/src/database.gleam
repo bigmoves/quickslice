@@ -1,4 +1,5 @@
 import cursor
+import gleam/dict.{type Dict}
 import gleam/dynamic/decode
 import gleam/int
 import gleam/list
@@ -253,6 +254,19 @@ fn migration_v2(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   sqlight.exec(create_table_sql, conn)
 }
 
+/// Migration v3: Add CID index for deduplication
+fn migration_v3(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+  logging.log(logging.Info, "Running migration v3 (CID index)...")
+
+  let create_cid_index_sql =
+    "
+    CREATE INDEX IF NOT EXISTS idx_record_cid
+    ON record(cid)
+  "
+
+  sqlight.exec(create_cid_index_sql, conn)
+}
+
 /// Runs all pending migrations based on current schema version
 fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   use current_version <- result.try(get_current_version(conn))
@@ -267,21 +281,28 @@ fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
     // Fresh database or pre-migration database - run v1
     0 -> {
       use _ <- result.try(apply_migration(conn, 1, migration_v1))
-      apply_migration(conn, 2, migration_v2)
+      use _ <- result.try(apply_migration(conn, 2, migration_v2))
+      apply_migration(conn, 3, migration_v3)
     }
 
-    // Run v2 migration
-    1 -> apply_migration(conn, 2, migration_v2)
+    // Run v2 and v3 migrations
+    1 -> {
+      use _ <- result.try(apply_migration(conn, 2, migration_v2))
+      apply_migration(conn, 3, migration_v3)
+    }
+
+    // Run v3 migration
+    2 -> apply_migration(conn, 3, migration_v3)
 
     // Already at latest version
-    2 -> {
-      logging.log(logging.Info, "Schema is up to date (v2)")
+    3 -> {
+      logging.log(logging.Info, "Schema is up to date (v3)")
       Ok(Nil)
     }
 
     // Future versions would be handled here:
-    // 2 -> apply_migration(conn, 3, migration_v3)
     // 3 -> apply_migration(conn, 4, migration_v4)
+    // 4 -> apply_migration(conn, 5, migration_v5)
     _ -> {
       logging.log(
         logging.Error,
@@ -455,7 +476,52 @@ pub fn delete_all_actors(conn: sqlight.Connection) -> Result(Nil, sqlight.Error)
 
 // ===== Record Functions =====
 
+/// Gets existing CIDs for a list of URIs
+/// Returns a Dict mapping URI -> CID for records that exist in the database
+fn get_existing_cids(
+  conn: sqlight.Connection,
+  uris: List(String),
+) -> Result(Dict(String, String), sqlight.Error) {
+  case uris {
+    [] -> Ok(dict.new())
+    _ -> {
+      // Build placeholders for SQL IN clause
+      let placeholders =
+        list.map(uris, fn(_) { "?" })
+        |> string.join(", ")
+
+      let sql =
+        "
+        SELECT uri, cid
+        FROM record
+        WHERE uri IN (" <> placeholders <> ")
+      "
+
+      // Convert URIs to sqlight.Value list
+      let params = list.map(uris, sqlight.text)
+
+      let decoder = {
+        use uri <- decode.field(0, decode.string)
+        use cid <- decode.field(1, decode.string)
+        decode.success(#(uri, cid))
+      }
+
+      use results <- result.try(sqlight.query(
+        sql,
+        on: conn,
+        with: params,
+        expecting: decoder,
+      ))
+
+      // Convert list of tuples to Dict
+      Ok(dict.from_list(results))
+    }
+  }
+}
+
 /// Inserts or updates a record in the database
+/// Skips insertion if the CID already exists in the database (for any URI)
+/// Also skips update if the URI exists with the same CID (content unchanged)
 pub fn insert_record(
   conn: sqlight.Connection,
   uri: String,
@@ -464,78 +530,188 @@ pub fn insert_record(
   collection: String,
   json: String,
 ) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
-    INSERT INTO record (uri, cid, did, collection, json)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(uri) DO UPDATE SET
-      cid = excluded.cid,
-      json = excluded.json,
-      indexed_at = datetime('now')
-  "
+  // Check if this CID already exists in the database
+  use existing_cids <- result.try(get_existing_cids(conn, [uri]))
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [
-      sqlight.text(uri),
-      sqlight.text(cid),
-      sqlight.text(did),
-      sqlight.text(collection),
-      sqlight.text(json),
-    ],
-    expecting: decode.string,
-  ))
-  Ok(Nil)
+  case dict.get(existing_cids, uri) {
+    // URI exists with same CID - skip update (content unchanged)
+    Ok(existing_cid) if existing_cid == cid -> Ok(Nil)
+    // URI exists with different CID - proceed with update
+    // URI doesn't exist - proceed with insert
+    _ -> {
+      // Check if this CID exists for any other URI
+      let check_cid_sql =
+        "
+        SELECT COUNT(*) as count
+        FROM record
+        WHERE cid = ?
+      "
+
+      let count_decoder = {
+        use count <- decode.field(0, decode.int)
+        decode.success(count)
+      }
+
+      use cid_exists <- result.try(case
+        sqlight.query(
+          check_cid_sql,
+          on: conn,
+          with: [sqlight.text(cid)],
+          expecting: count_decoder,
+        )
+      {
+        Ok([count]) if count > 0 -> Ok(True)
+        Ok(_) -> Ok(False)
+        Error(err) -> Error(err)
+      })
+
+      case cid_exists {
+        True -> Ok(Nil)
+        False -> {
+          let sql =
+            "
+            INSERT INTO record (uri, cid, did, collection, json)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(uri) DO UPDATE SET
+              cid = excluded.cid,
+              json = excluded.json,
+              indexed_at = datetime('now')
+          "
+
+          use _ <- result.try(sqlight.query(
+            sql,
+            on: conn,
+            with: [
+              sqlight.text(uri),
+              sqlight.text(cid),
+              sqlight.text(did),
+              sqlight.text(collection),
+              sqlight.text(json),
+            ],
+            expecting: decode.string,
+          ))
+          Ok(Nil)
+        }
+      }
+    }
+  }
 }
 
 /// Batch inserts or updates multiple records in the database
 /// More efficient than individual inserts for large datasets
+/// Filters out records where CID already exists or is unchanged
 pub fn batch_insert_records(
   conn: sqlight.Connection,
   records: List(Record),
 ) -> Result(Nil, sqlight.Error) {
-  // Process records in smaller batches to avoid SQL parameter limits
-  // SQLite has a default limit of 999 parameters
-  // Each record uses 5 parameters, so we can safely do 100 records at a time (500 params)
-  let batch_size = 100
+  case records {
+    [] -> Ok(Nil)
+    _ -> {
+      // Get all URIs from the incoming records
+      let uris = list.map(records, fn(record) { record.uri })
 
-  list.sized_chunk(records, batch_size)
-  |> list.try_each(fn(batch) {
-    // Build the SQL with multiple value sets
-    let value_placeholders =
-      list.repeat("(?, ?, ?, ?, ?)", list.length(batch))
-      |> string.join(", ")
+      // Fetch existing CIDs for these URIs
+      use existing_cids <- result.try(get_existing_cids(conn, uris))
 
-    let sql = "
-      INSERT INTO record (uri, cid, did, collection, json)
-      VALUES " <> value_placeholders <> "
-      ON CONFLICT(uri) DO UPDATE SET
-        cid = excluded.cid,
-        json = excluded.json,
-        indexed_at = datetime('now')
-    "
+      // Get all CIDs that already exist in the database (for any URI)
+      let all_incoming_cids = list.map(records, fn(record) { record.cid })
+      let check_all_cids_sql =
+        "
+        SELECT cid
+        FROM record
+        WHERE cid IN ("
+        <> string.join(list.map(all_incoming_cids, fn(_) { "?" }), ", ")
+        <> ")
+      "
 
-    // Flatten all record parameters into a single list
-    let params =
-      list.flat_map(batch, fn(record) {
-        [
-          sqlight.text(record.uri),
-          sqlight.text(record.cid),
-          sqlight.text(record.did),
-          sqlight.text(record.collection),
-          sqlight.text(record.json),
-        ]
-      })
+      let cid_decoder = {
+        use cid <- decode.field(0, decode.string)
+        decode.success(cid)
+      }
 
-    use _ <- result.try(sqlight.query(
-      sql,
-      on: conn,
-      with: params,
-      expecting: decode.string,
-    ))
-    Ok(Nil)
-  })
+      use existing_cids_in_db <- result.try(sqlight.query(
+        check_all_cids_sql,
+        on: conn,
+        with: list.map(all_incoming_cids, sqlight.text),
+        expecting: cid_decoder,
+      ))
+
+      // Create a set of existing CIDs for fast lookup
+      let existing_cid_set = dict.from_list(
+        list.map(existing_cids_in_db, fn(cid) { #(cid, True) }),
+      )
+
+      // Filter out records where:
+      // 1. URI exists with same CID (unchanged)
+      // 2. CID already exists for a different URI (duplicate content)
+      let filtered_records =
+        list.filter(records, fn(record) {
+          case dict.get(existing_cids, record.uri) {
+            // URI exists with same CID - skip
+            Ok(existing_cid) if existing_cid == record.cid -> False
+            // URI exists with different CID - include (content changed)
+            Ok(_) ->
+              case dict.get(existing_cid_set, record.cid) {
+                Ok(_) -> False
+                Error(_) -> True
+              }
+            // URI doesn't exist - check if CID exists elsewhere
+            Error(_) ->
+              case dict.get(existing_cid_set, record.cid) {
+                Ok(_) -> False
+                Error(_) -> True
+              }
+          }
+        })
+
+      case filtered_records {
+        [] -> Ok(Nil)
+        _ -> {
+          // Process records in smaller batches to avoid SQL parameter limits
+          // SQLite has a default limit of 999 parameters
+          // Each record uses 5 parameters, so we can safely do 100 records at a time (500 params)
+          let batch_size = 100
+
+          list.sized_chunk(filtered_records, batch_size)
+          |> list.try_each(fn(batch) {
+            // Build the SQL with multiple value sets
+            let value_placeholders =
+              list.repeat("(?, ?, ?, ?, ?)", list.length(batch))
+              |> string.join(", ")
+
+            let sql = "
+              INSERT INTO record (uri, cid, did, collection, json)
+              VALUES " <> value_placeholders <> "
+              ON CONFLICT(uri) DO UPDATE SET
+                cid = excluded.cid,
+                json = excluded.json,
+                indexed_at = datetime('now')
+            "
+
+            // Flatten all record parameters into a single list
+            let params =
+              list.flat_map(batch, fn(record) {
+                [
+                  sqlight.text(record.uri),
+                  sqlight.text(record.cid),
+                  sqlight.text(record.did),
+                  sqlight.text(record.collection),
+                  sqlight.text(record.json),
+                ]
+              })
+
+            use _ <- result.try(sqlight.query(
+              sql,
+              on: conn,
+              with: params,
+              expecting: decode.string,
+            ))
+            Ok(Nil)
+          })
+        }
+      }
+    }
+  }
 }
 
 /// Gets a record by URI
