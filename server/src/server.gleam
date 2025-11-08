@@ -11,6 +11,7 @@ import gleam/http/request
 import gleam/int
 import gleam/list
 import gleam/option
+import gleam/otp/actor
 import gleam/string
 import graphiql_handler
 import graphql_handler
@@ -28,6 +29,7 @@ import pages/index
 import pubsub
 import settings_handler
 import sqlight
+import stats_pubsub
 import upload_handler
 import wisp
 import wisp/wisp_mist
@@ -227,6 +229,10 @@ fn start_server_normally() {
   // Initialize PubSub registry for subscriptions
   pubsub.start()
   logging.log(logging.Info, "[server] PubSub registry initialized")
+
+  // Initialize Stats PubSub registry for real-time stats
+  stats_pubsub.start()
+  logging.log(logging.Info, "[server] Stats PubSub registry initialized")
 
   // Start Jetstream consumer in background
   let jetstream_subject = case jetstream_consumer.start(db) {
@@ -473,22 +479,36 @@ fn start_server(
       // Serve Lustre client runtime
       ["lustre", "runtime.mjs"] -> lustre_handlers.serve_lustre_runtime()
 
+      // Serve styles CSS
+      ["styles.css"] -> lustre_handlers.serve_tailwind_css()
+
       // Backfill button WebSocket
       ["backfill-ws"] -> {
         case upgrade_header {
           Ok(upgrade_value) -> {
             case string.lowercase(upgrade_value) {
               "websocket" -> {
-                logging.log(
-                  logging.Info,
-                  "[server] WebSocket upgrade for /backfill-ws",
-                )
                 lustre_handlers.serve_backfill_button(
                   req,
                   ctx.db,
                   ctx.backfill_state,
                   ctx.config,
                 )
+              }
+              _ -> wisp_handler(req)
+            }
+          }
+          _ -> wisp_handler(req)
+        }
+      }
+
+      // Stats cards WebSocket
+      ["stats-ws"] -> {
+        case upgrade_header {
+          Ok(upgrade_value) -> {
+            case string.lowercase(upgrade_value) {
+              "websocket" -> {
+                lustre_handlers.serve_stats_cards(req, ctx.db)
               }
               _ -> wisp_handler(req)
             }
@@ -758,7 +778,21 @@ fn index_route(req: wisp.Request, ctx: Context) -> wisp.Response {
   // Get domain authority from config cache
   let domain_authority = config.get_domain_authority(ctx.config)
 
-  index.view(ctx.db, current_user, user_is_admin, domain_authority)
+  // Get backfill state
+  let backfilling =
+    actor.call(
+      ctx.backfill_state,
+      waiting: 100,
+      sending: backfill_state.IsBackfilling,
+    )
+
+  index.view(
+    ctx.db,
+    current_user,
+    user_is_admin,
+    domain_authority,
+    backfilling,
+  )
   |> element.to_document_string
   |> wisp.html_response(200)
 }

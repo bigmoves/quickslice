@@ -23,6 +23,18 @@ pub fn button(
   )
 }
 
+/// Render a static button (no event handler, for slot content)
+pub fn button_static(disabled disabled: Bool, text text: String) -> Element(msg) {
+  html.button(
+    [
+      attribute.type_("button"),
+      attribute.class(button_classes),
+      attribute.disabled(disabled),
+    ],
+    [html.text(text)],
+  )
+}
+
 /// Render a link styled as a button
 pub fn link(href href: String, text text: String) -> Element(msg) {
   html.a([attribute.href(href), attribute.class(button_classes)], [

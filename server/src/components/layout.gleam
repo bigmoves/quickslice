@@ -50,8 +50,11 @@ fn head(title: String) -> Element(msg) {
       [],
     ),
     element.element(
-      "script",
-      [attribute.attribute("src", "https://cdn.tailwindcss.com")],
+      "link",
+      [
+        attribute.attribute("rel", "stylesheet"),
+        attribute.attribute("href", "/styles.css"),
+      ],
       [],
     ),
     // Lustre server component runtime

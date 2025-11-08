@@ -1,10 +1,11 @@
 import components/alert
+import components/backfill_button
 import components/button
 import components/collection_table
 import components/layout
 import components/sparkline
+import components/stats_cards
 import database
-import format
 import gleam/option.{type Option}
 import lustre/attribute
 import lustre/element.{type Element}
@@ -30,9 +31,10 @@ pub fn view(
   current_user: Option(#(String, String)),
   is_admin: Bool,
   domain_authority: Option(String),
+  backfilling: Bool,
 ) -> Element(msg) {
   let data = fetch_data(db)
-  render(data, current_user, is_admin, domain_authority)
+  render(data, current_user, is_admin, domain_authority, backfilling)
 }
 
 /// Fetch all data needed for the index page
@@ -83,22 +85,30 @@ fn render(
   current_user: Option(#(String, String)),
   is_admin: Bool,
   domain_authority: Option(String),
+  backfilling: Bool,
 ) -> Element(msg) {
   layout.page_with_header(
     title: "ATProto Database Stats",
     content: [
       render_alerts(domain_authority, data.lexicon_count),
       render_action_buttons(current_user),
-      render_stats_section(
-        data.record_count,
-        data.lexicon_count,
-        data.actor_count,
+      // Real-time stats cards server component with initial content
+      server_component.element(
+        [attribute.id("stats-cards"), server_component.route("/stats-ws")],
+        [
+          stats_cards.render_stats_grid(
+            data.record_count,
+            data.actor_count,
+            data.lexicon_count,
+          ),
+        ],
       ),
       render_activity_section(data.record_activity),
       render_collections_section(
         data.collection_stats,
         data.record_lexicons,
         is_admin,
+        backfilling,
       ),
     ],
     current_user: current_user,
@@ -160,43 +170,6 @@ fn render_action_buttons(
   }
 }
 
-/// Render the combined statistics section
-fn render_stats_section(
-  record_count: Int,
-  lexicon_count: Int,
-  actor_count: Int,
-) -> Element(msg) {
-  html.div([attribute.class("mb-8 grid grid-cols-3 gap-4")], [
-    // Total records stat card
-    html.div([attribute.class("bg-zinc-800/50 rounded p-4")], [
-      html.div([attribute.class("text-sm text-zinc-500 mb-1")], [
-        element.text("Total Records"),
-      ]),
-      html.div([attribute.class("text-2xl font-semibold text-zinc-200")], [
-        element.text(format.format_number(record_count)),
-      ]),
-    ]),
-    // Actors stat card
-    html.div([attribute.class("bg-zinc-800/50 rounded p-4")], [
-      html.div([attribute.class("text-sm text-zinc-500 mb-1")], [
-        element.text("Total Actors"),
-      ]),
-      html.div([attribute.class("text-2xl font-semibold text-zinc-200")], [
-        element.text(format.format_number(actor_count)),
-      ]),
-    ]),
-    // Lexicons stat card
-    html.div([attribute.class("bg-zinc-800/50 rounded p-4")], [
-      html.div([attribute.class("text-sm text-zinc-500 mb-1")], [
-        element.text("Total Lexicons"),
-      ]),
-      html.div([attribute.class("text-2xl font-semibold text-zinc-200")], [
-        element.text(format.format_number(lexicon_count)),
-      ]),
-    ]),
-  ])
-}
-
 /// Render the activity chart section
 fn render_activity_section(
   activity: List(database.ActivityPoint),
@@ -216,6 +189,7 @@ fn render_collections_section(
   collection_stats: List(database.CollectionStat),
   record_lexicons: List(database.Lexicon),
   is_admin: Bool,
+  backfilling: Bool,
 ) -> Element(msg) {
   let backfill_button = case is_admin {
     True ->
@@ -224,7 +198,7 @@ fn render_collections_section(
           attribute.id("backfill-button"),
           server_component.route("/backfill-ws"),
         ],
-        [],
+        [backfill_button.render_button_static(is_admin, backfilling)],
       )
     False -> element.none()
   }

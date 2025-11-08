@@ -182,6 +182,23 @@ fn start_polling() -> effect.Effect(Msg) {
 
 // VIEW
 
+/// Renders the backfill button (static version for slot content)
+pub fn render_button_static(is_admin: Bool, backfilling: Bool) -> Element(msg) {
+  case is_admin {
+    False -> element.none()
+    True -> {
+      let button_text = case backfilling {
+        True -> "Backfilling..."
+        False -> "Backfill Collections"
+      }
+
+      html.div([attribute.class("inline font-mono")], [
+        button.button_static(disabled: backfilling, text: button_text),
+      ])
+    }
+  }
+}
+
 fn view(model: Model) -> Element(Msg) {
   case model.is_admin {
     False -> element.none()
@@ -191,12 +208,23 @@ fn view(model: Model) -> Element(Msg) {
         False -> "Backfill Collections"
       }
 
-      html.div([attribute.class("inline")], [
-        button.button(
-          disabled: model.backfilling,
-          on_click: UserClickedBackfill,
-          text: button_text,
+      html.div([attribute.class("font-mono")], [
+        // Include Tailwind styles in the Shadow DOM
+        element.element(
+          "link",
+          [
+            attribute.attribute("rel", "stylesheet"),
+            attribute.attribute("href", "/styles.css"),
+          ],
+          [],
         ),
+        html.div([attribute.class("inline")], [
+          button.button(
+            disabled: model.backfilling,
+            on_click: UserClickedBackfill,
+            text: button_text,
+          ),
+        ]),
       ])
     }
   }

@@ -11,6 +11,7 @@ import lexicon
 import logging
 import pubsub
 import sqlight
+import stats_pubsub
 
 /// Convert a Dynamic value (Erlang term) to JSON string
 fn dynamic_to_json(value: Dynamic) -> String {
@@ -106,6 +107,9 @@ pub fn handle_commit_event(
                       // We're already in a spawned process per event, so blocking is fine
                       case is_new_actor {
                         True -> {
+                          // Publish stats event for new actor
+                          stats_pubsub.publish(stats_pubsub.ActorCreated)
+
                           backfill.backfill_external_collections_for_actor(
                             db,
                             did,
@@ -165,6 +169,12 @@ pub fn handle_commit_event(
                             )
 
                           pubsub.publish(event)
+
+                          // Publish stats event for real-time stats updates
+                          case is_create {
+                            True -> stats_pubsub.publish(stats_pubsub.RecordCreated)
+                            False -> Nil
+                          }
                         }
                         Error(err) -> {
                           logging.log(
@@ -248,6 +258,9 @@ pub fn handle_commit_event(
             )
 
           pubsub.publish(event)
+
+          // Publish stats event for real-time stats updates
+          stats_pubsub.publish(stats_pubsub.RecordDeleted)
         }
         Error(err) -> {
           logging.log(

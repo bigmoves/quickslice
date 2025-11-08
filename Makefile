@@ -1,4 +1,4 @@
-.PHONY: help test build clean run
+.PHONY: help test build clean run css
 
 help:
 	@echo "quickslice - Makefile Commands"
@@ -6,11 +6,18 @@ help:
 	@echo "  make run      - Start server"
 	@echo "  make test     - Run all tests"
 	@echo "  make build    - Build all projects"
+	@echo "  make css      - Build Tailwind CSS"
 	@echo "  make clean    - Clean build artifacts"
 	@echo ""
 
+# Build Tailwind CSS
+css:
+	@echo "Building Tailwind CSS..."
+	@cd server && npx @tailwindcss/cli -i src/app.css -o priv/static/styles.css --minify
+	@echo "CSS build complete"
+
 # Build all projects
-build:
+build: css
 	@echo "Building lexicon_graphql package..."
 	@cd lexicon_graphql && gleam build
 	@echo ""
