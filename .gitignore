@@ -1,5 +1,6 @@
 erl_crash.dump
 .claude
+.playwright-mcp
 
 # Database files
 *.db

@@ -3,10 +3,12 @@ import backfill
 import database
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
+import gleam/json
 import gleam/list
 import gleam/option
 import gleam/string
 import goose
+import jetstream_activity
 import lexicon
 import logging
 import pubsub
@@ -49,6 +51,40 @@ fn iolist_to_string(iolist: Dynamic) -> String {
 @external(erlang, "event_handler_ffi", "microseconds_to_iso8601")
 fn microseconds_to_iso8601(time_us: Int) -> String
 
+/// Serialize a commit event to JSON string for activity logging
+fn serialize_commit_event(
+  did: String,
+  time_us: Int,
+  commit: goose.CommitData,
+) -> String {
+  let record_json = case commit.record {
+    option.Some(record_data) -> json.string(dynamic_to_json(record_data))
+    option.None -> json.null()
+  }
+
+  let cid_json = case commit.cid {
+    option.Some(cid) -> json.string(cid)
+    option.None -> json.null()
+  }
+
+  json.object([
+    #("did", json.string(did)),
+    #("time_us", json.int(time_us)),
+    #(
+      "commit",
+      json.object([
+        #("rev", json.string(commit.rev)),
+        #("operation", json.string(commit.operation)),
+        #("collection", json.string(commit.collection)),
+        #("rkey", json.string(commit.rkey)),
+        #("record", record_json),
+        #("cid", cid_json),
+      ]),
+    ),
+  ])
+  |> json.to_string
+}
+
 /// Handle a commit event (create, update, or delete)
 pub fn handle_commit_event(
   db: sqlight.Connection,
@@ -59,6 +95,30 @@ pub fn handle_commit_event(
   external_collection_ids: List(String),
 ) -> Nil {
   let uri = "at://" <> did <> "/" <> commit.collection <> "/" <> commit.rkey
+
+  // Log activity at entry point - serialize the commit event to JSON
+  let event_json = serialize_commit_event(did, time_us, commit)
+  let timestamp = microseconds_to_iso8601(time_us)
+
+  let activity_id = case
+    jetstream_activity.log_activity(
+      db,
+      timestamp,
+      commit.operation,
+      commit.collection,
+      did,
+      event_json,
+    )
+  {
+    Ok(id) -> option.Some(id)
+    Error(err) -> {
+      logging.log(
+        logging.Warning,
+        "[jetstream] Failed to log activity: " <> string.inspect(err),
+      )
+      option.None
+    }
+  }
 
   case commit.operation {
     "create" | "update" -> {
@@ -132,7 +192,7 @@ pub fn handle_commit_event(
                           json_string,
                         )
                       {
-                        Ok(_) -> {
+                        Ok(database.Inserted) -> {
                           logging.log(
                             logging.Info,
                             "[jetstream] "
@@ -147,6 +207,35 @@ pub fn handle_commit_event(
                               <> ") "
                               <> did,
                           )
+
+                          // Update activity status to success
+                          case activity_id {
+                            option.Some(id) -> {
+                              case
+                                jetstream_activity.update_status(
+                                  db,
+                                  id,
+                                  "success",
+                                  option.None,
+                                )
+                              {
+                                Ok(_) ->
+                                  // Publish activity event for real-time UI updates
+                                  stats_pubsub.publish(stats_pubsub.ActivityLogged(
+                                    id,
+                                    timestamp,
+                                    commit.operation,
+                                    commit.collection,
+                                    did,
+                                    "success",
+                                    option.None,
+                                    event_json,
+                                  ))
+                                Error(_) -> Nil
+                              }
+                            }
+                            option.None -> Nil
+                          }
 
                           // Publish event to PubSub for GraphQL subscriptions
                           let operation = case is_create {
@@ -176,6 +265,47 @@ pub fn handle_commit_event(
                             False -> Nil
                           }
                         }
+                        Ok(database.Skipped) -> {
+                          logging.log(
+                            logging.Info,
+                            "[jetstream] skipped (duplicate CID) "
+                              <> commit.collection
+                              <> " ("
+                              <> commit.rkey
+                              <> ") "
+                              <> did,
+                          )
+
+                          // Update activity status to success (but don't increment counters)
+                          case activity_id {
+                            option.Some(id) -> {
+                              case
+                                jetstream_activity.update_status(
+                                  db,
+                                  id,
+                                  "success",
+                                  option.Some("Skipped: duplicate CID"),
+                                )
+                              {
+                                Ok(_) ->
+                                  // Publish activity event for real-time UI updates
+                                  stats_pubsub.publish(stats_pubsub.ActivityLogged(
+                                    id,
+                                    timestamp,
+                                    commit.operation,
+                                    commit.collection,
+                                    did,
+                                    "success",
+                                    option.Some("Skipped: duplicate CID"),
+                                    event_json,
+                                  ))
+                                Error(_) -> Nil
+                              }
+                            }
+                            option.None -> Nil
+                          }
+                          // Don't publish RecordCreated event - record wasn't actually created
+                        }
                         Error(err) -> {
                           logging.log(
                             logging.Error,
@@ -184,6 +314,41 @@ pub fn handle_commit_event(
                               <> ": "
                               <> string.inspect(err),
                           )
+
+                          // Update activity status to error
+                          case activity_id {
+                            option.Some(id) -> {
+                              case
+                                jetstream_activity.update_status(
+                                  db,
+                                  id,
+                                  "error",
+                                  option.Some(
+                                    "Database insert failed: "
+                                    <> string.inspect(err),
+                                  ),
+                                )
+                              {
+                                Ok(_) -> {
+                                  let error_msg =
+                                    "Database insert failed: " <> string.inspect(err)
+                                  // Publish activity event for real-time UI updates
+                                  stats_pubsub.publish(stats_pubsub.ActivityLogged(
+                                    id,
+                                    timestamp,
+                                    commit.operation,
+                                    commit.collection,
+                                    did,
+                                    "error",
+                                    option.Some(error_msg),
+                                    event_json,
+                                  ))
+                                }
+                                Error(_) -> Nil
+                              }
+                            }
+                            option.None -> Nil
+                          }
                         }
                       }
                     }
@@ -195,6 +360,37 @@ pub fn handle_commit_event(
                           <> ": "
                           <> actor_err,
                       )
+
+                      // Update activity status to error
+                      case activity_id {
+                        option.Some(id) -> {
+                          case
+                            jetstream_activity.update_status(
+                              db,
+                              id,
+                              "error",
+                              option.Some("Actor validation failed: " <> actor_err),
+                            )
+                          {
+                            Ok(_) -> {
+                              let error_msg = "Actor validation failed: " <> actor_err
+                              // Publish activity event for real-time UI updates
+                              stats_pubsub.publish(stats_pubsub.ActivityLogged(
+                                id,
+                                timestamp,
+                                commit.operation,
+                                commit.collection,
+                                did,
+                                "error",
+                                option.Some(error_msg),
+                                event_json,
+                              ))
+                            }
+                            Error(_) -> Nil
+                          }
+                        }
+                        option.None -> Nil
+                      }
                     }
                   }
                 }
@@ -206,6 +402,37 @@ pub fn handle_commit_event(
                       <> ": "
                       <> lexicon.describe_error(validation_error),
                   )
+
+                  // Update activity status to validation_error
+                  case activity_id {
+                    option.Some(id) -> {
+                      case
+                        jetstream_activity.update_status(
+                          db,
+                          id,
+                          "validation_error",
+                          option.Some(lexicon.describe_error(validation_error)),
+                        )
+                      {
+                        Ok(_) -> {
+                          let error_msg = lexicon.describe_error(validation_error)
+                          // Publish activity event for real-time UI updates
+                          stats_pubsub.publish(stats_pubsub.ActivityLogged(
+                            id,
+                            timestamp,
+                            commit.operation,
+                            commit.collection,
+                            did,
+                            "validation_error",
+                            option.Some(error_msg),
+                            event_json,
+                          ))
+                        }
+                        Error(_) -> Nil
+                      }
+                    }
+                    option.None -> Nil
+                  }
                 }
               }
             }
@@ -215,6 +442,23 @@ pub fn handle_commit_event(
                 "[jetstream] Failed to fetch lexicons for validation: "
                   <> string.inspect(db_err),
               )
+
+              // Update activity status to error
+              case activity_id {
+                option.Some(id) -> {
+                  let _ =
+                    jetstream_activity.update_status(
+                      db,
+                      id,
+                      "error",
+                      option.Some(
+                        "Failed to fetch lexicons: " <> string.inspect(db_err),
+                      ),
+                    )
+                  Nil
+                }
+                option.None -> Nil
+              }
             }
           }
         }
@@ -226,6 +470,21 @@ pub fn handle_commit_event(
               <> " event missing record or cid for "
               <> uri,
           )
+
+          // Update activity status to error
+          case activity_id {
+            option.Some(id) -> {
+              let _ =
+                jetstream_activity.update_status(
+                  db,
+                  id,
+                  "error",
+                  option.Some("Event missing record or cid"),
+                )
+              Nil
+            }
+            option.None -> Nil
+          }
         }
       }
     }
@@ -242,6 +501,35 @@ pub fn handle_commit_event(
 
       case database.delete_record(db, uri) {
         Ok(_) -> {
+          // Update activity status to success
+          case activity_id {
+            option.Some(id) -> {
+              case
+                jetstream_activity.update_status(
+                  db,
+                  id,
+                  "success",
+                  option.None,
+                )
+              {
+                Ok(_) ->
+                  // Publish activity event for real-time UI updates
+                  stats_pubsub.publish(stats_pubsub.ActivityLogged(
+                    id,
+                    timestamp,
+                    commit.operation,
+                    commit.collection,
+                    did,
+                    "success",
+                    option.None,
+                    event_json,
+                  ))
+                Error(_) -> Nil
+              }
+            }
+            option.None -> Nil
+          }
+
           // Publish delete event to PubSub for GraphQL subscriptions
           // Use the event timestamp from the Jetstream event
           let indexed_at = microseconds_to_iso8601(time_us)
@@ -267,6 +555,21 @@ pub fn handle_commit_event(
             logging.Error,
             "[jetstream] Failed to delete: " <> string.inspect(err),
           )
+
+          // Update activity status to error
+          case activity_id {
+            option.Some(id) -> {
+              let _ =
+                jetstream_activity.update_status(
+                  db,
+                  id,
+                  "error",
+                  option.Some("Delete failed: " <> string.inspect(err)),
+                )
+              Nil
+            }
+            option.None -> Nil
+          }
         }
       }
     }
@@ -275,6 +578,21 @@ pub fn handle_commit_event(
         logging.Warning,
         "[jetstream] Unknown operation: " <> commit.operation,
       )
+
+      // Update activity status to error
+      case activity_id {
+        option.Some(id) -> {
+          let _ =
+            jetstream_activity.update_status(
+              db,
+              id,
+              "error",
+              option.Some("Unknown operation: " <> commit.operation),
+            )
+          Nil
+        }
+        option.None -> Nil
+      }
     }
   }
 }

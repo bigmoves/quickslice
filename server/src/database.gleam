@@ -267,6 +267,34 @@ fn migration_v3(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   sqlight.exec(create_cid_index_sql, conn)
 }
 
+/// Migration v4: Add jetstream_activity table for 24h activity log
+fn migration_v4(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+  logging.log(logging.Info, "Running migration v4 (jetstream_activity table)...")
+
+  let create_table_sql =
+    "
+    CREATE TABLE IF NOT EXISTS jetstream_activity (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      collection TEXT NOT NULL,
+      did TEXT NOT NULL,
+      status TEXT NOT NULL,
+      error_message TEXT,
+      event_json TEXT NOT NULL
+    )
+  "
+
+  let create_timestamp_index_sql =
+    "
+    CREATE INDEX IF NOT EXISTS idx_jetstream_activity_timestamp
+    ON jetstream_activity(timestamp DESC)
+  "
+
+  use _ <- result.try(sqlight.exec(create_table_sql, conn))
+  sqlight.exec(create_timestamp_index_sql, conn)
+}
+
 /// Runs all pending migrations based on current schema version
 fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   use current_version <- result.try(get_current_version(conn))
@@ -282,27 +310,35 @@ fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
     0 -> {
       use _ <- result.try(apply_migration(conn, 1, migration_v1))
       use _ <- result.try(apply_migration(conn, 2, migration_v2))
-      apply_migration(conn, 3, migration_v3)
+      use _ <- result.try(apply_migration(conn, 3, migration_v3))
+      apply_migration(conn, 4, migration_v4)
     }
 
-    // Run v2 and v3 migrations
+    // Run v2, v3, and v4 migrations
     1 -> {
       use _ <- result.try(apply_migration(conn, 2, migration_v2))
-      apply_migration(conn, 3, migration_v3)
+      use _ <- result.try(apply_migration(conn, 3, migration_v3))
+      apply_migration(conn, 4, migration_v4)
     }
 
-    // Run v3 migration
-    2 -> apply_migration(conn, 3, migration_v3)
+    // Run v3 and v4 migrations
+    2 -> {
+      use _ <- result.try(apply_migration(conn, 3, migration_v3))
+      apply_migration(conn, 4, migration_v4)
+    }
+
+    // Run v4 migration
+    3 -> apply_migration(conn, 4, migration_v4)
 
     // Already at latest version
-    3 -> {
-      logging.log(logging.Info, "Schema is up to date (v3)")
+    4 -> {
+      logging.log(logging.Info, "Schema is up to date (v4)")
       Ok(Nil)
     }
 
     // Future versions would be handled here:
-    // 3 -> apply_migration(conn, 4, migration_v4)
     // 4 -> apply_migration(conn, 5, migration_v5)
+    // 5 -> apply_migration(conn, 6, migration_v6)
     _ -> {
       logging.log(
         logging.Error,
@@ -522,6 +558,14 @@ fn get_existing_cids(
 /// Inserts or updates a record in the database
 /// Skips insertion if the CID already exists in the database (for any URI)
 /// Also skips update if the URI exists with the same CID (content unchanged)
+/// Result of inserting a record
+pub type InsertResult {
+  /// Record was newly inserted or updated
+  Inserted
+  /// Record was skipped (duplicate CID)
+  Skipped
+}
+
 pub fn insert_record(
   conn: sqlight.Connection,
   uri: String,
@@ -529,70 +573,39 @@ pub fn insert_record(
   did: String,
   collection: String,
   json: String,
-) -> Result(Nil, sqlight.Error) {
+) -> Result(InsertResult, sqlight.Error) {
   // Check if this CID already exists in the database
   use existing_cids <- result.try(get_existing_cids(conn, [uri]))
 
   case dict.get(existing_cids, uri) {
     // URI exists with same CID - skip update (content unchanged)
-    Ok(existing_cid) if existing_cid == cid -> Ok(Nil)
+    Ok(existing_cid) if existing_cid == cid -> Ok(Skipped)
     // URI exists with different CID - proceed with update
     // URI doesn't exist - proceed with insert
     _ -> {
-      // Check if this CID exists for any other URI
-      let check_cid_sql =
+      let sql =
         "
-        SELECT COUNT(*) as count
-        FROM record
-        WHERE cid = ?
+        INSERT INTO record (uri, cid, did, collection, json)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(uri) DO UPDATE SET
+          cid = excluded.cid,
+          json = excluded.json,
+          indexed_at = datetime('now')
       "
 
-      let count_decoder = {
-        use count <- decode.field(0, decode.int)
-        decode.success(count)
-      }
-
-      use cid_exists <- result.try(case
-        sqlight.query(
-          check_cid_sql,
-          on: conn,
-          with: [sqlight.text(cid)],
-          expecting: count_decoder,
-        )
-      {
-        Ok([count]) if count > 0 -> Ok(True)
-        Ok(_) -> Ok(False)
-        Error(err) -> Error(err)
-      })
-
-      case cid_exists {
-        True -> Ok(Nil)
-        False -> {
-          let sql =
-            "
-            INSERT INTO record (uri, cid, did, collection, json)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(uri) DO UPDATE SET
-              cid = excluded.cid,
-              json = excluded.json,
-              indexed_at = datetime('now')
-          "
-
-          use _ <- result.try(sqlight.query(
-            sql,
-            on: conn,
-            with: [
-              sqlight.text(uri),
-              sqlight.text(cid),
-              sqlight.text(did),
-              sqlight.text(collection),
-              sqlight.text(json),
-            ],
-            expecting: decode.string,
-          ))
-          Ok(Nil)
-        }
-      }
+      use _ <- result.try(sqlight.query(
+        sql,
+        on: conn,
+        with: [
+          sqlight.text(uri),
+          sqlight.text(cid),
+          sqlight.text(did),
+          sqlight.text(collection),
+          sqlight.text(json),
+        ],
+        expecting: decode.string,
+      ))
+      Ok(Inserted)
     }
   }
 }
@@ -1147,48 +1160,6 @@ pub fn get_record_type_lexicons(
     use json <- decode.field(1, decode.string)
     use created_at <- decode.field(2, decode.string)
     decode.success(Lexicon(id:, json:, created_at:))
-  }
-
-  sqlight.query(sql, on: conn, with: [], expecting: decoder)
-}
-
-pub type ActivityPoint {
-  ActivityPoint(timestamp: String, count: Int)
-}
-
-/// Gets record indexing activity over time
-/// Returns hourly counts for the specified duration
-pub fn get_record_activity(
-  conn: sqlight.Connection,
-  duration_hours: Int,
-) -> Result(List(ActivityPoint), sqlight.Error) {
-  // SQLite datetime calculation for cutoff time
-  let sql = "
-    WITH RECURSIVE time_series AS (
-      SELECT datetime('now', '-" <> int.to_string(duration_hours) <> " hours') AS bucket
-      UNION ALL
-      SELECT datetime(bucket, '+1 hour')
-      FROM time_series
-      WHERE bucket < datetime('now')
-    )
-    SELECT
-      strftime('%Y-%m-%dT%H:00:00Z', ts.bucket) as timestamp,
-      COALESCE(COUNT(r.uri), 0) as count
-    FROM time_series ts
-    LEFT JOIN record r ON
-      datetime(r.indexed_at) >= datetime(ts.bucket)
-      AND datetime(r.indexed_at) < datetime(ts.bucket, '+1 hour')
-      AND datetime(r.indexed_at) >= datetime('now', '-" <> int.to_string(
-      duration_hours,
-    ) <> " hours')
-    GROUP BY ts.bucket
-    ORDER BY ts.bucket ASC
-  "
-
-  let decoder = {
-    use timestamp <- decode.field(0, decode.string)
-    use count <- decode.field(1, decode.int)
-    decode.success(ActivityPoint(timestamp:, count:))
   }
 
   sqlight.query(sql, on: conn, with: [], expecting: decoder)

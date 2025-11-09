@@ -1,3 +1,4 @@
+import activity_cleanup
 import argv
 import backfill
 import backfill_state
@@ -233,6 +234,21 @@ fn start_server_normally() {
   // Initialize Stats PubSub registry for real-time stats
   stats_pubsub.start()
   logging.log(logging.Info, "[server] Stats PubSub registry initialized")
+
+  // Start activity cleanup scheduler
+  case activity_cleanup.start(db) {
+    Ok(_cleanup_subject) ->
+      logging.log(
+        logging.Info,
+        "[server] Activity cleanup scheduler started (runs hourly)",
+      )
+    Error(err) ->
+      logging.log(
+        logging.Warning,
+        "[server] Failed to start activity cleanup scheduler: "
+          <> string.inspect(err),
+      )
+  }
 
   // Start Jetstream consumer in background
   let jetstream_subject = case jetstream_consumer.start(db) {
@@ -509,6 +525,36 @@ fn start_server(
             case string.lowercase(upgrade_value) {
               "websocket" -> {
                 lustre_handlers.serve_stats_cards(req, ctx.db)
+              }
+              _ -> wisp_handler(req)
+            }
+          }
+          _ -> wisp_handler(req)
+        }
+      }
+
+      // Activity log WebSocket
+      ["activity-ws"] -> {
+        case upgrade_header {
+          Ok(upgrade_value) -> {
+            case string.lowercase(upgrade_value) {
+              "websocket" -> {
+                lustre_handlers.serve_activity_log(req, ctx.db)
+              }
+              _ -> wisp_handler(req)
+            }
+          }
+          _ -> wisp_handler(req)
+        }
+      }
+
+      // Activity chart WebSocket
+      ["activity-chart-ws"] -> {
+        case upgrade_header {
+          Ok(upgrade_value) -> {
+            case string.lowercase(upgrade_value) {
+              "websocket" -> {
+                lustre_handlers.serve_activity_chart(req, ctx.db)
               }
               _ -> wisp_handler(req)
             }

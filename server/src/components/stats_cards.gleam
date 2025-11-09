@@ -72,6 +72,8 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         stats_pubsub.ActorCreated -> {
           #(Model(..model, actor_count: model.actor_count + 1), effect.none())
         }
+        // Ignore activity logged events - those are for the activity log component
+        stats_pubsub.ActivityLogged(..) -> #(model, effect.none())
       }
     }
   }

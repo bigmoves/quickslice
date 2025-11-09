@@ -57,6 +57,23 @@ fn head(title: String) -> Element(msg) {
       ],
       [],
     ),
+    // Tippy.js for tooltips
+    html.script(
+      [attribute.attribute("src", "https://unpkg.com/@popperjs/core@2")],
+      "",
+    ),
+    html.script(
+      [attribute.attribute("src", "https://unpkg.com/tippy.js@6")],
+      "",
+    ),
+    element.element(
+      "link",
+      [
+        attribute.attribute("rel", "stylesheet"),
+        attribute.attribute("href", "https://unpkg.com/tippy.js@6/themes/light.css"),
+      ],
+      [],
+    ),
     // Lustre server component runtime
     html.script(
       [
@@ -65,16 +82,173 @@ fn head(title: String) -> Element(msg) {
       ],
       "",
     ),
-    // Listen for backfill-complete event and reload page
+    // Define custom elements for client-side formatting
     html.script(
       [],
       "
-      // Wait for DOM to be ready
+      // Format timestamps inside Shadow DOM
+      function formatTimestamps(shadowRoot) {
+        if (!shadowRoot) return;
+
+        const timeElements = shadowRoot.querySelectorAll('[data-timestamp]');
+        timeElements.forEach(el => {
+          const utcTime = el.getAttribute('data-timestamp');
+          if (utcTime) {
+            try {
+              const date = new Date(utcTime);
+              const formatted = date.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              });
+              // Always reformat - Lustre may reuse elements with different data
+              if (el.textContent !== formatted) {
+                el.textContent = formatted;
+              }
+            } catch (e) {
+              console.error('[Timestamp Formatter] Error:', e);
+            }
+          }
+        });
+
+        // Format JSON elements
+        const jsonElements = shadowRoot.querySelectorAll('[data-json]');
+        jsonElements.forEach(el => {
+          const jsonStr = el.getAttribute('data-json');
+          if (jsonStr) {
+            try {
+              const parsed = JSON.parse(jsonStr);
+              if (parsed.commit && typeof parsed.commit.record === 'string') {
+                try {
+                  parsed.commit.record = JSON.parse(parsed.commit.record);
+                } catch (e) {}
+              }
+              const formatted = JSON.stringify(parsed, null, 2);
+              if (el.textContent !== formatted) {
+                el.textContent = formatted;
+              }
+            } catch (e) {
+              console.error('[JSON Formatter] Error:', e);
+            }
+          }
+        });
+      }
+
+      // Listen for activity log component mount and updates
       document.addEventListener('DOMContentLoaded', function() {
+        const activityLog = document.querySelector('lustre-server-component#activity-log');
+
+        if (activityLog) {
+          // Format on initial mount
+          activityLog.addEventListener('lustre:mount', function() {
+            formatTimestamps(activityLog.shadowRoot);
+          });
+
+          // Also try formatting immediately in case already mounted
+          if (activityLog.shadowRoot) {
+            formatTimestamps(activityLog.shadowRoot);
+          }
+
+          // Watch for changes in Shadow DOM using MutationObserver
+          const observer = new MutationObserver(() => {
+            formatTimestamps(activityLog.shadowRoot);
+          });
+
+          // Wait a bit for shadow root to be available
+          setTimeout(() => {
+            if (activityLog.shadowRoot) {
+              observer.observe(activityLog.shadowRoot, {
+                childList: true,
+                subtree: true
+              });
+              // Format once more to catch anything that loaded during timeout
+              formatTimestamps(activityLog.shadowRoot);
+            }
+          }, 100);
+        }
+
+        // Initialize tooltips for activity chart
+        function initChartTooltips(shadowRoot) {
+          if (!shadowRoot || !window.tippy) return;
+
+          const bars = shadowRoot.querySelectorAll('[data-tooltip-timestamp]');
+          bars.forEach(bar => {
+            // Destroy existing tippy instance if it exists
+            if (bar._tippy) {
+              bar._tippy.destroy();
+            }
+
+            const timestamp = bar.getAttribute('data-tooltip-timestamp');
+            const create = bar.getAttribute('data-create') || '0';
+            const update = bar.getAttribute('data-update') || '0';
+            const del = bar.getAttribute('data-delete') || '0';
+            const total = parseInt(create) + parseInt(update) + parseInt(del);
+
+            if (!timestamp) return;
+
+            try {
+              const date = new Date(timestamp);
+              const formatted = date.toLocaleString([], {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              });
+              const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+              let content = formatted + ' (' + timezone + ')';
+              if (total === 0) {
+                content += '\\nNo activity';
+              } else {
+                content += '\\nCreate: ' + create;
+                content += '\\nUpdate: ' + update;
+                content += '\\nDelete: ' + del;
+                content += '\\nTotal: ' + total;
+              }
+
+              tippy(bar, {
+                content: content.replace(/\\n/g, '<br>'),
+                allowHTML: true,
+                theme: 'dark',
+                placement: 'top'
+              });
+            } catch (e) {
+              console.error('[Tooltip] Error:', e);
+            }
+          });
+        }
+
+        const activityChart = document.querySelector('lustre-server-component#activity-chart');
+        if (activityChart) {
+          activityChart.addEventListener('lustre:mount', function() {
+            initChartTooltips(activityChart.shadowRoot);
+          });
+
+          if (activityChart.shadowRoot) {
+            initChartTooltips(activityChart.shadowRoot);
+          }
+
+          const chartObserver = new MutationObserver(() => {
+            initChartTooltips(activityChart.shadowRoot);
+          });
+
+          setTimeout(() => {
+            if (activityChart.shadowRoot) {
+              chartObserver.observe(activityChart.shadowRoot, {
+                childList: true,
+                subtree: true
+              });
+              initChartTooltips(activityChart.shadowRoot);
+            }
+          }, 100);
+        }
+
+        // Listen for backfill-complete event and reload page
         const backfillButton = document.querySelector('lustre-server-component#backfill-button');
         if (backfillButton) {
           backfillButton.addEventListener('backfill-complete', function() {
-            // Reload page to show updated database stats
             window.location.reload();
           });
         }

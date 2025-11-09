@@ -4,7 +4,9 @@
 /// for Lustre server components, including serving the client runtime and
 /// managing component WebSocket connections.
 import backfill_state
+import components/activity_chart
 import components/backfill_button
+import components/jetstream_activity_log
 import components/stats_cards
 import config
 import gleam/bytes_tree
@@ -233,6 +235,167 @@ fn loop_stats_cards_socket(
 }
 
 fn close_stats_cards_socket(state: StatsCardsSocket) -> Nil {
+  lustre.shutdown()
+  |> lustre.send(to: state.component)
+}
+
+// JETSTREAM ACTIVITY LOG COMPONENT
+
+/// WebSocket handler for jetstream activity log component
+pub fn serve_activity_log(
+  req: request.Request(mist.Connection),
+  db: sqlight.Connection,
+) -> response.Response(mist.ResponseData) {
+  mist.websocket(
+    request: req,
+    on_init: init_activity_log_socket(db, _),
+    handler: loop_activity_log_socket,
+    on_close: close_activity_log_socket,
+  )
+}
+
+type ActivityLogSocket {
+  ActivityLogSocket(
+    component: lustre.Runtime(jetstream_activity_log.Msg),
+    self: process.Subject(
+      server_component.ClientMessage(jetstream_activity_log.Msg),
+    ),
+  )
+}
+
+type ActivityLogSocketMessage =
+  server_component.ClientMessage(jetstream_activity_log.Msg)
+
+type ActivityLogSocketInit =
+  #(ActivityLogSocket, option.Option(process.Selector(ActivityLogSocketMessage)))
+
+fn init_activity_log_socket(
+  db: sqlight.Connection,
+  _connection: mist.WebsocketConnection,
+) -> ActivityLogSocketInit {
+  let component = jetstream_activity_log.component(db)
+  let assert Ok(runtime) = lustre.start_server_component(component, Nil)
+
+  let self = process.new_subject()
+  let selector = process.new_selector() |> process.select(self)
+
+  server_component.register_subject(self)
+  |> lustre.send(to: runtime)
+
+  #(ActivityLogSocket(component: runtime, self: self), option.Some(selector))
+}
+
+fn loop_activity_log_socket(
+  state: ActivityLogSocket,
+  message: mist.WebsocketMessage(ActivityLogSocketMessage),
+  connection: mist.WebsocketConnection,
+) -> mist.Next(ActivityLogSocket, ActivityLogSocketMessage) {
+  case message {
+    mist.Text(json_string) -> {
+      case json.parse(json_string, server_component.runtime_message_decoder()) {
+        Ok(runtime_message) -> lustre.send(state.component, runtime_message)
+        Error(_) -> Nil
+      }
+
+      mist.continue(state)
+    }
+
+    mist.Binary(_) -> mist.continue(state)
+
+    mist.Custom(client_message) -> {
+      let json_obj = server_component.client_message_to_json(client_message)
+      let assert Ok(_) =
+        mist.send_text_frame(connection, json.to_string(json_obj))
+
+      mist.continue(state)
+    }
+
+    mist.Closed | mist.Shutdown -> mist.stop()
+  }
+}
+
+fn close_activity_log_socket(state: ActivityLogSocket) -> Nil {
+  lustre.shutdown()
+  |> lustre.send(to: state.component)
+}
+
+// ACTIVITY CHART COMPONENT
+
+/// WebSocket handler for activity chart component
+pub fn serve_activity_chart(
+  req: request.Request(mist.Connection),
+  db: sqlight.Connection,
+) -> response.Response(mist.ResponseData) {
+  mist.websocket(
+    request: req,
+    on_init: init_activity_chart_socket(db, _),
+    handler: loop_activity_chart_socket,
+    on_close: close_activity_chart_socket,
+  )
+}
+
+type ActivityChartSocket {
+  ActivityChartSocket(
+    component: lustre.Runtime(activity_chart.Msg),
+    self: process.Subject(server_component.ClientMessage(activity_chart.Msg)),
+  )
+}
+
+type ActivityChartSocketMessage =
+  server_component.ClientMessage(activity_chart.Msg)
+
+type ActivityChartSocketInit =
+  #(
+    ActivityChartSocket,
+    option.Option(process.Selector(ActivityChartSocketMessage)),
+  )
+
+fn init_activity_chart_socket(
+  db: sqlight.Connection,
+  _connection: mist.WebsocketConnection,
+) -> ActivityChartSocketInit {
+  let component = activity_chart.component(db)
+  let assert Ok(runtime) = lustre.start_server_component(component, Nil)
+
+  let self = process.new_subject()
+  let selector = process.new_selector() |> process.select(self)
+
+  server_component.register_subject(self)
+  |> lustre.send(to: runtime)
+
+  #(ActivityChartSocket(component: runtime, self: self), option.Some(selector))
+}
+
+fn loop_activity_chart_socket(
+  state: ActivityChartSocket,
+  message: mist.WebsocketMessage(ActivityChartSocketMessage),
+  connection: mist.WebsocketConnection,
+) -> mist.Next(ActivityChartSocket, ActivityChartSocketMessage) {
+  case message {
+    mist.Text(json_string) -> {
+      case json.parse(json_string, server_component.runtime_message_decoder()) {
+        Ok(runtime_message) -> lustre.send(state.component, runtime_message)
+        Error(_) -> Nil
+      }
+
+      mist.continue(state)
+    }
+
+    mist.Binary(_) -> mist.continue(state)
+
+    mist.Custom(client_message) -> {
+      let json_obj = server_component.client_message_to_json(client_message)
+      let assert Ok(_) =
+        mist.send_text_frame(connection, json.to_string(json_obj))
+
+      mist.continue(state)
+    }
+
+    mist.Closed | mist.Shutdown -> mist.stop()
+  }
+}
+
+fn close_activity_chart_socket(state: ActivityChartSocket) -> Nil {
   lustre.shutdown()
   |> lustre.send(to: state.component)
 }

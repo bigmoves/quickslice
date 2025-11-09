@@ -1,12 +1,14 @@
+import components/activity_chart
 import components/alert
 import components/backfill_button
 import components/button
-import components/collection_table
+import components/jetstream_activity_log
 import components/layout
-import components/sparkline
 import components/stats_cards
 import database
 import gleam/option.{type Option}
+import gleam/result
+import jetstream_activity
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
@@ -19,9 +21,9 @@ pub type IndexData {
     record_count: Int,
     lexicon_count: Int,
     actor_count: Int,
-    collection_stats: List(database.CollectionStat),
     record_lexicons: List(database.Lexicon),
-    record_activity: List(database.ActivityPoint),
+    activity_chart_data: List(jetstream_activity.ActivityBucket),
+    jetstream_activity: List(jetstream_activity.ActivityEntry),
   )
 }
 
@@ -54,28 +56,27 @@ fn fetch_data(db: sqlight.Connection) -> IndexData {
     Error(_) -> 0
   }
 
-  let collection_stats = case database.get_collection_stats(db) {
-    Ok(stats) -> stats
-    Error(_) -> []
-  }
-
   let record_lexicons = case database.get_record_type_lexicons(db) {
     Ok(lexicons) -> lexicons
     Error(_) -> []
   }
 
-  let record_activity = case database.get_record_activity(db, 168) {
-    Ok(activity) -> activity
-    Error(_) -> []
-  }
+  // Get 1-day activity data for the chart (default view)
+  let activity_chart_data = jetstream_activity.get_activity_1day(db)
+    |> result.unwrap([])
+
+  // Get last 24h of individual activity entries for the log
+  let jetstream_activity_data =
+    jetstream_activity.get_recent_activity(db, 168)
+    |> result.unwrap([])
 
   IndexData(
     record_count: record_count,
     lexicon_count: lexicon_count,
     actor_count: actor_count,
-    collection_stats: collection_stats,
     record_lexicons: record_lexicons,
-    record_activity: record_activity,
+    activity_chart_data: activity_chart_data,
+    jetstream_activity: jetstream_activity_data,
   )
 }
 
@@ -91,7 +92,7 @@ fn render(
     title: "ATProto Database Stats",
     content: [
       render_alerts(domain_authority, data.lexicon_count),
-      render_action_buttons(current_user),
+      render_action_buttons(current_user, is_admin, backfilling),
       // Real-time stats cards server component with initial content
       server_component.element(
         [attribute.id("stats-cards"), server_component.route("/stats-ws")],
@@ -103,13 +104,26 @@ fn render(
           ),
         ],
       ),
-      render_activity_section(data.record_activity),
-      render_collections_section(
-        data.collection_stats,
-        data.record_lexicons,
-        is_admin,
-        backfilling,
-      ),
+      // Activity chart with time range selector
+      html.div([attribute.class("mb-8")], [
+        server_component.element(
+          [
+            attribute.id("activity-chart"),
+            server_component.route("/activity-chart-ws"),
+          ],
+          [activity_chart.render_static(data.activity_chart_data, activity_chart.OneDay)],
+        ),
+      ]),
+      // JetStream activity log with pre-rendered content
+      html.div([attribute.class("mb-8")], [
+        server_component.element(
+          [
+            attribute.id("activity-log"),
+            server_component.route("/activity-ws"),
+          ],
+          [jetstream_activity_log.render_static(data.jetstream_activity)],
+        ),
+      ]),
     ],
     current_user: current_user,
     domain_authority: domain_authority,
@@ -159,57 +173,27 @@ fn render_alerts(
 /// Render action buttons for authenticated users
 fn render_action_buttons(
   current_user: Option(#(String, String)),
+  is_admin: Bool,
+  backfilling: Bool,
 ) -> Element(msg) {
   case current_user {
     option.Some(_) -> {
       html.div([attribute.class("mb-8 flex gap-3")], [
         button.link(href: "/graphiql", text: "Open GraphiQL"),
+        case is_admin {
+          True ->
+            server_component.element(
+              [
+                attribute.id("backfill-button"),
+                server_component.route("/backfill-ws"),
+              ],
+              [backfill_button.render_button_static(is_admin, backfilling)],
+            )
+          False -> element.none()
+        },
       ])
     }
     option.None -> element.none()
   }
 }
 
-/// Render the activity chart section
-fn render_activity_section(
-  activity: List(database.ActivityPoint),
-) -> Element(msg) {
-  html.div([attribute.class("mb-8")], [
-    html.div([attribute.class("bg-zinc-800/50 rounded p-4")], [
-      html.div([attribute.class("text-sm text-zinc-500 mb-3")], [
-        element.text("Activity (Last 7 Days)"),
-      ]),
-      sparkline.view(activity),
-    ]),
-  ])
-}
-
-/// Render the collections table section
-fn render_collections_section(
-  collection_stats: List(database.CollectionStat),
-  record_lexicons: List(database.Lexicon),
-  is_admin: Bool,
-  backfilling: Bool,
-) -> Element(msg) {
-  let backfill_button = case is_admin {
-    True ->
-      server_component.element(
-        [
-          attribute.id("backfill-button"),
-          server_component.route("/backfill-ws"),
-        ],
-        [backfill_button.render_button_static(is_admin, backfilling)],
-      )
-    False -> element.none()
-  }
-
-  html.div([], [
-    html.div([attribute.class("flex justify-between items-center mb-4")], [
-      html.h2([attribute.class("text-2xl font-semibold text-zinc-300")], [
-        element.text("Collections"),
-      ]),
-      backfill_button,
-    ]),
-    collection_table.view(collection_stats, record_lexicons),
-  ])
-}

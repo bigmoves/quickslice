@@ -1,5 +1,6 @@
 import gleam/erlang/process.{type Subject}
 import gleam/list
+import gleam/option
 import group_registry
 
 /// Event types for stats updates
@@ -7,6 +8,16 @@ pub type StatsEvent {
   RecordCreated
   RecordDeleted
   ActorCreated
+  ActivityLogged(
+    id: Int,
+    timestamp: String,
+    operation: String,
+    collection: String,
+    did: String,
+    status: String,
+    error_message: option.Option(String),
+    event_json: String,
+  )
 }
 
 /// The group name for all stats event subscriptions
