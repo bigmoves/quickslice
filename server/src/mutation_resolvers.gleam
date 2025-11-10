@@ -26,6 +26,7 @@ pub type MutationContext {
     db: sqlight.Connection,
     auth_base_url: String,
     plc_url: String,
+    collection_ids: List(String),
     external_collection_ids: List(String),
   )
 }
@@ -136,13 +137,14 @@ pub fn create_resolver_factory(
       ctx.plc_url,
     ))
 
-    // If new actor, spawn backfill for external collections
+    // If new actor, spawn backfill for all collections
     case is_new_actor {
       True -> {
         process.spawn_unlinked(fn() {
-          backfill.backfill_external_collections_for_actor(
+          backfill.backfill_collections_for_actor(
             ctx.db,
             user_info.did,
+            ctx.collection_ids,
             ctx.external_collection_ids,
             ctx.plc_url,
           )
@@ -321,13 +323,14 @@ pub fn update_resolver_factory(
       ctx.plc_url,
     ))
 
-    // If new actor, spawn backfill for external collections
+    // If new actor, spawn backfill for all collections
     case is_new_actor {
       True -> {
         process.spawn_unlinked(fn() {
-          backfill.backfill_external_collections_for_actor(
+          backfill.backfill_collections_for_actor(
             ctx.db,
             user_info.did,
+            ctx.collection_ids,
             ctx.external_collection_ids,
             ctx.plc_url,
           )
@@ -480,13 +483,14 @@ pub fn delete_resolver_factory(
       ctx.plc_url,
     ))
 
-    // If new actor, spawn backfill for external collections
+    // If new actor, spawn backfill for all collections
     case is_new_actor {
       True -> {
         process.spawn_unlinked(fn() {
-          backfill.backfill_external_collections_for_actor(
+          backfill.backfill_collections_for_actor(
             ctx.db,
             user_info.did,
+            ctx.collection_ids,
             ctx.external_collection_ids,
             ctx.plc_url,
           )
@@ -604,13 +608,14 @@ pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
       ctx.plc_url,
     ))
 
-    // If new actor, spawn backfill for external collections
+    // If new actor, spawn backfill for all collections
     case is_new_actor {
       True -> {
         process.spawn_unlinked(fn() {
-          backfill.backfill_external_collections_for_actor(
+          backfill.backfill_collections_for_actor(
             ctx.db,
             user_info.did,
+            ctx.collection_ids,
             ctx.external_collection_ids,
             ctx.plc_url,
           )

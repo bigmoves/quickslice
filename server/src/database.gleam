@@ -521,36 +521,98 @@ fn get_existing_cids(
   case uris {
     [] -> Ok(dict.new())
     _ -> {
-      // Build placeholders for SQL IN clause
-      let placeholders =
-        list.map(uris, fn(_) { "?" })
-        |> string.join(", ")
+      // Process in batches to avoid SQL parameter limits (max 999 params)
+      let batch_size = 900
+      let batches = list.sized_chunk(uris, batch_size)
 
-      let sql =
-        "
-        SELECT uri, cid
-        FROM record
-        WHERE uri IN (" <> placeholders <> ")
-      "
+      // Process each batch and merge results
+      use accumulated_dict <- result.try(
+        list.try_fold(batches, dict.new(), fn(acc_dict, batch) {
+          // Build placeholders for SQL IN clause
+          let placeholders =
+            list.map(batch, fn(_) { "?" })
+            |> string.join(", ")
 
-      // Convert URIs to sqlight.Value list
-      let params = list.map(uris, sqlight.text)
+          let sql =
+            "
+            SELECT uri, cid
+            FROM record
+            WHERE uri IN (" <> placeholders <> ")
+          "
 
-      let decoder = {
-        use uri <- decode.field(0, decode.string)
-        use cid <- decode.field(1, decode.string)
-        decode.success(#(uri, cid))
-      }
+          // Convert URIs to sqlight.Value list
+          let params = list.map(batch, sqlight.text)
 
-      use results <- result.try(sqlight.query(
-        sql,
-        on: conn,
-        with: params,
-        expecting: decoder,
-      ))
+          let decoder = {
+            use uri <- decode.field(0, decode.string)
+            use cid <- decode.field(1, decode.string)
+            decode.success(#(uri, cid))
+          }
 
-      // Convert list of tuples to Dict
-      Ok(dict.from_list(results))
+          use results <- result.try(sqlight.query(
+            sql,
+            on: conn,
+            with: params,
+            expecting: decoder,
+          ))
+
+          // Merge with accumulated dictionary
+          let batch_dict = dict.from_list(results)
+          Ok(dict.merge(acc_dict, batch_dict))
+        }),
+      )
+
+      Ok(accumulated_dict)
+    }
+  }
+}
+
+/// Gets existing CIDs from the database (checks if any CID exists, regardless of URI)
+/// Returns a list of CIDs that exist in the database
+fn get_existing_cids_batch(
+  conn: sqlight.Connection,
+  cids: List(String),
+) -> Result(List(String), sqlight.Error) {
+  case cids {
+    [] -> Ok([])
+    _ -> {
+      // Process in batches to avoid SQL parameter limits (max 999 params)
+      let batch_size = 900
+      let batches = list.sized_chunk(cids, batch_size)
+
+      // Process each batch and collect results
+      use all_results <- result.try(
+        list.try_fold(batches, [], fn(acc_results, batch) {
+          // Build placeholders for SQL IN clause
+          let placeholders =
+            list.map(batch, fn(_) { "?" })
+            |> string.join(", ")
+
+          let sql =
+            "
+            SELECT cid
+            FROM record
+            WHERE cid IN (" <> placeholders <> ")
+          "
+
+          let cid_decoder = {
+            use cid <- decode.field(0, decode.string)
+            decode.success(cid)
+          }
+
+          use results <- result.try(sqlight.query(
+            sql,
+            on: conn,
+            with: list.map(batch, sqlight.text),
+            expecting: cid_decoder,
+          ))
+
+          // Append to accumulated results
+          Ok(list.append(acc_results, results))
+        }),
+      )
+
+      Ok(all_results)
     }
   }
 }
@@ -623,30 +685,18 @@ pub fn batch_insert_records(
       // Get all URIs from the incoming records
       let uris = list.map(records, fn(record) { record.uri })
 
-      // Fetch existing CIDs for these URIs
+      // Fetch existing CIDs for these URIs (batched to avoid SQL parameter limits)
       use existing_cids <- result.try(get_existing_cids(conn, uris))
 
       // Get all CIDs that already exist in the database (for any URI)
-      let all_incoming_cids = list.map(records, fn(record) { record.cid })
-      let check_all_cids_sql =
-        "
-        SELECT cid
-        FROM record
-        WHERE cid IN ("
-        <> string.join(list.map(all_incoming_cids, fn(_) { "?" }), ", ")
-        <> ")
-      "
+      // Check in batches to avoid exceeding SQL parameter limits
+      let all_incoming_cids =
+        list.map(records, fn(record) { record.cid })
+        |> list.unique()
 
-      let cid_decoder = {
-        use cid <- decode.field(0, decode.string)
-        decode.success(cid)
-      }
-
-      use existing_cids_in_db <- result.try(sqlight.query(
-        check_all_cids_sql,
-        on: conn,
-        with: list.map(all_incoming_cids, sqlight.text),
-        expecting: cid_decoder,
+      use existing_cids_in_db <- result.try(get_existing_cids_batch(
+        conn,
+        all_incoming_cids,
       ))
 
       // Create a set of existing CIDs for fast lookup

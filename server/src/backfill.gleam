@@ -98,6 +98,56 @@ pub fn nsid_matches_domain_authority(
 
 /// Resolve a DID to get ATP data (PDS endpoint and handle)
 pub fn resolve_did(did: String, plc_url: String) -> Result(AtprotoData, String) {
+  // Check if this is a did:web DID
+  case string.starts_with(did, "did:web:") {
+    True -> resolve_did_web(did)
+    False -> resolve_did_plc(did, plc_url)
+  }
+}
+
+/// Resolve a did:web DID by fetching the DID document from HTTPS
+fn resolve_did_web(did: String) -> Result(AtprotoData, String) {
+  // Extract the domain from did:web:example.com
+  // did:web format: did:web:<domain>[:<port>][:<path>]
+  let parts = string.split(did, ":")
+  case parts {
+    ["did", "web", domain, ..rest] -> {
+      // Build the URL: https://<domain>/.well-known/did.json
+      // If there are additional path components, they go before /.well-known/did.json
+      let base_domain = case rest {
+        [] -> domain
+        path_parts -> domain <> "/" <> string.join(path_parts, "/")
+      }
+      let url = "https://" <> base_domain <> "/.well-known/did.json"
+
+      case request.to(url) {
+        Error(_) -> Error("Failed to create request for did:web DID: " <> did)
+        Ok(req) -> {
+          case hackney.send(req) {
+            Error(_) -> Error("Failed to fetch did:web DID data for: " <> did)
+            Ok(resp) -> {
+              case resp.status {
+                200 -> parse_atproto_data(resp.body, did)
+                _ ->
+                  Error(
+                    "Failed to resolve DID "
+                    <> did
+                    <> " (status: "
+                    <> string.inspect(resp.status)
+                    <> ")",
+                  )
+              }
+            }
+          }
+        }
+      }
+    }
+    _ -> Error("Invalid did:web format: " <> did)
+  }
+}
+
+/// Resolve a did:plc DID through the PLC directory
+fn resolve_did_plc(did: String, plc_url: String) -> Result(AtprotoData, String) {
   let url = plc_url <> "/" <> did
 
   case request.to(url) {
@@ -266,14 +316,28 @@ fn fetch_records_paginated(
     Ok(req) -> {
       case hackney.send(req) {
         Error(err) -> {
-          // Only log unexpected errors (not TLS/DNS/timeout issues)
+          // Log all errors with details
           let err_str = string.inspect(err)
-          case
+          let is_expected_error =
             string.contains(err_str, "TlsAlert")
             || string.contains(err_str, "Nxdomain")
             || string.contains(err_str, "Timeout")
-          {
-            True -> Nil
+            || string.contains(err_str, "Econnrefused")
+            || string.contains(err_str, "Closed")
+
+          case is_expected_error {
+            True ->
+              logging.log(
+                logging.Warning,
+                "[backfill] Network error fetching "
+                  <> repo
+                  <> "/"
+                  <> collection
+                  <> " from "
+                  <> pds_url
+                  <> ": "
+                  <> err_str,
+              )
             False ->
               logging.log(
                 logging.Error,
@@ -281,6 +345,8 @@ fn fetch_records_paginated(
                   <> repo
                   <> "/"
                   <> collection
+                  <> " from "
+                  <> pds_url
                   <> ": "
                   <> err_str,
               )
@@ -293,8 +359,21 @@ fn fetch_records_paginated(
               case parse_list_records_response(resp.body, repo, collection) {
                 Ok(#(records, next_cursor)) -> {
                   let new_acc = list.append(acc, records)
+                  let total_so_far = list.length(new_acc)
+
                   case next_cursor {
-                    Some(c) ->
+                    Some(c) -> {
+                      logging.log(
+                        logging.Info,
+                        "[backfill] Fetched "
+                          <> string.inspect(list.length(records))
+                          <> " records (total: "
+                          <> string.inspect(total_so_far)
+                          <> "), continuing with cursor for "
+                          <> repo
+                          <> "/"
+                          <> collection,
+                      )
                       fetch_records_paginated(
                         repo,
                         collection,
@@ -302,7 +381,19 @@ fn fetch_records_paginated(
                         Some(c),
                         new_acc,
                       )
-                    None -> new_acc
+                    }
+                    None -> {
+                      logging.log(
+                        logging.Info,
+                        "[backfill] Completed fetching "
+                          <> string.inspect(total_so_far)
+                          <> " records for "
+                          <> repo
+                          <> "/"
+                          <> collection,
+                      )
+                      new_acc
+                    }
                   }
                 }
                 Error(err) -> {
@@ -324,17 +415,23 @@ fn fetch_records_paginated(
             // 302/308: redirect (PDS moved)
             // 403: forbidden (private account)
             // 502/520: bad gateway / cloudflare error (server down)
-            400 | 404 | 302 | 308 | 403 | 502 | 520 -> acc
+            400 | 404 | 302 | 308 | 403 | 502 | 520 -> {
+              acc
+            }
             // Other unexpected errors should be logged
             _ -> {
               logging.log(
                 logging.Error,
-                "[backfill] Failed to fetch records for "
+                "[backfill] Unexpected status "
+                  <> string.inspect(resp.status)
+                  <> " fetching "
                   <> repo
                   <> "/"
                   <> collection
-                  <> " (status: "
-                  <> string.inspect(resp.status)
+                  <> " from "
+                  <> pds_url
+                  <> " (URL: "
+                  <> url
                   <> ")",
               )
               acc
@@ -613,28 +710,36 @@ pub fn index_actors(
   })
 }
 
-/// Backfill all external collections for a newly discovered actor
+/// Backfill all collections (primary and external) for a newly discovered actor
 /// This is called when a new actor is created via Jetstream or GraphQL mutations
-pub fn backfill_external_collections_for_actor(
+pub fn backfill_collections_for_actor(
   db: sqlight.Connection,
   did: String,
+  collection_ids: List(String),
   external_collection_ids: List(String),
   plc_url: String,
 ) -> Nil {
+  let all_collections = list.append(collection_ids, external_collection_ids)
+  let total_count = list.length(all_collections)
+
   logging.log(
     logging.Info,
     "[backfill] Starting background sync for new actor: "
       <> did
       <> " ("
+      <> string.inspect(total_count)
+      <> " collections: "
+      <> string.inspect(list.length(collection_ids))
+      <> " primary + "
       <> string.inspect(list.length(external_collection_ids))
-      <> " external collections)",
+      <> " external)",
   )
 
   // Resolve DID to get PDS endpoint
   case resolve_did(did, plc_url) {
     Ok(atp_data) -> {
-      // Fetch and index records for each external collection
-      list.each(external_collection_ids, fn(collection) {
+      // Fetch and index records for all collections (primary + external)
+      list.each(all_collections, fn(collection) {
         logging.log(
           logging.Info,
           "[backfill] Fetching " <> collection <> " for " <> did,

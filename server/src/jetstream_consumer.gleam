@@ -222,6 +222,7 @@ fn start_consumer_process(db: sqlight.Connection) -> Result(process.Pid, String)
           )
 
           // Start the unified consumer
+          let local_collections = local_collection_ids
           let ext_collections = external_collection_ids
           let pid =
             process.spawn_unlinked(fn() {
@@ -232,6 +233,7 @@ fn start_consumer_process(db: sqlight.Connection) -> Result(process.Pid, String)
                     handle_jetstream_event(
                       db,
                       event_json,
+                      local_collections,
                       ext_collections,
                       plc_url,
                     )
@@ -275,6 +277,7 @@ fn is_known_did(db: sqlight.Connection, did: String) -> Bool {
 fn handle_jetstream_event(
   db: sqlight.Connection,
   event_json: String,
+  collection_ids: List(String),
   external_collection_ids: List(String),
   plc_url: String,
 ) -> Nil {
@@ -295,6 +298,7 @@ fn handle_jetstream_event(
                 time_us,
                 commit,
                 plc_url,
+                collection_ids,
                 external_collection_ids,
               )
             False -> Nil
@@ -308,6 +312,7 @@ fn handle_jetstream_event(
             time_us,
             commit,
             plc_url,
+            collection_ids,
             external_collection_ids,
           )
         }

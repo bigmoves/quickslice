@@ -343,7 +343,20 @@ pub fn build_schema_from_db(
         }
       }
 
-      // Step 4: Determine external collections for backfill
+      // Step 4: Determine local and external collections for backfill
+      let collection_ids =
+        parsed_lexicons
+        |> list.filter_map(fn(lex) {
+          case
+            backfill.nsid_matches_domain_authority(lex.id, domain_authority)
+          {
+            True -> Ok(lex.id)
+            // Local collection, include
+            False -> Error(Nil)
+            // External collection, skip
+          }
+        })
+
       let external_collection_ids =
         parsed_lexicons
         |> list.filter_map(fn(lex) {
@@ -363,6 +376,7 @@ pub fn build_schema_from_db(
           db: db,
           auth_base_url: auth_base_url,
           plc_url: plc_url,
+          collection_ids: collection_ids,
           external_collection_ids: external_collection_ids,
         )
 

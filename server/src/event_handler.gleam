@@ -92,6 +92,7 @@ pub fn handle_commit_event(
   time_us: Int,
   commit: goose.CommitData,
   plc_url: String,
+  collection_ids: List(String),
   external_collection_ids: List(String),
 ) -> Nil {
   let uri = "at://" <> did <> "/" <> commit.collection <> "/" <> commit.rkey
@@ -162,7 +163,7 @@ pub fn handle_commit_event(
                   // Ensure actor exists before inserting record
                   case actor_validator.ensure_actor_exists(db, did, plc_url) {
                     Ok(is_new_actor) -> {
-                      // If this is a new actor, synchronously backfill external collections
+                      // If this is a new actor, synchronously backfill all collections
                       // This ensures subscription joins have complete data immediately
                       // We're already in a spawned process per event, so blocking is fine
                       case is_new_actor {
@@ -170,9 +171,10 @@ pub fn handle_commit_event(
                           // Publish stats event for new actor
                           stats_pubsub.publish(stats_pubsub.ActorCreated)
 
-                          backfill.backfill_external_collections_for_actor(
+                          backfill.backfill_collections_for_actor(
                             db,
                             did,
+                            collection_ids,
                             external_collection_ids,
                             plc_url,
                           )
