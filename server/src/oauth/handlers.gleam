@@ -44,9 +44,9 @@ pub fn handle_oauth_authorize(
   use formdata <- wisp.require_form(req)
 
   // Get login hint from form
-  let login_hint = case formdata.values {
-    [#("loginHint", hint), ..] -> hint
-    _ -> ""
+  let login_hint = case list.key_find(formdata.values, "login_hint") {
+    Ok(hint) -> hint
+    Error(_) -> ""
   }
 
   wisp.log_info("OAuth: Authorization requested for: " <> login_hint)

@@ -510,6 +510,16 @@ pub fn delete_all_actors(conn: sqlight.Connection) -> Result(Nil, sqlight.Error)
   |> result.map(fn(_) { Nil })
 }
 
+/// Deletes all jetstream activity logs from the database
+pub fn delete_all_jetstream_activity(
+  conn: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
+  let sql = "DELETE FROM jetstream_activity"
+
+  sqlight.exec(sql, conn)
+  |> result.map(fn(_) { Nil })
+}
+
 // ===== Record Functions =====
 
 /// Gets existing CIDs for a list of URIs

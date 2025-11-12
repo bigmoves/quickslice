@@ -8,6 +8,7 @@ import lexicon
 import logging
 import simplifile
 import sqlight
+import zip_helper
 
 pub type ImportStats {
   ImportStats(total: Int, imported: Int, failed: Int, errors: List(String))
@@ -125,21 +126,30 @@ pub fn scan_directory_recursive(path: String) -> Result(List(String), String) {
         Ok(entries) -> {
           entries
           |> list.filter_map(fn(entry) {
-            let entry_path = path <> "/" <> entry
+            // Skip macOS metadata directories and hidden files
+            case
+              string.starts_with(entry, "__MACOSX")
+              || string.starts_with(entry, ".")
+            {
+              True -> Error(Nil)
+              False -> {
+                let entry_path = path <> "/" <> entry
 
-            case simplifile.is_directory(entry_path) {
-              Ok(True) -> {
-                // Recursively scan subdirectory
-                case scan_directory_recursive(entry_path) {
-                  Ok(paths) -> Ok(paths)
-                  Error(_) -> Error(Nil)
-                }
-              }
-              _ -> {
-                // Check if it's a .json file
-                case string.ends_with(entry, ".json") {
-                  True -> Ok([entry_path])
-                  False -> Error(Nil)
+                case simplifile.is_directory(entry_path) {
+                  Ok(True) -> {
+                    // Recursively scan subdirectory
+                    case scan_directory_recursive(entry_path) {
+                      Ok(paths) -> Ok(paths)
+                      Error(_) -> Error(Nil)
+                    }
+                  }
+                  _ -> {
+                    // Check if it's a .json file
+                    case string.ends_with(entry, ".json") {
+                      True -> Ok([entry_path])
+                      False -> Error(Nil)
+                    }
+                  }
                 }
               }
             }
@@ -268,3 +278,86 @@ fn import_validated_lexicon(
     }
   }
 }
+
+/// Decode base64 string to bit array using Erlang FFI
+@external(erlang, "base64", "decode")
+fn decode_base64(base64: String) -> BitArray
+
+/// Import lexicons from a base64-encoded ZIP file
+/// Returns ImportStats on success, error message on failure
+pub fn import_lexicons_from_base64_zip(
+  zip_base64: String,
+  db: sqlight.Connection,
+) -> Result(ImportStats, String) {
+  // Decode base64 to binary
+  let zip_binary = decode_base64(zip_base64)
+
+  // Create temporary directory for extraction
+  let temp_dir = "/tmp/lexicons_" <> string.inspect(erlang_timestamp())
+  use _ <- result.try(case simplifile.create_directory(temp_dir) {
+    Ok(_) -> Ok(Nil)
+    Error(_) -> Error("Failed to create temporary directory")
+  })
+
+  // Write ZIP file to temp location
+  let zip_path = temp_dir <> "/lexicons.zip"
+  use _ <- result.try(case simplifile.write_bits(zip_path, zip_binary) {
+    Ok(_) -> Ok(Nil)
+    Error(_) -> Error("Failed to write ZIP file")
+  })
+
+  // Extract ZIP to temp directory
+  let extract_dir = temp_dir <> "/extracted"
+  use _ <- result.try(case simplifile.create_directory(extract_dir) {
+    Ok(_) -> Ok(Nil)
+    Error(_) -> Error("Failed to create extraction directory")
+  })
+
+  use _ <- result.try(zip_helper.extract_zip(zip_path, extract_dir))
+
+  // Import lexicons from extracted directory
+  let import_result = import_lexicons_from_directory(extract_dir, db)
+
+  // Clean up temp directory
+  let _ = simplifile.delete(zip_path)
+  let _ = delete_directory_recursive(extract_dir)
+  let _ = simplifile.delete(temp_dir)
+
+  import_result
+}
+
+/// Recursively delete a directory and its contents
+fn delete_directory_recursive(path: String) -> Result(Nil, Nil) {
+  case simplifile.is_directory(path) {
+    Ok(True) -> {
+      case simplifile.read_directory(path) {
+        Ok(entries) -> {
+          // Delete all entries first
+          list.each(entries, fn(entry) {
+            let entry_path = path <> "/" <> entry
+            let _ = delete_directory_recursive(entry_path)
+            Nil
+          })
+
+          // Then delete the directory itself
+          case simplifile.delete(path) {
+            Ok(_) -> Ok(Nil)
+            Error(_) -> Error(Nil)
+          }
+        }
+        Error(_) -> Error(Nil)
+      }
+    }
+    _ -> {
+      // Not a directory, try to delete as file
+      case simplifile.delete(path) {
+        Ok(_) -> Ok(Nil)
+        Error(_) -> Error(Nil)
+      }
+    }
+  }
+}
+
+/// Get current Erlang timestamp (for temp directory naming)
+@external(erlang, "erlang", "system_time")
+fn erlang_timestamp() -> Int

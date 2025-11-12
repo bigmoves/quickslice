@@ -1,6 +1,8 @@
 import gleam/bit_array
 import gleam/crypto
 import gleam/dynamic/decode
+import gleam/http/cookie
+import gleam/http/response
 import gleam/int
 import gleam/option.{type Option}
 import gleam/result
@@ -210,20 +212,26 @@ pub fn delete_session(
   Ok(Nil)
 }
 
-/// Set session cookie on response
+/// Set session cookie on response with SameSite=None for fetch with credentials
 pub fn set_session_cookie(
   response: Response,
   req: Request,
   session_id: String,
 ) -> Response {
-  wisp.set_cookie(
-    response,
-    req,
-    session_cookie_name,
-    session_id,
-    wisp.Signed,
-    60 * 60 * 24 * 14,
+  // Sign the session ID the same way wisp does
+  let signed_value = wisp.sign_message(req, <<session_id:utf8>>, crypto.Sha512)
+
+  // Create cookie attributes without SameSite restriction
+  let attributes = cookie.Attributes(
+    max_age: option.Some(60 * 60 * 24 * 14),
+    domain: option.None,
+    path: option.Some("/"),
+    secure: False,  // False for localhost HTTP
+    http_only: True,
+    same_site: option.None,  // No SameSite restriction for JavaScript fetch
   )
+
+  response.set_cookie(response, session_cookie_name, signed_value, attributes)
 }
 
 /// Get session ID from request cookies

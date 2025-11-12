@@ -2,10 +2,8 @@
 ///
 /// Serves a simple form to upload blobs and test the uploadBlob mutation
 import gleam/http
-import lustre/element
 import oauth/handlers
 import oauth/session
-import pages/upload
 import sqlight
 import wisp
 
@@ -36,10 +34,14 @@ fn handle_upload_form(
       // User is not logged in - redirect to home with error
       wisp.redirect("/?error=Please+log+in+to+upload+blobs")
     }
-    Ok(#(_did, handle, access_token)) -> {
-      upload.view(handle, access_token)
-      |> element.to_document_string
-      |> wisp.html_response(200)
+    Ok(#(_did, handle, _access_token)) -> {
+      // TODO: Migrate upload page to client SPA
+      wisp.html_response(
+        "<h1>Upload</h1><p>Upload page will be migrated to the client SPA. Logged in as @"
+          <> handle
+          <> "</p>",
+        200,
+      )
     }
   }
 }

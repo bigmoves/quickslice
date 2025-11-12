@@ -1,0 +1,28 @@
+name = "quickslice_client"
+version = "1.0.0"
+target = "javascript"
+
+[tools.lustre.build]
+minify = true
+# Build the application into our server's `priv/static` directory so it can be
+# deployed together with the backend.
+outdir = "../server/priv/static"
+
+[tools.lustre.html]
+title = "quickslice"
+stylesheets = [
+  { href = "/styles.css" }
+]
+
+[dependencies]
+gleam_stdlib = ">= 0.44.0 and < 2.0.0"
+lustre = ">= 5.0.0 and < 6.0.0"
+gleam_json = ">= 3.0.0 and < 4.0.0"
+squall = { path = "../../squall" }
+squall_cache = { path = "../../squall_cache" }
+modem = ">= 2.0.0 and < 3.0.0"
+gleam_http = ">= 4.3.0 and < 5.0.0"
+
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
+lustre_dev_tools = ">= 2.2.2 and < 3.0.0"

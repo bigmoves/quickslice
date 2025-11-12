@@ -23,21 +23,21 @@ pub fn button(
   )
 }
 
-/// Render a static button (no event handler, for slot content)
-pub fn button_static(disabled disabled: Bool, text text: String) -> Element(msg) {
-  html.button(
-    [
-      attribute.type_("button"),
-      attribute.class(button_classes),
-      attribute.disabled(disabled),
-    ],
-    [html.text(text)],
-  )
-}
-
-/// Render a link styled as a button
+/// Render a link styled as a button (for SPA routes)
 pub fn link(href href: String, text text: String) -> Element(msg) {
   html.a([attribute.href(href), attribute.class(button_classes)], [
     html.text(text),
   ])
+}
+
+/// Render an external link styled as a button (opens in current tab, navigates away from SPA)
+pub fn external_link(href href: String, text text: String) -> Element(msg) {
+  html.a(
+    [
+      attribute.href(href),
+      attribute.class(button_classes),
+      attribute.attribute("rel", "noopener noreferrer"),
+    ],
+    [html.text(text)],
+  )
 }

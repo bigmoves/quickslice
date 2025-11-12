@@ -1,6 +1,7 @@
 import activity_cleanup
 import argv
 import backfill
+import client_graphql_handler
 import backfill_state
 import config
 import database
@@ -12,7 +13,6 @@ import gleam/http/request
 import gleam/int
 import gleam/list
 import gleam/option
-import gleam/otp/actor
 import gleam/string
 import graphiql_handler
 import graphql_handler
@@ -20,15 +20,11 @@ import graphql_ws_handler
 import importer
 import jetstream_consumer
 import logging
-import lustre/element
-import lustre_handlers
 import mist
 import oauth/handlers
 import oauth/registration
-import oauth/session
-import pages/index
 import pubsub
-import settings_handler
+import simplifile
 import sqlight
 import stats_pubsub
 import upload_handler
@@ -311,7 +307,7 @@ fn start_server(
   // Get HOST and PORT from environment variables or use defaults
   let host = case envoy.get("HOST") {
     Ok(h) -> h
-    Error(_) -> "127.0.0.1"
+    Error(_) -> "localhost"
   }
 
   let port = case envoy.get("PORT") {
@@ -486,84 +482,13 @@ fn start_server(
   // Create Wisp handler converted to Mist format
   let wisp_handler = wisp_mist.handler(handler, secret_key_base)
 
-  // Wrap it to intercept WebSocket upgrades and serve Lustre runtime
+  // Wrap it to intercept WebSocket upgrades for GraphQL subscriptions
   let mist_handler = fn(req: request.Request(mist.Connection)) {
     let upgrade_header = request.get_header(req, "upgrade")
     let path = request.path_segments(req)
 
     case path {
-      // Serve Lustre client runtime
-      ["lustre", "runtime.mjs"] -> lustre_handlers.serve_lustre_runtime()
-
-      // Serve styles CSS
-      ["styles.css"] -> lustre_handlers.serve_tailwind_css()
-
-      // Backfill button WebSocket
-      ["backfill-ws"] -> {
-        case upgrade_header {
-          Ok(upgrade_value) -> {
-            case string.lowercase(upgrade_value) {
-              "websocket" -> {
-                lustre_handlers.serve_backfill_button(
-                  req,
-                  ctx.db,
-                  ctx.backfill_state,
-                  ctx.config,
-                )
-              }
-              _ -> wisp_handler(req)
-            }
-          }
-          _ -> wisp_handler(req)
-        }
-      }
-
-      // Stats cards WebSocket
-      ["stats-ws"] -> {
-        case upgrade_header {
-          Ok(upgrade_value) -> {
-            case string.lowercase(upgrade_value) {
-              "websocket" -> {
-                lustre_handlers.serve_stats_cards(req, ctx.db)
-              }
-              _ -> wisp_handler(req)
-            }
-          }
-          _ -> wisp_handler(req)
-        }
-      }
-
-      // Activity log WebSocket
-      ["activity-ws"] -> {
-        case upgrade_header {
-          Ok(upgrade_value) -> {
-            case string.lowercase(upgrade_value) {
-              "websocket" -> {
-                lustre_handlers.serve_activity_log(req, ctx.db)
-              }
-              _ -> wisp_handler(req)
-            }
-          }
-          _ -> wisp_handler(req)
-        }
-      }
-
-      // Activity chart WebSocket
-      ["activity-chart-ws"] -> {
-        case upgrade_header {
-          Ok(upgrade_value) -> {
-            case string.lowercase(upgrade_value) {
-              "websocket" -> {
-                lustre_handlers.serve_activity_chart(req, ctx.db)
-              }
-              _ -> wisp_handler(req)
-            }
-          }
-          _ -> wisp_handler(req)
-        }
-      }
-
-      // GraphQL WebSocket
+      // GraphQL WebSocket for subscriptions
       ["graphql"] | ["", "graphql"] -> {
         case upgrade_header {
           Ok(upgrade_value) -> {
@@ -607,11 +532,6 @@ fn start_server(
   process.sleep_forever()
 }
 
-/// Check if a DID has admin access based on the ADMIN_DIDS list
-fn is_admin(did: String, admin_dids: List(String)) -> Bool {
-  list.contains(admin_dids, did)
-}
-
 fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
   use _req <- middleware(req)
 
@@ -620,23 +540,17 @@ fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
   case segments {
     [] -> index_route(req, ctx)
     ["health"] -> handle_health_check(ctx)
-    ["settings"] ->
-      settings_handler.handle(
-        req,
-        settings_handler.Context(
-          db: ctx.db,
-          oauth_config: ctx.oauth_config,
-          admin_dids: ctx.admin_dids,
-          config: ctx.config,
-          jetstream_consumer: ctx.jetstream_consumer,
-        ),
-      )
+    // Serve client static files (bundled by lustre dev tools)
+    ["quickslice_client.js"] -> serve_static_file(["quickslice_client.js"])
+    ["styles.css"] -> serve_static_file(["styles.css"])
     ["oauth", "authorize"] ->
       handlers.handle_oauth_authorize(req, ctx.db, ctx.oauth_config)
     ["oauth", "callback"] ->
       handlers.handle_oauth_callback(req, ctx.db, ctx.oauth_config)
     ["logout"] -> handlers.handle_logout(req, ctx.db)
     ["backfill"] -> handle_backfill_request(req, ctx)
+    ["admin", "graphql"] ->
+      client_graphql_handler.handle_client_graphql_request(req, ctx.db, ctx.admin_dids, ctx.jetstream_consumer)
     ["graphql"] ->
       graphql_handler.handle_graphql_request(
         req,
@@ -703,7 +617,8 @@ fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
         }
       }
     }
-    _ -> wisp.html_response("<h1>Not Found</h1>", 404)
+    // Fallback: serve SPA index.html for client-side routing
+    _ -> index_route(req, ctx)
   }
 }
 
@@ -805,42 +720,51 @@ fn handle_health_check(ctx: Context) -> wisp.Response {
   }
 }
 
-fn index_route(req: wisp.Request, ctx: Context) -> wisp.Response {
-  // Get current user from session (with automatic token refresh)
-  let refresh_fn = fn(refresh_token) {
-    handlers.refresh_access_token(ctx.oauth_config, refresh_token)
+fn index_route(_req: wisp.Request, _ctx: Context) -> wisp.Response {
+  // Serve the client SPA's index.html (bundled by lustre dev tools)
+  case simplifile.read("priv/static/index.html") {
+    Ok(contents) -> wisp.html_response(contents, 200)
+    Error(_) ->
+      wisp.html_response(
+        "<h1>Error</h1><p>Client application not found. Run 'gleam run -m lustre/dev build' in the client directory.</p>",
+        500,
+      )
   }
+}
 
-  let #(current_user, user_is_admin) = case
-    session.get_current_user(req, ctx.db, refresh_fn)
-  {
-    Ok(#(did, handle, _access_token)) -> {
-      let admin = is_admin(did, ctx.admin_dids)
-      #(option.Some(#(did, handle)), admin)
+fn serve_static_file(path_segments: List(String)) -> wisp.Response {
+  let file_path = "priv/static/" <> string.join(path_segments, "/")
+
+  case simplifile.read(file_path) {
+    Ok(contents) -> {
+      // Determine content type based on file extension
+      let content_type = case list.last(path_segments) {
+        Ok(filename) -> {
+          case string.ends_with(filename, ".mjs") || string.ends_with(
+            filename,
+            ".js",
+          ) {
+            True -> "application/javascript"
+            False ->
+              case string.ends_with(filename, ".css") {
+                True -> "text/css"
+                False ->
+                  case string.ends_with(filename, ".html") {
+                    True -> "text/html"
+                    False -> "application/octet-stream"
+                  }
+              }
+          }
+        }
+        Error(_) -> "application/octet-stream"
+      }
+
+      wisp.response(200)
+      |> wisp.set_header("content-type", content_type)
+      |> wisp.set_body(wisp.Text(contents))
     }
-    Error(_) -> #(option.None, False)
+    Error(_) -> wisp.response(404) |> wisp.set_body(wisp.Text("Not found"))
   }
-
-  // Get domain authority from config cache
-  let domain_authority = config.get_domain_authority(ctx.config)
-
-  // Get backfill state
-  let backfilling =
-    actor.call(
-      ctx.backfill_state,
-      waiting: 100,
-      sending: backfill_state.IsBackfilling,
-    )
-
-  index.view(
-    ctx.db,
-    current_user,
-    user_is_admin,
-    domain_authority,
-    backfilling,
-  )
-  |> element.to_document_string
-  |> wisp.html_response(200)
 }
 
 fn middleware(
@@ -851,5 +775,29 @@ fn middleware(
   use <- wisp.log_request(req)
   use req <- wisp.handle_head(req)
 
-  handle_request(req)
+  // Get origin from request headers
+  let origin = case request.get_header(req, "origin") {
+    Ok(o) -> o
+    Error(_) -> "http://localhost:8000"
+  }
+
+  // Handle CORS preflight requests
+  case req.method {
+    gleam_http.Options -> {
+      wisp.response(200)
+      |> wisp.set_header("access-control-allow-origin", origin)
+      |> wisp.set_header("access-control-allow-credentials", "true")
+      |> wisp.set_header("access-control-allow-methods", "GET, POST, OPTIONS")
+      |> wisp.set_header("access-control-allow-headers", "Content-Type")
+      |> wisp.set_body(wisp.Text(""))
+    }
+    _ -> {
+      // Add CORS headers to all responses
+      handle_request(req)
+      |> wisp.set_header("access-control-allow-origin", origin)
+      |> wisp.set_header("access-control-allow-credentials", "true")
+      |> wisp.set_header("access-control-allow-methods", "GET, POST, OPTIONS")
+      |> wisp.set_header("access-control-allow-headers", "Content-Type")
+    }
+  }
 }

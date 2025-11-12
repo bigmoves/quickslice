@@ -11,3 +11,6 @@ erl_crash.dump
 *.env
 
 tmp
+
+.lustre
+build/

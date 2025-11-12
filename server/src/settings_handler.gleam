@@ -9,10 +9,8 @@ import gleam/string
 import importer
 import jetstream_consumer
 import logging
-import lustre/element
 import oauth/handlers
 import oauth/session
-import pages/settings
 import simplifile
 import sqlight
 import wisp
@@ -63,16 +61,15 @@ pub fn handle(req: wisp.Request, ctx: Context) -> wisp.Response {
 fn handle_admin_request(
   req: wisp.Request,
   ctx: Context,
-  current_user: option.Option(#(String, String)),
+  _current_user: option.Option(#(String, String)),
 ) -> wisp.Response {
   case req.method {
     gleam_http.Get -> {
-      // Extract flash messages if present
-      use flash_kind, flash_message <- wisp_flash.get_flash(req)
-
-      settings.view(ctx.db, current_user, flash_kind, flash_message)
-      |> element.to_document_string
-      |> wisp.html_response(200)
+      // TODO: Migrate settings page to client SPA
+      wisp.html_response(
+        "<h1>Settings</h1><p>Settings page will be migrated to the client SPA</p>",
+        200,
+      )
     }
     gleam_http.Post -> {
       // Handle form submission (domain authority or lexicons upload or reset)
