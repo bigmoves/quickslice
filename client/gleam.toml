@@ -18,8 +18,8 @@ stylesheets = [
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"
 lustre = ">= 5.0.0 and < 6.0.0"
 gleam_json = ">= 3.0.0 and < 4.0.0"
-squall = { path = "../../squall" }
-squall_cache = { path = "../../squall_cache" }
+squall = ">= 1.0.0 and < 2.0.0"
+squall_cache = { git = "https://github.com/bigmoves/squall_cache.git", ref = "main" }
 modem = ">= 2.0.0 and < 3.0.0"
 gleam_http = ">= 4.3.0 and < 5.0.0"
 

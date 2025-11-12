@@ -15,7 +15,6 @@
 import components/layout
 import file_upload
 import generated/queries
-import navigation
 import generated/queries/get_activity_buckets.{ONEDAY}
 import generated/queries/get_current_session
 import generated/queries/get_recent_activity
@@ -36,10 +35,11 @@ import lustre/effect.{type Effect}
 import lustre/element.{type Element}
 import lustre/element/html
 import modem
+import navigation
 import pages/home
 import pages/settings
+import squall/unstable_registry as registry
 import squall_cache
-import squall/registry
 
 pub fn main() {
   let app = lustre.application(init, update, view)
@@ -193,7 +193,8 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
     HandleOptimisticMutationSuccess(mutation_id, response_body) -> {
       // Mutation succeeded - commit the optimistic update
-      let cache_after_commit = squall_cache.commit_optimistic(model.cache, mutation_id, response_body)
+      let cache_after_commit =
+        squall_cache.commit_optimistic(model.cache, mutation_id, response_body)
 
       let new_settings_model =
         settings.set_alert(
@@ -202,20 +203,30 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           "Domain authority updated successfully",
         )
 
-      #(Model(..model, cache: cache_after_commit, settings_page_model: new_settings_model), effect.none())
+      #(
+        Model(
+          ..model,
+          cache: cache_after_commit,
+          settings_page_model: new_settings_model,
+        ),
+        effect.none(),
+      )
     }
 
     HandleOptimisticMutationFailure(mutation_id, error_message) -> {
       // Mutation failed - rollback the optimistic update
-      let cache_after_rollback = squall_cache.rollback_optimistic(model.cache, mutation_id)
+      let cache_after_rollback =
+        squall_cache.rollback_optimistic(model.cache, mutation_id)
 
       // Get the actual saved value from cache to reset the input field
-      let saved_domain_authority = case squall_cache.lookup(
-        cache_after_rollback,
-        "GetSettings",
-        json.object([]),
-        get_settings.parse_get_settings_response,
-      ) {
+      let saved_domain_authority = case
+        squall_cache.lookup(
+          cache_after_rollback,
+          "GetSettings",
+          json.object([]),
+          get_settings.parse_get_settings_response,
+        )
+      {
         #(_, squall_cache.Data(data)) -> data.settings.domain_authority
         _ -> model.settings_page_model.domain_authority_input
       }
@@ -227,7 +238,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           alert: option.Some(#("error", "Error: " <> error_message)),
         )
 
-      #(Model(..model, cache: cache_after_rollback, settings_page_model: new_settings_model), effect.none())
+      #(
+        Model(
+          ..model,
+          cache: cache_after_rollback,
+          settings_page_model: new_settings_model,
+        ),
+        effect.none(),
+      )
     }
 
     HandleQueryResponse(query_name, variables, Ok(response_body)) -> {
@@ -259,7 +277,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       // Update auth state when GetCurrentSession response arrives
       let new_auth_state = case query_name {
         "GetCurrentSession" -> {
-          case get_current_session.parse_get_current_session_response(response_body) {
+          case
+            get_current_session.parse_get_current_session_response(
+              response_body,
+            )
+          {
             Ok(data) -> {
               case data.current_session {
                 option.Some(session) ->
@@ -296,10 +318,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         }
         "ResetAll" -> {
           // Clear the domain authority input when reset completes
-          let cleared_model = settings.Model(
-            ..model.settings_page_model,
-            domain_authority_input: "",
-          )
+          let cleared_model =
+            settings.Model(
+              ..model.settings_page_model,
+              domain_authority_input: "",
+            )
           settings.set_alert(
             cleared_model,
             "success",
@@ -335,7 +358,12 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               cache1,
               "GetActivityBuckets",
               json.object([
-                #("range", json.string(get_activity_buckets.time_range_to_string(model.time_range))),
+                #(
+                  "range",
+                  json.string(get_activity_buckets.time_range_to_string(
+                    model.time_range,
+                  )),
+                ),
               ]),
             )
           let cache3 =
@@ -382,8 +410,12 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         "GetCurrentSession" -> {
           // If we're on settings route but not admin, redirect to home
           case model.route, new_auth_state {
-            Settings, NotAuthenticated -> [modem.push("/", option.None, option.None)]
-            Settings, Authenticated(_, _, False) -> [modem.push("/", option.None, option.None)]
+            Settings, NotAuthenticated -> [
+              modem.push("/", option.None, option.None),
+            ]
+            Settings, Authenticated(_, _, False) -> [
+              modem.push("/", option.None, option.None),
+            ]
             _, _ -> []
           }
         }
@@ -391,8 +423,16 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       }
 
       #(
-        Model(..model, cache: cache_after_mutation, settings_page_model: new_settings_model, is_backfilling: updated_is_backfilling, auth_state: new_auth_state),
-        effect.batch([effects, mutation_effects, redirect_effect] |> list.flatten),
+        Model(
+          ..model,
+          cache: cache_after_mutation,
+          settings_page_model: new_settings_model,
+          is_backfilling: updated_is_backfilling,
+          auth_state: new_auth_state,
+        ),
+        effect.batch(
+          [effects, mutation_effects, redirect_effect] |> list.flatten,
+        ),
       )
     }
 
@@ -405,7 +445,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
       // Show error message for mutations
       let new_settings_model = case query_name {
-        "UpdateDomainAuthority" | "UploadLexicons" | "ResetAll" | "TriggerBackfill" ->
+        "UpdateDomainAuthority"
+        | "UploadLexicons"
+        | "ResetAll"
+        | "TriggerBackfill" ->
           settings.set_alert(
             model.settings_page_model,
             "error",
@@ -414,7 +457,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         _ -> model.settings_page_model
       }
 
-      #(Model(..model, settings_page_model: new_settings_model, is_backfilling: updated_is_backfilling), effect.none())
+      #(
+        Model(
+          ..model,
+          settings_page_model: new_settings_model,
+          is_backfilling: updated_is_backfilling,
+        ),
+        effect.none(),
+      )
     }
 
     OnRouteChange(route) -> {
@@ -452,7 +502,12 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               cache2,
               "GetActivityBuckets",
               json.object([
-                #("range", json.string(get_activity_buckets.time_range_to_string(model.time_range))),
+                #(
+                  "range",
+                  json.string(get_activity_buckets.time_range_to_string(
+                    model.time_range,
+                  )),
+                ),
               ]),
               get_activity_buckets.parse_get_activity_buckets_response,
             )
@@ -475,7 +530,15 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               fn() { 0 },
             )
 
-          #(Model(..model, route: route, cache: final_cache, settings_page_model: cleared_settings_model), effect.batch(effects))
+          #(
+            Model(
+              ..model,
+              route: route,
+              cache: final_cache,
+              settings_page_model: cleared_settings_model,
+            ),
+            effect.batch(effects),
+          )
         }
         Settings -> {
           // Check if user is admin
@@ -507,11 +570,26 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                   fn() { 0 },
                 )
 
-              #(Model(..model, route: route, cache: final_cache, settings_page_model: cleared_settings_model), effect.batch(effects))
+              #(
+                Model(
+                  ..model,
+                  route: route,
+                  cache: final_cache,
+                  settings_page_model: cleared_settings_model,
+                ),
+                effect.batch(effects),
+              )
             }
           }
         }
-        _ -> #(Model(..model, route: route, settings_page_model: cleared_settings_model), effect.none())
+        _ -> #(
+          Model(
+            ..model,
+            route: route,
+            settings_page_model: cleared_settings_model,
+          ),
+          effect.none(),
+        )
       }
     }
 
@@ -521,7 +599,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           // Update time range and fetch new activity data
           let variables =
             json.object([
-              #("range", json.string(get_activity_buckets.time_range_to_string(new_range))),
+              #(
+                "range",
+                json.string(get_activity_buckets.time_range_to_string(new_range)),
+              ),
             ])
 
           let #(cache_with_lookup, _) =
@@ -540,7 +621,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               fn() { 0 },
             )
 
-          #(Model(..model, cache: final_cache, time_range: new_range), effect.batch(effects))
+          #(
+            Model(..model, cache: final_cache, time_range: new_range),
+            effect.batch(effects),
+          )
         }
 
         home.OpenGraphiQL -> {
@@ -554,7 +638,8 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           let variables = json.object([])
 
           // Invalidate any cached mutation result to ensure a fresh request
-          let cache_invalidated = squall_cache.invalidate(model.cache, "TriggerBackfill", variables)
+          let cache_invalidated =
+            squall_cache.invalidate(model.cache, "TriggerBackfill", variables)
 
           let #(cache_with_lookup, _) =
             squall_cache.lookup(
@@ -591,7 +676,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               domain_authority_input: value,
               alert: None,
             )
-          #(Model(..model, settings_page_model: new_settings_model), effect.none())
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
         }
 
         settings.SubmitDomainAuthority -> {
@@ -602,16 +690,21 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           // Execute optimistic mutation
           let variables =
             json.object([
-              #("domainAuthority", json.string(model.settings_page_model.domain_authority_input)),
+              #(
+                "domainAuthority",
+                json.string(model.settings_page_model.domain_authority_input),
+              ),
             ])
 
           // Create optimistic entity - get current oauthClientId from cache
-          let current_oauth_client_id = case squall_cache.lookup(
-            model.cache,
-            "GetSettings",
-            json.object([]),
-            get_settings.parse_get_settings_response,
-          ) {
+          let current_oauth_client_id = case
+            squall_cache.lookup(
+              model.cache,
+              "GetSettings",
+              json.object([]),
+              get_settings.parse_get_settings_response,
+            )
+          {
             #(_, squall_cache.Data(data)) -> data.settings.oauth_client_id
             _ -> None
           }
@@ -619,8 +712,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           let optimistic_entity =
             json.object([
               #("id", json.string("Settings:singleton")),
-              #("domainAuthority", json.string(model.settings_page_model.domain_authority_input)),
-              #("oauthClientId", json.nullable(current_oauth_client_id, json.string)),
+              #(
+                "domainAuthority",
+                json.string(model.settings_page_model.domain_authority_input),
+              ),
+              #(
+                "oauthClientId",
+                json.nullable(current_oauth_client_id, json.string),
+              ),
             ])
 
           let #(updated_cache, _mutation_id, mutation_effect) =
@@ -634,13 +733,22 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               update_domain_authority.parse_update_domain_authority_response,
               fn(mutation_id, result, response_body) {
                 case result {
-                  Ok(_) -> HandleOptimisticMutationSuccess(mutation_id, response_body)
-                  Error(err) -> HandleOptimisticMutationFailure(mutation_id, err)
+                  Ok(_) ->
+                    HandleOptimisticMutationSuccess(mutation_id, response_body)
+                  Error(err) ->
+                    HandleOptimisticMutationFailure(mutation_id, err)
                 }
               },
             )
 
-          #(Model(..model, cache: updated_cache, settings_page_model: cleared_settings_model), mutation_effect)
+          #(
+            Model(
+              ..model,
+              cache: updated_cache,
+              settings_page_model: cleared_settings_model,
+            ),
+            mutation_effect,
+          )
         }
 
         settings.SelectLexiconFile -> {
@@ -653,7 +761,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           io.println("[UploadLexicons] Button clicked, creating file effect")
           let file_effect =
             effect.from(fn(dispatch) {
-              io.println("[UploadLexicons] Effect running, calling read_file_as_base64")
+              io.println(
+                "[UploadLexicons] Effect running, calling read_file_as_base64",
+              )
               file_upload.read_file_as_base64("lexicon-file-input", fn(result) {
                 io.println("[UploadLexicons] Callback received result")
                 dispatch(FileRead(result))
@@ -670,18 +780,25 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               reset_confirmation: value,
               alert: None,
             )
-          #(Model(..model, settings_page_model: new_settings_model), effect.none())
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
         }
 
         settings.SubmitReset -> {
           // Execute ResetAll mutation
           let variables =
             json.object([
-              #("confirm", json.string(model.settings_page_model.reset_confirmation)),
+              #(
+                "confirm",
+                json.string(model.settings_page_model.reset_confirmation),
+              ),
             ])
 
           // Invalidate any cached mutation result to ensure a fresh request
-          let cache_invalidated = squall_cache.invalidate(model.cache, "ResetAll", variables)
+          let cache_invalidated =
+            squall_cache.invalidate(model.cache, "ResetAll", variables)
 
           let #(cache_with_lookup, _) =
             squall_cache.lookup(
@@ -708,7 +825,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             )
 
           #(
-            Model(..model, cache: final_cache, settings_page_model: new_settings_model),
+            Model(
+              ..model,
+              cache: final_cache,
+              settings_page_model: new_settings_model,
+            ),
             effect.batch(effects),
           )
         }
@@ -718,11 +839,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     FileRead(Ok(base64_content)) -> {
       // File was successfully read, now upload it
       io.println("[FileRead] Successfully read file, uploading...")
-      let variables =
-        json.object([#("zipBase64", json.string(base64_content))])
+      let variables = json.object([#("zipBase64", json.string(base64_content))])
 
       // Invalidate any cached mutation result to ensure a fresh request
-      let cache_invalidated = squall_cache.invalidate(model.cache, "UploadLexicons", variables)
+      let cache_invalidated =
+        squall_cache.invalidate(model.cache, "UploadLexicons", variables)
 
       let #(cache_with_lookup, _) =
         squall_cache.lookup(
@@ -745,7 +866,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         settings.Model(..model.settings_page_model, selected_file: None)
 
       #(
-        Model(..model, cache: final_cache, settings_page_model: new_settings_model),
+        Model(
+          ..model,
+          cache: final_cache,
+          settings_page_model: new_settings_model,
+        ),
         effect.batch(effects),
       )
     }
