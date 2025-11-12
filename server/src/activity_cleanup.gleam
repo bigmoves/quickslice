@@ -37,10 +37,7 @@ pub fn start(
   }
 }
 
-fn handle_message(
-  state: State,
-  message: Message,
-) -> actor.Next(State, Message) {
+fn handle_message(state: State, message: Message) -> actor.Next(State, Message) {
   case message {
     Cleanup -> {
       // Clean up activity entries older than 7 days (168 hours)
@@ -49,8 +46,7 @@ fn handle_message(
         Error(err) -> {
           logging.log(
             logging.Error,
-            "[cleanup] Failed to cleanup old activity: "
-              <> string.inspect(err),
+            "[cleanup] Failed to cleanup old activity: " <> string.inspect(err),
           )
         }
       }

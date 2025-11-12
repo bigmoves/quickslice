@@ -25,7 +25,11 @@ fn is_admin(did: String, admin_dids: List(String)) -> Bool {
 }
 
 /// Convert CurrentSession data to GraphQL value
-fn current_session_to_value(did: String, handle: String, is_admin: Bool) -> value.Value {
+fn current_session_to_value(
+  did: String,
+  handle: String,
+  is_admin: Bool,
+) -> value.Value {
   value.Object([
     #("did", value.String(did)),
     #("handle", value.String(handle)),
@@ -270,34 +274,15 @@ pub fn settings_type() -> schema.Type {
         }
       },
     ),
-    schema.field("oauthClientId", schema.string_type(), "OAuth client ID if registered", fn(
-      ctx,
-    ) {
-      case ctx.data {
-        Some(value.Object(fields)) -> {
-          case list.key_find(fields, "oauthClientId") {
-            Ok(client_id) -> Ok(client_id)
-            Error(_) -> Ok(value.Null)
-          }
-        }
-        _ -> Ok(value.Null)
-      }
-    }),
-  ])
-}
-
-/// ActivityEntry type for individual activity records
-pub fn activity_entry_type() -> schema.Type {
-  schema.object_type("ActivityEntry", "Individual activity log entry", [
     schema.field(
-      "id",
-      schema.non_null(schema.int_type()),
-      "Entry ID",
+      "oauthClientId",
+      schema.string_type(),
+      "OAuth client ID if registered",
       fn(ctx) {
         case ctx.data {
           Some(value.Object(fields)) -> {
-            case list.key_find(fields, "id") {
-              Ok(id) -> Ok(id)
+            case list.key_find(fields, "oauthClientId") {
+              Ok(client_id) -> Ok(client_id)
               Error(_) -> Ok(value.Null)
             }
           }
@@ -305,6 +290,23 @@ pub fn activity_entry_type() -> schema.Type {
         }
       },
     ),
+  ])
+}
+
+/// ActivityEntry type for individual activity records
+pub fn activity_entry_type() -> schema.Type {
+  schema.object_type("ActivityEntry", "Individual activity log entry", [
+    schema.field("id", schema.non_null(schema.int_type()), "Entry ID", fn(ctx) {
+      case ctx.data {
+        Some(value.Object(fields)) -> {
+          case list.key_find(fields, "id") {
+            Ok(id) -> Ok(id)
+            Error(_) -> Ok(value.Null)
+          }
+        }
+        _ -> Ok(value.Null)
+      }
+    }),
     schema.field(
       "timestamp",
       schema.non_null(schema.string_type()),
@@ -353,22 +355,17 @@ pub fn activity_entry_type() -> schema.Type {
         }
       },
     ),
-    schema.field(
-      "did",
-      schema.non_null(schema.string_type()),
-      "DID",
-      fn(ctx) {
-        case ctx.data {
-          Some(value.Object(fields)) -> {
-            case list.key_find(fields, "did") {
-              Ok(did) -> Ok(did)
-              Error(_) -> Ok(value.Null)
-            }
+    schema.field("did", schema.non_null(schema.string_type()), "DID", fn(ctx) {
+      case ctx.data {
+        Some(value.Object(fields)) -> {
+          case list.key_find(fields, "did") {
+            Ok(did) -> Ok(did)
+            Error(_) -> Ok(value.Null)
           }
-          _ -> Ok(value.Null)
         }
-      },
-    ),
+        _ -> Ok(value.Null)
+      }
+    }),
     schema.field(
       "status",
       schema.non_null(schema.string_type()),
@@ -385,19 +382,22 @@ pub fn activity_entry_type() -> schema.Type {
         }
       },
     ),
-    schema.field("errorMessage", schema.string_type(), "Error message if failed", fn(
-      ctx,
-    ) {
-      case ctx.data {
-        Some(value.Object(fields)) -> {
-          case list.key_find(fields, "errorMessage") {
-            Ok(err_msg) -> Ok(err_msg)
-            Error(_) -> Ok(value.Null)
+    schema.field(
+      "errorMessage",
+      schema.string_type(),
+      "Error message if failed",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "errorMessage") {
+              Ok(err_msg) -> Ok(err_msg)
+              Error(_) -> Ok(value.Null)
+            }
           }
+          _ -> Ok(value.Null)
         }
-        _ -> Ok(value.Null)
-      }
-    }),
+      },
+    ),
     schema.field("eventJson", schema.string_type(), "Raw event JSON", fn(ctx) {
       case ctx.data {
         Some(value.Object(fields)) -> {
@@ -522,7 +522,9 @@ pub fn query_type(
       schema.non_null(settings_type()),
       "Get system settings",
       fn(_ctx) {
-        let domain_authority = case database.get_config(conn, "domain_authority") {
+        let domain_authority = case
+          database.get_config(conn, "domain_authority")
+        {
           Ok(authority) -> authority
           Error(_) -> ""
         }
@@ -647,7 +649,10 @@ pub fn mutation_type(
                 // Restart Jetstream consumer to pick up new domain authority
                 case jetstream_subject {
                   Some(consumer) -> {
-                    logging.log(logging.Info, "[updateDomainAuthority] Restarting Jetstream consumer with new domain authority...")
+                    logging.log(
+                      logging.Info,
+                      "[updateDomainAuthority] Restarting Jetstream consumer with new domain authority...",
+                    )
                     let _ = jetstream_consumer.restart(consumer)
                     Nil
                   }
@@ -655,7 +660,9 @@ pub fn mutation_type(
                 }
 
                 // Fetch OAuth client ID to return complete Settings
-                let oauth_client_id = case database.get_oauth_credentials(conn) {
+                let oauth_client_id = case
+                  database.get_oauth_credentials(conn)
+                {
                   Ok(Some(#(client_id, _secret, _uri))) -> Some(client_id)
                   _ -> None
                 }
@@ -690,20 +697,36 @@ pub fn mutation_type(
                 // Restart Jetstream consumer to pick up newly imported collections
                 case jetstream_subject {
                   Some(consumer) -> {
-                    logging.log(logging.Info, "[uploadLexicons] Restarting Jetstream consumer with new lexicons...")
+                    logging.log(
+                      logging.Info,
+                      "[uploadLexicons] Restarting Jetstream consumer with new lexicons...",
+                    )
                     case jetstream_consumer.restart(consumer) {
                       Ok(_) -> {
-                        logging.log(logging.Info, "[uploadLexicons] Jetstream consumer restarted successfully")
+                        logging.log(
+                          logging.Info,
+                          "[uploadLexicons] Jetstream consumer restarted successfully",
+                        )
                         Ok(value.Boolean(True))
                       }
                       Error(err) -> {
-                        logging.log(logging.Error, "[uploadLexicons] Failed to restart Jetstream consumer: " <> err)
-                        Error("Lexicons imported but failed to restart Jetstream consumer: " <> err)
+                        logging.log(
+                          logging.Error,
+                          "[uploadLexicons] Failed to restart Jetstream consumer: "
+                            <> err,
+                        )
+                        Error(
+                          "Lexicons imported but failed to restart Jetstream consumer: "
+                          <> err,
+                        )
                       }
                     }
                   }
                   None -> {
-                    logging.log(logging.Info, "[uploadLexicons] Jetstream consumer not running, skipping restart")
+                    logging.log(
+                      logging.Info,
+                      "[uploadLexicons] Jetstream consumer not running, skipping restart",
+                    )
                     Ok(value.Boolean(True))
                   }
                 }
@@ -747,7 +770,10 @@ pub fn mutation_type(
                     // Restart Jetstream consumer after reset
                     case jetstream_subject {
                       Some(consumer) -> {
-                        logging.log(logging.Info, "[resetAll] Restarting Jetstream consumer after reset...")
+                        logging.log(
+                          logging.Info,
+                          "[resetAll] Restarting Jetstream consumer after reset...",
+                        )
                         let _ = jetstream_consumer.restart(consumer)
                         Nil
                       }
@@ -780,16 +806,23 @@ pub fn mutation_type(
               True -> {
                 // Spawn background process to run backfill
                 process.spawn_unlinked(fn() {
-                  logging.log(logging.Info, "[triggerBackfill] Starting background backfill...")
+                  logging.log(
+                    logging.Info,
+                    "[triggerBackfill] Starting background backfill...",
+                  )
 
                   // Get all record-type collections from database (only backfill records, not queries/procedures)
-                  let collections = case database.get_record_type_lexicons(conn) {
+                  let collections = case
+                    database.get_record_type_lexicons(conn)
+                  {
                     Ok(lexicons) -> list.map(lexicons, fn(lex) { lex.id })
                     Error(_) -> []
                   }
 
                   // Get domain authority to determine external collections
-                  let domain_authority = case database.get_config(conn, "domain_authority") {
+                  let domain_authority = case
+                    database.get_config(conn, "domain_authority")
+                  {
                     Ok(authority) -> authority
                     Error(_) -> ""
                   }
@@ -797,14 +830,26 @@ pub fn mutation_type(
                   // Split collections into primary and external
                   let #(primary_collections, external_collections) =
                     list.partition(collections, fn(collection) {
-                      backfill.nsid_matches_domain_authority(collection, domain_authority)
+                      backfill.nsid_matches_domain_authority(
+                        collection,
+                        domain_authority,
+                      )
                     })
 
                   // Run backfill with default config and empty repo list (fetches from relay)
                   let config = backfill.default_config()
-                  backfill.backfill_collections([], primary_collections, external_collections, config, conn)
+                  backfill.backfill_collections(
+                    [],
+                    primary_collections,
+                    external_collections,
+                    config,
+                    conn,
+                  )
 
-                  logging.log(logging.Info, "[triggerBackfill] Background backfill completed")
+                  logging.log(
+                    logging.Info,
+                    "[triggerBackfill] Background backfill completed",
+                  )
                 })
 
                 // Return immediately

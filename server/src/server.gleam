@@ -1,8 +1,8 @@
 import activity_cleanup
 import argv
 import backfill
-import client_graphql_handler
 import backfill_state
+import client_graphql_handler
 import config
 import database
 import dotenv_gleam
@@ -550,7 +550,12 @@ fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
     ["logout"] -> handlers.handle_logout(req, ctx.db)
     ["backfill"] -> handle_backfill_request(req, ctx)
     ["admin", "graphql"] ->
-      client_graphql_handler.handle_client_graphql_request(req, ctx.db, ctx.admin_dids, ctx.jetstream_consumer)
+      client_graphql_handler.handle_client_graphql_request(
+        req,
+        ctx.db,
+        ctx.admin_dids,
+        ctx.jetstream_consumer,
+      )
     ["graphql"] ->
       graphql_handler.handle_graphql_request(
         req,
@@ -740,10 +745,10 @@ fn serve_static_file(path_segments: List(String)) -> wisp.Response {
       // Determine content type based on file extension
       let content_type = case list.last(path_segments) {
         Ok(filename) -> {
-          case string.ends_with(filename, ".mjs") || string.ends_with(
-            filename,
-            ".js",
-          ) {
+          case
+            string.ends_with(filename, ".mjs")
+            || string.ends_with(filename, ".js")
+          {
             True -> "application/javascript"
             False ->
               case string.ends_with(filename, ".css") {

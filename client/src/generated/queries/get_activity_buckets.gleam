@@ -23,10 +23,7 @@ pub fn time_range_to_string(value: TimeRange) -> String {
 
 pub fn time_range_decoder() -> decode.Decoder(TimeRange) {
   decode.string
-  
-  
   |> decode.then(fn(str) {
-  
     case str {
       "ONE_HOUR" -> decode.success(ONEHOUR)
       "THREE_HOURS" -> decode.success(THREEHOURS)
@@ -35,8 +32,6 @@ pub fn time_range_decoder() -> decode.Decoder(TimeRange) {
       "SEVEN_DAYS" -> decode.success(SEVENDAYS)
       _other -> decode.failure(ONEHOUR, "TimeRange")
     }
-  
-  
   })
 }
 
@@ -66,38 +61,44 @@ pub fn activity_bucket_decoder() -> decode.Decoder(ActivityBucket) {
 }
 
 pub fn activity_bucket_to_json(input: ActivityBucket) -> json.Json {
-  json.object(
-    [
-      #("timestamp", json.string(input.timestamp)),
-      #("total", json.int(input.total)),
-      #("creates", json.int(input.creates)),
-      #("updates", json.int(input.updates)),
-      #("deletes", json.int(input.deletes)),
-    ],
-  )
+  json.object([
+    #("timestamp", json.string(input.timestamp)),
+    #("total", json.int(input.total)),
+    #("creates", json.int(input.creates)),
+    #("updates", json.int(input.updates)),
+    #("deletes", json.int(input.deletes)),
+  ])
 }
 
 pub type GetActivityBucketsResponse {
   GetActivityBucketsResponse(activity_buckets: List(ActivityBucket))
 }
 
-pub fn get_activity_buckets_response_decoder() -> decode.Decoder(GetActivityBucketsResponse) {
-  use activity_buckets <- decode.field("activityBuckets", decode.list(activity_bucket_decoder()))
+pub fn get_activity_buckets_response_decoder() -> decode.Decoder(
+  GetActivityBucketsResponse,
+) {
+  use activity_buckets <- decode.field(
+    "activityBuckets",
+    decode.list(activity_bucket_decoder()),
+  )
   decode.success(GetActivityBucketsResponse(activity_buckets: activity_buckets))
 }
 
-pub fn get_activity_buckets_response_to_json(input: GetActivityBucketsResponse) -> json.Json {
-  json.object(
-    [
-      #("activityBuckets", json.array(
-        from: input.activity_buckets,
-        of: activity_bucket_to_json,
-      )),
-    ],
-  )
+pub fn get_activity_buckets_response_to_json(
+  input: GetActivityBucketsResponse,
+) -> json.Json {
+  json.object([
+    #(
+      "activityBuckets",
+      json.array(from: input.activity_buckets, of: activity_bucket_to_json),
+    ),
+  ])
 }
 
-pub fn get_activity_buckets(client: squall.Client, range: TimeRange) -> Result(Request(String), String) {
+pub fn get_activity_buckets(
+  client: squall.Client,
+  range: TimeRange,
+) -> Result(Request(String), String) {
   squall.prepare_request(
     client,
     "query GetActivityBuckets($range: TimeRange!) {\n  activityBuckets(range: $range) {\n    timestamp\n    total\n    creates\n    updates\n    deletes\n  }\n}",
@@ -105,6 +106,8 @@ pub fn get_activity_buckets(client: squall.Client, range: TimeRange) -> Result(R
   )
 }
 
-pub fn parse_get_activity_buckets_response(body: String) -> Result(GetActivityBucketsResponse, String) {
+pub fn parse_get_activity_buckets_response(
+  body: String,
+) -> Result(GetActivityBucketsResponse, String) {
   squall.parse_response(body, get_activity_buckets_response_decoder())
 }

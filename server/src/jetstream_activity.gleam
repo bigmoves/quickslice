@@ -96,8 +96,7 @@ pub fn get_recent_activity(
   conn: sqlight.Connection,
   hours: Int,
 ) -> Result(List(ActivityEntry), sqlight.Error) {
-  let sql =
-    "
+  let sql = "
     SELECT id, timestamp, operation, collection, did, status, error_message, event_json
     FROM jetstream_activity
     WHERE datetime(timestamp) >= datetime('now', '-" <> int.to_string(hours) <> " hours')
@@ -134,8 +133,7 @@ pub fn cleanup_old_activity(
   conn: sqlight.Connection,
   hours: Int,
 ) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
+  let sql = "
     DELETE FROM jetstream_activity
     WHERE datetime(timestamp) < datetime('now', '-" <> int.to_string(hours) <> " hours')
   "
@@ -253,8 +251,7 @@ fn get_activity_bucketed(
   let max_n = int.to_string(expected_buckets)
 
   // Build the SQL dynamically based on interval
-  let sql =
-    "
+  let sql = "
     WITH RECURSIVE time_series(bucket, n) AS (
       SELECT datetime('now', '-" <> hours_str <> " hours'), 0
       UNION ALL

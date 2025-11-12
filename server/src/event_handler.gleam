@@ -223,16 +223,18 @@ pub fn handle_commit_event(
                               {
                                 Ok(_) ->
                                   // Publish activity event for real-time UI updates
-                                  stats_pubsub.publish(stats_pubsub.ActivityLogged(
-                                    id,
-                                    timestamp,
-                                    commit.operation,
-                                    commit.collection,
-                                    did,
-                                    "success",
-                                    option.None,
-                                    event_json,
-                                  ))
+                                  stats_pubsub.publish(
+                                    stats_pubsub.ActivityLogged(
+                                      id,
+                                      timestamp,
+                                      commit.operation,
+                                      commit.collection,
+                                      did,
+                                      "success",
+                                      option.None,
+                                      event_json,
+                                    ),
+                                  )
                                 Error(_) -> Nil
                               }
                             }
@@ -263,7 +265,8 @@ pub fn handle_commit_event(
 
                           // Publish stats event for real-time stats updates
                           case is_create {
-                            True -> stats_pubsub.publish(stats_pubsub.RecordCreated)
+                            True ->
+                              stats_pubsub.publish(stats_pubsub.RecordCreated)
                             False -> Nil
                           }
                         }
@@ -291,16 +294,18 @@ pub fn handle_commit_event(
                               {
                                 Ok(_) ->
                                   // Publish activity event for real-time UI updates
-                                  stats_pubsub.publish(stats_pubsub.ActivityLogged(
-                                    id,
-                                    timestamp,
-                                    commit.operation,
-                                    commit.collection,
-                                    did,
-                                    "success",
-                                    option.Some("Skipped: duplicate CID"),
-                                    event_json,
-                                  ))
+                                  stats_pubsub.publish(
+                                    stats_pubsub.ActivityLogged(
+                                      id,
+                                      timestamp,
+                                      commit.operation,
+                                      commit.collection,
+                                      did,
+                                      "success",
+                                      option.Some("Skipped: duplicate CID"),
+                                      event_json,
+                                    ),
+                                  )
                                 Error(_) -> Nil
                               }
                             }
@@ -333,18 +338,21 @@ pub fn handle_commit_event(
                               {
                                 Ok(_) -> {
                                   let error_msg =
-                                    "Database insert failed: " <> string.inspect(err)
+                                    "Database insert failed: "
+                                    <> string.inspect(err)
                                   // Publish activity event for real-time UI updates
-                                  stats_pubsub.publish(stats_pubsub.ActivityLogged(
-                                    id,
-                                    timestamp,
-                                    commit.operation,
-                                    commit.collection,
-                                    did,
-                                    "error",
-                                    option.Some(error_msg),
-                                    event_json,
-                                  ))
+                                  stats_pubsub.publish(
+                                    stats_pubsub.ActivityLogged(
+                                      id,
+                                      timestamp,
+                                      commit.operation,
+                                      commit.collection,
+                                      did,
+                                      "error",
+                                      option.Some(error_msg),
+                                      event_json,
+                                    ),
+                                  )
                                 }
                                 Error(_) -> Nil
                               }
@@ -371,11 +379,14 @@ pub fn handle_commit_event(
                               db,
                               id,
                               "error",
-                              option.Some("Actor validation failed: " <> actor_err),
+                              option.Some(
+                                "Actor validation failed: " <> actor_err,
+                              ),
                             )
                           {
                             Ok(_) -> {
-                              let error_msg = "Actor validation failed: " <> actor_err
+                              let error_msg =
+                                "Actor validation failed: " <> actor_err
                               // Publish activity event for real-time UI updates
                               stats_pubsub.publish(stats_pubsub.ActivityLogged(
                                 id,
@@ -417,7 +428,8 @@ pub fn handle_commit_event(
                         )
                       {
                         Ok(_) -> {
-                          let error_msg = lexicon.describe_error(validation_error)
+                          let error_msg =
+                            lexicon.describe_error(validation_error)
                           // Publish activity event for real-time UI updates
                           stats_pubsub.publish(stats_pubsub.ActivityLogged(
                             id,
@@ -507,12 +519,7 @@ pub fn handle_commit_event(
           case activity_id {
             option.Some(id) -> {
               case
-                jetstream_activity.update_status(
-                  db,
-                  id,
-                  "success",
-                  option.None,
-                )
+                jetstream_activity.update_status(db, id, "success", option.None)
               {
                 Ok(_) ->
                   // Publish activity event for real-time UI updates

@@ -11,8 +11,8 @@
 ///   }
 /// }
 /// ```
-import gleam/json
 import generated/queries/get_statistics
+import gleam/json
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
@@ -47,9 +47,18 @@ pub fn view(cache: Cache) -> Element(msg) {
       let stats = data.statistics
 
       html.div([attribute.class("mb-8 grid grid-cols-3 gap-4")], [
-        stat_card("Total Records", number_formatter.format_number(stats.record_count)),
-        stat_card("Total Actors", number_formatter.format_number(stats.actor_count)),
-        stat_card("Total Lexicons", number_formatter.format_number(stats.lexicon_count)),
+        stat_card(
+          "Total Records",
+          number_formatter.format_number(stats.record_count),
+        ),
+        stat_card(
+          "Total Actors",
+          number_formatter.format_number(stats.actor_count),
+        ),
+        stat_card(
+          "Total Lexicons",
+          number_formatter.format_number(stats.lexicon_count),
+        ),
       ])
     }
   }

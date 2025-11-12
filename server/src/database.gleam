@@ -269,7 +269,10 @@ fn migration_v3(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
 
 /// Migration v4: Add jetstream_activity table for 24h activity log
 fn migration_v4(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
-  logging.log(logging.Info, "Running migration v4 (jetstream_activity table)...")
+  logging.log(
+    logging.Info,
+    "Running migration v4 (jetstream_activity table)...",
+  )
 
   let create_table_sql =
     "
@@ -543,8 +546,7 @@ fn get_existing_cids(
             list.map(batch, fn(_) { "?" })
             |> string.join(", ")
 
-          let sql =
-            "
+          let sql = "
             SELECT uri, cid
             FROM record
             WHERE uri IN (" <> placeholders <> ")
@@ -598,8 +600,7 @@ fn get_existing_cids_batch(
             list.map(batch, fn(_) { "?" })
             |> string.join(", ")
 
-          let sql =
-            "
+          let sql = "
             SELECT cid
             FROM record
             WHERE cid IN (" <> placeholders <> ")
@@ -710,9 +711,8 @@ pub fn batch_insert_records(
       ))
 
       // Create a set of existing CIDs for fast lookup
-      let existing_cid_set = dict.from_list(
-        list.map(existing_cids_in_db, fn(cid) { #(cid, True) }),
-      )
+      let existing_cid_set =
+        dict.from_list(list.map(existing_cids_in_db, fn(cid) { #(cid, True) }))
 
       // Filter out records where:
       // 1. URI exists with same CID (unchanged)

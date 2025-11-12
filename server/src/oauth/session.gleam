@@ -222,14 +222,17 @@ pub fn set_session_cookie(
   let signed_value = wisp.sign_message(req, <<session_id:utf8>>, crypto.Sha512)
 
   // Create cookie attributes without SameSite restriction
-  let attributes = cookie.Attributes(
-    max_age: option.Some(60 * 60 * 24 * 14),
-    domain: option.None,
-    path: option.Some("/"),
-    secure: False,  // False for localhost HTTP
-    http_only: True,
-    same_site: option.None,  // No SameSite restriction for JavaScript fetch
-  )
+  let attributes =
+    cookie.Attributes(
+      max_age: option.Some(60 * 60 * 24 * 14),
+      domain: option.None,
+      path: option.Some("/"),
+      secure: False,
+      // False for localhost HTTP
+      http_only: True,
+      same_site: option.None,
+      // No SameSite restriction for JavaScript fetch
+    )
 
   response.set_cookie(response, session_cookie_name, signed_value, attributes)
 }

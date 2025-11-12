@@ -162,13 +162,22 @@ fn render_stacked_bar_chart(
         attribute.attribute("preserveAspectRatio", "none"),
       ],
       list.index_map(buckets, fn(bucket, index) {
-        render_stacked_bar(bucket, index, bar_width, gap, chart_height, max_value)
+        render_stacked_bar(
+          bucket,
+          index,
+          bar_width,
+          gap,
+          chart_height,
+          max_value,
+        )
       }),
     ),
   ])
 }
 
-fn calculate_max_value(buckets: List(get_activity_buckets.ActivityBucket)) -> Int {
+fn calculate_max_value(
+  buckets: List(get_activity_buckets.ActivityBucket),
+) -> Int {
   buckets
   |> list.map(fn(b) { b.creates + b.updates + b.deletes })
   |> list.reduce(int.max)

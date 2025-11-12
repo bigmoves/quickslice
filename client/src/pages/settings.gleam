@@ -123,38 +123,44 @@ pub fn view(cache: Cache, model: Model, is_admin: Bool) -> Element(Msg) {
         html.h1([attribute.class("text-2xl font-semibold text-zinc-300 mb-8")], [
           element.text("Settings"),
         ]),
-    // Alert message
-    case model.alert {
-      Some(#(kind, message)) -> {
-        let alert_kind = case kind {
-          "success" -> alert.Success
-          "error" -> alert.Error
-          _ -> alert.Info
-        }
-        alert.alert(alert_kind, message)
-      }
-      None -> element.none()
-    },
-    // Settings sections
-    case result {
-      squall_cache.Loading ->
-        html.div([attribute.class("py-8 text-center text-zinc-600 text-sm")], [
-          element.text("Loading settings..."),
-        ])
+        // Alert message
+        case model.alert {
+          Some(#(kind, message)) -> {
+            let alert_kind = case kind {
+              "success" -> alert.Success
+              "error" -> alert.Error
+              _ -> alert.Info
+            }
+            alert.alert(alert_kind, message)
+          }
+          None -> element.none()
+        },
+        // Settings sections
+        case result {
+          squall_cache.Loading ->
+            html.div(
+              [attribute.class("py-8 text-center text-zinc-600 text-sm")],
+              [
+                element.text("Loading settings..."),
+              ],
+            )
 
-      squall_cache.Failed(msg) ->
-        html.div([attribute.class("py-8 text-center text-red-400 text-sm")], [
-          element.text("Error: " <> msg),
-        ])
+          squall_cache.Failed(msg) ->
+            html.div(
+              [attribute.class("py-8 text-center text-red-400 text-sm")],
+              [
+                element.text("Error: " <> msg),
+              ],
+            )
 
-      squall_cache.Data(data) ->
-        html.div([attribute.class("space-y-6")], [
-          domain_authority_section(data.settings, model, is_saving),
-          lexicons_section(model),
-          oauth_section(data.settings),
-          danger_zone_section(model),
-        ])
-    },
+          squall_cache.Data(data) ->
+            html.div([attribute.class("space-y-6")], [
+              domain_authority_section(data.settings, model, is_saving),
+              lexicons_section(model),
+              oauth_section(data.settings),
+              danger_zone_section(model),
+            ])
+        },
       ])
     }
   }
@@ -176,10 +182,9 @@ fn domain_authority_section(
     ]),
     html.div([attribute.class("space-y-4")], [
       html.div([attribute.class("mb-4")], [
-        html.label(
-          [attribute.class("block text-sm text-zinc-400 mb-2")],
-          [element.text("Domain Authority")],
-        ),
+        html.label([attribute.class("block text-sm text-zinc-400 mb-2")], [
+          element.text("Domain Authority"),
+        ]),
         html.input([
           attribute.type_("text"),
           attribute.class(
@@ -207,10 +212,12 @@ fn domain_authority_section(
             attribute.disabled(is_saving),
             event.on_click(SubmitDomainAuthority),
           ],
-          [element.text(case is_saving {
-            True -> "Saving..."
-            False -> "Save"
-          })],
+          [
+            element.text(case is_saving {
+              True -> "Saving..."
+              False -> "Save"
+            }),
+          ],
         ),
       ]),
     ]),
@@ -270,10 +277,9 @@ fn lexicons_section(_model: Model) -> Element(Msg) {
     ]),
     html.div([attribute.class("space-y-4")], [
       html.div([attribute.class("mb-4")], [
-        html.label(
-          [attribute.class("block text-sm text-zinc-400 mb-2")],
-          [element.text("Upload Lexicons (ZIP)")],
-        ),
+        html.label([attribute.class("block text-sm text-zinc-400 mb-2")], [
+          element.text("Upload Lexicons (ZIP)"),
+        ]),
         html.input([
           attribute.type_("file"),
           attribute.accept([".zip"]),
@@ -324,10 +330,9 @@ fn danger_zone_section(model: Model) -> Element(Msg) {
     ]),
     html.div([attribute.class("space-y-4")], [
       html.div([attribute.class("mb-4")], [
-        html.label(
-          [attribute.class("block text-sm text-zinc-400 mb-2")],
-          [element.text("Type RESET to confirm")],
-        ),
+        html.label([attribute.class("block text-sm text-zinc-400 mb-2")], [
+          element.text("Type RESET to confirm"),
+        ]),
         html.input([
           attribute.type_("text"),
           attribute.class(

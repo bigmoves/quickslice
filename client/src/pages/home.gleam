@@ -48,7 +48,10 @@ pub fn view(
   // Extract domain authority and lexicon count for alerts
   let alerts = case stats_result, settings_result {
     squall_cache.Data(stats), squall_cache.Data(settings) ->
-      render_alerts(settings.settings.domain_authority, stats.statistics.lexicon_count)
+      render_alerts(
+        settings.settings.domain_authority,
+        stats.statistics.lexicon_count,
+      )
     _, _ -> element.none()
   }
 
@@ -58,7 +61,11 @@ pub fn view(
     // Action buttons
     html.div([attribute.class("mb-8 flex gap-3")], case is_admin {
       True -> [
-        button.button(disabled: False, on_click: OpenGraphiQL, text: "Open GraphiQL"),
+        button.button(
+          disabled: False,
+          on_click: OpenGraphiQL,
+          text: "Open GraphiQL",
+        ),
         button.button(
           disabled: is_backfilling,
           on_click: TriggerBackfill,
@@ -68,7 +75,13 @@ pub fn view(
           },
         ),
       ]
-      False -> [button.button(disabled: False, on_click: OpenGraphiQL, text: "Open GraphiQL")]
+      False -> [
+        button.button(
+          disabled: False,
+          on_click: OpenGraphiQL,
+          text: "Open GraphiQL",
+        ),
+      ]
     }),
     // Stats cards component
     stats_cards.view(cache),
@@ -80,10 +93,7 @@ pub fn view(
 }
 
 /// Render configuration alerts if domain authority is missing or no lexicons loaded
-fn render_alerts(
-  domain_authority: String,
-  lexicon_count: Int,
-) -> Element(Msg) {
+fn render_alerts(domain_authority: String, lexicon_count: Int) -> Element(Msg) {
   let domain_alert = case domain_authority {
     "" ->
       alert.alert_with_link(

@@ -43,7 +43,15 @@ fn handle_post(
       case bit_array.to_string(body) {
         Ok(body_string) -> {
           case extract_query_and_variables_from_json(body_string) {
-            Ok(#(query, variables)) -> execute_query(req, db, admin_dids, jetstream_subject, query, variables)
+            Ok(#(query, variables)) ->
+              execute_query(
+                req,
+                db,
+                admin_dids,
+                jetstream_subject,
+                query,
+                variables,
+              )
             Error(err) -> bad_request_response("Invalid JSON: " <> err)
           }
         }
@@ -62,7 +70,8 @@ fn handle_get(
 ) -> wisp.Response {
   let query_params = wisp.get_query(req)
   case list.key_find(query_params, "query") {
-    Ok(query) -> execute_query(req, db, admin_dids, jetstream_subject, query, option.None)
+    Ok(query) ->
+      execute_query(req, db, admin_dids, jetstream_subject, query, option.None)
     Error(_) -> bad_request_response("Missing 'query' parameter")
   }
 }
@@ -76,7 +85,8 @@ fn execute_query(
   variables: option.Option(value.Value),
 ) -> wisp.Response {
   // Build the schema
-  let graphql_schema = client_schema.build_schema(db, req, admin_dids, jetstream_subject)
+  let graphql_schema =
+    client_schema.build_schema(db, req, admin_dids, jetstream_subject)
 
   // Create context with variables
   let ctx = case variables {
@@ -133,9 +143,9 @@ fn value_to_json(val: value.Value) -> json.Json {
     value.Enum(e) -> json.string(e)
     value.List(items) -> json.array(items, value_to_json)
     value.Object(fields) ->
-      json.object(list.map(fields, fn(field) {
-        #(field.0, value_to_json(field.1))
-      }))
+      json.object(
+        list.map(fields, fn(field) { #(field.0, value_to_json(field.1)) }),
+      )
   }
 }
 

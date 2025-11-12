@@ -33,94 +33,97 @@ pub fn header(auth_info: Option(#(String, Bool))) -> Element(msg) {
         ],
       ),
       // Right: Navigation and Auth
-      html.div([attribute.class("flex gap-4 text-xs items-center")], case auth_info {
-        option.None -> [
-          // Only show login form when not authenticated
-          html.form(
-            [
-              attribute.method("POST"),
-              attribute.action("/oauth/authorize"),
-              attribute.class("flex gap-2 items-center"),
-            ],
-            [
-              html.input([
-                attribute.type_("text"),
-                attribute.name("login_hint"),
-                attribute.placeholder("handle.bsky.social"),
-                attribute.class(
-                  "bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 placeholder-zinc-600 focus:border-zinc-500 focus:outline-none w-48",
-                ),
-                attribute.required(True),
-              ]),
-              html.button(
-                [
-                  attribute.type_("submit"),
-                  attribute.class(
-                    "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1 rounded transition-colors",
-                  ),
-                ],
-                [element.text("Login")],
-              ),
-            ],
-          ),
-        ]
-        option.Some(#(handle, is_admin)) -> {
-          // Show navigation links when authenticated
-          let nav_links = [
-            html.a(
-              [
-                attribute.href("/"),
-                attribute.class(
-                  "px-3 py-1 text-zinc-400 hover:text-zinc-300 transition-colors",
-                ),
-              ],
-              [element.text("Home")],
-            ),
-          ]
-
-          // Add Settings link only for admins
-          let nav_links = case is_admin {
-            True ->
-              list.append(nav_links, [
-                html.a(
-                  [
-                    attribute.href("/settings"),
-                    attribute.class(
-                      "px-3 py-1 text-zinc-400 hover:text-zinc-300 transition-colors",
-                    ),
-                  ],
-                  [element.text("Settings")],
-                ),
-              ])
-            False -> nav_links
-          }
-
-          list.append(nav_links, [
-            // User handle
-            html.span([attribute.class("px-3 py-1 text-zinc-400")], [
-              element.text(handle),
-            ]),
-            // Logout button
+      html.div(
+        [attribute.class("flex gap-4 text-xs items-center")],
+        case auth_info {
+          option.None -> [
+            // Only show login form when not authenticated
             html.form(
               [
                 attribute.method("POST"),
-                attribute.action("/logout"),
+                attribute.action("/oauth/authorize"),
+                attribute.class("flex gap-2 items-center"),
               ],
               [
+                html.input([
+                  attribute.type_("text"),
+                  attribute.name("login_hint"),
+                  attribute.placeholder("handle.bsky.social"),
+                  attribute.class(
+                    "bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 placeholder-zinc-600 focus:border-zinc-500 focus:outline-none w-48",
+                  ),
+                  attribute.required(True),
+                ]),
                 html.button(
                   [
                     attribute.type_("submit"),
                     attribute.class(
-                      "px-3 py-1 text-zinc-400 hover:text-zinc-300 transition-colors cursor-pointer",
+                      "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1 rounded transition-colors",
                     ),
                   ],
-                  [element.text("Logout")],
+                  [element.text("Login")],
                 ),
               ],
             ),
-        ])
-        }
-      }),
+          ]
+          option.Some(#(handle, is_admin)) -> {
+            // Show navigation links when authenticated
+            let nav_links = [
+              html.a(
+                [
+                  attribute.href("/"),
+                  attribute.class(
+                    "px-3 py-1 text-zinc-400 hover:text-zinc-300 transition-colors",
+                  ),
+                ],
+                [element.text("Home")],
+              ),
+            ]
+
+            // Add Settings link only for admins
+            let nav_links = case is_admin {
+              True ->
+                list.append(nav_links, [
+                  html.a(
+                    [
+                      attribute.href("/settings"),
+                      attribute.class(
+                        "px-3 py-1 text-zinc-400 hover:text-zinc-300 transition-colors",
+                      ),
+                    ],
+                    [element.text("Settings")],
+                  ),
+                ])
+              False -> nav_links
+            }
+
+            list.append(nav_links, [
+              // User handle
+              html.span([attribute.class("px-3 py-1 text-zinc-400")], [
+                element.text(handle),
+              ]),
+              // Logout button
+              html.form(
+                [
+                  attribute.method("POST"),
+                  attribute.action("/logout"),
+                ],
+                [
+                  html.button(
+                    [
+                      attribute.type_("submit"),
+                      attribute.class(
+                        "px-3 py-1 text-zinc-400 hover:text-zinc-300 transition-colors cursor-pointer",
+                      ),
+                    ],
+                    [element.text("Logout")],
+                  ),
+                ],
+              ),
+            ])
+          }
+        },
+      ),
     ]),
   ])
 }

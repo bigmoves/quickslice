@@ -1,7 +1,6 @@
 /// File upload utilities via JavaScript FFI
 ///
 /// Provides base64 encoding for file uploads through GraphQL
-
 /// Read a file and encode it as base64
 /// This is async and uses a callback (dispatch function) to return the result
 @external(javascript, "./file_upload.ffi.mjs", "readFileAsBase64")
