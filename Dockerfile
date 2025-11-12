@@ -42,7 +42,7 @@ RUN cd /build && patch -p1 < patches/mist-websocket-protocol.patch
 # Compile the client code and output to server's static directory
 RUN cd /build/client \
     && gleam add --dev lustre_dev_tools \
-    && gleam run -m lustre/dev build client --minify --outdir=/build/server/priv/static
+    && gleam run -m lustre/dev build quickslice_client --minify --outdir=/build/server/priv/static
 
 # Compile the server code
 RUN cd /build/server \
