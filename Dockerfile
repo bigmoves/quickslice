@@ -18,6 +18,7 @@ ENV GIT_TERMINAL_PROMPT=0
 # Add local dependencies first (these change less frequently)
 COPY ./lexicon /build/lexicon
 COPY ./lexicon_graphql /build/lexicon_graphql
+COPY ./client /build/client
 
 # Add server code
 COPY ./server /build/server
