@@ -58,7 +58,7 @@ RUN cd /build/server \
 FROM ghcr.io/gleam-lang/gleam:${GLEAM_VERSION}-erlang-alpine
 
 # Install runtime dependencies
-RUN apk add --no-cache sqlite-libs
+RUN apk add --no-cache sqlite-libs sqlite
 
 # Copy the compiled server code from the builder stage
 COPY --from=builder /build/server/build/erlang-shipment /app
