@@ -19,27 +19,25 @@ pub fn statistics_decoder() -> decode.Decoder(Statistics) {
 }
 
 pub fn statistics_to_json(input: Statistics) -> json.Json {
-  json.object([
-    #("recordCount", json.int(input.record_count)),
-    #("actorCount", json.int(input.actor_count)),
-    #("lexiconCount", json.int(input.lexicon_count)),
-  ])
+  json.object(
+    [
+      #("recordCount", json.int(input.record_count)),
+      #("actorCount", json.int(input.actor_count)),
+      #("lexiconCount", json.int(input.lexicon_count)),
+    ],
+  )
 }
 
 pub type GetStatisticsResponse {
   GetStatisticsResponse(statistics: Statistics)
 }
 
-pub fn get_statistics_response_decoder() -> decode.Decoder(
-  GetStatisticsResponse,
-) {
+pub fn get_statistics_response_decoder() -> decode.Decoder(GetStatisticsResponse) {
   use statistics <- decode.field("statistics", statistics_decoder())
   decode.success(GetStatisticsResponse(statistics: statistics))
 }
 
-pub fn get_statistics_response_to_json(
-  input: GetStatisticsResponse,
-) -> json.Json {
+pub fn get_statistics_response_to_json(input: GetStatisticsResponse) -> json.Json {
   json.object([#("statistics", statistics_to_json(input.statistics))])
 }
 
@@ -51,8 +49,6 @@ pub fn get_statistics(client: squall.Client) -> Result(Request(String), String) 
   )
 }
 
-pub fn parse_get_statistics_response(
-  body: String,
-) -> Result(GetStatisticsResponse, String) {
+pub fn parse_get_statistics_response(body: String) -> Result(GetStatisticsResponse, String) {
   squall.parse_response(body, get_statistics_response_decoder())
 }

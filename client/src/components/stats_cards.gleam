@@ -50,29 +50,60 @@ pub fn view(cache: Cache) -> Element(msg) {
         stat_card(
           "Total Records",
           number_formatter.format_number(stats.record_count),
+          False,
+          "",
         ),
         stat_card(
           "Total Actors",
           number_formatter.format_number(stats.actor_count),
+          False,
+          "",
         ),
         stat_card(
           "Total Lexicons",
           number_formatter.format_number(stats.lexicon_count),
+          True,
+          "/lexicons",
         ),
       ])
     }
   }
 }
 
-fn stat_card(label: String, value: String) -> Element(msg) {
-  html.div([attribute.class("bg-zinc-800/50 rounded p-4")], [
-    html.div([attribute.class("text-sm text-zinc-500 mb-1")], [
-      html.text(label),
-    ]),
-    html.div([attribute.class("text-2xl font-semibold text-zinc-200")], [
-      html.text(value),
-    ]),
-  ])
+fn stat_card(
+  label: String,
+  value: String,
+  is_clickable: Bool,
+  href: String,
+) -> Element(msg) {
+  case is_clickable {
+    True ->
+      html.a(
+        [
+          attribute.href(href),
+          attribute.class(
+            "bg-zinc-800/50 rounded p-4 block hover:bg-zinc-800 transition-colors cursor-pointer",
+          ),
+        ],
+        [
+          html.div([attribute.class("text-sm text-zinc-500 mb-1")], [
+            html.text(label),
+          ]),
+          html.div([attribute.class("text-2xl font-semibold text-zinc-200")], [
+            html.text(value),
+          ]),
+        ],
+      )
+    False ->
+      html.div([attribute.class("bg-zinc-800/50 rounded p-4")], [
+        html.div([attribute.class("text-sm text-zinc-500 mb-1")], [
+          html.text(label),
+        ]),
+        html.div([attribute.class("text-2xl font-semibold text-zinc-200")], [
+          html.text(value),
+        ]),
+      ])
+  }
 }
 
 fn loading_card(label: String) -> Element(msg) {

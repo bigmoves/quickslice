@@ -12,14 +12,12 @@
 ///   }
 /// }
 /// ```
-@external(javascript, "./quickslice_client.ffi.mjs", "getWindowOrigin")
-fn window_origin() -> String
-
 import components/layout
 import file_upload
 import generated/queries
 import generated/queries/get_activity_buckets.{ONEDAY}
 import generated/queries/get_current_session
+import generated/queries/get_lexicons
 import generated/queries/get_recent_activity
 import generated/queries/get_settings
 import generated/queries/get_statistics
@@ -40,9 +38,13 @@ import lustre/element/html
 import modem
 import navigation
 import pages/home
+import pages/lexicons
 import pages/settings
 import squall/unstable_registry as registry
 import squall_cache
+
+@external(javascript, "./quickslice_client.ffi.mjs", "getWindowOrigin")
+fn window_origin() -> String
 
 pub fn main() {
   let app = lustre.application(init, update, view)
@@ -54,6 +56,7 @@ pub fn main() {
 pub type Route {
   Home
   Settings
+  Lexicons
   Upload
 }
 
@@ -159,6 +162,23 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
         })
       #(final_cache, fx)
     }
+    Lexicons -> {
+      // GetLexicons query
+      let #(cache1, _) =
+        squall_cache.lookup(
+          cache_with_session,
+          "GetLexicons",
+          json.object([]),
+          get_lexicons.parse_get_lexicons_response,
+        )
+
+      // Process pending fetches
+      let #(final_cache, fx) =
+        squall_cache.process_pending(cache1, reg, HandleQueryResponse, fn() {
+          0
+        })
+      #(final_cache, fx)
+    }
     _ -> #(cache_with_session, [])
   }
 
@@ -189,6 +209,7 @@ pub type Msg {
   OnRouteChange(Route)
   HomePageMsg(home.Msg)
   SettingsPageMsg(settings.Msg)
+  LexiconsPageMsg(lexicons.Msg)
   FileRead(Result(String, String))
 }
 
@@ -585,6 +606,34 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             }
           }
         }
+        Lexicons -> {
+          // Fetch lexicons data
+          let #(cache_with_lookup, _) =
+            squall_cache.lookup(
+              model.cache,
+              "GetLexicons",
+              json.object([]),
+              get_lexicons.parse_get_lexicons_response,
+            )
+
+          let #(final_cache, effects) =
+            squall_cache.process_pending(
+              cache_with_lookup,
+              model.registry,
+              HandleQueryResponse,
+              fn() { 0 },
+            )
+
+          #(
+            Model(
+              ..model,
+              route: route,
+              cache: final_cache,
+              settings_page_model: cleared_settings_model,
+            ),
+            effect.batch(effects),
+          )
+        }
         _ -> #(
           Model(
             ..model,
@@ -878,6 +927,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       )
     }
 
+    LexiconsPageMsg(msg) -> {
+      let eff = lexicons.update(msg)
+      #(model, effect.map(eff, LexiconsPageMsg))
+    }
+
     FileRead(Error(err)) -> {
       // Handle file read error
       io.println("[FileRead] Error reading file: " <> err)
@@ -905,6 +959,7 @@ fn view(model: Model) -> Element(Msg) {
         case model.route {
           Home -> view_home(model)
           Settings -> view_settings(model)
+          Lexicons -> view_lexicons(model)
           Upload -> view_upload(model)
         },
       ]),
@@ -936,6 +991,10 @@ fn view_settings(model: Model) -> Element(Msg) {
   )
 }
 
+fn view_lexicons(model: Model) -> Element(Msg) {
+  element.map(lexicons.view(model.cache), LexiconsPageMsg)
+}
+
 fn view_upload(_model: Model) -> Element(Msg) {
   html.div([], [
     html.h1([attribute.class("text-xl font-bold text-zinc-100 mb-4")], [
@@ -957,6 +1016,7 @@ fn parse_route(uri: uri.Uri) -> Route {
   case uri.path {
     "/" -> Home
     "/settings" -> Settings
+    "/lexicons" -> Lexicons
     "/upload" -> Upload
     _ -> Home
   }

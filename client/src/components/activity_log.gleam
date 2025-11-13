@@ -51,7 +51,7 @@ pub fn view(cache: Cache, hours: Int) -> Element(msg) {
       // Header
       html.div([attribute.class("flex items-center justify-between mb-3")], [
         html.div([attribute.class("text-sm text-zinc-500")], [
-          element.text("JetStream Activity"),
+          element.text("Jetstream Activity"),
         ]),
         case result {
           squall_cache.Data(data) ->

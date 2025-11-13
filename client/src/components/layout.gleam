@@ -8,8 +8,8 @@ import lustre/element/html
 /// Renders the unified header with logo and nav
 /// auth_info: Option containing (handle, is_admin) if authenticated, None if not
 pub fn header(auth_info: Option(#(String, Bool))) -> Element(msg) {
-  html.div([attribute.class("border-b border-zinc-800 pb-4 mb-8")], [
-    html.div([attribute.class("flex items-end justify-between")], [
+  html.div([attribute.class("border-b border-zinc-800 pb-3 mb-8")], [
+    html.div([attribute.class("flex items-center justify-between")], [
       // Left: Brand with logo
       html.a(
         [

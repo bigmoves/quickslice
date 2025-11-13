@@ -16,10 +16,7 @@ pub fn reset_all_response_to_json(input: ResetAllResponse) -> json.Json {
   json.object([#("resetAll", json.bool(input.reset_all))])
 }
 
-pub fn reset_all(
-  client: squall.Client,
-  confirm: String,
-) -> Result(Request(String), String) {
+pub fn reset_all(client: squall.Client, confirm: String) -> Result(Request(String), String) {
   squall.prepare_request(
     client,
     "mutation ResetAll($confirm: String!) {\n  resetAll(confirm: $confirm)\n}",
@@ -27,8 +24,6 @@ pub fn reset_all(
   )
 }
 
-pub fn parse_reset_all_response(
-  body: String,
-) -> Result(ResetAllResponse, String) {
+pub fn parse_reset_all_response(body: String) -> Result(ResetAllResponse, String) {
   squall.parse_response(body, reset_all_response_decoder())
 }

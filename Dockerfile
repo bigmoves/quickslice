@@ -7,6 +7,8 @@ FROM ghcr.io/gleam-lang/gleam:${GLEAM_VERSION}-erlang-alpine AS builder
 RUN apk add --no-cache \
     bash \
     git \
+    nodejs \
+    npm \
     build-base \
     sqlite-dev \
     rust \
@@ -32,12 +34,16 @@ RUN cd /build/lexicon/native/lexicon_nif && cargo build --release && \
     cp /build/lexicon/native/lexicon_nif/target/release/liblexicon_nif.so /build/lexicon/priv/liblexicon_nif.so
 
 # Install dependencies for all projects
+RUN cd /build/client && gleam deps download
 RUN cd /build/lexicon && gleam deps download
 RUN cd /build/lexicon_graphql && gleam deps download
 RUN cd /build/server && gleam deps download
 
 # Apply patches to dependencies
 RUN cd /build && patch -p1 < patches/mist-websocket-protocol.patch
+
+# Install JavaScript dependencies for client
+RUN cd /build/client && npm install
 
 # Compile the client code and output to server's static directory
 RUN cd /build/client \

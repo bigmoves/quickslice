@@ -10,9 +10,6 @@ outdir = "../server/priv/static"
 
 [tools.lustre.html]
 title = "quickslice"
-stylesheets = [
-  { href = "/styles.css" }
-]
 
 [dependencies]
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"

@@ -10,17 +10,13 @@ import { Error, Ok } from "./gleam.mjs";
  * @returns {void}
  */
 export function readFileAsBase64(fileInputId, dispatch) {
-  console.log("[readFileAsBase64] Called with fileInputId:", fileInputId);
   const input = document.getElementById(fileInputId);
 
   if (!input) {
-    console.log("[readFileAsBase64] File input not found");
     dispatch(new Error("File input not found"));
     return;
   }
 
-  console.log("[readFileAsBase64] Input element:", input);
-  console.log("[readFileAsBase64] Input files:", input.files);
   const file = input.files?.[0];
 
   if (!file) {
@@ -28,8 +24,6 @@ export function readFileAsBase64(fileInputId, dispatch) {
     dispatch(new Error("No file selected"));
     return;
   }
-
-  console.log("[readFileAsBase64] Reading file:", file.name);
 
   const reader = new FileReader();
 
@@ -57,6 +51,6 @@ export function readFileAsBase64(fileInputId, dispatch) {
 export function clearFileInput(fileInputId) {
   const input = document.getElementById(fileInputId);
   if (input) {
-    input.value = '';
+    input.value = "";
   }
 }

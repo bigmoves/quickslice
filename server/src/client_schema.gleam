@@ -246,6 +246,60 @@ pub fn activity_bucket_type() -> schema.Type {
   ])
 }
 
+/// Lexicon type for AT Protocol lexicon schemas
+pub fn lexicon_type() -> schema.Type {
+  schema.object_type("Lexicon", "AT Protocol lexicon schema definition", [
+    schema.field(
+      "id",
+      schema.non_null(schema.string_type()),
+      "Lexicon NSID (e.g., app.bsky.feed.post)",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "id") {
+              Ok(id) -> Ok(id)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
+    schema.field(
+      "json",
+      schema.non_null(schema.string_type()),
+      "Full lexicon JSON content",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "json") {
+              Ok(json) -> Ok(json)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
+    schema.field(
+      "createdAt",
+      schema.non_null(schema.string_type()),
+      "Timestamp when lexicon was created",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "createdAt") {
+              Ok(created_at) -> Ok(created_at)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
+  ])
+}
+
 /// Settings type for configuration
 pub fn settings_type() -> schema.Type {
   schema.object_type("Settings", "System settings and configuration", [
@@ -475,6 +529,14 @@ fn settings_to_value(
   ])
 }
 
+fn lexicon_to_value(lexicon: database.Lexicon) -> value.Value {
+  value.Object([
+    #("id", value.String(lexicon.id)),
+    #("json", value.String(lexicon.json)),
+    #("createdAt", value.String(lexicon.created_at)),
+  ])
+}
+
 // ===== Query Type =====
 
 pub fn query_type(
@@ -535,6 +597,18 @@ pub fn query_type(
         }
 
         Ok(settings_to_value(domain_authority, oauth_client_id))
+      },
+    ),
+    // lexicons query
+    schema.field(
+      "lexicons",
+      schema.non_null(schema.list_type(schema.non_null(lexicon_type()))),
+      "Get all lexicons",
+      fn(_ctx) {
+        case database.get_all_lexicons(conn) {
+          Ok(lexicons) -> Ok(value.List(list.map(lexicons, lexicon_to_value)))
+          Error(_) -> Error("Failed to fetch lexicons")
+        }
       },
     ),
     // activityBuckets query with TimeRange argument

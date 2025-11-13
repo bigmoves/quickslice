@@ -1,0 +1,8 @@
+{
+  "name": "quickslice_client",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "lucide": "^0.548.0"
+  }
+}
