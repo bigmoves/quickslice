@@ -26,6 +26,7 @@ pub fn view(
   time_range: get_activity_buckets.TimeRange,
   is_backfilling: Bool,
   is_admin: Bool,
+  is_authenticated: Bool,
 ) -> Element(Msg) {
   // Get statistics to check lexicon count
   let #(_cache1, stats_result) =
@@ -58,31 +59,35 @@ pub fn view(
   html.div([], [
     // Configuration alerts
     alerts,
-    // Action buttons
-    html.div([attribute.class("mb-8 flex gap-3")], case is_admin {
-      True -> [
-        button.button(
-          disabled: False,
-          on_click: OpenGraphiQL,
-          text: "Open GraphiQL",
-        ),
-        button.button(
-          disabled: is_backfilling,
-          on_click: TriggerBackfill,
-          text: case is_backfilling {
-            True -> "Backfilling..."
-            False -> "Trigger Backfill"
-          },
-        ),
-      ]
-      False -> [
-        button.button(
-          disabled: False,
-          on_click: OpenGraphiQL,
-          text: "Open GraphiQL",
-        ),
-      ]
-    }),
+    // Action buttons (only shown when authenticated)
+    case is_authenticated {
+      True ->
+        html.div([attribute.class("mb-8 flex gap-3")], case is_admin {
+          True -> [
+            button.button(
+              disabled: False,
+              on_click: OpenGraphiQL,
+              text: "Open GraphiQL",
+            ),
+            button.button(
+              disabled: is_backfilling,
+              on_click: TriggerBackfill,
+              text: case is_backfilling {
+                True -> "Backfilling..."
+                False -> "Trigger Backfill"
+              },
+            ),
+          ]
+          False -> [
+            button.button(
+              disabled: False,
+              on_click: OpenGraphiQL,
+              text: "Open GraphiQL",
+            ),
+          ]
+        })
+      False -> element.none()
+    },
     // Stats cards component
     stats_cards.view(cache),
     // Activity chart component

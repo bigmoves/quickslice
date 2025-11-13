@@ -968,13 +968,19 @@ fn view(model: Model) -> Element(Msg) {
 }
 
 fn view_home(model: Model) -> Element(Msg) {
-  let is_admin = case model.auth_state {
-    Authenticated(_, _, is_admin) -> is_admin
-    NotAuthenticated -> False
+  let #(is_admin, is_authenticated) = case model.auth_state {
+    Authenticated(_, _, is_admin) -> #(is_admin, True)
+    NotAuthenticated -> #(False, False)
   }
 
   element.map(
-    home.view(model.cache, model.time_range, model.is_backfilling, is_admin),
+    home.view(
+      model.cache,
+      model.time_range,
+      model.is_backfilling,
+      is_admin,
+      is_authenticated,
+    ),
     HomePageMsg,
   )
 }
