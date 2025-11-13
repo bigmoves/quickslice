@@ -12,6 +12,9 @@
 ///   }
 /// }
 /// ```
+@external(javascript, "./quickslice_client.ffi.mjs", "getWindowOrigin")
+fn window_origin() -> String
+
 import components/layout
 import file_upload
 import generated/queries
@@ -72,8 +75,8 @@ pub type Model {
 }
 
 fn init(_flags) -> #(Model, Effect(Msg)) {
-  // Create cache
-  let cache = squall_cache.new("http://localhost:8000/admin/graphql")
+  let api_url = window_origin() <> "/admin/graphql"
+  let cache = squall_cache.new(api_url)
 
   // Initialize registry with all extracted queries
   let reg = queries.init_registry()
