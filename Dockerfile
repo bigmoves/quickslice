@@ -66,6 +66,9 @@ COPY --from=builder /build/server/build/erlang-shipment /app
 # Set up the entrypoint
 WORKDIR /app
 
+# Create the data directory for the SQLite database and Fly.io volume mount
+RUN mkdir -p /data && chmod 755 /data
+
 # Set environment variables
 ENV HOST=0.0.0.0
 ENV PORT=8000
