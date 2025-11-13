@@ -276,6 +276,10 @@ fn start_server(
 ) {
   wisp.configure_logger()
 
+  // Get priv directory for serving static files
+  let assert Ok(priv_directory) = wisp.priv_directory("server")
+  let static_directory = priv_directory <> "/static"
+
   // Get secret_key_base from environment or generate one
   let secret_key_base = case envoy.get("SECRET_KEY_BASE") {
     Ok(key) -> {
@@ -472,7 +476,7 @@ fn start_server(
       jetstream_consumer: jetstream_subject,
     )
 
-  let handler = fn(req) { handle_request(req, ctx) }
+  let handler = fn(req) { handle_request(req, ctx, static_directory) }
 
   logging.log(
     logging.Info,
@@ -532,17 +536,18 @@ fn start_server(
   process.sleep_forever()
 }
 
-fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
-  use _req <- middleware(req)
+fn handle_request(
+  req: wisp.Request,
+  ctx: Context,
+  static_directory: String,
+) -> wisp.Response {
+  use _req <- middleware(req, static_directory)
 
   let segments = wisp.path_segments(req)
 
   case segments {
     [] -> index_route(req, ctx)
     ["health"] -> handle_health_check(ctx)
-    // Serve client static files (bundled by lustre dev tools)
-    ["quickslice_client.js"] -> serve_static_file(["quickslice_client.js"])
-    ["styles.css"] -> serve_static_file(["styles.css"])
     ["oauth", "authorize"] ->
       handlers.handle_oauth_authorize(req, ctx.db, ctx.oauth_config)
     ["oauth", "callback"] ->
@@ -727,7 +732,11 @@ fn handle_health_check(ctx: Context) -> wisp.Response {
 
 fn index_route(_req: wisp.Request, _ctx: Context) -> wisp.Response {
   // Serve the client SPA's index.html (bundled by lustre dev tools)
-  case simplifile.read("priv/static/index.html") {
+  // The priv directory is resolved at startup and passed through the handler
+  let assert Ok(priv_dir) = wisp.priv_directory("server")
+  let index_path = priv_dir <> "/static/index.html"
+
+  case simplifile.read(index_path) {
     Ok(contents) -> wisp.html_response(contents, 200)
     Error(_) ->
       wisp.html_response(
@@ -737,48 +746,15 @@ fn index_route(_req: wisp.Request, _ctx: Context) -> wisp.Response {
   }
 }
 
-fn serve_static_file(path_segments: List(String)) -> wisp.Response {
-  let file_path = "priv/static/" <> string.join(path_segments, "/")
-
-  case simplifile.read(file_path) {
-    Ok(contents) -> {
-      // Determine content type based on file extension
-      let content_type = case list.last(path_segments) {
-        Ok(filename) -> {
-          case
-            string.ends_with(filename, ".mjs")
-            || string.ends_with(filename, ".js")
-          {
-            True -> "application/javascript"
-            False ->
-              case string.ends_with(filename, ".css") {
-                True -> "text/css"
-                False ->
-                  case string.ends_with(filename, ".html") {
-                    True -> "text/html"
-                    False -> "application/octet-stream"
-                  }
-              }
-          }
-        }
-        Error(_) -> "application/octet-stream"
-      }
-
-      wisp.response(200)
-      |> wisp.set_header("content-type", content_type)
-      |> wisp.set_body(wisp.Text(contents))
-    }
-    Error(_) -> wisp.response(404) |> wisp.set_body(wisp.Text("Not found"))
-  }
-}
-
 fn middleware(
   req: wisp.Request,
+  static_directory: String,
   handle_request: fn(wisp.Request) -> wisp.Response,
 ) -> wisp.Response {
   use <- wisp.rescue_crashes
   use <- wisp.log_request(req)
   use req <- wisp.handle_head(req)
+  use <- wisp.serve_static(req, under: "/", from: static_directory)
 
   // Get origin from request headers
   let origin = case request.get_header(req, "origin") {
