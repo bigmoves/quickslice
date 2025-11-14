@@ -20,16 +20,40 @@ pub type Message {
   Restart(reply_with: process.Subject(Result(Nil, String)))
 }
 
+/// Messages for cursor tracker actor
+pub type CursorMessage {
+  UpdateCursor(time_us: Int)
+  FlushCursor(reply_with: process.Subject(Nil))
+}
+
 /// Internal state of the Jetstream consumer actor
 type State {
-  State(db: sqlight.Connection, consumer_pid: option.Option(process.Pid))
+  State(
+    db: sqlight.Connection,
+    consumer_pid: option.Option(process.Pid),
+    cursor_tracker_pid: option.Option(process.Pid),
+  )
+}
+
+/// State for cursor tracker
+type CursorState {
+  CursorState(
+    db: sqlight.Connection,
+    latest_cursor: option.Option(Int),
+    last_flush_time: Int,
+  )
 }
 
 /// Start the Jetstream consumer actor
 pub fn start(db: sqlight.Connection) -> Result(process.Subject(Message), String) {
   case start_consumer_process(db) {
     Ok(consumer_pid) -> {
-      let initial_state = State(db: db, consumer_pid: option.Some(consumer_pid))
+      let initial_state =
+        State(
+          db: db,
+          consumer_pid: option.Some(consumer_pid),
+          cursor_tracker_pid: option.None,
+        )
 
       let result =
         actor.new(initial_state)
@@ -45,7 +69,12 @@ pub fn start(db: sqlight.Connection) -> Result(process.Subject(Message), String)
     Error(err) -> {
       // Consumer failed to start, but we still create the actor so it can be restarted later
       logging.log(logging.Warning, "[jetstream] " <> err)
-      let initial_state = State(db: db, consumer_pid: option.None)
+      let initial_state =
+        State(
+          db: db,
+          consumer_pid: option.None,
+          cursor_tracker_pid: option.None,
+        )
 
       let result =
         actor.new(initial_state)
@@ -109,6 +138,124 @@ fn handle_message(state: State, message: Message) -> actor.Next(State, Message) 
         Error(err) -> {
           process.send(client, Error(err))
           actor.continue(State(..state, consumer_pid: option.None))
+        }
+      }
+    }
+  }
+}
+
+/// Get current timestamp in seconds (for tracking flush intervals)
+@external(erlang, "erlang", "system_time")
+fn erlang_system_time(unit: Int) -> Int
+
+fn get_current_time_seconds() -> Int {
+  // Time unit: 1 = seconds
+  erlang_system_time(1)
+}
+
+/// Handle cursor tracker messages
+fn handle_cursor_message(
+  state: CursorState,
+  message: CursorMessage,
+) -> actor.Next(CursorState, CursorMessage) {
+  case message {
+    UpdateCursor(time_us) -> {
+      let current_time = get_current_time_seconds()
+      let time_since_last_flush = current_time - state.last_flush_time
+
+      // Update latest cursor
+      let new_state = CursorState(..state, latest_cursor: option.Some(time_us))
+
+      // Flush every 5 seconds
+      case time_since_last_flush >= 5 {
+        True -> {
+          // Flush the new cursor value (time_us)
+          case database.set_jetstream_cursor(state.db, time_us) {
+            Ok(_) -> {
+              actor.continue(
+                CursorState(
+                  db: state.db,
+                  last_flush_time: current_time,
+                  latest_cursor: option.None,
+                ),
+              )
+            }
+            Error(err) -> {
+              logging.log(
+                logging.Error,
+                "[jetstream] Failed to update cursor: " <> string.inspect(err),
+              )
+              // Keep the cursor in state so we can retry on next flush
+              actor.continue(new_state)
+            }
+          }
+        }
+        False -> actor.continue(new_state)
+      }
+    }
+
+    FlushCursor(client) -> {
+      // Force flush current cursor
+      case state.latest_cursor {
+        option.Some(cursor) -> {
+          case database.set_jetstream_cursor(state.db, cursor) {
+            Ok(_) -> {
+              process.send(client, Nil)
+              actor.continue(
+                CursorState(
+                  ..state,
+                  latest_cursor: option.None,
+                  last_flush_time: get_current_time_seconds(),
+                ),
+              )
+            }
+            Error(err) -> {
+              logging.log(
+                logging.Error,
+                "[jetstream] Failed to flush cursor: " <> string.inspect(err),
+              )
+              process.send(client, Nil)
+              actor.continue(state)
+            }
+          }
+        }
+        option.None -> {
+          process.send(client, Nil)
+          actor.continue(state)
+        }
+      }
+    }
+  }
+}
+
+/// Start cursor tracker actor
+fn start_cursor_tracker(
+  db: sqlight.Connection,
+  disable_cursor: Bool,
+) -> option.Option(process.Subject(CursorMessage)) {
+  case disable_cursor {
+    True -> option.None
+    False -> {
+      let initial_state =
+        CursorState(
+          db: db,
+          latest_cursor: option.None,
+          last_flush_time: get_current_time_seconds(),
+        )
+
+      case
+        actor.new(initial_state)
+        |> actor.on_message(handle_cursor_message)
+        |> actor.start
+      {
+        Ok(started) -> option.Some(started.data)
+        Error(err) -> {
+          logging.log(
+            logging.Error,
+            "[jetstream] Failed to start cursor tracker: "
+              <> string.inspect(err),
+          )
+          option.None
         }
       }
     }
@@ -196,13 +343,62 @@ fn start_consumer_process(db: sqlight.Connection) -> Result(process.Pid, String)
             Error(_) -> "wss://jetstream2.us-west.bsky.network/subscribe"
           }
 
+          // Check if cursor tracking is disabled via environment variable
+          let disable_cursor = case envoy.get("JETSTREAM_DISABLE_CURSOR") {
+            Ok(value) ->
+              case string.lowercase(value) {
+                "true" | "1" | "yes" -> True
+                _ -> False
+              }
+            Error(_) -> False
+          }
+
+          // Read cursor from database unless disabled
+          let cursor = case disable_cursor {
+            True -> {
+              logging.log(
+                logging.Info,
+                "[jetstream] Cursor tracking disabled via JETSTREAM_DISABLE_CURSOR",
+              )
+              option.None
+            }
+            False -> {
+              case database.get_jetstream_cursor(db) {
+                Ok(option.Some(cursor)) -> {
+                  logging.log(
+                    logging.Info,
+                    "[jetstream] Resuming from cursor: "
+                      <> int.to_string(cursor),
+                  )
+                  option.Some(cursor)
+                }
+                Ok(option.None) -> {
+                  logging.log(
+                    logging.Info,
+                    "[jetstream] No cursor found, starting from live stream",
+                  )
+                  option.None
+                }
+                Error(err) -> {
+                  logging.log(
+                    logging.Error,
+                    "[jetstream] Failed to read cursor: "
+                      <> string.inspect(err)
+                      <> ", starting from live stream",
+                  )
+                  option.None
+                }
+              }
+            }
+          }
+
           // Create unified Jetstream config for all collections (no DID filter - listen to all)
           let unified_config =
             goose.JetstreamConfig(
               endpoint: jetstream_url,
               wanted_collections: all_collection_ids,
               wanted_dids: [],
-              cursor: option.None,
+              cursor: cursor,
               max_message_size_bytes: option.None,
               compress: False,
               require_hello: False,
@@ -221,6 +417,9 @@ fn start_consumer_process(db: sqlight.Connection) -> Result(process.Pid, String)
               <> " (all DIDs, filtered client-side for external)",
           )
 
+          // Start cursor tracker
+          let cursor_tracker = start_cursor_tracker(db, disable_cursor)
+
           // Start the unified consumer
           let local_collections = local_collection_ids
           let ext_collections = external_collection_ids
@@ -236,6 +435,7 @@ fn start_consumer_process(db: sqlight.Connection) -> Result(process.Pid, String)
                       local_collections,
                       ext_collections,
                       plc_url,
+                      cursor_tracker,
                     )
                   })
                 Nil
@@ -280,9 +480,16 @@ fn handle_jetstream_event(
   collection_ids: List(String),
   external_collection_ids: List(String),
   plc_url: String,
+  cursor_tracker: option.Option(process.Subject(CursorMessage)),
 ) -> Nil {
   case goose.parse_event(event_json) {
     goose.CommitEvent(did, time_us, commit) -> {
+      // Update cursor tracker with latest time_us
+      case cursor_tracker {
+        option.Some(tracker) -> process.send(tracker, UpdateCursor(time_us))
+        option.None -> Nil
+      }
+
       // Check if this is an external collection event
       let is_external =
         list.contains(external_collection_ids, commit.collection)

@@ -298,6 +298,25 @@ fn migration_v4(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   sqlight.exec(create_timestamp_index_sql, conn)
 }
 
+/// Migration v5: Add jetstream_cursor table for cursor tracking
+fn migration_v5(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+  logging.log(
+    logging.Info,
+    "Running migration v5 (jetstream_cursor table)...",
+  )
+
+  let create_table_sql =
+    "
+    CREATE TABLE IF NOT EXISTS jetstream_cursor (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      cursor INTEGER NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  "
+
+  sqlight.exec(create_table_sql, conn)
+}
+
 /// Runs all pending migrations based on current schema version
 fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   use current_version <- result.try(get_current_version(conn))
@@ -314,34 +333,43 @@ fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
       use _ <- result.try(apply_migration(conn, 1, migration_v1))
       use _ <- result.try(apply_migration(conn, 2, migration_v2))
       use _ <- result.try(apply_migration(conn, 3, migration_v3))
-      apply_migration(conn, 4, migration_v4)
+      use _ <- result.try(apply_migration(conn, 4, migration_v4))
+      apply_migration(conn, 5, migration_v5)
     }
 
-    // Run v2, v3, and v4 migrations
+    // Run v2, v3, v4, and v5 migrations
     1 -> {
       use _ <- result.try(apply_migration(conn, 2, migration_v2))
       use _ <- result.try(apply_migration(conn, 3, migration_v3))
-      apply_migration(conn, 4, migration_v4)
+      use _ <- result.try(apply_migration(conn, 4, migration_v4))
+      apply_migration(conn, 5, migration_v5)
     }
 
-    // Run v3 and v4 migrations
+    // Run v3, v4, and v5 migrations
     2 -> {
       use _ <- result.try(apply_migration(conn, 3, migration_v3))
-      apply_migration(conn, 4, migration_v4)
+      use _ <- result.try(apply_migration(conn, 4, migration_v4))
+      apply_migration(conn, 5, migration_v5)
     }
 
-    // Run v4 migration
-    3 -> apply_migration(conn, 4, migration_v4)
+    // Run v4 and v5 migrations
+    3 -> {
+      use _ <- result.try(apply_migration(conn, 4, migration_v4))
+      apply_migration(conn, 5, migration_v5)
+    }
+
+    // Run v5 migration
+    4 -> apply_migration(conn, 5, migration_v5)
 
     // Already at latest version
-    4 -> {
-      logging.log(logging.Info, "Schema is up to date (v4)")
+    5 -> {
+      logging.log(logging.Info, "Schema is up to date (v5)")
       Ok(Nil)
     }
 
     // Future versions would be handled here:
-    // 4 -> apply_migration(conn, 5, migration_v5)
     // 5 -> apply_migration(conn, 6, migration_v6)
+    // 6 -> apply_migration(conn, 7, migration_v7)
     _ -> {
       logging.log(
         logging.Error,
@@ -518,6 +546,65 @@ pub fn delete_all_jetstream_activity(
   conn: sqlight.Connection,
 ) -> Result(Nil, sqlight.Error) {
   let sql = "DELETE FROM jetstream_activity"
+
+  sqlight.exec(sql, conn)
+  |> result.map(fn(_) { Nil })
+}
+
+// ===== Jetstream Cursor Functions =====
+
+/// Gets the current Jetstream cursor value
+pub fn get_jetstream_cursor(
+  conn: sqlight.Connection,
+) -> Result(Option(Int), sqlight.Error) {
+  let sql =
+    "
+    SELECT cursor
+    FROM jetstream_cursor
+    WHERE id = 1
+  "
+
+  let decoder = {
+    use cursor <- decode.field(0, decode.int)
+    decode.success(cursor)
+  }
+
+  case sqlight.query(sql, on: conn, with: [], expecting: decoder) {
+    Ok([cursor]) -> Ok(Some(cursor))
+    Ok([]) -> Ok(None)
+    Ok(_) -> Ok(None)
+    Error(err) -> Error(err)
+  }
+}
+
+/// Sets or updates the Jetstream cursor value
+pub fn set_jetstream_cursor(
+  conn: sqlight.Connection,
+  cursor: Int,
+) -> Result(Nil, sqlight.Error) {
+  let sql =
+    "
+    INSERT INTO jetstream_cursor (id, cursor, updated_at)
+    VALUES (1, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      cursor = excluded.cursor,
+      updated_at = datetime('now')
+  "
+
+  use _ <- result.try(sqlight.query(
+    sql,
+    on: conn,
+    with: [sqlight.int(cursor)],
+    expecting: decode.string,
+  ))
+  Ok(Nil)
+}
+
+/// Clears the Jetstream cursor (for dev reset)
+pub fn clear_jetstream_cursor(
+  conn: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
+  let sql = "DELETE FROM jetstream_cursor WHERE id = 1"
 
   sqlight.exec(sql, conn)
   |> result.map(fn(_) { Nil })
