@@ -4,7 +4,8 @@ import gleam/json
 import gleam/list
 import gleam/result
 import gleam/string
-import lexicon
+import honk
+import gleam/dict
 import logging
 import simplifile
 import sqlight
@@ -44,24 +45,33 @@ pub fn import_lexicons_from_directory(
 
   logging.log(logging.Info, "[import] Validating all lexicons together...")
 
-  // Extract all JSON strings for validation
+  // Extract all JSON strings and parse them to Json objects
   let all_json_strings = list.map(file_contents, fn(pair) { pair.1 })
+  let all_json_results =
+    honk.parse_json_strings(all_json_strings)
+    |> result.map_error(fn(_) { "Failed to parse JSON" })
 
-  // Validate all schemas together (this allows cross-references to be resolved)
-  let validation_result = case lexicon.validate_schemas(all_json_strings) {
-    Ok(_) -> {
-      logging.log(
-        logging.Info,
-        "[import]   All lexicons validated successfully",
-      )
-      Ok(Nil)
-    }
-    Error(err) -> {
-      logging.log(
-        logging.Error,
-        "[import]   Validation failed: " <> format_validation_error(err),
-      )
-      Error("Validation failed")
+  let validation_result = case all_json_results {
+    Ok(all_jsons) ->
+      case honk.validate(all_jsons) {
+        Ok(_) -> {
+          logging.log(
+            logging.Info,
+            "[import]   All lexicons validated successfully",
+          )
+          Ok(Nil)
+        }
+        Error(err_map) -> {
+          logging.log(
+            logging.Error,
+            "[import]   Validation failed: " <> format_validation_errors(err_map),
+          )
+          Error("Validation failed")
+        }
+      }
+    Error(_) -> {
+      logging.log(logging.Error, "[import]   Failed to parse JSON")
+      Error("Failed to parse JSON")
     }
   }
 
@@ -176,9 +186,15 @@ pub fn parse_and_validate_lexicon(
   use lexicon_id <- result.try(extract_lexicon_id(json_content))
 
   // Validate using lexicon package
-  case lexicon.validate_schemas([json_content]) {
+  use json_obj <- result.try(
+    honk.parse_json_string(json_content)
+    |> result.map_error(fn(_) { "Failed to parse JSON" }),
+  )
+
+  case honk.validate([json_obj]) {
     Ok(_) -> Ok(#(lexicon_id, json_content))
-    Error(err) -> Error("Validation failed: " <> format_validation_error(err))
+    Error(err_map) ->
+      Error("Validation failed: " <> format_validation_errors(err_map))
   }
 }
 
@@ -207,10 +223,15 @@ fn extract_lexicon_id(json_content: String) -> Result(String, String) {
   }
 }
 
-/// Formats validation errors into readable strings
-fn format_validation_error(error: lexicon.ValidationError) -> String {
-  // Just convert to string for now - the lexicon package will provide details
-  string.inspect(error)
+/// Formats validation errors from error map into readable strings
+fn format_validation_errors(error_map: dict.Dict(String, List(String))) -> String {
+  error_map
+  |> dict.to_list
+  |> list.flat_map(fn(entry) {
+    let #(_key, errors) = entry
+    errors
+  })
+  |> string.join(", ")
 }
 
 /// Imports a single lexicon file (with validation)

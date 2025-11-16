@@ -15,7 +15,8 @@ import gleam/json
 import gleam/list
 import gleam/option
 import gleam/result
-import lexicon
+import honk
+import honk/errors
 import sqlight
 import swell/schema
 import swell/value
@@ -29,32 +30,6 @@ pub type MutationContext {
     collection_ids: List(String),
     external_collection_ids: List(String),
   )
-}
-
-/// Convert GraphQL value to JSON string for AT Protocol
-fn graphql_value_to_json(val: value.Value) -> String {
-  case val {
-    value.String(s) -> json.string(s) |> json.to_string
-    value.Int(i) -> json.int(i) |> json.to_string
-    value.Float(f) -> json.float(f) |> json.to_string
-    value.Boolean(b) -> json.bool(b) |> json.to_string
-    value.Null -> json.null() |> json.to_string
-    value.Enum(e) -> json.string(e) |> json.to_string
-    value.List(items) -> {
-      json.array(items, graphql_value_to_json_value)
-      |> json.to_string
-    }
-    value.Object(fields) -> {
-      json.object(
-        fields
-        |> list.map(fn(field) {
-          let #(key, val) = field
-          #(key, graphql_value_to_json_value(val))
-        }),
-      )
-      |> json.to_string
-    }
-  }
 }
 
 /// Convert GraphQL value to JSON value (not string)
@@ -160,7 +135,8 @@ pub fn create_resolver_factory(
     )
 
     // Step 5: Convert input to JSON for validation and AT Protocol
-    let record_json = graphql_value_to_json(input)
+    let record_json_value = graphql_value_to_json_value(input)
+    let record_json_string = json.to_string(record_json_value)
 
     // Step 6: Validate against lexicon
     use lexicon_records <- result.try(
@@ -170,10 +146,18 @@ pub fn create_resolver_factory(
 
     case lexicon_records {
       [lex, ..] -> {
+        // Parse lexicon JSON string to Json
+        use lex_json <- result.try(
+          honk.parse_json_string(lex.json)
+          |> result.map_error(fn(e) {
+            "Failed to parse lexicon JSON: " <> errors.to_string(e)
+          }),
+        )
+
         use _ <- result.try(
-          lexicon.validate_record([lex.json], collection, record_json)
+          honk.validate_record([lex_json], collection, record_json_value)
           |> result.map_error(fn(err) {
-            "Validation failed: " <> lexicon.describe_error(err)
+            "Validation failed: " <> errors.to_string(err)
           }),
         )
 
@@ -239,7 +223,7 @@ pub fn create_resolver_factory(
             cid,
             user_info.did,
             collection,
-            record_json,
+            record_json_string,
           )
           |> result.map_error(fn(_) { "Failed to index record in database" }),
         )
@@ -346,7 +330,8 @@ pub fn update_resolver_factory(
     )
 
     // Step 5: Convert input to JSON for validation and AT Protocol
-    let record_json = graphql_value_to_json(input)
+    let record_json_value = graphql_value_to_json_value(input)
+    let record_json_string = json.to_string(record_json_value)
 
     // Step 6: Validate against lexicon
     use lexicon_records <- result.try(
@@ -356,10 +341,18 @@ pub fn update_resolver_factory(
 
     case lexicon_records {
       [lex, ..] -> {
+        // Parse lexicon JSON string to Json
+        use lex_json <- result.try(
+          honk.parse_json_string(lex.json)
+          |> result.map_error(fn(e) {
+            "Failed to parse lexicon JSON: " <> errors.to_string(e)
+          }),
+        )
+
         use _ <- result.try(
-          lexicon.validate_record([lex.json], collection, record_json)
+          honk.validate_record([lex_json], collection, record_json_value)
           |> result.map_error(fn(err) {
-            "Validation failed: " <> lexicon.describe_error(err)
+            "Validation failed: " <> errors.to_string(err)
           }),
         )
 
@@ -408,7 +401,7 @@ pub fn update_resolver_factory(
 
         // Step 9: Update the record in the database
         use _ <- result.try(
-          database.update_record(ctx.db, uri, cid, record_json)
+          database.update_record(ctx.db, uri, cid, record_json_string)
           |> result.map_error(fn(_) { "Failed to update record in database" }),
         )
 

@@ -12,7 +12,7 @@ import gleam/string
 import gleeunit/should
 import graphql_handler
 import importer
-import lexicon
+import honk
 import simplifile
 import sqlight
 import wisp
@@ -35,13 +35,17 @@ fn load_grain_lexicons(db: sqlight.Connection) -> Result(Nil, String) {
       }
     })
 
-  // Extract all JSON strings for validation
+  // Extract all JSON strings and parse to Json objects
   let all_json_strings = list.map(file_contents, fn(pair) { pair.1 })
+  use all_jsons <- result.try(
+    honk.parse_json_strings(all_json_strings)
+    |> result.map_error(fn(_) { "Failed to parse JSON" })
+  )
 
   // Validate all schemas together (this allows cross-references to be resolved)
-  use _ <- result.try(case lexicon.validate_schemas(all_json_strings) {
+  use _ <- result.try(case honk.validate(all_jsons) {
     Ok(_) -> Ok(Nil)
-    Error(err) -> Error("Validation failed: " <> string.inspect(err))
+    Error(err_map) -> Error("Validation failed: " <> string.inspect(err_map))
   })
 
   // Import each lexicon (skipping individual validation since we already validated all together)

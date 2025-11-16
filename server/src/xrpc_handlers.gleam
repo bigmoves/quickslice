@@ -6,7 +6,8 @@ import gleam/http
 import gleam/http/request
 import gleam/list
 import gleam/string
-import lexicon
+import honk
+import honk/errors
 import sqlight
 import wisp
 
@@ -187,34 +188,43 @@ pub fn handle_update_record(
                   // Get the lexicon for validation
                   case database.get_lexicon(db, nsid) {
                     Ok([lexicon_record]) -> {
-                      // Validate the new record against the lexicon
+                      // Parse lexicon and body to Json
                       case
-                        lexicon.validate_record(
-                          [lexicon_record.json],
-                          nsid,
-                          body_string,
-                        )
+                        honk.parse_json_string(lexicon_record.json),
+                        honk.parse_json_string(body_string)
                       {
-                        Ok(_) -> {
-                          // TODO: Update the record in the database
-                          // This would require extracting the updated values
-                          // and calling database.insert_record (which upserts)
+                        Ok(lex_json), Ok(body_json) -> {
+                          // Validate the new record against the lexicon
+                          case honk.validate_record([lex_json], nsid, body_json) {
+                            Ok(_) -> {
+                              // TODO: Update the record in the database
+                              // This would require extracting the updated values
+                              // and calling database.insert_record (which upserts)
 
-                          wisp.response(200)
-                          |> wisp.set_header("content-type", "application/json")
-                          |> wisp.set_body(wisp.Text(
-                            "{\"uri\": \""
-                            <> uri
-                            <> "\", \"cid\": \"bafyupdated\"}",
-                          ))
+                              wisp.response(200)
+                              |> wisp.set_header("content-type", "application/json")
+                              |> wisp.set_body(wisp.Text(
+                                "{\"uri\": \""
+                                <> uri
+                                <> "\", \"cid\": \"bafyupdated\"}",
+                              ))
+                            }
+                            Error(validation_error) -> {
+                              wisp.response(400)
+                              |> wisp.set_header("content-type", "application/json")
+                              |> wisp.set_body(wisp.Text(
+                                "{\"error\": \"InvalidRecord\", \"message\": \""
+                                <> errors.to_string(validation_error)
+                                <> "\"}",
+                              ))
+                            }
+                          }
                         }
-                        Error(validation_error) -> {
+                        _, _ -> {
                           wisp.response(400)
                           |> wisp.set_header("content-type", "application/json")
                           |> wisp.set_body(wisp.Text(
-                            "{\"error\": \"InvalidRecord\", \"message\": \""
-                            <> lexicon.describe_error(validation_error)
-                            <> "\"}",
+                            "{\"error\": \"InvalidJSON\", \"message\": \"Failed to parse JSON\"}",
                           ))
                         }
                       }

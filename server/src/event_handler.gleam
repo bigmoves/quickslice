@@ -6,10 +6,12 @@ import gleam/dynamic/decode
 import gleam/json
 import gleam/list
 import gleam/option
+import gleam/result
 import gleam/string
 import goose
 import jetstream_activity
-import lexicon
+import honk
+import honk/errors
 import logging
 import pubsub
 import sqlight
@@ -132,16 +134,28 @@ pub fn handle_commit_event(
           // Get lexicons from database for validation
           case database.get_all_lexicons(db) {
             Ok(lexicons) -> {
-              let lexicon_jsons = list.map(lexicons, fn(lex) { lex.json })
+              // Parse lexicon JSON strings to Json objects
+              let lexicon_jsons_result =
+                lexicons
+                |> list.try_map(fn(lex) {
+                  honk.parse_json_string(lex.json)
+                  |> result.map_error(fn(e) { errors.to_string(e) })
+                })
+
+              // Parse record JSON string to Json object
+              let record_json_result =
+                honk.parse_json_string(json_string)
+                |> result.map_error(fn(e) { errors.to_string(e) })
 
               // Validate record against lexicon
-              case
-                lexicon.validate_record(
-                  lexicon_jsons,
-                  commit.collection,
-                  json_string,
-                )
-              {
+              case lexicon_jsons_result, record_json_result {
+                Ok(lexicon_jsons), Ok(record_json) -> case
+                  honk.validate_record(
+                    lexicon_jsons,
+                    commit.collection,
+                    record_json,
+                  )
+                {
                 Ok(_) -> {
                   // Check if record already exists BEFORE inserting to determine operation type
                   let existing_record = database.get_record(db, uri)
@@ -413,7 +427,7 @@ pub fn handle_commit_event(
                     "[jetstream] Validation failed for "
                       <> uri
                       <> ": "
-                      <> lexicon.describe_error(validation_error),
+                      <> errors.to_string(validation_error),
                   )
 
                   // Update activity status to validation_error
@@ -424,12 +438,12 @@ pub fn handle_commit_event(
                           db,
                           id,
                           "validation_error",
-                          option.Some(lexicon.describe_error(validation_error)),
+                          option.Some(errors.to_string(validation_error)),
                         )
                       {
                         Ok(_) -> {
                           let error_msg =
-                            lexicon.describe_error(validation_error)
+                            errors.to_string(validation_error)
                           // Publish activity event for real-time UI updates
                           stats_pubsub.publish(stats_pubsub.ActivityLogged(
                             id,
@@ -444,6 +458,28 @@ pub fn handle_commit_event(
                         }
                         Error(_) -> Nil
                       }
+                    }
+                    option.None -> Nil
+                  }
+                }
+              }
+                Error(_lex_parse_err), _ | _, Error(_rec_parse_err) -> {
+                  logging.log(
+                    logging.Error,
+                    "[jetstream] Failed to parse JSON for validation: " <> uri,
+                  )
+
+                  // Update activity status to error
+                  case activity_id {
+                    option.Some(id) -> {
+                      let _ =
+                        jetstream_activity.update_status(
+                          db,
+                          id,
+                          "error",
+                          option.Some("Failed to parse JSON"),
+                        )
+                      Nil
                     }
                     option.None -> Nil
                   }

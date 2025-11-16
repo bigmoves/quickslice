@@ -13,7 +13,7 @@ version = "1.0.0"
 # https://gleam.run/writing-gleam/gleam-toml/.
 
 [dependencies]
-lexicon = { path = "../lexicon" }
+honk = { path = "/Users/chadmiller/code/honk" }
 lexicon_graphql = { path = "../lexicon_graphql" }
 gleam_stdlib = ">= 0.60.0 and < 1.0.0"
 mist = ">= 5.0.3 and < 6.0.0"
