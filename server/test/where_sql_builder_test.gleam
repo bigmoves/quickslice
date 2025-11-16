@@ -120,7 +120,8 @@ pub fn build_where_gte_operator_test() {
 
   let #(sql, params) = where_clause.build_where_sql(clause, False)
 
-  sql |> should.equal("json_extract(json, '$.year') >= ?")
+  // Now includes CAST for numeric comparisons on JSON fields
+  sql |> should.equal("CAST(json_extract(json, '$.year') AS INTEGER) >= ?")
   list.length(params) |> should.equal(1)
 }
 
@@ -170,7 +171,8 @@ pub fn build_where_lte_operator_test() {
 
   let #(sql, params) = where_clause.build_where_sql(clause, False)
 
-  sql |> should.equal("json_extract(json, '$.count') <= ?")
+  // Now includes CAST for numeric comparisons on JSON fields
+  sql |> should.equal("CAST(json_extract(json, '$.count') AS INTEGER) <= ?")
   list.length(params) |> should.equal(1)
 }
 
@@ -339,9 +341,10 @@ pub fn build_where_json_field_comparison_test() {
 
   let #(sql, params) = where_clause.build_where_sql(clause, False)
 
+  // Now includes CAST for numeric comparisons on JSON fields
   sql
   |> should.equal(
-    "json_extract(json, '$.likes') > ? AND json_extract(json, '$.likes') < ?",
+    "CAST(json_extract(json, '$.likes') AS INTEGER) > ? AND CAST(json_extract(json, '$.likes') AS INTEGER) < ?",
   )
   list.length(params) |> should.equal(2)
 }
@@ -380,9 +383,9 @@ pub fn build_where_mixed_table_and_json_test() {
 
   let #(sql, params) = where_clause.build_where_sql(clause, False)
 
-  // Should have both table column and JSON extract
+  // Should have both table column and JSON extract with CAST for numeric comparison
   should.be_true(string.contains(sql, "collection = ?"))
-  should.be_true(string.contains(sql, "json_extract(json, '$.replyCount') > ?"))
+  should.be_true(string.contains(sql, "CAST(json_extract(json, '$.replyCount') AS INTEGER) > ?"))
   should.be_true(string.contains(sql, "AND"))
   list.length(params) |> should.equal(2)
 }

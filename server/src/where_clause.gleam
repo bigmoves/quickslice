@@ -120,6 +120,25 @@ fn build_field_ref(field: String, use_table_prefix: Bool) -> String {
   }
 }
 
+/// Helper to determine if we should cast to numeric
+/// Since sqlight.Value is opaque, we check the condition operators
+fn should_cast_numeric(condition: WhereCondition) -> Bool {
+  // If any of the numeric comparison operators are present, we should cast
+  option.is_some(condition.gt) || option.is_some(condition.gte) ||
+  option.is_some(condition.lt) || option.is_some(condition.lte)
+}
+
+/// Builds field reference with optional numeric cast for JSON fields
+fn build_field_ref_with_cast(field: String, use_table_prefix: Bool, cast_numeric: Bool) -> String {
+  let field_ref = build_field_ref(field, use_table_prefix)
+
+  // If it's a JSON field and we need numeric cast, wrap in CAST
+  case is_table_column(field) || !cast_numeric {
+    True -> field_ref
+    False -> "CAST(" <> field_ref <> " AS INTEGER)"
+  }
+}
+
 /// Builds SQL for a single condition on a field
 /// Returns a list of SQL strings and accumulated parameters
 fn build_single_condition(
@@ -127,7 +146,10 @@ fn build_single_condition(
   condition: WhereCondition,
   use_table_prefix: Bool,
 ) -> #(List(String), List(sqlight.Value)) {
-  let field_ref = build_field_ref(field, use_table_prefix)
+  // Check if numeric casting is needed (for gt/gte/lt/lte operators)
+  let has_numeric_comparison = should_cast_numeric(condition)
+
+  let field_ref = build_field_ref_with_cast(field, use_table_prefix, has_numeric_comparison)
   let mut_sql_parts = []
   let mut_params = []
 

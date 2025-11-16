@@ -1,7 +1,6 @@
 /// Pure Gleam GraphQL Implementation
 ///
-/// This module provides GraphQL schema building and query execution using
-/// pure Gleam code, replacing the previous Elixir FFI implementation.
+/// This module provides GraphQL schema building and query execution
 import backfill
 import config
 import cursor
@@ -14,6 +13,7 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
+import lexicon_graphql/aggregate_input
 import lexicon_graphql/dataloader
 import lexicon_graphql/db_schema_builder
 import lexicon_graphql/lexicon_parser
@@ -400,6 +400,47 @@ pub fn build_schema_from_db(
           mutation_resolvers.upload_blob_resolver_factory(mutation_ctx)
         })
 
+      // Step 5.5: Create an aggregate fetcher function
+      let aggregate_fetcher = fn(
+        collection_nsid: String,
+        params: db_schema_builder.AggregateParams,
+      ) {
+        // Convert GraphQL where clause to SQL where clause
+        let where_clause = case params.where {
+          option.Some(graphql_where) ->
+            option.Some(where_converter.convert_where_clause(graphql_where))
+          option.None -> option.None
+        }
+
+        // Convert GroupByFieldInput to database.GroupByField
+        let group_by_fields =
+          list.map(params.group_by, fn(gb) {
+            case gb.interval {
+              option.Some(interval) -> {
+                let db_interval = case interval {
+                  aggregate_input.Hour -> database.Hour
+                  aggregate_input.Day -> database.Day
+                  aggregate_input.Week -> database.Week
+                  aggregate_input.Month -> database.Month
+                }
+                database.TruncatedField(gb.field, db_interval)
+              }
+              option.None -> database.SimpleField(gb.field)
+            }
+          })
+
+        // Call database aggregation function
+        database.get_aggregated_records(
+          db,
+          collection_nsid,
+          group_by_fields,
+          where_clause,
+          params.order_by_desc,
+          params.limit,
+        )
+        |> result.map_error(fn(_) { "Failed to fetch aggregated records" })
+      }
+
       // Step 6: Build schema with database-backed resolvers, mutations, and subscriptions
       db_schema_builder.build_schema_with_subscriptions(
         parsed_lexicons,
@@ -410,6 +451,7 @@ pub fn build_schema_from_db(
         update_factory,
         delete_factory,
         upload_blob_factory,
+        option.Some(aggregate_fetcher),
       )
     }
   }

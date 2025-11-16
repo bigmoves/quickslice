@@ -1,8 +1,6 @@
 ---
 version: 1.4.1
 title: Query type with multiple connection fields and distinct sort enums
-file: ./test/sorting_test.gleam
-test_name: multiple_lexicons_with_distinct_sort_enums_snapshot_test
 ---
 """Root query type"""
 type Query {
@@ -10,4 +8,8 @@ type Query {
   xyzStatusphereStatus: XyzStatusphereStatusConnection
   """Query app.bsky.feed.post with cursor pagination and sorting"""
   appBskyFeedPost: AppBskyFeedPostConnection
+  """Aggregated query for xyz.statusphere.status"""
+  xyzStatusphereStatusAggregated: [XyzStatusphereStatusAggregated!]
+  """Aggregated query for app.bsky.feed.post"""
+  appBskyFeedPostAggregated: [AppBskyFeedPostAggregated!]
 }

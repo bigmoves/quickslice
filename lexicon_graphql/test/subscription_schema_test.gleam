@@ -54,6 +54,7 @@ pub fn subscription_type_generated_test() {
       None,
       None,
       None,
+      None,  // aggregate_fetcher
     )
   {
     Ok(s) -> {
@@ -101,6 +102,7 @@ pub fn subscription_fields_generated_test() {
       None,
       None,
       None,
+      None,  // aggregate_fetcher
     )
   {
     Ok(s) -> {
@@ -170,6 +172,7 @@ pub fn deleted_subscription_returns_string_test() {
       None,
       None,
       None,
+      None,  // aggregate_fetcher
     )
   {
     Ok(s) -> {
@@ -232,6 +235,7 @@ pub fn created_updated_return_record_type_test() {
       None,
       None,
       None,
+      None,  // aggregate_fetcher
     )
   {
     Ok(s) -> {
@@ -316,6 +320,7 @@ pub fn multiple_records_generate_subscriptions_test() {
       None,
       None,
       None,
+      None,  // aggregate_fetcher
     )
   {
     Ok(s) -> {

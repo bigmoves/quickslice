@@ -4,11 +4,15 @@
 /// This extends the base schema_builder with actual data resolution.
 import gleam/dict.{type Dict}
 import gleam/dynamic.{type Dynamic}
+import gleam/dynamic/decode
 import gleam/int
+import gleam/json
 import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
+import lexicon_graphql/aggregate_input
+import lexicon_graphql/aggregate_types
 import lexicon_graphql/collection_meta
 import lexicon_graphql/connection as lexicon_connection
 import lexicon_graphql/dataloader
@@ -23,6 +27,40 @@ import lexicon_graphql/where_input
 import swell/connection
 import swell/schema
 import swell/value
+
+/// Represents the type of a field based on lexicon schema
+/// Used for validation (e.g., ensuring date intervals are only applied to datetime fields)
+pub type FieldType {
+  StringField
+  IntField
+  BoolField
+  NumberField
+  DateTimeField
+  BlobField
+  RefField
+  ArrayField
+}
+
+/// Convert a lexicon property to a FieldType
+/// Checks format field for datetime, otherwise uses type_ field
+pub fn property_to_field_type(property: types.Property) -> FieldType {
+  // Check format first for datetime
+  case property.format {
+    option.Some("datetime") -> DateTimeField
+    _ ->
+      case property.type_ {
+        "string" -> StringField
+        "integer" -> IntField
+        "boolean" -> BoolField
+        "number" -> NumberField
+        "array" -> ArrayField
+        "blob" -> BlobField
+        "ref" -> RefField
+        _ -> StringField
+        // Default to string for unknown types
+      }
+  }
+}
 
 /// Represents a reverse join relationship discovered from lexicon analysis
 type ReverseJoinRelationship {
@@ -68,6 +106,22 @@ pub type RecordFetcher =
       String,
     )
 
+/// Type for aggregate query parameters
+pub type AggregateParams {
+  AggregateParams(
+    group_by: List(aggregate_input.GroupByFieldInput),
+    where: option.Option(where_input.WhereClause),
+    order_by_desc: Bool,
+    limit: Int,
+  )
+}
+
+/// Type for a database aggregate fetcher function
+/// Takes a collection NSID and aggregate params, returns aggregate results
+pub type AggregateFetcher =
+  fn(String, AggregateParams) ->
+    Result(List(aggregate_types.AggregateResult), String)
+
 /// Build a GraphQL schema from lexicons with database-backed resolvers
 ///
 /// The fetcher parameter should be a function that queries the database for records with pagination
@@ -87,7 +141,7 @@ pub fn build_schema_with_fetcher(
     [] -> Error("Cannot build schema from empty lexicon list")
     _ -> {
       // Extract record types and object types from lexicons with batch fetcher for joins
-      let #(record_types, object_types) =
+      let #(record_types, object_types, _field_type_registry) =
         extract_record_types_and_object_types(
           lexicons,
           batch_fetcher,
@@ -95,7 +149,14 @@ pub fn build_schema_with_fetcher(
         )
 
       // Build the query type with fields for each record using shared object types
-      let query_type = build_query_type(record_types, object_types, fetcher)
+      let query_type =
+        build_query_type(
+          record_types,
+          object_types,
+          fetcher,
+          option.None,
+          dict.new(),
+        )
 
       // Build the mutation type with provided resolver factories
       // Pass the complete object types so mutations use the same types as queries
@@ -128,20 +189,28 @@ pub fn build_schema_with_subscriptions(
   update_factory: option.Option(mutation_builder.ResolverFactory),
   delete_factory: option.Option(mutation_builder.ResolverFactory),
   upload_blob_factory: option.Option(mutation_builder.UploadBlobResolverFactory),
+  aggregate_fetcher: option.Option(AggregateFetcher),
 ) -> Result(schema.Schema, String) {
   case lexicons {
     [] -> Error("Cannot build schema from empty lexicon list")
     _ -> {
       // Extract record types and object types from lexicons
-      let #(record_types, object_types) =
+      let #(record_types, object_types, field_type_registry) =
         extract_record_types_and_object_types(
           lexicons,
           batch_fetcher,
           paginated_batch_fetcher,
         )
 
-      // Build the query type
-      let query_type = build_query_type(record_types, object_types, fetcher)
+      // Build the query type (pass field_type_registry for aggregation validation)
+      let query_type =
+        build_query_type(
+          record_types,
+          object_types,
+          fetcher,
+          aggregate_fetcher,
+          field_type_registry,
+        )
 
       // Build the mutation type
       let mutation_type =
@@ -175,11 +244,17 @@ pub fn build_schema_with_subscriptions(
 /// Pass 1: Extract metadata and build basic types (base fields only)
 /// Pass 2: Build complete RecordTypes with ALL join fields
 /// Pass 3: Rebuild ONLY Connection fields using final types
+///
+/// Returns: #(record_types, object_types, field_type_registry)
 fn extract_record_types_and_object_types(
   lexicons: List(types.Lexicon),
   batch_fetcher: option.Option(dataloader.BatchFetcher),
   paginated_batch_fetcher: option.Option(dataloader.PaginatedBatchFetcher),
-) -> #(List(RecordType), dict.Dict(String, schema.Type)) {
+) -> #(
+  List(RecordType),
+  dict.Dict(String, schema.Type),
+  dict.Dict(String, dict.Dict(String, FieldType)),
+) {
   // =============================================================================
   // PASS 0: Build object types from lexicon defs
   // =============================================================================
@@ -295,6 +370,13 @@ fn extract_record_types_and_object_types(
     list.fold(basic_record_types, dict.new(), fn(acc, rt: RecordType) {
       let enum = build_sort_field_enum(rt)
       dict.insert(acc, rt.type_name, enum)
+    })
+
+  // Build field type registry for validation (collection_nsid -> field_name -> FieldType)
+  let field_type_registry: dict.Dict(String, dict.Dict(String, FieldType)) =
+    list.fold(basic_record_types, dict.new(), fn(acc, rt: RecordType) {
+      let field_types = build_field_type_map(rt.properties)
+      dict.insert(acc, rt.nsid, field_types)
     })
 
   // =============================================================================
@@ -458,7 +540,7 @@ fn extract_record_types_and_object_types(
       dict.insert(acc, ref, obj_type)
     })
 
-  #(final_record_types, final_object_types_with_refs)
+  #(final_record_types, final_object_types_with_refs, field_type_registry)
 }
 
 /// Build a map of reverse join relationships from metadata
@@ -1189,19 +1271,22 @@ fn build_fields(
 
 /// Check if a lexicon property is sortable based on its type
 /// Sortable types: string, integer, boolean, number (primitive types)
-/// Non-sortable types: blob, ref (complex types)
+/// Non-sortable types: blob, ref, array (complex types)
 fn is_sortable_property(property: types.Property) -> Bool {
-  case property.type_, property.format {
-    // Primitive types are sortable
-    "string", _ -> True
-    "integer", _ -> True
-    "boolean", _ -> True
-    "number", _ -> True
-    // Blob and ref types are not sortable
-    "blob", _ -> False
-    "ref", _ -> False
-    // Default to non-sortable for unknown types
-    _, _ -> False
+  case property_to_field_type(property) {
+    StringField | IntField | BoolField | NumberField | DateTimeField -> True
+    BlobField | RefField | ArrayField -> False
+  }
+}
+
+/// Check if a lexicon property is groupable based on its type (for aggregation)
+/// Groupable types: string, integer, boolean, number, array
+/// Non-groupable types: blob, ref (complex types)
+fn is_groupable_property(property: types.Property) -> Bool {
+  case property_to_field_type(property) {
+    StringField | IntField | BoolField | NumberField | DateTimeField | ArrayField ->
+      True
+    BlobField | RefField -> False
   }
 }
 
@@ -1258,6 +1343,62 @@ fn get_filterable_field_names(record_type: RecordType) -> List(String) {
   list.append(standard_filterable_fields, filterable_property_names)
 }
 
+/// Get all groupable field names for aggregation GROUP BY
+/// Returns all groupable fields including arrays and computed fields like actorHandle
+fn get_groupable_field_names(record_type: RecordType) -> List(String) {
+  // Filter properties to only groupable types (includes arrays), then get their field names
+  let groupable_property_names =
+    list.filter_map(record_type.properties, fn(prop) {
+      let #(field_name, property) = prop
+      case is_groupable_property(property) {
+        True -> Ok(field_name)
+        False -> Error(Nil)
+      }
+    })
+
+  // Add standard groupable fields from AT Protocol
+  // Note: actorHandle IS included for grouping by actor
+  let standard_groupable_fields = [
+    "uri",
+    "cid",
+    "did",
+    "collection",
+    "indexedAt",
+    "actorHandle",
+  ]
+  list.append(standard_groupable_fields, groupable_property_names)
+}
+
+/// Build a map of field names to their FieldTypes for validation
+/// Includes both lexicon properties and standard AT Protocol fields
+pub fn build_field_type_map(
+  properties: List(#(String, types.Property)),
+) -> dict.Dict(String, FieldType) {
+  // Build map from lexicon properties
+  let property_types =
+    list.fold(properties, dict.new(), fn(acc, prop) {
+      let #(field_name, property) = prop
+      let field_type = property_to_field_type(property)
+      dict.insert(acc, field_name, field_type)
+    })
+
+  // Add standard AT Protocol fields
+  let standard_fields = [
+    #("uri", StringField),
+    #("cid", StringField),
+    #("did", StringField),
+    #("collection", StringField),
+    #("indexedAt", DateTimeField),
+    #("indexed_at", DateTimeField),
+    #("actorHandle", StringField),
+  ]
+
+  list.fold(standard_fields, property_types, fn(acc, field) {
+    let #(name, field_type) = field
+    dict.insert(acc, name, field_type)
+  })
+}
+
 /// Build a SortFieldEnum for a record type with all its sortable fields
 /// Only includes primitive fields (string, integer, boolean, number) from the original lexicon
 /// Excludes complex types (blob, ref), join fields, and computed fields like actorHandle
@@ -1278,6 +1419,27 @@ fn build_sort_field_enum(record_type: RecordType) -> schema.Type {
   )
 }
 
+/// Build a GroupByFieldEnum for a record type with all its groupable fields
+/// Includes primitive fields (string, integer, boolean, number, array) from the original lexicon
+/// Includes computed fields like actorHandle (useful for grouping by actor)
+/// Excludes complex types (blob, ref)
+fn build_groupable_field_enum(record_type: RecordType) -> schema.Type {
+  // Get all groupable field names (includes arrays and actorHandle)
+  let groupable_fields = get_groupable_field_names(record_type)
+
+  // Convert field names to enum values
+  let enum_values =
+    list.map(groupable_fields, fn(field_name) {
+      schema.enum_value(field_name, "Group by " <> field_name)
+    })
+
+  schema.enum_type(
+    record_type.type_name <> "GroupByField",
+    "Available groupBy fields for " <> record_type.type_name,
+    enum_values,
+  )
+}
+
 /// Build a WhereInput type for a record type with all its filterable fields
 /// Only includes primitive fields (string, integer, boolean, number) from the original lexicon
 /// Excludes complex types (blob, ref) and join fields, but includes computed fields like actorHandle
@@ -1294,7 +1456,10 @@ fn build_query_type(
   record_types: List(RecordType),
   object_types: dict.Dict(String, schema.Type),
   fetcher: RecordFetcher,
+  aggregate_fetcher: option.Option(AggregateFetcher),
+  field_type_registry: dict.Dict(String, dict.Dict(String, FieldType)),
 ) -> schema.Type {
+  // Build regular query fields
   let query_fields =
     list.map(record_types, fn(record_type) {
       // Get the pre-built object type
@@ -1374,7 +1539,24 @@ fn build_query_type(
       )
     })
 
-  schema.object_type("Query", "Root query type", query_fields)
+  // Build aggregated query fields if aggregate_fetcher is provided
+  let aggregate_query_fields = case aggregate_fetcher {
+    option.Some(agg_fetcher) -> {
+      list.flat_map(record_types, fn(record_type) {
+        build_aggregated_query_field(
+          record_type,
+          agg_fetcher,
+          field_type_registry,
+        )
+      })
+    }
+    option.None -> []
+  }
+
+  // Combine regular and aggregate query fields
+  let all_query_fields = list.append(query_fields, aggregate_query_fields)
+
+  schema.object_type("Query", "Root query type", all_query_fields)
 }
 
 /// Extract pagination parameters from GraphQL context
@@ -1712,4 +1894,505 @@ fn build_subscription_type(
     "GraphQL subscription root",
     subscription_fields,
   )
+}
+
+// ===== Aggregated Query Support =====
+
+/// Build an aggregated query field for a record type
+fn build_aggregated_query_field(
+  record_type: RecordType,
+  agg_fetcher: AggregateFetcher,
+  field_type_registry: dict.Dict(String, dict.Dict(String, FieldType)),
+) -> List(schema.Field) {
+  // Create aggregated type name (e.g., XyzStatusphereStatusAggregated)
+  let aggregated_type_name = record_type.type_name <> "Aggregated"
+
+  // Create field name (e.g., xyzStatusphereStatusAggregated)
+  let field_name = record_type.field_name <> "Aggregated"
+
+  // Build the aggregated output type
+  let aggregated_type =
+    build_aggregated_output_type(record_type, aggregated_type_name)
+
+  // Build collection-specific GroupByField enum
+  let group_by_field_enum = build_groupable_field_enum(record_type)
+
+  // Build collection-specific GroupByFieldInput with the field enum
+  let group_by_input =
+    build_group_by_field_input(record_type.type_name, group_by_field_enum)
+
+  let aggregation_order_by_input = build_aggregation_order_by_input()
+
+  // Build WhereInput type for this record type (reuse existing)
+  let where_input_type = build_where_input_type(record_type)
+
+  // Build arguments for aggregated query
+  let args = [
+    schema.argument(
+      "groupBy",
+      schema.list_type(schema.non_null(group_by_input)),
+      "Fields to group by (required)",
+      option.None,
+    ),
+    schema.argument(
+      "where",
+      where_input_type,
+      "Filter records before aggregation",
+      option.None,
+    ),
+    schema.argument(
+      "orderBy",
+      aggregation_order_by_input,
+      "Order by count (default: desc)",
+      option.None,
+    ),
+    schema.argument(
+      "limit",
+      schema.int_type(),
+      "Maximum number of results (default 50, max 1000)",
+      option.Some(value.Int(50)),
+    ),
+  ]
+
+  // Create the query field
+  let collection_nsid = record_type.nsid
+  let field =
+    schema.field_with_args(
+      field_name,
+      schema.list_type(schema.non_null(aggregated_type)),
+      "Aggregated query for " <> record_type.nsid,
+      args,
+      fn(ctx: schema.Context) {
+        // Extract and parse arguments
+        case extract_aggregate_params(ctx) {
+          Ok(params) -> {
+            // Get field types for this collection
+            let field_types =
+              dict.get(field_type_registry, collection_nsid)
+              |> result.unwrap(dict.new())
+
+            // Validate that interval is only applied to datetime fields
+            case validate_interval_fields(params.group_by, field_types) {
+              Ok(_) -> {
+                // Extract field names from groupBy
+                let field_names = list.map(params.group_by, fn(gb) { gb.field })
+
+                // Call the aggregate fetcher
+                case agg_fetcher(collection_nsid, params) {
+                  Ok(results) -> {
+                    // Convert results to GraphQL values with field name mapping
+                    let result_values =
+                      list.map(results, fn(result) {
+                        aggregate_result_to_value(result, field_names)
+                      })
+                    Ok(value.List(result_values))
+                  }
+                  Error(err) -> Error(err)
+                }
+              }
+              Error(validation_err) -> Error(validation_err)
+            }
+          }
+          Error(err) -> Error(err)
+        }
+      },
+    )
+
+  [field]
+}
+
+/// Build the aggregated output type for a record type
+fn build_aggregated_output_type(
+  record_type: RecordType,
+  type_name: String,
+) -> schema.Type {
+  // Get all field names from the record type
+  let field_names =
+    list.map(record_type.properties, fn(prop) {
+      let #(name, _) = prop
+      name
+    })
+
+  // Add table column fields
+  let all_field_names =
+    list.append(["uri", "cid", "did", "collection", "indexed_at"], field_names)
+
+  // Build fields: all as nullable JSON (using string_type as proxy) + count as Int!
+  // Resolvers extract values from parent object
+  let fields =
+    list.map(all_field_names, fn(field_name) {
+      schema.field(
+        field_name,
+        schema.string_type(),
+        "Grouped field value",
+        fn(ctx: schema.Context) {
+          case ctx.data {
+            option.Some(value.Object(fields)) -> {
+              case list.key_find(fields, field_name) {
+                Ok(v) -> Ok(v)
+                Error(_) -> Ok(value.Null)
+              }
+            }
+            _ -> Ok(value.Null)
+          }
+        },
+      )
+    })
+
+  // Add count field
+  let fields_with_count =
+    list.append(fields, [
+      schema.field(
+        "count",
+        schema.non_null(schema.int_type()),
+        "Count of records in this group",
+        fn(ctx: schema.Context) {
+          case ctx.data {
+            option.Some(value.Object(fields)) -> {
+              case list.key_find(fields, "count") {
+                Ok(v) -> Ok(v)
+                Error(_) -> Ok(value.Int(0))
+              }
+            }
+            _ -> Ok(value.Int(0))
+          }
+        },
+      ),
+    ])
+
+  schema.object_type(
+    type_name,
+    "Aggregated results for " <> record_type.nsid,
+    fields_with_count,
+  )
+}
+
+/// Build GroupByFieldInput input type with collection-specific field enum
+fn build_group_by_field_input(
+  type_name: String,
+  field_enum: schema.Type,
+) -> schema.Type {
+  let date_interval_enum = build_date_interval_enum()
+
+  schema.input_object_type(
+    type_name <> "GroupByFieldInput",
+    "Specifies a field to group by with optional date truncation",
+    [
+      schema.input_field(
+        "field",
+        schema.non_null(field_enum),
+        "Field name to group by",
+        option.None,
+      ),
+      schema.input_field(
+        "interval",
+        date_interval_enum,
+        "Date truncation interval (for datetime fields)",
+        option.None,
+      ),
+    ],
+  )
+}
+
+/// Build DateInterval enum type
+fn build_date_interval_enum() -> schema.Type {
+  schema.enum_type("DateInterval", "Date truncation intervals for aggregation", [
+    schema.enum_value("HOUR", "Truncate to hour"),
+    schema.enum_value("DAY", "Truncate to day"),
+    schema.enum_value("WEEK", "Truncate to week"),
+    schema.enum_value("MONTH", "Truncate to month"),
+  ])
+}
+
+/// Build AggregationOrderBy input type
+fn build_aggregation_order_by_input() -> schema.Type {
+  schema.input_object_type(
+    "AggregationOrderBy",
+    "Order aggregation results by count",
+    [
+      schema.input_field(
+        "count",
+        lexicon_connection.sort_direction_enum(),
+        "Order by count (asc or desc)",
+        option.None,
+      ),
+    ],
+  )
+}
+
+/// Extract aggregate parameters from GraphQL context
+fn extract_aggregate_params(
+  ctx: schema.Context,
+) -> Result(AggregateParams, String) {
+  // Extract groupBy argument (required)
+  let group_by_result = case schema.get_argument(ctx, "groupBy") {
+    option.Some(value.List(items)) -> {
+      list.try_map(items, fn(item) {
+        case item {
+          value.Object(fields) -> {
+            case list.key_find(fields, "field") {
+              Ok(value.String(field)) -> {
+                let interval = case list.key_find(fields, "interval") {
+                  Ok(value.String(int_str)) -> {
+                    case aggregate_input.parse_date_interval(int_str) {
+                      Ok(interval) -> option.Some(interval)
+                      Error(_) -> option.None
+                    }
+                  }
+                  _ -> option.None
+                }
+                Ok(aggregate_input.GroupByFieldInput(field, interval))
+              }
+              _ -> Error("Missing or invalid 'field' in groupBy")
+            }
+          }
+          _ -> Error("groupBy must be a list of objects")
+        }
+      })
+    }
+    option.Some(_) -> Error("groupBy must be a list")
+    option.None -> Error("groupBy argument is required")
+  }
+
+  use group_by <- result.try(group_by_result)
+
+  // Validate query complexity
+  use _ <- result.try(validate_query_complexity(group_by))
+
+  // Extract where argument (optional)
+  let where_clause = case schema.get_argument(ctx, "where") {
+    option.Some(where_value) -> {
+      let wc = where_input.parse_where_clause(where_value)
+      option.Some(wc)
+    }
+    option.None -> option.None
+  }
+
+  // Extract orderBy argument (optional, default to desc)
+  let order_by_desc = case schema.get_argument(ctx, "orderBy") {
+    option.Some(value.Object(fields)) -> {
+      case list.key_find(fields, "count") {
+        Ok(value.String("ASC")) -> False
+        Ok(value.String("DESC")) -> True
+        _ -> True
+        // default desc
+      }
+    }
+    _ -> True
+    // default desc
+  }
+
+  // Extract limit argument (optional, default 50, max 1000)
+  let limit = case schema.get_argument(ctx, "limit") {
+    option.Some(value.Int(n)) -> {
+      case n {
+        _ if n > 1000 -> 1000
+        _ if n < 1 -> 50
+        _ -> n
+      }
+    }
+    _ -> 50
+  }
+
+  Ok(AggregateParams(
+    group_by: group_by,
+    where: where_clause,
+    order_by_desc: order_by_desc,
+    limit: limit,
+  ))
+}
+
+/// Validate query complexity to prevent resource exhaustion
+/// Returns Ok(Nil) if valid, Error(String) if too complex
+pub fn validate_query_complexity(
+  group_by: List(aggregate_input.GroupByFieldInput),
+) -> Result(Nil, String) {
+  let field_count = list.length(group_by)
+  case field_count {
+    n if n > 5 ->
+      Error(
+        "Query too complex: maximum 5 group by fields allowed (got "
+        <> int.to_string(n)
+        <> ")",
+      )
+    n if n < 1 -> Error("Query must include at least 1 group by field")
+    _ -> Ok(Nil)
+  }
+}
+
+/// Validate that interval is only applied to datetime fields
+/// Returns Ok(Nil) if valid, Error(String) with descriptive message if invalid
+pub fn validate_interval_fields(
+  group_by: List(aggregate_input.GroupByFieldInput),
+  field_types: dict.Dict(String, FieldType),
+) -> Result(Nil, String) {
+  list.try_each(group_by, fn(gb) {
+    case gb.interval {
+      option.Some(_interval) -> {
+        // Has interval, must be datetime
+        case dict.get(field_types, gb.field) {
+          Ok(DateTimeField) -> Ok(Nil)
+          Ok(StringField) ->
+            Error(
+              "Cannot apply date interval to field '"
+              <> gb.field
+              <> "': field is string, not datetime",
+            )
+          Ok(IntField) ->
+            Error(
+              "Cannot apply date interval to field '"
+              <> gb.field
+              <> "': field is integer, not datetime",
+            )
+          Ok(BoolField) ->
+            Error(
+              "Cannot apply date interval to field '"
+              <> gb.field
+              <> "': field is boolean, not datetime",
+            )
+          Ok(NumberField) ->
+            Error(
+              "Cannot apply date interval to field '"
+              <> gb.field
+              <> "': field is number, not datetime",
+            )
+          Ok(ArrayField) ->
+            Error(
+              "Cannot apply date interval to field '"
+              <> gb.field
+              <> "': field is array, not datetime",
+            )
+          Ok(BlobField) ->
+            Error(
+              "Cannot apply date interval to field '"
+              <> gb.field
+              <> "': field is blob, not datetime",
+            )
+          Ok(RefField) ->
+            Error(
+              "Cannot apply date interval to field '"
+              <> gb.field
+              <> "': field is ref, not datetime",
+            )
+          Error(_) -> Error("Field '" <> gb.field <> "' not found in schema")
+        }
+      }
+      option.None -> Ok(Nil)
+      // No interval, any groupable type is fine
+    }
+  })
+}
+
+/// Convert AggregateResult to GraphQL value
+/// Maps field_0, field_1, etc. to actual field names
+fn aggregate_result_to_value(
+  result: aggregate_types.AggregateResult,
+  field_names: List(String),
+) -> value.Value {
+  // Map field_0, field_1, etc. to actual field names
+  let group_fields =
+    list.index_map(field_names, fn(field_name, index) {
+      let field_key = "field_" <> int.to_string(index)
+      case dict.get(result.group_values, field_key) {
+        Ok(dynamic_value) -> #(
+          field_name,
+          dynamic_to_graphql_value(dynamic_value),
+        )
+        Error(_) -> #(field_name, value.Null)
+      }
+    })
+
+  let all_fields =
+    list.append(group_fields, [#("count", value.Int(result.count))])
+
+  value.Object(all_fields)
+}
+
+/// Convert dynamic value to GraphQL value
+/// Detects and parses JSON strings (arrays/objects) into proper GraphQL values
+fn dynamic_to_graphql_value(dyn: dynamic.Dynamic) -> value.Value {
+  // Try different decoders
+  case decode.run(dyn, decode.string) {
+    Ok(s) -> {
+      // Check if this is a JSON string (starts with [ or {)
+      case string.starts_with(s, "[") || string.starts_with(s, "{") {
+        True -> {
+          // Try to parse as JSON
+          case json.parse(s, decode.dynamic) {
+            Ok(parsed_json) -> {
+              // Recursively convert the parsed JSON to GraphQL value
+              json_dynamic_to_graphql_value(parsed_json)
+            }
+            Error(_) -> {
+              // JSON parse failed, return as string
+              value.String(s)
+            }
+          }
+        }
+        False -> value.String(s)
+      }
+    }
+    Error(_) ->
+      case decode.run(dyn, decode.int) {
+        Ok(i) -> value.Int(i)
+        Error(_) ->
+          case decode.run(dyn, decode.float) {
+            Ok(f) -> value.Float(f)
+            Error(_) ->
+              case decode.run(dyn, decode.bool) {
+                Ok(b) -> value.Boolean(b)
+                Error(_) -> value.Null
+              }
+          }
+      }
+  }
+}
+
+/// Convert a JSON dynamic value to GraphQL value recursively
+/// Handles arrays and objects properly
+fn json_dynamic_to_graphql_value(dyn: dynamic.Dynamic) -> value.Value {
+  // Try to decode as different types
+  case decode.run(dyn, decode.string) {
+    Ok(s) -> value.String(s)
+    Error(_) ->
+      case decode.run(dyn, decode.int) {
+        Ok(i) -> value.Int(i)
+        Error(_) ->
+          case decode.run(dyn, decode.float) {
+            Ok(f) -> value.Float(f)
+            Error(_) ->
+              case decode.run(dyn, decode.bool) {
+                Ok(b) -> value.Boolean(b)
+                Error(_) ->
+                  case decode.run(dyn, decode.list(decode.dynamic)) {
+                    Ok(list_items) -> {
+                      // Recursively convert array items
+                      let graphql_items =
+                        list.map(list_items, json_dynamic_to_graphql_value)
+                      value.List(graphql_items)
+                    }
+                    Error(_) ->
+                      case
+                        decode.run(
+                          dyn,
+                          decode.dict(decode.string, decode.dynamic),
+                        )
+                      {
+                        Ok(dict_items) -> {
+                          // Convert dict to list of tuples for GraphQL Object
+                          let graphql_fields =
+                            dict.to_list(dict_items)
+                            |> list.map(fn(pair) {
+                              let #(key, val) = pair
+                              #(key, json_dynamic_to_graphql_value(val))
+                            })
+                          value.Object(graphql_fields)
+                        }
+                        Error(_) -> value.Null
+                      }
+                  }
+              }
+          }
+      }
+  }
 }

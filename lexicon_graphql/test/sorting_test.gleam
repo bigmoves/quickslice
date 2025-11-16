@@ -28,8 +28,13 @@ fn create_test_schema_from_lexicons(
     Ok(#([], option.None, False, False, option.None))
   }
 
+  // Mock aggregate fetcher for aggregation queries
+  let aggregate_fetcher = fn(_collection: String, _params: db_schema_builder.AggregateParams) {
+    Ok([])
+  }
+
   case
-    db_schema_builder.build_schema_with_fetcher(
+    db_schema_builder.build_schema_with_subscriptions(
       lexicons,
       fetcher,
       option.None,
@@ -38,6 +43,7 @@ fn create_test_schema_from_lexicons(
       option.None,
       option.None,
       option.None,
+      option.Some(aggregate_fetcher),
     )
   {
     Ok(s) -> s

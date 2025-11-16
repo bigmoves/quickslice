@@ -532,10 +532,10 @@ pub fn multiple_operators_same_field_test() {
 
   let #(sql, params) = where_clause.build_where_sql(clause, False)
 
-  // Should combine both operators with json_extract
+  // Should combine both operators with json_extract and CAST for numeric comparison
   sql
   |> should.equal(
-    "json_extract(json, '$.age') > ? AND json_extract(json, '$.age') < ?",
+    "CAST(json_extract(json, '$.age') AS INTEGER) > ? AND CAST(json_extract(json, '$.age') AS INTEGER) < ?",
   )
   list.length(params) |> should.equal(2)
 }
