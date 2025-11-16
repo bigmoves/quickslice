@@ -14,6 +14,50 @@ import goose
 import logging
 import sqlight
 
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+/// How long to wait without messages before forcing a restart (in milliseconds)
+const heartbeat_timeout_ms = 300_000
+
+// 5 minutes - restart when stuck
+
+/// How often to check for heartbeat timeouts (in milliseconds)
+const heartbeat_check_interval_ms = 300_000
+
+// 5 minutes - check at the same interval as timeout for consistent triggering
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+/// Messages that can be sent to the consumer manager
+pub type ManagerMessage {
+  /// Update the last seen message timestamp
+  MessageReceived(timestamp: Int)
+  /// Check if we should restart due to timeout
+  CheckHeartbeat
+  /// Update the self subject after actor starts
+  UpdateSelfSubject(process.Subject(ManagerMessage))
+  /// Update the consumer subject
+  UpdateConsumerSubject(option.Option(process.Subject(Message)))
+  /// Manual restart request
+  ManualRestart(reply_with: process.Subject(Result(Nil, String)))
+  /// Manual stop request
+  ManualStop(reply_with: process.Subject(Nil))
+}
+
+/// State for the consumer manager actor
+pub type ManagerState {
+  ManagerState(
+    db: sqlight.Connection,
+    last_message_time_ms: Int,
+    consumer_subject: option.Option(process.Subject(Message)),
+    self_subject: process.Subject(ManagerMessage),
+  )
+}
+
 /// Messages that can be sent to the Jetstream consumer actor
 pub type Message {
   Stop(reply_with: process.Subject(Nil))
@@ -44,9 +88,259 @@ type CursorState {
   )
 }
 
-/// Start the Jetstream consumer actor
-pub fn start(db: sqlight.Connection) -> Result(process.Subject(Message), String) {
-  case start_consumer_process(db) {
+// ============================================================================
+// CONSUMER MANAGER
+// ============================================================================
+
+/// Start the consumer manager that spawns and monitors the consumer
+pub fn start(
+  db: sqlight.Connection,
+) -> Result(process.Subject(ManagerMessage), String) {
+  let temp_subject = process.new_subject()
+
+  let state =
+    ManagerState(
+      db: db,
+      last_message_time_ms: get_current_time_milliseconds(),
+      consumer_subject: option.None,
+      self_subject: temp_subject,
+    )
+
+  let result =
+    actor.new(state)
+    |> actor.on_message(handle_manager_message)
+    |> actor.start
+
+  case result {
+    Ok(started) -> {
+      // Update the actor's state with its real subject
+      process.send(started.data, UpdateSelfSubject(started.data))
+
+      // Spawn the initial consumer actor
+      case start_consumer_actor(db, option.Some(started.data)) {
+        Ok(consumer_subject) -> {
+          // Update manager state with consumer subject
+          process.send(
+            started.data,
+            UpdateConsumerSubject(option.Some(consumer_subject)),
+          )
+
+          // Schedule the first heartbeat check
+          process.send_after(
+            started.data,
+            heartbeat_check_interval_ms,
+            CheckHeartbeat,
+          )
+
+          Ok(started.data)
+        }
+        Error(err) -> {
+          // Consumer failed to start, but manager is running for future restarts
+          logging.log(
+            logging.Warning,
+            "[jetstream] Consumer failed to start: " <> err,
+          )
+
+          // Schedule heartbeat check anyway (it will attempt restart)
+          process.send_after(
+            started.data,
+            heartbeat_check_interval_ms,
+            CheckHeartbeat,
+          )
+
+          Ok(started.data)
+        }
+      }
+    }
+    Error(err) ->
+      Error("Failed to start manager actor: " <> string.inspect(err))
+  }
+}
+
+/// Stop the Jetstream consumer
+pub fn stop(manager: process.Subject(ManagerMessage)) -> Nil {
+  // Send stop request through manager
+  let _ = actor.call(manager, waiting: 1000, sending: ManualStop)
+  Nil
+}
+
+/// Restart the Jetstream consumer with fresh lexicon data
+pub fn restart(
+  manager: process.Subject(ManagerMessage),
+) -> Result(Nil, String) {
+  actor.call(manager, waiting: 5000, sending: ManualRestart)
+}
+
+/// Handle messages sent to the consumer manager
+fn handle_manager_message(
+  state: ManagerState,
+  message: ManagerMessage,
+) -> actor.Next(ManagerState, ManagerMessage) {
+  case message {
+    UpdateSelfSubject(subject) -> {
+      // Update state with the real actor subject
+      let new_state = ManagerState(..state, self_subject: subject)
+      actor.continue(new_state)
+    }
+
+    UpdateConsumerSubject(subject) -> {
+      let new_state = ManagerState(..state, consumer_subject: subject)
+      actor.continue(new_state)
+    }
+
+    MessageReceived(timestamp) -> {
+      // Update the last seen message time
+      let new_state = ManagerState(..state, last_message_time_ms: timestamp)
+      actor.continue(new_state)
+    }
+
+    CheckHeartbeat -> {
+      let current_time = get_current_time_milliseconds()
+      let time_since_last_message = current_time - state.last_message_time_ms
+
+      // Debug logging for slow message rates
+      case time_since_last_message > 60_000 {
+        True ->
+          logging.log(
+            logging.Debug,
+            "[jetstream] Health check: "
+              <> int.to_string(time_since_last_message / 1000)
+              <> "s since last message",
+          )
+        False -> Nil
+      }
+
+      case time_since_last_message > heartbeat_timeout_ms {
+        True -> {
+          // No messages received within timeout - force restart
+          logging.log(
+            logging.Warning,
+            "[jetstream] No messages received for "
+              <> int.to_string(time_since_last_message / 1000)
+              <> " seconds. Restarting consumer...",
+          )
+
+          // Stop old consumer if running
+          case state.consumer_subject {
+            option.Some(subject) -> {
+              let _ = actor.call(subject, waiting: 1000, sending: Stop)
+              Nil
+            }
+            option.None -> Nil
+          }
+
+          // Start new consumer
+          case start_consumer_actor(state.db, option.Some(state.self_subject)) {
+            Ok(new_subject) -> {
+              logging.log(logging.Info, "[jetstream] Consumer restarted")
+
+              // Reset the timer and update state
+              let new_state =
+                ManagerState(
+                  ..state,
+                  last_message_time_ms: current_time,
+                  consumer_subject: option.Some(new_subject),
+                )
+
+              // Schedule next check
+              process.send_after(
+                state.self_subject,
+                heartbeat_check_interval_ms,
+                CheckHeartbeat,
+              )
+
+              actor.continue(new_state)
+            }
+            Error(err) -> {
+              logging.log(
+                logging.Error,
+                "[jetstream] Failed to restart consumer: " <> err,
+              )
+
+              // Schedule next check to retry
+              process.send_after(
+                state.self_subject,
+                heartbeat_check_interval_ms,
+                CheckHeartbeat,
+              )
+
+              actor.continue(ManagerState(
+                ..state,
+                consumer_subject: option.None,
+              ))
+            }
+          }
+        }
+        False -> {
+          // Still receiving messages - schedule next check
+          process.send_after(
+            state.self_subject,
+            heartbeat_check_interval_ms,
+            CheckHeartbeat,
+          )
+          actor.continue(state)
+        }
+      }
+    }
+
+    ManualRestart(client) -> {
+      logging.log(logging.Info, "[jetstream] Manual restart requested")
+
+      // Stop old consumer if running
+      case state.consumer_subject {
+        option.Some(subject) -> {
+          let _ = actor.call(subject, waiting: 1000, sending: Stop)
+          Nil
+        }
+        option.None -> Nil
+      }
+
+      // Start new consumer
+      case start_consumer_actor(state.db, option.Some(state.self_subject)) {
+        Ok(new_subject) -> {
+          process.send(client, Ok(Nil))
+          actor.continue(
+            ManagerState(
+              ..state,
+              last_message_time_ms: get_current_time_milliseconds(),
+              consumer_subject: option.Some(new_subject),
+            ),
+          )
+        }
+        Error(err) -> {
+          process.send(client, Error(err))
+          actor.continue(ManagerState(..state, consumer_subject: option.None))
+        }
+      }
+    }
+
+    ManualStop(client) -> {
+      logging.log(logging.Info, "[jetstream] Manual stop requested")
+
+      // Stop consumer if running
+      case state.consumer_subject {
+        option.Some(subject) -> {
+          let _ = actor.call(subject, waiting: 1000, sending: Stop)
+          process.send(client, Nil)
+        }
+        option.None -> process.send(client, Nil)
+      }
+
+      actor.continue(ManagerState(..state, consumer_subject: option.None))
+    }
+  }
+}
+
+// ============================================================================
+// CONSUMER ACTOR
+// ============================================================================
+
+/// Start the Jetstream consumer actor (called by manager)
+fn start_consumer_actor(
+  db: sqlight.Connection,
+  manager: option.Option(process.Subject(ManagerMessage)),
+) -> Result(process.Subject(Message), String) {
+  case start_consumer_process(db, manager) {
     Ok(consumer_pid) -> {
       let initial_state =
         State(
@@ -90,16 +384,6 @@ pub fn start(db: sqlight.Connection) -> Result(process.Subject(Message), String)
   }
 }
 
-/// Stop the Jetstream consumer
-pub fn stop(consumer: process.Subject(Message)) -> Nil {
-  actor.call(consumer, waiting: 1000, sending: Stop)
-}
-
-/// Restart the Jetstream consumer with fresh lexicon data
-pub fn restart(consumer: process.Subject(Message)) -> Result(Nil, String) {
-  actor.call(consumer, waiting: 5000, sending: Restart)
-}
-
 /// Handle messages sent to the consumer actor
 fn handle_message(state: State, message: Message) -> actor.Next(State, Message) {
   case message {
@@ -130,7 +414,8 @@ fn handle_message(state: State, message: Message) -> actor.Next(State, Message) 
       }
 
       // Start new consumer with fresh lexicon data
-      case start_consumer_process(state.db) {
+      // Note: We pass option.None for manager since restarts go through the manager
+      case start_consumer_process(state.db, option.None) {
         Ok(new_pid) -> {
           process.send(client, Ok(Nil))
           actor.continue(State(..state, consumer_pid: option.Some(new_pid)))
@@ -151,6 +436,11 @@ fn erlang_system_time(unit: Int) -> Int
 fn get_current_time_seconds() -> Int {
   // Time unit: 1 = seconds
   erlang_system_time(1)
+}
+
+fn get_current_time_milliseconds() -> Int {
+  // Time unit: 1000000 = milliseconds
+  erlang_system_time(1_000_000)
 }
 
 /// Handle cursor tracker messages
@@ -263,7 +553,10 @@ fn start_cursor_tracker(
 }
 
 /// Start the actual consumer process (extracted from original start function)
-fn start_consumer_process(db: sqlight.Connection) -> Result(process.Pid, String) {
+fn start_consumer_process(
+  db: sqlight.Connection,
+  manager: option.Option(process.Subject(ManagerMessage)),
+) -> Result(process.Pid, String) {
   logging.log(logging.Info, "")
   logging.log(logging.Info, "[jetstream] Starting Jetstream consumer...")
 
@@ -436,6 +729,7 @@ fn start_consumer_process(db: sqlight.Connection) -> Result(process.Pid, String)
                       ext_collections,
                       plc_url,
                       cursor_tracker,
+                      manager,
                     )
                   })
                 Nil
@@ -481,9 +775,16 @@ fn handle_jetstream_event(
   external_collection_ids: List(String),
   plc_url: String,
   cursor_tracker: option.Option(process.Subject(CursorMessage)),
+  manager: option.Option(process.Subject(ManagerMessage)),
 ) -> Nil {
   case goose.parse_event(event_json) {
     goose.CommitEvent(did, time_us, commit) -> {
+      // Send heartbeat to manager (convert microseconds to milliseconds)
+      case manager {
+        option.Some(mgr) -> process.send(mgr, MessageReceived(time_us / 1000))
+        option.None -> Nil
+      }
+
       // Update cursor tracker with latest time_us
       case cursor_tracker {
         option.Some(tracker) -> process.send(tracker, UpdateCursor(time_us))

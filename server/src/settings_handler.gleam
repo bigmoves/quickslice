@@ -24,7 +24,7 @@ pub type Context {
     admin_dids: List(String),
     config: process.Subject(config.Message),
     jetstream_consumer: option.Option(
-      process.Subject(jetstream_consumer.Message),
+      process.Subject(jetstream_consumer.ManagerMessage),
     ),
   )
 }

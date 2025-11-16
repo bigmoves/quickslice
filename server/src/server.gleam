@@ -43,7 +43,7 @@ pub type Context {
     backfill_state: process.Subject(backfill_state.Message),
     config: process.Subject(config.Message),
     jetstream_consumer: option.Option(
-      process.Subject(jetstream_consumer.Message),
+      process.Subject(jetstream_consumer.ManagerMessage),
     ),
   )
 }
@@ -272,7 +272,9 @@ fn start_server_normally() {
 
 fn start_server(
   db: sqlight.Connection,
-  jetstream_subject: option.Option(process.Subject(jetstream_consumer.Message)),
+  jetstream_subject: option.Option(
+    process.Subject(jetstream_consumer.ManagerMessage),
+  ),
 ) {
   wisp.configure_logger()
 

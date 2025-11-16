@@ -699,7 +699,7 @@ pub fn mutation_type(
   conn: sqlight.Connection,
   req: wisp.Request,
   admin_dids: List(String),
-  jetstream_subject: Option(process.Subject(jetstream_consumer.Message)),
+  jetstream_subject: Option(process.Subject(jetstream_consumer.ManagerMessage)),
 ) -> schema.Type {
   schema.object_type("Mutation", "Root mutation type", [
     // updateDomainAuthority mutation
@@ -944,7 +944,7 @@ pub fn build_schema(
   conn: sqlight.Connection,
   req: wisp.Request,
   admin_dids: List(String),
-  jetstream_subject: Option(process.Subject(jetstream_consumer.Message)),
+  jetstream_subject: Option(process.Subject(jetstream_consumer.ManagerMessage)),
 ) -> schema.Schema {
   schema.schema(
     query_type(conn, req, admin_dids),

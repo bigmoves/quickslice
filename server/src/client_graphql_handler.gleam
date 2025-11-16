@@ -23,7 +23,9 @@ pub fn handle_client_graphql_request(
   req: wisp.Request,
   db: sqlight.Connection,
   admin_dids: List(String),
-  jetstream_subject: option.Option(process.Subject(jetstream_consumer.Message)),
+  jetstream_subject: option.Option(
+    process.Subject(jetstream_consumer.ManagerMessage),
+  ),
 ) -> wisp.Response {
   case req.method {
     http.Post -> handle_post(req, db, admin_dids, jetstream_subject)
@@ -36,7 +38,9 @@ fn handle_post(
   req: wisp.Request,
   db: sqlight.Connection,
   admin_dids: List(String),
-  jetstream_subject: option.Option(process.Subject(jetstream_consumer.Message)),
+  jetstream_subject: option.Option(
+    process.Subject(jetstream_consumer.ManagerMessage),
+  ),
 ) -> wisp.Response {
   case wisp.read_body_bits(req) {
     Ok(body) -> {
@@ -66,7 +70,9 @@ fn handle_get(
   req: wisp.Request,
   db: sqlight.Connection,
   admin_dids: List(String),
-  jetstream_subject: option.Option(process.Subject(jetstream_consumer.Message)),
+  jetstream_subject: option.Option(
+    process.Subject(jetstream_consumer.ManagerMessage),
+  ),
 ) -> wisp.Response {
   let query_params = wisp.get_query(req)
   case list.key_find(query_params, "query") {
@@ -80,7 +86,9 @@ fn execute_query(
   req: wisp.Request,
   db: sqlight.Connection,
   admin_dids: List(String),
-  jetstream_subject: option.Option(process.Subject(jetstream_consumer.Message)),
+  jetstream_subject: option.Option(
+    process.Subject(jetstream_consumer.ManagerMessage),
+  ),
   query: String,
   variables: option.Option(value.Value),
 ) -> wisp.Response {
