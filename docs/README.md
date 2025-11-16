@@ -112,6 +112,7 @@ query {
 ## Documentation
 
 - [Queries](./queries.md) - Fetching records with filters and sorting
+- [Aggregations](./aggregations.md) - Group by and count operations
 - [Mutations](./mutations.md) - Creating, updating, and deleting records
 - [Subscriptions](./subscriptions.md) - Real-time updates via WebSocket
 - [Joins](./joins.md) - Forward and reverse joins between records
