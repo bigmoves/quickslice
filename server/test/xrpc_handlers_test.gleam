@@ -1,4 +1,6 @@
-import database
+import database/repositories/lexicons
+import database/repositories/records
+import database/schema/tables
 import gleam/http
 import gleeunit/should
 import sqlight
@@ -13,8 +15,8 @@ fn setup_test_db() -> sqlight.Connection {
   let assert Ok(db) = sqlight.open(":memory:")
 
   // Create tables
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
 
   db
 }
@@ -47,7 +49,7 @@ fn insert_test_lexicon(db: sqlight.Connection, nsid: String) -> Nil {
   }
 }"
 
-  let assert Ok(_) = database.insert_lexicon(db, nsid, lexicon_json)
+  let assert Ok(_) = lexicons.insert(db, nsid, lexicon_json)
   Nil
 }
 
@@ -61,7 +63,7 @@ fn insert_test_record(
     "{\"text\": \"Hello world\", \"createdAt\": \"2025-01-01T00:00:00Z\"}"
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       uri,
       "bafytest123",

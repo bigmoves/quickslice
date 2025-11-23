@@ -5,7 +5,8 @@
 import actor_validator
 import atproto_auth
 import backfill
-import database
+import database/repositories/lexicons
+import database/repositories/records
 import dpop
 import gleam/dynamic
 import gleam/dynamic/decode
@@ -140,7 +141,7 @@ pub fn create_resolver_factory(
 
     // Step 6: Validate against lexicon
     use lexicon_records <- result.try(
-      database.get_lexicon(ctx.db, collection)
+      lexicons.get(ctx.db, collection)
       |> result.map_error(fn(_) { "Failed to fetch lexicon" }),
     )
 
@@ -217,7 +218,7 @@ pub fn create_resolver_factory(
 
         // Step 9: Index the created record in the database
         use _ <- result.try(
-          database.insert_record(
+          records.insert(
             ctx.db,
             uri,
             cid,
@@ -335,7 +336,7 @@ pub fn update_resolver_factory(
 
     // Step 6: Validate against lexicon
     use lexicon_records <- result.try(
-      database.get_lexicon(ctx.db, collection)
+      lexicons.get(ctx.db, collection)
       |> result.map_error(fn(_) { "Failed to fetch lexicon" }),
     )
 
@@ -401,7 +402,7 @@ pub fn update_resolver_factory(
 
         // Step 9: Update the record in the database
         use _ <- result.try(
-          database.update_record(ctx.db, uri, cid, record_json_string)
+          records.update(ctx.db, uri, cid, record_json_string)
           |> result.map_error(fn(_) { "Failed to update record in database" }),
         )
 
@@ -533,7 +534,7 @@ pub fn delete_resolver_factory(
 
     // Step 8: Delete the record from the database
     use _ <- result.try(
-      database.delete_record(ctx.db, uri)
+      records.delete(ctx.db, uri)
       |> result.map_error(fn(_) { "Failed to delete record from database" }),
     )
 

@@ -3,7 +3,11 @@
 /// This schema is separate from the main /graphql endpoint and serves
 /// the client SPA with stats and activity data via /admin/graphql
 import backfill
-import database
+import database/repositories/actors
+import database/repositories/config as config_repo
+import database/repositories/lexicons
+import database/repositories/records
+import database/types
 import gleam/erlang/process
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -529,7 +533,7 @@ fn settings_to_value(
   ])
 }
 
-fn lexicon_to_value(lexicon: database.Lexicon) -> value.Value {
+fn lexicon_to_value(lexicon: types.Lexicon) -> value.Value {
   value.Object([
     #("id", value.String(lexicon.id)),
     #("json", value.String(lexicon.json)),
@@ -567,9 +571,9 @@ pub fn query_type(
       "Get system statistics",
       fn(_ctx) {
         case
-          database.get_record_count(conn),
-          database.get_actor_count(conn),
-          database.get_lexicon_count(conn)
+          records.get_count(conn),
+          actors.get_count(conn),
+          lexicons.get_count(conn)
         {
           Ok(record_count), Ok(actor_count), Ok(lexicon_count) -> {
             Ok(statistics_to_value(record_count, actor_count, lexicon_count))
@@ -585,13 +589,13 @@ pub fn query_type(
       "Get system settings",
       fn(_ctx) {
         let domain_authority = case
-          database.get_config(conn, "domain_authority")
+          config_repo.get(conn, "domain_authority")
         {
           Ok(authority) -> authority
           Error(_) -> ""
         }
 
-        let oauth_client_id = case database.get_oauth_credentials(conn) {
+        let oauth_client_id = case config_repo.get_oauth_credentials(conn) {
           Ok(Some(#(client_id, _secret, _uri))) -> Some(client_id)
           _ -> None
         }
@@ -605,8 +609,9 @@ pub fn query_type(
       schema.non_null(schema.list_type(schema.non_null(lexicon_type()))),
       "Get all lexicons",
       fn(_ctx) {
-        case database.get_all_lexicons(conn) {
-          Ok(lexicons) -> Ok(value.List(list.map(lexicons, lexicon_to_value)))
+        case lexicons.get_all(conn) {
+          Ok(lexicon_list) ->
+            Ok(value.List(list.map(lexicon_list, lexicon_to_value)))
           Error(_) -> Error("Failed to fetch lexicons")
         }
       },
@@ -718,7 +723,7 @@ pub fn mutation_type(
       fn(ctx) {
         case schema.get_argument(ctx, "domainAuthority") {
           Some(value.String(authority)) -> {
-            case database.set_config(conn, "domain_authority", authority) {
+            case config_repo.set(conn, "domain_authority", authority) {
               Ok(_) -> {
                 // Restart Jetstream consumer to pick up new domain authority
                 case jetstream_subject {
@@ -735,7 +740,7 @@ pub fn mutation_type(
 
                 // Fetch OAuth client ID to return complete Settings
                 let oauth_client_id = case
-                  database.get_oauth_credentials(conn)
+                  config_repo.get_oauth_credentials(conn)
                 {
                   Ok(Some(#(client_id, _secret, _uri))) -> Some(client_id)
                   _ -> None
@@ -834,12 +839,12 @@ pub fn mutation_type(
                 case schema.get_argument(ctx, "confirm") {
                   Some(value.String("RESET")) -> {
                     // Call multiple database functions to reset all data
-                    let _ = database.delete_all_records(conn)
-                    let _ = database.delete_all_actors(conn)
-                    let _ = database.delete_all_lexicons(conn)
-                    let _ = database.delete_domain_authority(conn)
-                    let _ = database.delete_oauth_credentials(conn)
-                    let _ = database.delete_all_jetstream_activity(conn)
+                    let _ = records.delete_all(conn)
+                    let _ = actors.delete_all(conn)
+                    let _ = lexicons.delete_all(conn)
+                    let _ = config_repo.delete_domain_authority(conn)
+                    let _ = config_repo.delete_oauth_credentials(conn)
+                    let _ = jetstream_activity.delete_all(conn)
 
                     // Restart Jetstream consumer after reset
                     case jetstream_subject {
@@ -886,16 +891,15 @@ pub fn mutation_type(
                   )
 
                   // Get all record-type collections from database (only backfill records, not queries/procedures)
-                  let collections = case
-                    database.get_record_type_lexicons(conn)
-                  {
-                    Ok(lexicons) -> list.map(lexicons, fn(lex) { lex.id })
+                  let collections = case lexicons.get_record_types(conn) {
+                    Ok(lexicon_list) ->
+                      list.map(lexicon_list, fn(lex) { lex.id })
                     Error(_) -> []
                   }
 
                   // Get domain authority to determine external collections
                   let domain_authority = case
-                    database.get_config(conn, "domain_authority")
+                    config_repo.get(conn, "domain_authority")
                   {
                     Ok(authority) -> authority
                     Error(_) -> ""

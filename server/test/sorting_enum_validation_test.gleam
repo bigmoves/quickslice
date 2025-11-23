@@ -1,3 +1,4 @@
+
 /// Integration test for sorting enum validation
 ///
 /// Verifies that each Connection field uses the correct collection-specific

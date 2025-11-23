@@ -1,5 +1,8 @@
 import config
-import database
+import database/repositories/actors
+import database/repositories/config as config_repo
+import database/repositories/lexicons
+import database/repositories/records
 import gleam/erlang/process
 import gleam/http as gleam_http
 import gleam/int
@@ -362,11 +365,11 @@ fn handle_reset(
   case list.key_find(form_data.values, "confirm") {
     Ok("RESET") -> {
       // Delete all data
-      let domain_result = database.delete_domain_authority(ctx.db)
-      let lexicons_result = database.delete_all_lexicons(ctx.db)
-      let records_result = database.delete_all_records(ctx.db)
-      let actors_result = database.delete_all_actors(ctx.db)
-      let oauth_result = database.delete_oauth_credentials(ctx.db)
+      let domain_result = config_repo.delete_domain_authority(ctx.db)
+      let lexicons_result = lexicons.delete_all(ctx.db)
+      let records_result = records.delete_all(ctx.db)
+      let actors_result = actors.delete_all(ctx.db)
+      let oauth_result = config_repo.delete_oauth_credentials(ctx.db)
 
       case
         domain_result,

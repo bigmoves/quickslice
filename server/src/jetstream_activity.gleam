@@ -288,3 +288,10 @@ fn get_activity_bucketed(
 
   sqlight.query(sql, on: conn, with: [], expecting: decoder)
 }
+
+/// Deletes all jetstream activity records from the database
+pub fn delete_all(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+  let sql = "DELETE FROM jetstream_activity"
+  sqlight.exec(sql, conn)
+  |> result.map(fn(_) { Nil })
+}

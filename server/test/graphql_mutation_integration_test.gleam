@@ -1,4 +1,5 @@
-import database
+import database/repositories/lexicons
+import database/schema/tables
 import gleam/json
 import gleam/list
 import gleam/option
@@ -64,16 +65,16 @@ fn create_status_lexicon() -> String {
 pub fn test_create_mutation_generates_correct_schema_test() {
   // Setup: Create in-memory database with test lexicons
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
 
   // Insert xyz.statusphere.status lexicon
   let status_lexicon = create_status_lexicon()
 
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
 
   // Get lexicons and parse them
-  let assert Ok(lexicon_records) = database.get_all_lexicons(db)
+  let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
     |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
@@ -126,11 +127,11 @@ pub fn test_create_mutation_generates_correct_schema_test() {
 pub fn test_create_mutation_field_signature_test() {
   // Setup
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
   let status_lexicon = create_status_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", status_lexicon)
-  let assert Ok(lexicon_records) = database.get_all_lexicons(db)
+    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+  let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
     |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
@@ -183,11 +184,11 @@ pub fn test_create_mutation_field_signature_test() {
 pub fn test_update_mutation_field_signature_test() {
   // Setup
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
   let status_lexicon = create_status_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", status_lexicon)
-  let assert Ok(lexicon_records) = database.get_all_lexicons(db)
+    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+  let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
     |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
@@ -239,11 +240,11 @@ pub fn test_update_mutation_field_signature_test() {
 pub fn test_delete_mutation_field_signature_test() {
   // Setup
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
   let status_lexicon = create_status_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", status_lexicon)
-  let assert Ok(lexicon_records) = database.get_all_lexicons(db)
+    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+  let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
     |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })

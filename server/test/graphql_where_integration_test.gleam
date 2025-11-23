@@ -1,7 +1,8 @@
 /// End-to-end integration tests for GraphQL where clause filtering
 ///
 /// Tests the complete flow: GraphQL value → WhereInput parsing → SQL generation → Database query
-import database
+import database/repositories/records
+import database/schema/tables
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
@@ -20,10 +21,10 @@ pub fn main() {
 // Helper to setup test database with sample records
 fn setup_test_db() -> Result(sqlight.Connection, sqlight.Error) {
   use conn <- result.try(sqlight.open(":memory:"))
-  use _ <- result.try(database.create_record_table(conn))
+  use _ <- result.try(tables.create_record_table(conn))
 
   // Insert test records with different properties
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:alice/app.bsky.feed.post/1",
     "cid1",
@@ -32,7 +33,7 @@ fn setup_test_db() -> Result(sqlight.Connection, sqlight.Error) {
     "{\"text\":\"Hello World\",\"likes\":100,\"author\":\"alice\"}",
   ))
 
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:bob/app.bsky.feed.post/2",
     "cid2",
@@ -41,7 +42,7 @@ fn setup_test_db() -> Result(sqlight.Connection, sqlight.Error) {
     "{\"text\":\"Goodbye World\",\"likes\":50,\"author\":\"bob\"}",
   ))
 
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:charlie/app.bsky.feed.post/3",
     "cid3",
@@ -50,7 +51,7 @@ fn setup_test_db() -> Result(sqlight.Connection, sqlight.Error) {
     "{\"text\":\"Hello Universe\",\"likes\":200,\"author\":\"charlie\"}",
   ))
 
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:alice/app.bsky.feed.post/4",
     "cid4",
@@ -80,7 +81,7 @@ pub fn graphql_simple_filter_test() {
 
       // Execute query
       case
-        database.get_records_by_collection_paginated_with_where(
+        records.get_by_collection_paginated_with_where(
           conn,
           "app.bsky.feed.post",
           Some(10),
@@ -135,7 +136,7 @@ pub fn graphql_or_filter_test() {
 
       // Execute query
       case
-        database.get_records_by_collection_paginated_with_where(
+        records.get_by_collection_paginated_with_where(
           conn,
           "app.bsky.feed.post",
           Some(10),
@@ -202,7 +203,7 @@ pub fn graphql_and_filter_test() {
 
       // Execute query
       case
-        database.get_records_by_collection_paginated_with_where(
+        records.get_by_collection_paginated_with_where(
           conn,
           "app.bsky.feed.post",
           Some(10),
@@ -278,7 +279,7 @@ pub fn graphql_nested_and_or_test() {
 
       // Execute query
       case
-        database.get_records_by_collection_paginated_with_where(
+        records.get_by_collection_paginated_with_where(
           conn,
           "app.bsky.feed.post",
           Some(10),
@@ -340,7 +341,7 @@ pub fn graphql_complex_nested_test() {
 
       // Execute query
       case
-        database.get_records_by_collection_paginated_with_where(
+        records.get_by_collection_paginated_with_where(
           conn,
           "app.bsky.feed.post",
           Some(10),
@@ -399,7 +400,7 @@ pub fn graphql_empty_logic_arrays_test() {
 
       // Execute query - should return all records
       case
-        database.get_records_by_collection_paginated_with_where(
+        records.get_by_collection_paginated_with_where(
           conn,
           "app.bsky.feed.post",
           Some(10),

@@ -1,4 +1,4 @@
-import database
+import database/repositories/lexicons
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
@@ -83,7 +83,7 @@ pub fn parse_method(method: String) -> XrpcMethod {
 
 /// Check if a lexicon exists for the given NSID
 pub fn validate_nsid(db: sqlight.Connection, nsid: String) -> Bool {
-  case database.has_lexicon_for_collection(db, nsid) {
+  case lexicons.has_for_collection(db, nsid) {
     Ok(True) -> True
     _ -> False
   }

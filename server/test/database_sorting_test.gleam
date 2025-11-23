@@ -1,8 +1,10 @@
+import database/types
 /// Database sorting integration tests
 ///
 /// Tests that SQL ORDER BY clauses are generated correctly and
 /// that sorting works properly with the database
-import database
+import database/repositories/records
+import database/schema/tables
 import gleam/list
 import gleam/option.{None, Some}
 import gleeunit/should
@@ -14,7 +16,7 @@ fn create_test_db_with_records() -> sqlight.Connection {
   let assert Ok(conn) = sqlight.open(":memory:")
 
   // Create schema using the database module
-  let assert Ok(_) = database.create_record_table(conn)
+  let assert Ok(_) = tables.create_record_table(conn)
 
   // Insert test records with different dates
   let records = [
@@ -80,7 +82,7 @@ pub fn test_sort_by_indexed_at_desc() {
   let conn = create_test_db_with_records()
 
   let result =
-    database.get_records_by_collection_paginated(
+    records.get_by_collection_paginated(
       conn,
       "xyz.statusphere.status",
       Some(10),
@@ -117,7 +119,7 @@ pub fn test_sort_by_indexed_at_asc() {
   let conn = create_test_db_with_records()
 
   let result =
-    database.get_records_by_collection_paginated(
+    records.get_by_collection_paginated(
       conn,
       "xyz.statusphere.status",
       Some(10),
@@ -154,7 +156,7 @@ pub fn test_sort_by_json_field_desc_nulls_last() {
   let conn = create_test_db_with_records()
 
   let result =
-    database.get_records_by_collection_paginated(
+    records.get_by_collection_paginated(
       conn,
       "xyz.statusphere.status",
       Some(10),
@@ -195,7 +197,7 @@ pub fn test_sort_by_json_field_asc_nulls_last() {
   let conn = create_test_db_with_records()
 
   let result =
-    database.get_records_by_collection_paginated(
+    records.get_by_collection_paginated(
       conn,
       "xyz.statusphere.status",
       Some(10),
@@ -235,7 +237,7 @@ pub fn test_pagination_with_sorting() {
 
   // Get first 2 records sorted by createdAt DESC
   let result =
-    database.get_records_by_collection_paginated(
+    records.get_by_collection_paginated(
       conn,
       "xyz.statusphere.status",
       Some(2),
@@ -271,7 +273,7 @@ pub fn test_invalid_dates_treated_as_null() {
   let conn = create_test_db_with_records()
 
   let result =
-    database.get_records_by_collection_paginated(
+    records.get_by_collection_paginated(
       conn,
       "xyz.statusphere.status",
       Some(10),
@@ -286,7 +288,7 @@ pub fn test_invalid_dates_treated_as_null() {
       // The record with "wowzers" should be near the end (treated as NULL)
       // Find the "wowzers" record by its indexed_at
       let wowzers_position =
-        list.index_map(records, fn(r: database.Record, idx) {
+        list.index_map(records, fn(r: types.Record, idx) {
           case r.indexed_at == "2025-01-18T10:00:00Z" {
             True -> Some(idx)
             False -> None
@@ -313,7 +315,7 @@ pub fn test_cursor_pagination() {
 
   // Get first page of 2 records
   let first_page =
-    database.get_records_by_collection_paginated(
+    records.get_by_collection_paginated(
       conn,
       "xyz.statusphere.status",
       Some(2),
@@ -339,7 +341,7 @@ pub fn test_cursor_pagination() {
 
           // Now get second page using the cursor
           let second_page =
-            database.get_records_by_collection_paginated(
+            records.get_by_collection_paginated(
               conn,
               "xyz.statusphere.status",
               Some(2),
@@ -388,7 +390,7 @@ pub fn test_cursor_pagination_last_page() {
 
   // Get first 4 records, leaving only 1
   let first_page =
-    database.get_records_by_collection_paginated(
+    records.get_by_collection_paginated(
       conn,
       "xyz.statusphere.status",
       Some(4),
@@ -405,7 +407,7 @@ pub fn test_cursor_pagination_last_page() {
 
       // Get last page
       let last_page =
-        database.get_records_by_collection_paginated(
+        records.get_by_collection_paginated(
           conn,
           "xyz.statusphere.status",
           Some(2),

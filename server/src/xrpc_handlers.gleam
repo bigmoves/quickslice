@@ -1,5 +1,6 @@
 import atproto_auth
-import database
+import database/repositories/lexicons
+import database/repositories/records
 import dpop
 import gleam/bit_array
 import gleam/http
@@ -107,7 +108,7 @@ pub fn handle_get_record(
       case list.key_find(query_params, "uri") {
         Ok(uri) -> {
           // Fetch the record from database
-          case database.get_record(db, uri) {
+          case records.get(db, uri) {
             Ok([record]) -> {
               // Return the record
               wisp.response(200)
@@ -186,7 +187,7 @@ pub fn handle_update_record(
               case bit_array.to_string(body) {
                 Ok(body_string) -> {
                   // Get the lexicon for validation
-                  case database.get_lexicon(db, nsid) {
+                  case lexicons.get(db, nsid) {
                     Ok([lexicon_record]) -> {
                       // Parse lexicon and body to Json
                       case
@@ -303,7 +304,7 @@ pub fn handle_delete_record(
       case list.key_find(query_params, "uri") {
         Ok(uri) -> {
           // Delete the record from the database
-          case database.delete_record(db, uri) {
+          case records.delete(db, uri) {
             Ok(_) -> {
               wisp.response(200)
               |> wisp.set_header("content-type", "application/json")

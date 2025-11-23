@@ -1,3 +1,5 @@
+import database/queries/aggregates
+import database/types
 /// End-to-end integration tests for GraphQL aggregated queries
 ///
 /// Tests the complete aggregation flow:
@@ -5,10 +7,11 @@
 /// 2. GraphQL schema building with aggregate fields
 /// 3. Aggregated query execution with various parameters
 /// 4. Result formatting and verification
-import database
+import database/repositories/lexicons
+import database/repositories/records
+import database/schema/tables
 import gleam/dict
 import gleam/http
-import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option.{None}
@@ -100,12 +103,12 @@ fn create_status_lexicon() -> String {
 // Helper to setup test database with aggregatable records
 fn setup_aggregation_test_db() -> Result(sqlight.Connection, sqlight.Error) {
   use conn <- result.try(sqlight.open(":memory:"))
-  use _ <- result.try(database.create_lexicon_table(conn))
-  use _ <- result.try(database.create_record_table(conn))
+  use _ <- result.try(tables.create_lexicon_table(conn))
+  use _ <- result.try(tables.create_record_table(conn))
 
   // Insert post lexicon
   let post_lexicon = create_post_lexicon()
-  use _ <- result.try(database.insert_lexicon(
+  use _ <- result.try(lexicons.insert(
     conn,
     "app.bsky.feed.post",
     post_lexicon,
@@ -113,7 +116,7 @@ fn setup_aggregation_test_db() -> Result(sqlight.Connection, sqlight.Error) {
 
   // Insert status lexicon
   let status_lexicon = create_status_lexicon()
-  use _ <- result.try(database.insert_lexicon(
+  use _ <- result.try(lexicons.insert(
     conn,
     "xyz.statusphere.status",
     status_lexicon,
@@ -121,7 +124,7 @@ fn setup_aggregation_test_db() -> Result(sqlight.Connection, sqlight.Error) {
 
   // Insert test records with varying fields for aggregation
   // Posts from different authors with different languages
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:alice/app.bsky.feed.post/1",
     "cid1",
@@ -136,7 +139,7 @@ fn setup_aggregation_test_db() -> Result(sqlight.Connection, sqlight.Error) {
       |> json.to_string,
   ))
 
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:alice/app.bsky.feed.post/2",
     "cid2",
@@ -151,7 +154,7 @@ fn setup_aggregation_test_db() -> Result(sqlight.Connection, sqlight.Error) {
       |> json.to_string,
   ))
 
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:bob/app.bsky.feed.post/1",
     "cid3",
@@ -166,7 +169,7 @@ fn setup_aggregation_test_db() -> Result(sqlight.Connection, sqlight.Error) {
       |> json.to_string,
   ))
 
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:charlie/app.bsky.feed.post/1",
     "cid4",
@@ -181,7 +184,7 @@ fn setup_aggregation_test_db() -> Result(sqlight.Connection, sqlight.Error) {
       |> json.to_string,
   ))
 
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:bob/app.bsky.feed.post/2",
     "cid5",
@@ -197,7 +200,7 @@ fn setup_aggregation_test_db() -> Result(sqlight.Connection, sqlight.Error) {
   ))
 
   // Insert status records
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:alice/xyz.statusphere.status/1",
     "scid1",
@@ -210,7 +213,7 @@ fn setup_aggregation_test_db() -> Result(sqlight.Connection, sqlight.Error) {
       |> json.to_string,
   ))
 
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:bob/xyz.statusphere.status/1",
     "scid2",
@@ -223,7 +226,7 @@ fn setup_aggregation_test_db() -> Result(sqlight.Connection, sqlight.Error) {
       |> json.to_string,
   ))
 
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:charlie/xyz.statusphere.status/1",
     "scid3",
@@ -357,8 +360,7 @@ pub fn graphql_aggregation_with_where_test() {
       "https://plc.directory",
     )
 
-  let assert wisp.Text(body_no_where) = response_no_where.body
-  io.println("Query without WHERE: " <> body_no_where)
+  let assert wisp.Text(_body_no_where) = response_no_where.body
 
   // Try with string field instead of integer
   let query_string =
@@ -385,8 +387,7 @@ pub fn graphql_aggregation_with_where_test() {
       "https://plc.directory",
     )
 
-  let assert wisp.Text(body_string) = response_string.body
-  io.println("Query with string WHERE: " <> body_string)
+  let assert wisp.Text(_body_string) = response_string.body
 
   // Query: Group posts by lang, but only for posts with likes >= 50
   // Note: GraphQL integers in queries don't need quotes
@@ -418,7 +419,6 @@ pub fn graphql_aggregation_with_where_test() {
   response.status |> should.equal(200)
 
   let assert wisp.Text(body) = response.body
-  io.println("Query with integer WHERE (likes >= 50): " <> body)
 
   // Should filter out posts with likes < 50 (bob/post/2 with 25 likes)
   // Remaining: alice/post/1 (100), alice/post/2 (50), bob/post/1 (75), charlie/post/1 (200)
@@ -568,10 +568,10 @@ pub fn database_aggregation_integration_test() {
 
   // Test simple grouping by author
   let assert Ok(results) =
-    database.get_aggregated_records(
+    aggregates.get_aggregated_records(
       conn,
       "app.bsky.feed.post",
-      [database.SimpleField("author")],
+      [types.SimpleField("author")],
       None,
       True,
       10,
@@ -597,10 +597,10 @@ pub fn database_multi_field_aggregation_test() {
 
   // Group by author and lang
   let assert Ok(results) =
-    database.get_aggregated_records(
+    aggregates.get_aggregated_records(
       conn,
       "app.bsky.feed.post",
-      [database.SimpleField("author"), database.SimpleField("lang")],
+      [types.SimpleField("author"), types.SimpleField("lang")],
       None,
       True,
       10,

@@ -1,4 +1,6 @@
-import database
+import database/queries/aggregates
+import database/schema/tables
+import database/types
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/list
@@ -17,8 +19,8 @@ fn setup_test_db() -> sqlight.Connection {
   let assert Ok(conn) = sqlight.open(":memory:")
 
   // Use existing database creation functions
-  let assert Ok(_) = database.create_record_table(conn)
-  let assert Ok(_) = database.create_actor_table(conn)
+  let assert Ok(_) = tables.create_record_table(conn)
+  let assert Ok(_) = tables.create_actor_table(conn)
 
   conn
 }
@@ -75,10 +77,10 @@ pub fn test_simple_group_by_single_field() {
 
   // Aggregate by status field
   let assert Ok(results) =
-    database.get_aggregated_records(
+    aggregates.get_aggregated_records(
       conn,
       "xyz.statusphere.status",
-      [database.SimpleField("status")],
+      [types.SimpleField("status")],
       None,
       True,
       // order by count desc
@@ -122,10 +124,10 @@ pub fn test_group_by_multiple_fields() {
 
   // Aggregate by status and category
   let assert Ok(results) =
-    database.get_aggregated_records(
+    aggregates.get_aggregated_records(
       conn,
       "xyz.statusphere.status",
-      [database.SimpleField("status"), database.SimpleField("category")],
+      [types.SimpleField("status"), types.SimpleField("category")],
       None,
       True,
       10,
@@ -186,10 +188,10 @@ pub fn test_group_by_with_where_filter() {
 
   // Aggregate by status with WHERE filter
   let assert Ok(results) =
-    database.get_aggregated_records(
+    aggregates.get_aggregated_records(
       conn,
       "xyz.statusphere.status",
-      [database.SimpleField("status")],
+      [types.SimpleField("status")],
       Some(where_clause),
       True,
       10,
@@ -228,10 +230,10 @@ pub fn test_group_by_table_column() {
 
   // Aggregate by DID (table column)
   let assert Ok(results) =
-    database.get_aggregated_records(
+    aggregates.get_aggregated_records(
       conn,
       "xyz.statusphere.status",
-      [database.SimpleField("did")],
+      [types.SimpleField("did")],
       None,
       True,
       10,
@@ -273,10 +275,10 @@ pub fn test_order_by_count_ascending() {
 
   // Aggregate with ascending order
   let assert Ok(results) =
-    database.get_aggregated_records(
+    aggregates.get_aggregated_records(
       conn,
       "xyz.statusphere.status",
-      [database.SimpleField("status")],
+      [types.SimpleField("status")],
       None,
       False,
       // order by count asc
@@ -325,10 +327,10 @@ pub fn test_limit() {
 
   // Aggregate with limit of 2
   let assert Ok(results) =
-    database.get_aggregated_records(
+    aggregates.get_aggregated_records(
       conn,
       "xyz.statusphere.status",
-      [database.SimpleField("status")],
+      [types.SimpleField("status")],
       None,
       True,
       2,
@@ -371,10 +373,10 @@ pub fn test_date_truncation_day() {
 
   // Aggregate by indexed_at truncated to day
   let assert Ok(results) =
-    database.get_aggregated_records(
+    aggregates.get_aggregated_records(
       conn,
       "xyz.statusphere.status",
-      [database.TruncatedField("indexed_at", database.Day)],
+      [types.TruncatedField("indexed_at", types.Day)],
       None,
       True,
       10,
@@ -395,10 +397,10 @@ pub fn test_empty_result() {
 
   // Try to aggregate
   let assert Ok(results) =
-    database.get_aggregated_records(
+    aggregates.get_aggregated_records(
       conn,
       "xyz.statusphere.status",
-      [database.SimpleField("status")],
+      [types.SimpleField("status")],
       None,
       True,
       10,

@@ -4,7 +4,12 @@
 import backfill
 import config
 import cursor
-import database
+import database/queries/aggregates
+import database/queries/pagination
+import database/repositories/actors
+import database/repositories/lexicons
+import database/repositories/records
+import database/types
 import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
@@ -36,7 +41,7 @@ pub fn build_schema_from_db(
 ) -> Result(schema.Schema, String) {
   // Step 1: Fetch lexicons from database
   use lexicon_records <- result.try(
-    database.get_all_lexicons(db)
+    lexicons.get_all(db)
     |> result.map_error(fn(_) { "Failed to fetch lexicons from database" }),
   )
 
@@ -77,7 +82,7 @@ pub fn build_schema_from_db(
 
         // Get total count for this collection (with where filter if present)
         let total_count =
-          database.get_collection_count_with_where(
+          records.get_collection_count_with_where(
             db,
             collection_nsid,
             where_clause,
@@ -87,7 +92,7 @@ pub fn build_schema_from_db(
 
         // Fetch records from database for this collection with pagination
         case
-          database.get_records_by_collection_paginated_with_where(
+          records.get_by_collection_paginated_with_where(
             db,
             collection_nsid,
             pagination_params.first,
@@ -100,15 +105,15 @@ pub fn build_schema_from_db(
         {
           Error(_) -> Ok(#([], option.None, False, False, option.None))
           // Return empty result on error
-          Ok(#(records, next_cursor, has_next_page, has_previous_page)) -> {
+          Ok(#(record_list, next_cursor, has_next_page, has_previous_page)) -> {
             // Convert database records to GraphQL values with cursors
             let graphql_records_with_cursors =
-              list.map(records, fn(record) {
+              list.map(record_list, fn(record) {
                 let graphql_value = record_to_graphql_value(record, db)
                 // Generate cursor for this record
                 let record_cursor =
                   cursor.generate_cursor_from_record(
-                    database.record_to_record_like(record),
+                    pagination.record_to_record_like(record),
                     pagination_params.sort_by,
                   )
                 #(graphql_value, record_cursor)
@@ -141,16 +146,12 @@ pub fn build_schema_from_db(
                   True -> {
                     // DID join: fetch records by DID and collection
                     case
-                      database.get_records_by_dids_and_collection(
-                        db,
-                        uris,
-                        collection,
-                      )
+                      records.get_by_dids_and_collection(db, uris, collection)
                     {
-                      Ok(records) -> {
+                      Ok(record_list) -> {
                         // Group records by DID
                         let grouped =
-                          list.fold(records, dict.new(), fn(acc, record) {
+                          list.fold(record_list, dict.new(), fn(acc, record) {
                             let graphql_value =
                               record_to_graphql_value(record, db)
                             let existing =
@@ -167,11 +168,11 @@ pub fn build_schema_from_db(
                   }
                   False -> {
                     // Forward join: fetch records by their URIs
-                    case database.get_records_by_uris(db, uris) {
-                      Ok(records) -> {
+                    case records.get_by_uris(db, uris) {
+                      Ok(record_list) -> {
                         // Group records by URI
                         let grouped =
-                          list.fold(records, dict.new(), fn(acc, record) {
+                          list.fold(record_list, dict.new(), fn(acc, record) {
                             let graphql_value =
                               record_to_graphql_value(record, db)
                             // For forward joins, return single record per URI
@@ -189,18 +190,18 @@ pub fn build_schema_from_db(
           option.Some(reference_field) -> {
             // Reverse join: fetch records that reference the parent URIs
             case
-              database.get_records_by_reference_field(
+              records.get_by_reference_field(
                 db,
                 collection,
                 reference_field,
                 uris,
               )
             {
-              Ok(records) -> {
+              Ok(record_list) -> {
                 // Group records by the parent URI they reference
                 // Parse each record's JSON to extract the reference field value
                 let grouped =
-                  list.fold(records, dict.new(), fn(acc, record) {
+                  list.fold(record_list, dict.new(), fn(acc, record) {
                     let graphql_value = record_to_graphql_value(record, db)
                     // Extract the reference field from the record JSON to find parent URI
                     case extract_reference_uri(record.json, reference_field) {
@@ -250,7 +251,7 @@ pub fn build_schema_from_db(
           option.None -> {
             // DID join: key is the DID
             case
-              database.get_records_by_dids_and_collection_paginated(
+              records.get_by_dids_and_collection_paginated(
                 db,
                 key,
                 collection,
@@ -263,7 +264,7 @@ pub fn build_schema_from_db(
               )
             {
               Ok(#(
-                records,
+                record_list,
                 _next_cursor,
                 has_next_page,
                 has_previous_page,
@@ -271,11 +272,11 @@ pub fn build_schema_from_db(
               )) -> {
                 // Convert records to GraphQL values with cursors
                 let edges =
-                  list.map(records, fn(record) {
+                  list.map(record_list, fn(record) {
                     let graphql_value = record_to_graphql_value(record, db)
                     let cursor =
                       cursor.generate_cursor_from_record(
-                        database.record_to_record_like(record),
+                        pagination.record_to_record_like(record),
                         db_sort_by,
                       )
                     #(graphql_value, cursor)
@@ -294,7 +295,7 @@ pub fn build_schema_from_db(
           option.Some(reference_field) -> {
             // Reverse join: key is the parent URI
             case
-              database.get_records_by_reference_field_paginated(
+              records.get_by_reference_field_paginated(
                 db,
                 collection,
                 reference_field,
@@ -308,7 +309,7 @@ pub fn build_schema_from_db(
               )
             {
               Ok(#(
-                records,
+                record_list,
                 _next_cursor,
                 has_next_page,
                 has_previous_page,
@@ -316,11 +317,11 @@ pub fn build_schema_from_db(
               )) -> {
                 // Convert records to GraphQL values with cursors
                 let edges =
-                  list.map(records, fn(record) {
+                  list.map(record_list, fn(record) {
                     let graphql_value = record_to_graphql_value(record, db)
                     let cursor =
                       cursor.generate_cursor_from_record(
-                        database.record_to_record_like(record),
+                        pagination.record_to_record_like(record),
                         db_sort_by,
                       )
                     #(graphql_value, cursor)
@@ -412,25 +413,25 @@ pub fn build_schema_from_db(
           option.None -> option.None
         }
 
-        // Convert GroupByFieldInput to database.GroupByField
+        // Convert GroupByFieldInput to types.GroupByField
         let group_by_fields =
           list.map(params.group_by, fn(gb) {
             case gb.interval {
               option.Some(interval) -> {
                 let db_interval = case interval {
-                  aggregate_input.Hour -> database.Hour
-                  aggregate_input.Day -> database.Day
-                  aggregate_input.Week -> database.Week
-                  aggregate_input.Month -> database.Month
+                  aggregate_input.Hour -> types.Hour
+                  aggregate_input.Day -> types.Day
+                  aggregate_input.Week -> types.Week
+                  aggregate_input.Month -> types.Month
                 }
-                database.TruncatedField(gb.field, db_interval)
+                types.TruncatedField(gb.field, db_interval)
               }
-              option.None -> database.SimpleField(gb.field)
+              option.None -> types.SimpleField(gb.field)
             }
           })
 
         // Call database aggregation function
-        database.get_aggregated_records(
+        aggregates.get_aggregated_records(
           db,
           collection_nsid,
           group_by_fields,
@@ -509,7 +510,7 @@ pub fn execute_query_with_db(
 ///
 /// Creates an Object with all the record metadata plus the parsed JSON value
 pub fn record_to_graphql_value(
-  record: database.Record,
+  record: types.Record,
   db: sqlight.Connection,
 ) -> value.Value {
   // Parse the record JSON and convert to GraphQL value
@@ -520,7 +521,7 @@ pub fn record_to_graphql_value(
   }
 
   // Look up actor handle from actor table
-  let actor_handle = case database.get_actor(db, record.did) {
+  let actor_handle = case actors.get(db, record.did) {
     Ok([actor, ..]) -> value.String(actor.handle)
     _ -> value.Null
   }

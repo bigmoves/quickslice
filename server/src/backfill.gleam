@@ -1,4 +1,6 @@
-import database
+import database/repositories/actors
+import database/repositories/records
+import database/types.{type Record, Record}
 import envoy
 import gleam/dict
 import gleam/dynamic.{type Dynamic}
@@ -279,7 +281,7 @@ pub fn fetch_records_for_repo_collection(
   repo: String,
   collection: String,
   pds_url: String,
-) -> List(database.Record) {
+) -> List(Record) {
   fetch_records_paginated(repo, collection, pds_url, None, [])
 }
 
@@ -289,8 +291,8 @@ fn fetch_records_paginated(
   collection: String,
   pds_url: String,
   cursor: Option(String),
-  acc: List(database.Record),
-) -> List(database.Record) {
+  acc: List(Record),
+) -> List(Record) {
   // Build URL with query parameters
   let base_url =
     pds_url
@@ -448,7 +450,7 @@ fn parse_list_records_response(
   body: String,
   repo: String,
   collection: String,
-) -> Result(#(List(database.Record), Option(String)), String) {
+) -> Result(#(List(Record), Option(String)), String) {
   let decoder = {
     use records <- decode.field(
       "records",
@@ -495,7 +497,7 @@ fn parse_list_records_response(
         record_tuples
         |> list.map(fn(tuple) {
           let #(uri, cid, value) = tuple
-          database.Record(
+          Record(
             uri: uri,
             cid: cid,
             did: repo,
@@ -517,7 +519,7 @@ fn fetch_records_with_retry(
   collection: String,
   pds: String,
   plc_url: String,
-) -> List(database.Record) {
+) -> List(Record) {
   // First attempt with provided PDS
   let records = fetch_records_for_repo_collection(repo, collection, pds)
 
@@ -551,7 +553,7 @@ fn fetch_records_worker(
   collection: String,
   pds: String,
   plc_url: String,
-  reply_to: Subject(List(database.Record)),
+  reply_to: Subject(List(Record)),
 ) -> Nil {
   let records = fetch_records_with_retry(repo, collection, pds, plc_url)
   process.send(reply_to, records)
@@ -562,7 +564,7 @@ fn pds_worker(
   pds_url: String,
   jobs: List(#(String, String)),
   plc_url: String,
-  reply_to: Subject(List(database.Record)),
+  reply_to: Subject(List(Record)),
 ) -> Nil {
   // Process jobs in chunks of 3 to avoid overwhelming the PDS
   let max_concurrent_per_pds = 3
@@ -616,7 +618,7 @@ pub fn get_records_for_repos(
   collections: List(String),
   atp_data: List(AtprotoData),
   config: BackfillConfig,
-) -> List(database.Record) {
+) -> List(Record) {
   // Create all repo/collection job pairs grouped by PDS
   let jobs_by_pds =
     repos
@@ -674,10 +676,10 @@ pub fn get_records_for_repos(
 
 /// Index records into the database using batch inserts
 pub fn index_records(
-  records: List(database.Record),
+  records: List(Record),
   conn: sqlight.Connection,
 ) -> Nil {
-  case database.batch_insert_records(conn, records) {
+  case records.batch_insert(conn, records) {
     Ok(_) -> Nil
     Error(err) -> {
       logging.log(
@@ -695,7 +697,7 @@ pub fn index_actors(
 ) -> Nil {
   atp_data
   |> list.each(fn(data) {
-    case database.upsert_actor(conn, data.did, data.handle) {
+    case actors.upsert(conn, data.did, data.handle) {
       Ok(_) -> Nil
       Error(err) -> {
         logging.log(

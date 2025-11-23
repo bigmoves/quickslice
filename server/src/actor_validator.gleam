@@ -1,5 +1,5 @@
 import backfill
-import database
+import database/repositories/actors
 import gleam/list
 import gleam/string
 import logging
@@ -17,7 +17,7 @@ pub fn ensure_actor_exists(
   plc_url: String,
 ) -> Result(Bool, String) {
   // Check if actor already exists
-  case database.get_actor(db, did) {
+  case actors.get(db, did) {
     Ok(actors) -> {
       case list.is_empty(actors) {
         False -> {
@@ -37,7 +37,7 @@ pub fn ensure_actor_exists(
               )
 
               // Create actor in database
-              case database.upsert_actor(db, atp_data.did, atp_data.handle) {
+              case actors.upsert(db, atp_data.did, atp_data.handle) {
                 Ok(_) -> {
                   logging.log(
                     logging.Info,

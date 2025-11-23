@@ -4,7 +4,8 @@ import backfill
 import backfill_state
 import client_graphql_handler
 import config
-import database
+import database/connection
+import database/repositories/lexicons
 import dotenv_gleam
 import envoy
 import gleam/erlang/process
@@ -68,7 +69,7 @@ fn run_import_command(directory: String) {
   }
 
   // Initialize the database
-  let assert Ok(db) = database.initialize(database_url)
+  let assert Ok(db) = connection.initialize(database_url)
 
   case importer.import_lexicons_from_directory(directory, db) {
     Ok(stats) -> {
@@ -115,7 +116,7 @@ fn run_backfill_command() {
   }
 
   // Initialize the database
-  let assert Ok(db) = database.initialize(database_url)
+  let assert Ok(db) = connection.initialize(database_url)
 
   // Start config cache actor
   let assert Ok(config_subject) = config.start(db)
@@ -134,7 +135,7 @@ fn run_backfill_command() {
 
   // Get all record-type lexicons
   logging.log(logging.Info, "Fetching record-type lexicons from database...")
-  case database.get_record_type_lexicons(db) {
+  case lexicons.get_record_types(db) {
     Ok(lexicons) -> {
       case lexicons {
         [] -> {
@@ -218,7 +219,7 @@ fn start_server_normally() {
   }
 
   // Initialize the database
-  let assert Ok(db) = database.initialize(database_url)
+  let assert Ok(db) = connection.initialize(database_url)
 
   // Note: Lexicon import has been moved to the settings page (ZIP upload)
   // Use the /settings page to upload a ZIP file containing lexicon JSON files
@@ -644,7 +645,7 @@ fn handle_backfill_request(req: wisp.Request, ctx: Context) -> wisp.Response {
       }
 
       // Get all record-type lexicons
-      case database.get_record_type_lexicons(ctx.db) {
+      case lexicons.get_record_types(ctx.db) {
         Ok(lexicons) -> {
           case lexicons {
             [] -> {
@@ -714,7 +715,7 @@ fn handle_backfill_request(req: wisp.Request, ctx: Context) -> wisp.Response {
 
 fn handle_health_check(ctx: Context) -> wisp.Response {
   // Try a simple database query to verify connectivity
-  case database.get_lexicon_count(ctx.db) {
+  case lexicons.get_count(ctx.db) {
     Ok(_) -> {
       // Database is accessible
       wisp.response(200)

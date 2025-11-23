@@ -1,3 +1,4 @@
+import database/repositories/actors
 /// Integration tests for sortBy and where on nested join connections
 ///
 /// Tests verify that:
@@ -5,7 +6,9 @@
 /// - where filters work on nested joins
 /// - totalCount reflects filtered results
 /// - Combination of sortBy + where works correctly
-import database
+import database/repositories/lexicons
+import database/repositories/records
+import database/schema/tables
 import gleam/int
 import gleam/json
 import gleam/list
@@ -104,17 +107,17 @@ fn create_profile_lexicon() -> String {
 pub fn did_join_sortby_createdat_desc_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let status_lexicon = create_status_lexicon()
   let profile_lexicon = create_profile_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile
   let profile_uri = "at://did:plc:user1/app.bsky.actor.profile/self"
@@ -123,7 +126,7 @@ pub fn did_join_sortby_createdat_desc_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile_uri,
       "cid_profile",
@@ -153,7 +156,7 @@ pub fn did_join_sortby_createdat_desc_test() {
       |> json.to_string
 
     let assert Ok(_) =
-      database.insert_record(
+      records.insert(
         db,
         status_uri,
         "cid_status" <> int.to_string(i),
@@ -253,17 +256,17 @@ pub fn did_join_sortby_createdat_desc_test() {
 pub fn did_join_sortby_createdat_asc_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let status_lexicon = create_status_lexicon()
   let profile_lexicon = create_profile_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile
   let profile_uri = "at://did:plc:user1/app.bsky.actor.profile/self"
@@ -272,7 +275,7 @@ pub fn did_join_sortby_createdat_asc_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile_uri,
       "cid_profile",
@@ -297,7 +300,7 @@ pub fn did_join_sortby_createdat_asc_test() {
       |> json.to_string
 
     let assert Ok(_) =
-      database.insert_record(
+      records.insert(
         db,
         status_uri,
         "cid_status" <> int.to_string(i),
@@ -365,17 +368,17 @@ pub fn did_join_sortby_createdat_asc_test() {
 pub fn did_join_where_filter_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let status_lexicon = create_status_lexicon()
   let profile_lexicon = create_profile_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile
   let profile_uri = "at://did:plc:user1/app.bsky.actor.profile/self"
@@ -384,7 +387,7 @@ pub fn did_join_where_filter_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile_uri,
       "cid_profile",
@@ -415,7 +418,7 @@ pub fn did_join_where_filter_test() {
       |> json.to_string
 
     let assert Ok(_) =
-      database.insert_record(
+      records.insert(
         db,
         status_uri,
         "cid_status" <> int.to_string(i),
@@ -487,17 +490,17 @@ pub fn did_join_where_filter_test() {
 pub fn did_join_sortby_where_first_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let status_lexicon = create_status_lexicon()
   let profile_lexicon = create_profile_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile
   let profile_uri = "at://did:plc:user1/app.bsky.actor.profile/self"
@@ -506,7 +509,7 @@ pub fn did_join_sortby_where_first_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile_uri,
       "cid_profile",
@@ -537,7 +540,7 @@ pub fn did_join_sortby_where_first_test() {
       |> json.to_string
 
     let assert Ok(_) =
-      database.insert_record(
+      records.insert(
         db,
         status_uri,
         "cid_status" <> int.to_string(i),
@@ -625,17 +628,17 @@ pub fn did_join_sortby_where_first_test() {
 pub fn user_query_pattern_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let status_lexicon = create_status_lexicon()
   let profile_lexicon = create_profile_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert 2 profiles with different handles
   let profile1_uri = "at://did:plc:user1/app.bsky.actor.profile/self"
@@ -644,7 +647,7 @@ pub fn user_query_pattern_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile1_uri,
       "cid_profile1",
@@ -654,7 +657,7 @@ pub fn user_query_pattern_test() {
     )
 
   let assert Ok(_) =
-    database.upsert_actor(db, "did:plc:user1", "chadtmiller.com")
+    actors.upsert(db, "did:plc:user1", "chadtmiller.com")
 
   let profile2_uri = "at://did:plc:user2/app.bsky.actor.profile/self"
   let profile2_json =
@@ -662,7 +665,7 @@ pub fn user_query_pattern_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile2_uri,
       "cid_profile2",
@@ -671,7 +674,7 @@ pub fn user_query_pattern_test() {
       profile2_json,
     )
 
-  let assert Ok(_) = database.upsert_actor(db, "did:plc:user2", "other.com")
+  let assert Ok(_) = actors.upsert(db, "did:plc:user2", "other.com")
 
   // Insert statuses for user1 (chadtmiller.com)
   let statuses1 = [
@@ -693,7 +696,7 @@ pub fn user_query_pattern_test() {
       |> json.to_string
 
     let assert Ok(_) =
-      database.insert_record(
+      records.insert(
         db,
         status_uri,
         "cid_status1_" <> int.to_string(i),
@@ -706,7 +709,7 @@ pub fn user_query_pattern_test() {
 
   // Insert statuses for user2 (should be filtered out)
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:user2/xyz.statusphere.status/status1",
       "cid_status2_1",

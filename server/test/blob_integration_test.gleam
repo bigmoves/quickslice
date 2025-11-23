@@ -5,7 +5,9 @@
 /// 2. Insert records with blob data in AT Protocol format
 /// 3. Execute GraphQL queries with blob field selection
 /// 4. Verify blob fields are resolved correctly with all sub-fields
-import database
+import database/repositories/lexicons
+import database/repositories/records
+import database/schema/tables
 import gleam/http
 import gleam/json
 import gleam/string
@@ -64,12 +66,12 @@ fn create_profile_lexicon() -> String {
 pub fn blob_field_query_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Insert profile lexicon with blob fields
   let lexicon = create_profile_lexicon()
-  let assert Ok(_) = database.insert_lexicon(db, "app.test.profile", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.test.profile", lexicon)
 
   // Insert a profile record with avatar blob
   // AT Protocol blob format: { ref: { $link: "cid" }, mimeType: "...", size: 123 }
@@ -89,7 +91,7 @@ pub fn blob_field_query_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:alice123/app.test.profile/self",
       "cidprofile1",
@@ -160,12 +162,12 @@ pub fn blob_field_query_test() {
 pub fn blob_field_with_different_presets_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Insert profile lexicon
   let lexicon = create_profile_lexicon()
-  let assert Ok(_) = database.insert_lexicon(db, "app.test.profile", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.test.profile", lexicon)
 
   // Insert a profile with banner blob
   let record_json =
@@ -183,7 +185,7 @@ pub fn blob_field_with_different_presets_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:bob456/app.test.profile/self",
       "cidbanner1",
@@ -233,11 +235,11 @@ pub fn blob_field_with_different_presets_test() {
 pub fn blob_field_default_preset_test() {
   // Test that when no preset is specified, feed_fullsize is used
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   let lexicon = create_profile_lexicon()
-  let assert Ok(_) = database.insert_lexicon(db, "app.test.profile", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.test.profile", lexicon)
 
   let record_json =
     json.object([
@@ -254,7 +256,7 @@ pub fn blob_field_default_preset_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:charlie/app.test.profile/self",
       "cidcharlie",
@@ -302,11 +304,11 @@ pub fn blob_field_default_preset_test() {
 pub fn blob_field_null_when_missing_test() {
   // Test that blob fields return null when not present in record
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   let lexicon = create_profile_lexicon()
-  let assert Ok(_) = database.insert_lexicon(db, "app.test.profile", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.test.profile", lexicon)
 
   // Insert record without avatar field
   let record_json =
@@ -314,7 +316,7 @@ pub fn blob_field_null_when_missing_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:dave/app.test.profile/self",
       "ciddave",

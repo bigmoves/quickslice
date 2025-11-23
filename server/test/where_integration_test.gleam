@@ -1,4 +1,5 @@
-import database
+import database/repositories/records
+import database/schema/tables
 import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
@@ -16,10 +17,10 @@ pub fn main() {
 // Helper to setup test database with sample records
 fn setup_test_db() -> Result(sqlight.Connection, sqlight.Error) {
   use conn <- result.try(sqlight.open(":memory:"))
-  use _ <- result.try(database.create_record_table(conn))
+  use _ <- result.try(tables.create_record_table(conn))
 
   // Insert test records
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:1/app.bsky.feed.post/1",
     "cid1",
@@ -28,7 +29,7 @@ fn setup_test_db() -> Result(sqlight.Connection, sqlight.Error) {
     "{\"text\":\"Hello World\",\"likes\":100}",
   ))
 
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:2/app.bsky.feed.post/2",
     "cid2",
@@ -37,7 +38,7 @@ fn setup_test_db() -> Result(sqlight.Connection, sqlight.Error) {
     "{\"text\":\"Goodbye World\",\"likes\":50}",
   ))
 
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:3/app.bsky.feed.post/3",
     "cid3",
@@ -46,7 +47,7 @@ fn setup_test_db() -> Result(sqlight.Connection, sqlight.Error) {
     "{\"text\":\"Test post\",\"likes\":200}",
   ))
 
-  use _ <- result.try(database.insert_record(
+  use _ <- result.try(records.insert(
     conn,
     "at://did:plc:1/app.bsky.actor.profile/1",
     "cid4",
@@ -83,7 +84,7 @@ pub fn filter_by_did_test() {
     )
 
   let result =
-    database.get_records_by_collection_paginated_with_where(
+    records.get_by_collection_paginated_with_where(
       conn,
       "app.bsky.feed.post",
       Some(10),
@@ -131,7 +132,7 @@ pub fn filter_by_json_contains_test() {
     )
 
   let result =
-    database.get_records_by_collection_paginated_with_where(
+    records.get_by_collection_paginated_with_where(
       conn,
       "app.bsky.feed.post",
       Some(10),
@@ -179,7 +180,7 @@ pub fn filter_by_json_comparison_test() {
     )
 
   let result =
-    database.get_records_by_collection_paginated_with_where(
+    records.get_by_collection_paginated_with_where(
       conn,
       "app.bsky.feed.post",
       Some(10),
@@ -224,7 +225,7 @@ pub fn filter_range_query_test() {
     )
 
   let result =
-    database.get_records_by_collection_paginated_with_where(
+    records.get_by_collection_paginated_with_where(
       conn,
       "app.bsky.feed.post",
       Some(10),
@@ -296,7 +297,7 @@ pub fn filter_nested_and_test() {
     )
 
   let result =
-    database.get_records_by_collection_paginated_with_where(
+    records.get_by_collection_paginated_with_where(
       conn,
       "app.bsky.feed.post",
       Some(10),
@@ -375,7 +376,7 @@ pub fn filter_nested_or_test() {
     )
 
   let result =
-    database.get_records_by_collection_paginated_with_where(
+    records.get_by_collection_paginated_with_where(
       conn,
       "app.bsky.feed.post",
       Some(10),
@@ -402,7 +403,7 @@ pub fn filter_empty_where_test() {
   let where_clause = where_clause.empty_clause()
 
   let result =
-    database.get_records_by_collection_paginated_with_where(
+    records.get_by_collection_paginated_with_where(
       conn,
       "app.bsky.feed.post",
       Some(10),
@@ -448,7 +449,7 @@ pub fn filter_with_pagination_test() {
 
   // First page: limit 2
   let result =
-    database.get_records_by_collection_paginated_with_where(
+    records.get_by_collection_paginated_with_where(
       conn,
       "app.bsky.feed.post",
       Some(2),

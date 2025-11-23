@@ -1,4 +1,4 @@
-import database
+import database/repositories/config as config_repo
 import gleam/dynamic/decode
 import gleam/erlang/process
 import gleam/http.{Post}
@@ -37,7 +37,7 @@ type ClientRegistrationResponse {
 
 /// Check registration status by looking at database
 pub fn check_registration_status(db: sqlight.Connection) -> RegistrationStatus {
-  case database.get_oauth_credentials(db) {
+  case config_repo.get_oauth_credentials(db) {
     Ok(option.Some(#(client_id, _client_secret, _redirect_uri))) ->
       Registered(client_id)
     Ok(option.None) -> NotRegistered
@@ -54,7 +54,7 @@ pub fn ensure_oauth_client(
   client_name: String,
 ) -> Result(handlers.OAuthConfig, String) {
   // Check if credentials exist in database
-  case database.get_oauth_credentials(db) {
+  case config_repo.get_oauth_credentials(db) {
     Ok(option.Some(#(client_id, client_secret, _stored_uri))) -> {
       logging.log(logging.Info, "[oauth] Using stored OAuth credentials")
       Ok(handlers.OAuthConfig(
@@ -192,17 +192,9 @@ pub fn store_oauth_credentials(
   client_secret: String,
   redirect_uri: String,
 ) -> Result(Nil, sqlight.Error) {
-  use _ <- result.try(database.set_config(db, "oauth_client_id", client_id))
-  use _ <- result.try(database.set_config(
-    db,
-    "oauth_client_secret",
-    client_secret,
-  ))
-  use _ <- result.try(database.set_config(
-    db,
-    "oauth_redirect_uri",
-    redirect_uri,
-  ))
+  use _ <- result.try(config_repo.set(db, "oauth_client_id", client_id))
+  use _ <- result.try(config_repo.set(db, "oauth_client_secret", client_secret))
+  use _ <- result.try(config_repo.set(db, "oauth_redirect_uri", redirect_uri))
   Ok(Nil)
 }
 

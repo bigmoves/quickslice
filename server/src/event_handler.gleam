@@ -1,6 +1,9 @@
 import actor_validator
 import backfill
-import database
+import database/repositories/actors
+import database/repositories/lexicons
+import database/repositories/records
+import database/types.{Inserted, Skipped}
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
 import gleam/json
@@ -132,7 +135,7 @@ pub fn handle_commit_event(
           let json_string = dynamic_to_json(record_data)
 
           // Get lexicons from database for validation
-          case database.get_all_lexicons(db) {
+          case lexicons.get_all(db) {
             Ok(lexicons) -> {
               // Parse lexicon JSON strings to Json objects
               let lexicon_jsons_result =
@@ -158,7 +161,7 @@ pub fn handle_commit_event(
                 {
                 Ok(_) -> {
                   // Check if record already exists BEFORE inserting to determine operation type
-                  let existing_record = database.get_record(db, uri)
+                  let existing_record = records.get(db, uri)
                   let is_create = case existing_record {
                     Ok([]) -> True
                     // Empty list means record doesn't exist
@@ -199,7 +202,7 @@ pub fn handle_commit_event(
                       // Continue with record insertion
                       // Validation passed, insert record
                       case
-                        database.insert_record(
+                        records.insert(
                           db,
                           uri,
                           cid_value,
@@ -208,7 +211,7 @@ pub fn handle_commit_event(
                           json_string,
                         )
                       {
-                        Ok(database.Inserted) -> {
+                        Ok(Inserted) -> {
                           logging.log(
                             logging.Info,
                             "[jetstream] "
@@ -284,7 +287,7 @@ pub fn handle_commit_event(
                             False -> Nil
                           }
                         }
-                        Ok(database.Skipped) -> {
+                        Ok(Skipped) -> {
                           logging.log(
                             logging.Info,
                             "[jetstream] skipped (duplicate CID) "
@@ -549,7 +552,7 @@ pub fn handle_commit_event(
           <> did,
       )
 
-      case database.delete_record(db, uri) {
+      case records.delete(db, uri) {
         Ok(_) -> {
           // Update activity status to success
           case activity_id {
@@ -647,7 +650,7 @@ pub fn handle_identity_event(
   db: sqlight.Connection,
   identity: goose.IdentityData,
 ) -> Nil {
-  case database.upsert_actor(db, identity.did, identity.handle) {
+  case actors.upsert(db, identity.did, identity.handle) {
     Ok(_) -> {
       logging.log(
         logging.Info,

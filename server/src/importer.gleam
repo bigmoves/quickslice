@@ -1,11 +1,11 @@
-import database
+import database/repositories/lexicons
+import gleam/dict
 import gleam/dynamic/decode
 import gleam/json
 import gleam/list
 import gleam/result
 import gleam/string
 import honk
-import gleam/dict
 import logging
 import simplifile
 import sqlight
@@ -64,7 +64,8 @@ pub fn import_lexicons_from_directory(
         Error(err_map) -> {
           logging.log(
             logging.Error,
-            "[import]   Validation failed: " <> format_validation_errors(err_map),
+            "[import]   Validation failed: "
+              <> format_validation_errors(err_map),
           )
           Error("Validation failed")
         }
@@ -224,7 +225,9 @@ fn extract_lexicon_id(json_content: String) -> Result(String, String) {
 }
 
 /// Formats validation errors from error map into readable strings
-fn format_validation_errors(error_map: dict.Dict(String, List(String))) -> String {
+fn format_validation_errors(
+  error_map: dict.Dict(String, List(String)),
+) -> String {
   error_map
   |> dict.to_list
   |> list.flat_map(fn(entry) {
@@ -246,7 +249,7 @@ pub fn import_single_lexicon(
 
   case parse_and_validate_lexicon(file_path) {
     Ok(#(lexicon_id, json_content)) -> {
-      case database.insert_lexicon(conn, lexicon_id, json_content) {
+      case lexicons.insert(conn, lexicon_id, json_content) {
         Ok(_) -> {
           logging.log(logging.Info, "[import]   " <> lexicon_id)
           Ok(lexicon_id)
@@ -280,7 +283,7 @@ fn import_validated_lexicon(
 
   case extract_lexicon_id(json_content) {
     Ok(lexicon_id) -> {
-      case database.insert_lexicon(conn, lexicon_id, json_content) {
+      case lexicons.insert(conn, lexicon_id, json_content) {
         Ok(_) -> {
           logging.log(logging.Info, "[import]   " <> lexicon_id)
           Ok(lexicon_id)

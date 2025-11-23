@@ -1,7 +1,7 @@
 /// GraphQL WebSocket Handler
 ///
 /// Handles WebSocket connections for GraphQL subscriptions using the graphql-ws protocol
-import database
+import database/repositories/actors
 import gleam/dict.{type Dict}
 import gleam/erlang/process
 import gleam/http/request.{type Request}
@@ -53,7 +53,7 @@ fn event_to_graphql_value(
   }
 
   // Look up actor handle from actor table
-  let actor_handle = case database.get_actor(db, event.did) {
+  let actor_handle = case actors.get(db, event.did) {
     Ok([actor, ..]) -> value.String(actor.handle)
     _ -> value.Null
   }

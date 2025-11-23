@@ -1,6 +1,7 @@
 import backfill
 import config
-import database
+import database/jetstream
+import database/repositories/lexicons
 import envoy
 import event_handler
 import gleam/dynamic/decode
@@ -460,7 +461,7 @@ fn handle_cursor_message(
       case time_since_last_flush >= 5 {
         True -> {
           // Flush the new cursor value (time_us)
-          case database.set_jetstream_cursor(state.db, time_us) {
+          case jetstream.set_cursor(state.db, time_us) {
             Ok(_) -> {
               actor.continue(
                 CursorState(
@@ -488,7 +489,7 @@ fn handle_cursor_message(
       // Force flush current cursor
       case state.latest_cursor {
         option.Some(cursor) -> {
-          case database.set_jetstream_cursor(state.db, cursor) {
+          case jetstream.set_cursor(state.db, cursor) {
             Ok(_) -> {
               process.send(client, Nil)
               actor.continue(
@@ -576,7 +577,7 @@ fn start_consumer_process(
   }
 
   // Get all record-type lexicons from the database
-  case database.get_record_type_lexicons(db) {
+  case lexicons.get_record_types(db) {
     Ok(lexicons) -> {
       // Separate lexicons by domain authority
       let #(local_lexicons, external_lexicons) =
@@ -656,7 +657,7 @@ fn start_consumer_process(
               option.None
             }
             False -> {
-              case database.get_jetstream_cursor(db) {
+              case jetstream.get_cursor(db) {
                 Ok(option.Some(cursor)) -> {
                   logging.log(
                     logging.Info,

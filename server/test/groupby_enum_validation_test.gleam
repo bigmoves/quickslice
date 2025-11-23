@@ -1,3 +1,4 @@
+
 /// Integration test for groupBy field enum validation
 ///
 /// Verifies that aggregation queries use collection-specific GroupByField enums

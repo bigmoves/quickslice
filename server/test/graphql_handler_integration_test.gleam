@@ -1,3 +1,4 @@
+import database/repositories/actors
 /// Integration tests for GraphQL handler with database
 ///
 /// These tests verify the full GraphQL query flow:
@@ -5,7 +6,9 @@
 /// 2. GraphQL schema building from database lexicons
 /// 3. Query execution and result formatting
 /// 4. JSON parsing and encoding throughout the pipeline
-import database
+import database/repositories/lexicons
+import database/repositories/records
+import database/schema/tables
 import gleam/http
 import gleam/int
 import gleam/json
@@ -106,13 +109,13 @@ fn create_simple_lexicon(nsid: String) -> String {
 pub fn graphql_post_request_with_records_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Insert a lexicon for xyz.statusphere.status
   let lexicon = create_status_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert some test records
   let record1_json =
@@ -123,7 +126,7 @@ pub fn graphql_post_request_with_records_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:test1/xyz.statusphere.status/123",
       "cid1",
@@ -140,7 +143,7 @@ pub fn graphql_post_request_with_records_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:test2/xyz.statusphere.status/456",
       "cid2",
@@ -214,13 +217,13 @@ pub fn graphql_post_request_with_records_test() {
 pub fn graphql_post_request_empty_results_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Insert a lexicon but no records
   let lexicon = create_simple_lexicon("xyz.statusphere.status")
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Create GraphQL query request with Connection structure
   let query =
@@ -265,13 +268,13 @@ pub fn graphql_post_request_empty_results_test() {
 pub fn graphql_get_request_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Insert a lexicon
   let lexicon = create_simple_lexicon("xyz.statusphere.status")
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Create GraphQL GET request with query parameter
   let request =
@@ -306,7 +309,7 @@ pub fn graphql_get_request_test() {
 pub fn graphql_invalid_json_request_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
 
   // Create request with invalid JSON
   let request =
@@ -340,7 +343,7 @@ pub fn graphql_invalid_json_request_test() {
 pub fn graphql_missing_query_field_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
 
   // Create request with JSON but no query field
   let body_json =
@@ -408,8 +411,8 @@ pub fn graphql_method_not_allowed_test() {
 pub fn graphql_multiple_lexicons_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Insert multiple lexicons
   let lexicon1 = create_simple_lexicon("xyz.statusphere.status")
@@ -447,8 +450,8 @@ pub fn graphql_multiple_lexicons_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", lexicon1)
-  let assert Ok(_) = database.insert_lexicon(db, "app.bsky.feed.post", lexicon2)
+    lexicons.insert(db, "xyz.statusphere.status", lexicon1)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", lexicon2)
 
   // Insert records for first collection
   let record1_json =
@@ -456,7 +459,7 @@ pub fn graphql_multiple_lexicons_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:test/xyz.statusphere.status/1",
       "cid1",
@@ -506,7 +509,7 @@ pub fn graphql_multiple_lexicons_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:test/app.bsky.feed.post/1",
       "cid2",
@@ -554,13 +557,13 @@ pub fn graphql_multiple_lexicons_test() {
 pub fn graphql_record_limit_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Insert a lexicon
   let lexicon = create_simple_lexicon("xyz.statusphere.status")
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert 150 records (handler should limit to 100)
   let _ =
@@ -572,7 +575,7 @@ pub fn graphql_record_limit_test() {
         json.object([#("status", json.string(int.to_string(i)))])
         |> json.to_string
       let assert Ok(_) =
-        database.insert_record(
+        records.insert(
           db,
           uri,
           cid,
@@ -647,19 +650,19 @@ fn count_occurrences(text: String, pattern: String) -> Int {
 pub fn graphql_actor_handle_lookup_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert a lexicon for xyz.statusphere.status
   let lexicon = create_status_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert test actors
   let assert Ok(_) =
-    database.upsert_actor(db, "did:plc:alice", "alice.bsky.social")
-  let assert Ok(_) = database.upsert_actor(db, "did:plc:bob", "bob.bsky.social")
+    actors.upsert(db, "did:plc:alice", "alice.bsky.social")
+  let assert Ok(_) = actors.upsert(db, "did:plc:bob", "bob.bsky.social")
 
   // Insert test records with those DIDs
   let record1_json =
@@ -670,7 +673,7 @@ pub fn graphql_actor_handle_lookup_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:alice/xyz.statusphere.status/123",
       "cid1",
@@ -687,7 +690,7 @@ pub fn graphql_actor_handle_lookup_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:bob/xyz.statusphere.status/456",
       "cid2",
@@ -745,21 +748,21 @@ pub fn graphql_actor_handle_lookup_test() {
 pub fn graphql_filter_by_actor_handle_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert a lexicon for xyz.statusphere.status
   let lexicon = create_status_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert test actors
   let assert Ok(_) =
-    database.upsert_actor(db, "did:plc:alice", "alice.bsky.social")
-  let assert Ok(_) = database.upsert_actor(db, "did:plc:bob", "bob.bsky.social")
+    actors.upsert(db, "did:plc:alice", "alice.bsky.social")
+  let assert Ok(_) = actors.upsert(db, "did:plc:bob", "bob.bsky.social")
   let assert Ok(_) =
-    database.upsert_actor(db, "did:plc:charlie", "charlie.bsky.social")
+    actors.upsert(db, "did:plc:charlie", "charlie.bsky.social")
 
   // Insert test records with those DIDs
   let record1_json =
@@ -770,7 +773,7 @@ pub fn graphql_filter_by_actor_handle_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:alice/xyz.statusphere.status/123",
       "cid1",
@@ -787,7 +790,7 @@ pub fn graphql_filter_by_actor_handle_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:bob/xyz.statusphere.status/456",
       "cid2",
@@ -804,7 +807,7 @@ pub fn graphql_filter_by_actor_handle_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:charlie/xyz.statusphere.status/789",
       "cid3",

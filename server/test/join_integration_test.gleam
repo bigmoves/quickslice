@@ -5,7 +5,9 @@
 /// - Reverse joins discover and resolve relationships
 /// - DataLoader batches queries efficiently
 /// - All join types work with actual SQLite database queries
-import database
+import database/repositories/lexicons
+import database/repositories/records
+import database/schema/tables
 import gleam/json
 import gleam/string
 import gleeunit/should
@@ -159,14 +161,14 @@ fn create_profile_lexicon() -> String {
 pub fn forward_join_at_uri_resolves_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.feed.post", post_lexicon)
+    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
 
   // Insert test records
   // Parent post
@@ -176,7 +178,7 @@ pub fn forward_join_at_uri_resolves_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       parent_uri,
       "cid_parent",
@@ -195,7 +197,7 @@ pub fn forward_join_at_uri_resolves_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       reply_uri,
       "cid_reply",
@@ -246,17 +248,17 @@ pub fn forward_join_at_uri_resolves_test() {
 pub fn forward_join_strong_ref_resolves_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.feed.post", post_lexicon)
+    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert test records
   // A post
@@ -266,7 +268,7 @@ pub fn forward_join_strong_ref_resolves_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       post_uri,
       "cid_post1",
@@ -291,7 +293,7 @@ pub fn forward_join_strong_ref_resolves_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile_uri,
       "cid_profile",
@@ -342,19 +344,19 @@ pub fn forward_join_strong_ref_resolves_test() {
 pub fn reverse_join_resolves_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let like_lexicon = create_like_lexicon()
 
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.feed.post", post_lexicon)
+    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
 
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.feed.like", like_lexicon)
+    lexicons.insert(db, "app.bsky.feed.like", like_lexicon)
 
   // Insert test records
   // A post
@@ -364,7 +366,7 @@ pub fn reverse_join_resolves_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       post_uri,
       "cid_post",
@@ -383,7 +385,7 @@ pub fn reverse_join_resolves_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       like1_uri,
       "cid_like1",
@@ -401,7 +403,7 @@ pub fn reverse_join_resolves_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       like2_uri,
       "cid_like2",
@@ -460,14 +462,14 @@ pub fn reverse_join_resolves_test() {
 pub fn dataloader_batches_forward_joins_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.feed.post", post_lexicon)
+    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
 
   // Insert multiple parent posts
   let parent1_uri = "at://did:plc:user1/app.bsky.feed.post/parent1"
@@ -476,7 +478,7 @@ pub fn dataloader_batches_forward_joins_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       parent1_uri,
       "cid_p1",
@@ -491,7 +493,7 @@ pub fn dataloader_batches_forward_joins_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       parent2_uri,
       "cid_p2",
@@ -510,7 +512,7 @@ pub fn dataloader_batches_forward_joins_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       reply1_uri,
       "cid_r1",
@@ -528,7 +530,7 @@ pub fn dataloader_batches_forward_joins_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       reply2_uri,
       "cid_r2",
@@ -585,17 +587,17 @@ pub fn dataloader_batches_forward_joins_test() {
 pub fn reverse_join_with_strong_ref_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.feed.post", post_lexicon)
+    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a post
   let post_uri = "at://did:plc:creator/app.bsky.feed.post/amazing"
@@ -604,7 +606,7 @@ pub fn reverse_join_with_strong_ref_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       post_uri,
       "cid_amazing",
@@ -629,7 +631,7 @@ pub fn reverse_join_with_strong_ref_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile1_uri,
       "cid_prof1",
@@ -653,7 +655,7 @@ pub fn reverse_join_with_strong_ref_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile2_uri,
       "cid_prof2",
@@ -711,17 +713,17 @@ pub fn reverse_join_with_strong_ref_test() {
 pub fn forward_join_union_inline_fragments_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let like_lexicon = create_like_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.feed.post", post_lexicon)
+    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.feed.like", like_lexicon)
+    lexicons.insert(db, "app.bsky.feed.like", like_lexicon)
 
   // Insert a parent post
   let parent_post_uri = "at://did:plc:parent/app.bsky.feed.post/parent1"
@@ -730,7 +732,7 @@ pub fn forward_join_union_inline_fragments_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       parent_post_uri,
       "cid_parent_post",
@@ -749,7 +751,7 @@ pub fn forward_join_union_inline_fragments_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       target_like_uri,
       "cid_like",
@@ -768,7 +770,7 @@ pub fn forward_join_union_inline_fragments_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       reply_to_post_uri,
       "cid_reply1",
@@ -787,7 +789,7 @@ pub fn forward_join_union_inline_fragments_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       reply_to_like_uri,
       "cid_reply2",
@@ -903,17 +905,17 @@ fn create_profile_lexicon_with_literal_self() -> String {
 pub fn did_join_to_literal_self_returns_single_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon_with_literal_self()
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.feed.post", post_lexicon)
+    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile with literal:self key
   let profile_uri = "at://did:plc:user123/app.bsky.actor.profile/self"
@@ -925,7 +927,7 @@ pub fn did_join_to_literal_self_returns_single_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile_uri,
       "cid_profile",
@@ -941,7 +943,7 @@ pub fn did_join_to_literal_self_returns_single_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       post_uri,
       "cid_post1",
@@ -1001,17 +1003,17 @@ pub fn did_join_to_literal_self_returns_single_test() {
 pub fn did_join_to_non_literal_self_returns_list_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon_with_literal_self()
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.feed.post", post_lexicon)
+    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile
   let profile_uri = "at://did:plc:author/app.bsky.actor.profile/self"
@@ -1023,7 +1025,7 @@ pub fn did_join_to_non_literal_self_returns_list_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile_uri,
       "cid_profile",
@@ -1039,7 +1041,7 @@ pub fn did_join_to_non_literal_self_returns_list_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       post1_uri,
       "cid_post1",
@@ -1054,7 +1056,7 @@ pub fn did_join_to_non_literal_self_returns_list_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       post2_uri,
       "cid_post2",
@@ -1120,17 +1122,17 @@ pub fn did_join_to_non_literal_self_returns_list_test() {
 pub fn did_join_batches_queries_test() {
   // Setup database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon_with_literal_self()
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.feed.post", post_lexicon)
+    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
-    database.insert_lexicon(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert multiple profiles
   let profile1_uri = "at://did:plc:user1/app.bsky.actor.profile/self"
@@ -1142,7 +1144,7 @@ pub fn did_join_batches_queries_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile1_uri,
       "cid_profile1",
@@ -1160,7 +1162,7 @@ pub fn did_join_batches_queries_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       profile2_uri,
       "cid_profile2",
@@ -1176,7 +1178,7 @@ pub fn did_join_batches_queries_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       post1_uri,
       "cid_post1",
@@ -1191,7 +1193,7 @@ pub fn did_join_batches_queries_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       post2_uri,
       "cid_post2",

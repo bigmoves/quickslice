@@ -1,4 +1,4 @@
-import database
+import database/repositories/config as config_repo
 import gleam/erlang/process
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
@@ -31,7 +31,7 @@ fn handle_message(
       actor.continue(ConfigCache(domain_authority: Some(value)))
     }
     Reload(db, client) -> {
-      let new_state = case database.get_config(db, "domain_authority") {
+      let new_state = case config_repo.get(db, "domain_authority") {
         Ok(value) -> ConfigCache(domain_authority: Some(value))
         Error(_) -> ConfigCache(domain_authority: None)
       }
@@ -46,7 +46,7 @@ pub fn start(
   db: sqlight.Connection,
 ) -> Result(process.Subject(Message), actor.StartError) {
   // Load initial domain authority from database
-  let initial_state = case database.get_config(db, "domain_authority") {
+  let initial_state = case config_repo.get(db, "domain_authority") {
     Ok(value) -> ConfigCache(domain_authority: Some(value))
     Error(_) -> {
       logging.log(
@@ -80,7 +80,7 @@ pub fn set_domain_authority(
   value: String,
 ) -> Result(Nil, sqlight.Error) {
   // Update database first
-  case database.set_config(db, "domain_authority", value) {
+  case config_repo.set(db, "domain_authority", value) {
     Ok(_) -> {
       // Update cache
       actor.call(config, waiting: 100, sending: SetDomainAuthority(value, _))

@@ -2,7 +2,9 @@
 ///
 /// This test verifies that DID join fields are properly generated in the GraphQL schema
 /// by running a full introspection query and checking for the expected join fields.
-import database
+import database/repositories/lexicons
+import database/repositories/records
+import database/schema/tables
 import gleam/dynamic/decode
 import gleam/http
 import gleam/json
@@ -61,7 +63,7 @@ fn load_grain_lexicons(db: sqlight.Connection) -> Result(Nil, String) {
           })
         {
           Ok(lexicon_id) ->
-            case database.insert_lexicon(db, lexicon_id, json_content) {
+            case lexicons.insert(db, lexicon_id, json_content) {
               Ok(_) -> Ok(Nil)
               Error(_) -> Error("Database insertion failed")
             }
@@ -88,8 +90,8 @@ pub fn introspection_query_includes_did_join_fields_test() {
 
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Load all grain lexicons from fixtures
   let assert Ok(_) = load_grain_lexicons(db)
@@ -174,8 +176,8 @@ pub fn introspection_query_profile_join_fields_test() {
 
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Load all grain lexicons from fixtures
   let assert Ok(_) = load_grain_lexicons(db)
@@ -250,8 +252,8 @@ pub fn introspection_query_did_join_field_structure_test() {
 
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Load all grain lexicons from fixtures
   let assert Ok(_) = load_grain_lexicons(db)
@@ -267,7 +269,7 @@ pub fn introspection_query_did_join_field_structure_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://" <> test_did <> "/social.grain.actor.profile/self",
       "cid1",
@@ -285,7 +287,7 @@ pub fn introspection_query_did_join_field_structure_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://" <> test_did <> "/social.grain.gallery/123",
       "cid2",
@@ -303,7 +305,7 @@ pub fn introspection_query_did_join_field_structure_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://" <> test_did <> "/social.grain.photo/456",
       "cid3",
@@ -321,7 +323,7 @@ pub fn introspection_query_did_join_field_structure_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://" <> test_did <> "/social.grain.comment/789",
       "cid4",
@@ -342,7 +344,7 @@ pub fn introspection_query_did_join_field_structure_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://" <> test_did <> "/social.grain.favorite/abc",
       "cid5",
@@ -426,8 +428,8 @@ pub fn introspection_query_did_join_field_structure_test() {
 pub fn did_join_field_query_execution_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Load all grain lexicons from fixtures
   let assert Ok(_) = load_grain_lexicons(db)
@@ -441,7 +443,7 @@ pub fn did_join_field_query_execution_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:test/social.grain.actor.profile/self",
       "cid1",
@@ -459,7 +461,7 @@ pub fn did_join_field_query_execution_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:test/social.grain.gallery/123",
       "cid2",
@@ -476,7 +478,7 @@ pub fn did_join_field_query_execution_test() {
     |> json.to_string
 
   let assert Ok(_) =
-    database.insert_record(
+    records.insert(
       db,
       "at://did:plc:test/social.grain.gallery/456",
       "cid3",

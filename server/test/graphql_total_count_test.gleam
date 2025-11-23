@@ -1,7 +1,10 @@
+import database/repositories/actors
 /// Integration tests for GraphQL totalCount field
 ///
 /// These tests verify that totalCount is correctly returned in connection queries
-import database
+import database/repositories/lexicons
+import database/repositories/records
+import database/schema/tables
 import gleam/http
 import gleam/int
 import gleam/json
@@ -84,14 +87,14 @@ fn list_range_helper(current: Int, to: Int, acc: List(Int)) -> List(Int) {
 pub fn graphql_total_count_basic_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert a lexicon
   let lexicon = create_status_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert 5 test records
   let _ =
@@ -106,7 +109,7 @@ pub fn graphql_total_count_basic_test() {
         ])
         |> json.to_string
       let assert Ok(_) =
-        database.insert_record(
+        records.insert(
           db,
           uri,
           cid,
@@ -163,19 +166,19 @@ pub fn graphql_total_count_basic_test() {
 pub fn graphql_total_count_with_filter_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
-  let assert Ok(_) = database.create_actor_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
 
   // Insert a lexicon
   let lexicon = create_status_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert test actors
   let assert Ok(_) =
-    database.upsert_actor(db, "did:plc:alice", "alice.bsky.social")
-  let assert Ok(_) = database.upsert_actor(db, "did:plc:bob", "bob.bsky.social")
+    actors.upsert(db, "did:plc:alice", "alice.bsky.social")
+  let assert Ok(_) = actors.upsert(db, "did:plc:bob", "bob.bsky.social")
 
   // Insert 3 records for alice
   let _ =
@@ -190,7 +193,7 @@ pub fn graphql_total_count_with_filter_test() {
         ])
         |> json.to_string
       let assert Ok(_) =
-        database.insert_record(
+        records.insert(
           db,
           uri,
           cid,
@@ -214,7 +217,7 @@ pub fn graphql_total_count_with_filter_test() {
         ])
         |> json.to_string
       let assert Ok(_) =
-        database.insert_record(
+        records.insert(
           db,
           uri,
           cid,
@@ -278,13 +281,13 @@ pub fn graphql_total_count_with_filter_test() {
 pub fn graphql_total_count_empty_result_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Insert a lexicon
   let lexicon = create_status_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Query with totalCount field (no records inserted)
   let query =
@@ -328,13 +331,13 @@ pub fn graphql_total_count_empty_result_test() {
 pub fn graphql_total_count_with_pagination_test() {
   // Create in-memory database
   let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = database.create_lexicon_table(db)
-  let assert Ok(_) = database.create_record_table(db)
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
 
   // Insert a lexicon
   let lexicon = create_status_lexicon()
   let assert Ok(_) =
-    database.insert_lexicon(db, "xyz.statusphere.status", lexicon)
+    lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert 10 test records
   let _ =
@@ -349,7 +352,7 @@ pub fn graphql_total_count_with_pagination_test() {
         ])
         |> json.to_string
       let assert Ok(_) =
-        database.insert_record(
+        records.insert(
           db,
           uri,
           cid,
