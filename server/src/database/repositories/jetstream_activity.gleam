@@ -237,7 +237,6 @@ fn get_activity_bucketed(
   expected_buckets: Int,
 ) -> Result(List(ActivityBucket), sqlight.Error) {
   let hours_str = int.to_string(hours)
-  let max_n = int.to_string(expected_buckets)
 
   // Build the SQL dynamically based on interval
   let sql = "
@@ -246,7 +245,7 @@ fn get_activity_bucketed(
       UNION ALL
       SELECT datetime(bucket, '+" <> interval <> "'), n + 1
       FROM time_series
-      WHERE n < " <> max_n <> "
+      WHERE n < " <> int.to_string(expected_buckets - 1) <> "
     )
     SELECT
       strftime('%Y-%m-%dT%H:%M:00Z', ts.bucket) as timestamp,
