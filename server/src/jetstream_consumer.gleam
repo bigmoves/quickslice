@@ -11,6 +11,7 @@ import gleam/list
 import gleam/option
 import gleam/otp/actor
 import gleam/string
+import gleam/time/timestamp
 import goose
 import logging
 import sqlight
@@ -428,17 +429,19 @@ fn handle_message(state: State, message: Message) -> actor.Next(State, Message) 
 }
 
 /// Get current timestamp in seconds (for tracking flush intervals)
-@external(erlang, "erlang", "system_time")
-fn erlang_system_time(unit: Int) -> Int
-
 fn get_current_time_seconds() -> Int {
-  // Time unit: 1 = seconds
-  erlang_system_time(1)
+  let #(seconds, _nanoseconds) =
+    timestamp.system_time()
+    |> timestamp.to_unix_seconds_and_nanoseconds
+  seconds
 }
 
+/// Get current timestamp in milliseconds
 fn get_current_time_milliseconds() -> Int {
-  // Time unit: 1000000 = milliseconds
-  erlang_system_time(1_000_000)
+  let #(seconds, nanoseconds) =
+    timestamp.system_time()
+    |> timestamp.to_unix_seconds_and_nanoseconds
+  seconds * 1000 + nanoseconds / 1_000_000
 }
 
 /// Handle cursor tracker messages
