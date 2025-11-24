@@ -1,5 +1,7 @@
 // Shared database type definitions
 
+import gleam/option.{type Option}
+
 /// A record stored in the database
 pub type Record {
   Record(
@@ -47,4 +49,28 @@ pub type DateInterval {
 pub type GroupByField {
   SimpleField(field: String)
   TruncatedField(field: String, interval: DateInterval)
+}
+
+/// A jetstream activity log entry
+pub type ActivityEntry {
+  ActivityEntry(
+    id: Int,
+    timestamp: String,
+    operation: String,
+    collection: String,
+    did: String,
+    status: String,
+    error_message: Option(String),
+    event_json: String,
+  )
+}
+
+/// Activity bucket for aggregated data
+pub type ActivityBucket {
+  ActivityBucket(
+    timestamp: String,
+    create_count: Int,
+    update_count: Int,
+    delete_count: Int,
+  )
 }

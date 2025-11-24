@@ -1,3 +1,4 @@
+import database/types.{type ActivityBucket, type ActivityEntry, ActivityBucket, ActivityEntry}
 import gleam/dynamic/decode
 import gleam/int
 import gleam/option.{type Option, None, Some}
@@ -5,18 +6,7 @@ import gleam/result
 import logging
 import sqlight
 
-pub type ActivityEntry {
-  ActivityEntry(
-    id: Int,
-    timestamp: String,
-    operation: String,
-    collection: String,
-    did: String,
-    status: String,
-    error_message: Option(String),
-    event_json: String,
-  )
-}
+// ===== Jetstream Activity Functions =====
 
 /// Logs a new JetStream activity entry
 pub fn log_activity(
@@ -159,14 +149,11 @@ pub fn extract_display_info(
   #(None, None, None)
 }
 
-/// Activity bucket for aggregated data
-pub type ActivityBucket {
-  ActivityBucket(
-    timestamp: String,
-    create_count: Int,
-    update_count: Int,
-    delete_count: Int,
-  )
+/// Deletes all jetstream activity records from the database
+pub fn delete_all(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+  let sql = "DELETE FROM jetstream_activity"
+  sqlight.exec(sql, conn)
+  |> result.map(fn(_) { Nil })
 }
 
 /// Get activity aggregated into 5-minute buckets for the last hour
@@ -287,11 +274,4 @@ fn get_activity_bucketed(
   }
 
   sqlight.query(sql, on: conn, with: [], expecting: decoder)
-}
-
-/// Deletes all jetstream activity records from the database
-pub fn delete_all(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
-  let sql = "DELETE FROM jetstream_activity"
-  sqlight.exec(sql, conn)
-  |> result.map(fn(_) { Nil })
 }

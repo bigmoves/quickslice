@@ -1,7 +1,7 @@
+import database/repositories/jetstream_activity
 import gleam/erlang/process
 import gleam/otp/actor
 import gleam/string
-import jetstream_activity
 import logging
 import sqlight
 

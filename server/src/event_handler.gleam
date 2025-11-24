@@ -12,7 +12,7 @@ import gleam/option
 import gleam/result
 import gleam/string
 import goose
-import jetstream_activity
+import database/repositories/jetstream_activity
 import honk
 import honk/errors
 import logging

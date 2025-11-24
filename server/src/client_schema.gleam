@@ -7,12 +7,12 @@ import database/repositories/actors
 import database/repositories/config as config_repo
 import database/repositories/lexicons
 import database/repositories/records
-import database/types
+import database/repositories/jetstream_activity
+import database/types.{type ActivityBucket, type ActivityEntry, type Lexicon}
 import gleam/erlang/process
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import importer
-import jetstream_activity
 import jetstream_consumer
 import logging
 import oauth/session
@@ -485,7 +485,7 @@ fn statistics_to_value(
 }
 
 fn activity_bucket_to_value(
-  bucket: jetstream_activity.ActivityBucket,
+  bucket: ActivityBucket,
 ) -> value.Value {
   let total = bucket.create_count + bucket.update_count + bucket.delete_count
   value.Object([
@@ -498,7 +498,7 @@ fn activity_bucket_to_value(
 }
 
 fn activity_entry_to_value(
-  entry: jetstream_activity.ActivityEntry,
+  entry: ActivityEntry,
 ) -> value.Value {
   let error_msg_value = case entry.error_message {
     Some(msg) -> value.String(msg)
@@ -533,7 +533,7 @@ fn settings_to_value(
   ])
 }
 
-fn lexicon_to_value(lexicon: types.Lexicon) -> value.Value {
+fn lexicon_to_value(lexicon: Lexicon) -> value.Value {
   value.Object([
     #("id", value.String(lexicon.id)),
     #("json", value.String(lexicon.json)),
