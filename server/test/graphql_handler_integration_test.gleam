@@ -114,8 +114,7 @@ pub fn graphql_post_request_with_records_test() {
 
   // Insert a lexicon for xyz.statusphere.status
   let lexicon = create_status_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert some test records
   let record1_json =
@@ -222,8 +221,7 @@ pub fn graphql_post_request_empty_results_test() {
 
   // Insert a lexicon but no records
   let lexicon = create_simple_lexicon("xyz.statusphere.status")
-  let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Create GraphQL query request with Connection structure
   let query =
@@ -273,8 +271,7 @@ pub fn graphql_get_request_test() {
 
   // Insert a lexicon
   let lexicon = create_simple_lexicon("xyz.statusphere.status")
-  let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Create GraphQL GET request with query parameter
   let request =
@@ -449,8 +446,7 @@ pub fn graphql_multiple_lexicons_test() {
     ])
     |> json.to_string
 
-  let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", lexicon1)
+  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon1)
   let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", lexicon2)
 
   // Insert records for first collection
@@ -562,8 +558,7 @@ pub fn graphql_record_limit_test() {
 
   // Insert a lexicon
   let lexicon = create_simple_lexicon("xyz.statusphere.status")
-  let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert 150 records (handler should limit to 100)
   let _ =
@@ -656,12 +651,10 @@ pub fn graphql_actor_handle_lookup_test() {
 
   // Insert a lexicon for xyz.statusphere.status
   let lexicon = create_status_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert test actors
-  let assert Ok(_) =
-    actors.upsert(db, "did:plc:alice", "alice.bsky.social")
+  let assert Ok(_) = actors.upsert(db, "did:plc:alice", "alice.bsky.social")
   let assert Ok(_) = actors.upsert(db, "did:plc:bob", "bob.bsky.social")
 
   // Insert test records with those DIDs
@@ -754,15 +747,12 @@ pub fn graphql_filter_by_actor_handle_test() {
 
   // Insert a lexicon for xyz.statusphere.status
   let lexicon = create_status_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert test actors
-  let assert Ok(_) =
-    actors.upsert(db, "did:plc:alice", "alice.bsky.social")
+  let assert Ok(_) = actors.upsert(db, "did:plc:alice", "alice.bsky.social")
   let assert Ok(_) = actors.upsert(db, "did:plc:bob", "bob.bsky.social")
-  let assert Ok(_) =
-    actors.upsert(db, "did:plc:charlie", "charlie.bsky.social")
+  let assert Ok(_) = actors.upsert(db, "did:plc:charlie", "charlie.bsky.social")
 
   // Insert test records with those DIDs
   let record1_json =

@@ -675,10 +675,7 @@ pub fn get_records_for_repos(
 }
 
 /// Index records into the database using batch inserts
-pub fn index_records(
-  records: List(Record),
-  conn: sqlight.Connection,
-) -> Nil {
+pub fn index_records(records: List(Record), conn: sqlight.Connection) -> Nil {
   case records.batch_insert(conn, records) {
     Ok(_) -> Nil
     Error(err) -> {

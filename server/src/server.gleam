@@ -2,8 +2,6 @@ import activity_cleanup
 import argv
 import backfill
 import backfill_state
-import handlers/backfill as backfill_handler
-import handlers/client_graphql as client_graphql_handler
 import config
 import database/connection
 import database/repositories/lexicons
@@ -16,11 +14,14 @@ import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string
+import handlers/backfill as backfill_handler
+import handlers/client_graphql as client_graphql_handler
 import handlers/graphiql as graphiql_handler
 import handlers/graphql as graphql_handler
 import handlers/graphql_ws as graphql_ws_handler
 import handlers/health as health_handler
 import handlers/index as index_handler
+import handlers/upload as upload_handler
 import importer
 import jetstream_consumer
 import logging
@@ -30,7 +31,6 @@ import oauth/registration
 import pubsub
 import sqlight
 import stats_pubsub
-import handlers/upload as upload_handler
 import wisp
 import wisp/wisp_mist
 

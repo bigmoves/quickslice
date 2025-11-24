@@ -8,8 +8,8 @@
 import gleam/dict
 import gleam/list
 import gleam/option
-import lexicon_graphql/internal/lexicon/nsid
 import lexicon_graphql/internal/graphql/type_mapper
+import lexicon_graphql/internal/lexicon/nsid
 import lexicon_graphql/types
 import swell/schema
 import swell/value
@@ -150,11 +150,7 @@ fn build_create_mutation(
   let resolver = case factory {
     option.Some(factory_fn) -> factory_fn(collection)
     option.None -> fn(_resolver_ctx) {
-      Error(
-        "Create mutation for "
-        <> collection
-        <> " not yet implemented.",
-      )
+      Error("Create mutation for " <> collection <> " not yet implemented.")
     }
   }
 
@@ -205,11 +201,7 @@ fn build_update_mutation(
   let resolver = case factory {
     option.Some(factory_fn) -> factory_fn(collection)
     option.None -> fn(_resolver_ctx) {
-      Error(
-        "Update mutation for "
-        <> collection
-        <> " not yet implemented.",
-      )
+      Error("Update mutation for " <> collection <> " not yet implemented.")
     }
   }
 
@@ -249,11 +241,7 @@ fn build_delete_mutation(
   let resolver = case factory {
     option.Some(factory_fn) -> factory_fn(collection)
     option.None -> fn(_resolver_ctx) {
-      Error(
-        "Delete mutation for "
-        <> collection
-        <> " not yet implemented.",
-      )
+      Error("Delete mutation for " <> collection <> " not yet implemented.")
     }
   }
 

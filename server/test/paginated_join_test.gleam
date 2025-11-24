@@ -156,8 +156,7 @@ pub fn did_join_first_one_test() {
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
     lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
@@ -273,8 +272,7 @@ pub fn did_join_first_two_test() {
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
     lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
@@ -386,10 +384,8 @@ pub fn reverse_join_first_one_test() {
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let like_lexicon = create_like_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.like", like_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.like", like_lexicon)
 
   // Insert a post
   let post_uri = "at://did:plc:author/app.bsky.feed.post/post1"
@@ -505,8 +501,7 @@ pub fn did_join_default_pagination_test() {
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
     lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 

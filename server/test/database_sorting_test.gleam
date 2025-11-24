@@ -1,10 +1,10 @@
-import database/types
 /// Database sorting integration tests
 ///
 /// Tests that SQL ORDER BY clauses are generated correctly and
 /// that sorting works properly with the database
 import database/repositories/records
 import database/schema/tables
+import database/types
 import gleam/list
 import gleam/option.{None, Some}
 import gleeunit/should

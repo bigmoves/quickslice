@@ -88,9 +88,7 @@ fn render_error(error: String) -> Element(Msg) {
   ])
 }
 
-fn render_lexicons(
-  lexicons: List(get_lexicons.Lexicon),
-) -> Element(Msg) {
+fn render_lexicons(lexicons: List(get_lexicons.Lexicon)) -> Element(Msg) {
   case lexicons {
     [] -> render_empty()
     _ ->
@@ -98,7 +96,10 @@ fn render_lexicons(
         html.p([attribute.class("text-sm text-zinc-500 mb-4")], [
           element.text(string.inspect(list.length(lexicons)) <> " lexicons"),
         ]),
-        html.div([attribute.class("space-y-3")], list.map(lexicons, render_lexicon)),
+        html.div(
+          [attribute.class("space-y-3")],
+          list.map(lexicons, render_lexicon),
+        ),
       ])
   }
 }
@@ -157,4 +158,3 @@ fn render_lexicon(lexicon: get_lexicons.Lexicon) -> Element(Msg) {
     ]),
   ])
 }
-

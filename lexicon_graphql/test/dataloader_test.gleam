@@ -6,7 +6,7 @@ import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
 import gleeunit/should
-import lexicon_graphql/internal/lexicon/collection_meta as collection_meta
+import lexicon_graphql/internal/lexicon/collection_meta
 import lexicon_graphql/query/dataloader
 import lexicon_graphql/types
 import swell/value

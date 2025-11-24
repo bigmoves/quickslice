@@ -92,7 +92,12 @@ pub fn property_to_field_type_array_test() {
 
 pub fn property_to_field_type_blob_test() {
   let property =
-    types.Property(type_: "blob", required: True, format: option.None, ref: option.None)
+    types.Property(
+      type_: "blob",
+      required: True,
+      format: option.None,
+      ref: option.None,
+    )
 
   db_schema_builder.property_to_field_type(property)
   |> should.equal(db_schema_builder.BlobField)
@@ -339,7 +344,9 @@ pub fn validate_query_complexity_too_many_fields_test() {
 
   db_schema_builder.validate_query_complexity(group_by)
   |> should.be_error
-  |> should.equal("Query too complex: maximum 5 group by fields allowed (got 6)")
+  |> should.equal(
+    "Query too complex: maximum 5 group by fields allowed (got 6)",
+  )
 }
 
 pub fn validate_query_complexity_empty_test() {

@@ -656,8 +656,7 @@ pub fn user_query_pattern_test() {
       profile1_json,
     )
 
-  let assert Ok(_) =
-    actors.upsert(db, "did:plc:user1", "chadtmiller.com")
+  let assert Ok(_) = actors.upsert(db, "did:plc:user1", "chadtmiller.com")
 
   let profile2_uri = "at://did:plc:user2/app.bsky.actor.profile/self"
   let profile2_json =

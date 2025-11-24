@@ -53,9 +53,7 @@ pub fn set_cursor(
 }
 
 /// Clears the Jetstream cursor (for dev reset)
-pub fn clear_cursor(
-  conn: sqlight.Connection,
-) -> Result(Nil, sqlight.Error) {
+pub fn clear_cursor(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   let sql = "DELETE FROM jetstream_cursor WHERE id = 1"
 
   sqlight.exec(sql, conn)

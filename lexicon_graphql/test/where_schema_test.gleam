@@ -29,7 +29,10 @@ fn create_test_schema_from_lexicons(
   }
 
   // Mock aggregate fetcher for aggregation queries
-  let aggregate_fetcher = fn(_collection: String, _params: db_schema_builder.AggregateParams) {
+  let aggregate_fetcher = fn(
+    _collection: String,
+    _params: db_schema_builder.AggregateParams,
+  ) {
     Ok([])
   }
 

@@ -246,11 +246,7 @@ pub fn reverse_join_includes_forward_join_fields_test() {
 
   // Insert lexicons
   let assert Ok(_) =
-    lexicons.insert(
-      conn,
-      "social.grain.gallery",
-      create_gallery_lexicon(),
-    )
+    lexicons.insert(conn, "social.grain.gallery", create_gallery_lexicon())
   let assert Ok(_) =
     lexicons.insert(
       conn,
@@ -460,11 +456,7 @@ pub fn nested_query_profile_to_photos_test() {
       create_profile_lexicon(),
     )
   let assert Ok(_) =
-    lexicons.insert(
-      conn,
-      "social.grain.gallery",
-      create_gallery_lexicon(),
-    )
+    lexicons.insert(conn, "social.grain.gallery", create_gallery_lexicon())
   let assert Ok(_) =
     lexicons.insert(
       conn,

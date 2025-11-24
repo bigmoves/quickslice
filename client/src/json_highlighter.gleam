@@ -61,9 +61,7 @@ fn highlight_chars_with_context(
         ..acc
       ])
     }
-    ["{", ..rest] | ["}", ..rest] | ["[", ..rest] | ["]", ..rest]
-      if !in_string
-    -> {
+    ["{", ..rest] | ["}", ..rest] | ["[", ..rest] | ["]", ..rest] if !in_string -> {
       // Structural characters - dimmed white
       let char = case chars {
         [c, ..] -> c
@@ -85,11 +83,12 @@ fn highlight_chars_with_context(
     }
     [" ", ..rest] | ["\n", ..rest] if !in_string -> {
       // Preserve whitespace and maintain after_colon state
-      let elem = element.text(case chars {
-        [" ", ..] -> " "
-        ["\n", ..] -> "\n"
-        _ -> ""
-      })
+      let elem =
+        element.text(case chars {
+          [" ", ..] -> " "
+          ["\n", ..] -> "\n"
+          _ -> ""
+        })
       highlight_chars_with_context(rest, in_string, after_colon, [elem, ..acc])
     }
     [char, ..rest] if in_string -> {
@@ -101,9 +100,9 @@ fn highlight_chars_with_context(
       let elem = html.span([attribute.class(color)], [element.text(char)])
       highlight_chars_with_context(rest, in_string, after_colon, [elem, ..acc])
     }
-    ["t", "r", "u", "e", .._rest]
-    | ["f", "a", "l", "s", "e", .._rest]
-    | ["n", "u", "l", "l", .._rest]
+    ["t", "r", "u", "e", ..]
+      | ["f", "a", "l", "s", "e", ..]
+      | ["n", "u", "l", "l", ..]
       if !in_string
     -> {
       // Boolean or null - sunset red

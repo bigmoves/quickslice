@@ -71,10 +71,7 @@ pub fn get_all(conn: sqlight.Connection) -> Result(List(Lexicon), sqlight.Error)
 }
 
 /// Checks if a lexicon exists by ID
-pub fn has(
-  conn: sqlight.Connection,
-  id: String,
-) -> Result(Bool, sqlight.Error) {
+pub fn has(conn: sqlight.Connection, id: String) -> Result(Bool, sqlight.Error) {
   let sql =
     "
     SELECT COUNT(*) as count

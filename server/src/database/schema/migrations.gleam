@@ -119,10 +119,7 @@ fn migration_v4(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
 
 /// Migration v5: Add jetstream_cursor table for cursor tracking
 fn migration_v5(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
-  logging.log(
-    logging.Info,
-    "Running migration v5 (jetstream_cursor table)...",
-  )
+  logging.log(logging.Info, "Running migration v5 (jetstream_cursor table)...")
   tables.create_jetstream_cursor_table(conn)
 }
 

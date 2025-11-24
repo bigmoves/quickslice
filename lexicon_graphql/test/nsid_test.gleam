@@ -2,7 +2,7 @@
 ///
 /// NSIDs are used in AT Protocol to identify lexicons and collections
 import gleeunit/should
-import lexicon_graphql/internal/lexicon/nsid as nsid
+import lexicon_graphql/internal/lexicon/nsid
 
 pub fn nsid_to_type_name_test() {
   nsid.to_type_name("xyz.statusphere.status")

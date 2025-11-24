@@ -1,4 +1,6 @@
-import database/types.{type ActivityBucket, type ActivityEntry, ActivityBucket, ActivityEntry}
+import database/types.{
+  type ActivityBucket, type ActivityEntry, ActivityBucket, ActivityEntry,
+}
 import gleam/dynamic/decode
 import gleam/int
 import gleam/option.{type Option, None, Some}

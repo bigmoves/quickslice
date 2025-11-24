@@ -5,9 +5,9 @@
 import gleam/dict
 import gleam/list
 import gleam/option
-import lexicon_graphql/mutation/builder as mutation_builder
-import lexicon_graphql/internal/lexicon/nsid
 import lexicon_graphql/internal/graphql/type_mapper
+import lexicon_graphql/internal/lexicon/nsid
+import lexicon_graphql/mutation/builder as mutation_builder
 import lexicon_graphql/types
 import swell/schema
 import swell/value

@@ -5,9 +5,9 @@
 import backfill
 import database/repositories/actors
 import database/repositories/config as config_repo
+import database/repositories/jetstream_activity
 import database/repositories/lexicons
 import database/repositories/records
-import database/repositories/jetstream_activity
 import database/types.{type ActivityBucket, type ActivityEntry, type Lexicon}
 import gleam/erlang/process
 import gleam/list
@@ -484,9 +484,7 @@ fn statistics_to_value(
   ])
 }
 
-fn activity_bucket_to_value(
-  bucket: ActivityBucket,
-) -> value.Value {
+fn activity_bucket_to_value(bucket: ActivityBucket) -> value.Value {
   let total = bucket.create_count + bucket.update_count + bucket.delete_count
   value.Object([
     #("timestamp", value.String(bucket.timestamp)),
@@ -497,9 +495,7 @@ fn activity_bucket_to_value(
   ])
 }
 
-fn activity_entry_to_value(
-  entry: ActivityEntry,
-) -> value.Value {
+fn activity_entry_to_value(entry: ActivityEntry) -> value.Value {
   let error_msg_value = case entry.error_message {
     Some(msg) -> value.String(msg)
     None -> value.Null
@@ -588,9 +584,7 @@ pub fn query_type(
       schema.non_null(settings_type()),
       "Get system settings",
       fn(_ctx) {
-        let domain_authority = case
-          config_repo.get(conn, "domain_authority")
-        {
+        let domain_authority = case config_repo.get(conn, "domain_authority") {
           Ok(authority) -> authority
           Error(_) -> ""
         }

@@ -385,7 +385,10 @@ pub fn build_where_mixed_table_and_json_test() {
 
   // Should have both table column and JSON extract with CAST for numeric comparison
   should.be_true(string.contains(sql, "collection = ?"))
-  should.be_true(string.contains(sql, "CAST(json_extract(json, '$.replyCount') AS INTEGER) > ?"))
+  should.be_true(string.contains(
+    sql,
+    "CAST(json_extract(json, '$.replyCount') AS INTEGER) > ?",
+  ))
   should.be_true(string.contains(sql, "AND"))
   list.length(params) |> should.equal(2)
 }

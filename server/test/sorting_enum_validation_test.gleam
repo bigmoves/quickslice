@@ -1,4 +1,3 @@
-
 /// Integration test for sorting enum validation
 ///
 /// Verifies that each Connection field uses the correct collection-specific
@@ -392,7 +391,8 @@ fn load_social_grain_lexicons() -> List(types.Lexicon) {
   }"
 
   [
-    lexicon_graphql.parse_lexicon(gallery_json) |> result.unwrap(empty_lexicon()),
+    lexicon_graphql.parse_lexicon(gallery_json)
+      |> result.unwrap(empty_lexicon()),
     lexicon_graphql.parse_lexicon(gallery_item_json)
       |> result.unwrap(empty_lexicon()),
     lexicon_graphql.parse_lexicon(favorite_json)

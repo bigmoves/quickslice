@@ -93,8 +93,7 @@ pub fn graphql_total_count_basic_test() {
 
   // Insert a lexicon
   let lexicon = create_status_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert 5 test records
   let _ =
@@ -172,12 +171,10 @@ pub fn graphql_total_count_with_filter_test() {
 
   // Insert a lexicon
   let lexicon = create_status_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert test actors
-  let assert Ok(_) =
-    actors.upsert(db, "did:plc:alice", "alice.bsky.social")
+  let assert Ok(_) = actors.upsert(db, "did:plc:alice", "alice.bsky.social")
   let assert Ok(_) = actors.upsert(db, "did:plc:bob", "bob.bsky.social")
 
   // Insert 3 records for alice
@@ -286,8 +283,7 @@ pub fn graphql_total_count_empty_result_test() {
 
   // Insert a lexicon
   let lexicon = create_status_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Query with totalCount field (no records inserted)
   let query =
@@ -336,8 +332,7 @@ pub fn graphql_total_count_with_pagination_test() {
 
   // Insert a lexicon
   let lexicon = create_status_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
 
   // Insert 10 test records
   let _ =

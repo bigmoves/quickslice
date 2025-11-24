@@ -1,5 +1,4 @@
 import database/queries/aggregates
-import database/types
 /// End-to-end integration tests for GraphQL aggregated queries
 ///
 /// Tests the complete aggregation flow:
@@ -10,6 +9,7 @@ import database/types
 import database/repositories/lexicons
 import database/repositories/records
 import database/schema/tables
+import database/types
 import gleam/dict
 import gleam/http
 import gleam/json
@@ -108,11 +108,7 @@ fn setup_aggregation_test_db() -> Result(sqlight.Connection, sqlight.Error) {
 
   // Insert post lexicon
   let post_lexicon = create_post_lexicon()
-  use _ <- result.try(lexicons.insert(
-    conn,
-    "app.bsky.feed.post",
-    post_lexicon,
-  ))
+  use _ <- result.try(lexicons.insert(conn, "app.bsky.feed.post", post_lexicon))
 
   // Insert status lexicon
   let status_lexicon = create_status_lexicon()

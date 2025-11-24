@@ -166,9 +166,7 @@ pub fn stop(manager: process.Subject(ManagerMessage)) -> Nil {
 }
 
 /// Restart the Jetstream consumer with fresh lexicon data
-pub fn restart(
-  manager: process.Subject(ManagerMessage),
-) -> Result(Nil, String) {
+pub fn restart(manager: process.Subject(ManagerMessage)) -> Result(Nil, String) {
   actor.call(manager, waiting: 5000, sending: ManualRestart)
 }
 
@@ -265,10 +263,9 @@ fn handle_manager_message(
                 CheckHeartbeat,
               )
 
-              actor.continue(ManagerState(
-                ..state,
-                consumer_subject: option.None,
-              ))
+              actor.continue(
+                ManagerState(..state, consumer_subject: option.None),
+              )
             }
           }
         }
@@ -463,13 +460,11 @@ fn handle_cursor_message(
           // Flush the new cursor value (time_us)
           case jetstream.set_cursor(state.db, time_us) {
             Ok(_) -> {
-              actor.continue(
-                CursorState(
-                  db: state.db,
-                  last_flush_time: current_time,
-                  latest_cursor: option.None,
-                ),
-              )
+              actor.continue(CursorState(
+                db: state.db,
+                last_flush_time: current_time,
+                latest_cursor: option.None,
+              ))
             }
             Error(err) -> {
               logging.log(

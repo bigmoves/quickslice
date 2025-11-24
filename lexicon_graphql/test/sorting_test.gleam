@@ -12,8 +12,8 @@ import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
 import gleeunit/should
-import lexicon_graphql/schema/database as db_schema_builder
 import lexicon_graphql/schema/builder as schema_builder
+import lexicon_graphql/schema/database as db_schema_builder
 import lexicon_graphql/types
 import swell/introspection
 import swell/schema
@@ -29,7 +29,10 @@ fn create_test_schema_from_lexicons(
   }
 
   // Mock aggregate fetcher for aggregation queries
-  let aggregate_fetcher = fn(_collection: String, _params: db_schema_builder.AggregateParams) {
+  let aggregate_fetcher = fn(
+    _collection: String,
+    _params: db_schema_builder.AggregateParams,
+  ) {
     Ok([])
   }
 

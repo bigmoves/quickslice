@@ -121,9 +121,7 @@ pub fn create_config_table(
 }
 
 /// Creates the CID index for record deduplication
-pub fn create_cid_index(
-  conn: sqlight.Connection,
-) -> Result(Nil, sqlight.Error) {
+pub fn create_cid_index(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   let create_cid_index_sql =
     "
     CREATE INDEX IF NOT EXISTS idx_record_cid

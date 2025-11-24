@@ -1,6 +1,7 @@
 import actor_validator
 import backfill
 import database/repositories/actors
+import database/repositories/jetstream_activity
 import database/repositories/lexicons
 import database/repositories/records
 import database/types.{Inserted, Skipped}
@@ -12,7 +13,6 @@ import gleam/option
 import gleam/result
 import gleam/string
 import goose
-import database/repositories/jetstream_activity
 import honk
 import honk/errors
 import logging
@@ -152,191 +152,246 @@ pub fn handle_commit_event(
 
               // Validate record against lexicon
               case lexicon_jsons_result, record_json_result {
-                Ok(lexicon_jsons), Ok(record_json) -> case
-                  honk.validate_record(
-                    lexicon_jsons,
-                    commit.collection,
-                    record_json,
-                  )
-                {
-                Ok(_) -> {
-                  // Check if record already exists BEFORE inserting to determine operation type
-                  let existing_record = records.get(db, uri)
-                  let is_create = case existing_record {
-                    Ok([]) -> True
-                    // Empty list means record doesn't exist
-                    Ok(_) -> False
-                    // Non-empty list means record exists
-                    Error(_) -> {
-                      // Database error - log it and treat as update to be safe
-                      logging.log(
-                        logging.Warning,
-                        "[jetstream] Error checking existing record for " <> uri,
-                      )
-                      False
-                    }
-                  }
-
-                  // Ensure actor exists before inserting record
-                  case actor_validator.ensure_actor_exists(db, did, plc_url) {
-                    Ok(is_new_actor) -> {
-                      // If this is a new actor, synchronously backfill all collections
-                      // This ensures subscription joins have complete data immediately
-                      // We're already in a spawned process per event, so blocking is fine
-                      case is_new_actor {
-                        True -> {
-                          // Publish stats event for new actor
-                          stats_pubsub.publish(stats_pubsub.ActorCreated)
-
-                          backfill.backfill_collections_for_actor(
-                            db,
-                            did,
-                            collection_ids,
-                            external_collection_ids,
-                            plc_url,
+                Ok(lexicon_jsons), Ok(record_json) ->
+                  case
+                    honk.validate_record(
+                      lexicon_jsons,
+                      commit.collection,
+                      record_json,
+                    )
+                  {
+                    Ok(_) -> {
+                      // Check if record already exists BEFORE inserting to determine operation type
+                      let existing_record = records.get(db, uri)
+                      let is_create = case existing_record {
+                        Ok([]) -> True
+                        // Empty list means record doesn't exist
+                        Ok(_) -> False
+                        // Non-empty list means record exists
+                        Error(_) -> {
+                          // Database error - log it and treat as update to be safe
+                          logging.log(
+                            logging.Warning,
+                            "[jetstream] Error checking existing record for "
+                              <> uri,
                           )
+                          False
                         }
-                        False -> Nil
                       }
 
-                      // Continue with record insertion
-                      // Validation passed, insert record
+                      // Ensure actor exists before inserting record
                       case
-                        records.insert(
-                          db,
-                          uri,
-                          cid_value,
-                          did,
-                          commit.collection,
-                          json_string,
-                        )
+                        actor_validator.ensure_actor_exists(db, did, plc_url)
                       {
-                        Ok(Inserted) -> {
-                          logging.log(
-                            logging.Info,
-                            "[jetstream] "
-                              <> case is_create {
-                              True -> "create"
-                              False -> "update"
+                        Ok(is_new_actor) -> {
+                          // If this is a new actor, synchronously backfill all collections
+                          // This ensures subscription joins have complete data immediately
+                          // We're already in a spawned process per event, so blocking is fine
+                          case is_new_actor {
+                            True -> {
+                              // Publish stats event for new actor
+                              stats_pubsub.publish(stats_pubsub.ActorCreated)
+
+                              backfill.backfill_collections_for_actor(
+                                db,
+                                did,
+                                collection_ids,
+                                external_collection_ids,
+                                plc_url,
+                              )
                             }
-                              <> " "
-                              <> commit.collection
-                              <> " ("
-                              <> commit.rkey
-                              <> ") "
-                              <> did,
-                          )
-
-                          // Update activity status to success
-                          case activity_id {
-                            option.Some(id) -> {
-                              case
-                                jetstream_activity.update_status(
-                                  db,
-                                  id,
-                                  "success",
-                                  option.None,
-                                )
-                              {
-                                Ok(_) ->
-                                  // Publish activity event for real-time UI updates
-                                  stats_pubsub.publish(
-                                    stats_pubsub.ActivityLogged(
-                                      id,
-                                      timestamp,
-                                      commit.operation,
-                                      commit.collection,
-                                      did,
-                                      "success",
-                                      option.None,
-                                      event_json,
-                                    ),
-                                  )
-                                Error(_) -> Nil
-                              }
-                            }
-                            option.None -> Nil
-                          }
-
-                          // Publish event to PubSub for GraphQL subscriptions
-                          let operation = case is_create {
-                            True -> pubsub.Create
-                            False -> pubsub.Update
-                          }
-
-                          // Convert event timestamp from microseconds to ISO8601
-                          let indexed_at = microseconds_to_iso8601(time_us)
-
-                          let event =
-                            pubsub.RecordEvent(
-                              uri: uri,
-                              cid: cid_value,
-                              did: did,
-                              collection: commit.collection,
-                              value: json_string,
-                              indexed_at: indexed_at,
-                              operation: operation,
-                            )
-
-                          pubsub.publish(event)
-
-                          // Publish stats event for real-time stats updates
-                          case is_create {
-                            True ->
-                              stats_pubsub.publish(stats_pubsub.RecordCreated)
                             False -> Nil
                           }
-                        }
-                        Ok(Skipped) -> {
-                          logging.log(
-                            logging.Info,
-                            "[jetstream] skipped (duplicate CID) "
-                              <> commit.collection
-                              <> " ("
-                              <> commit.rkey
-                              <> ") "
-                              <> did,
-                          )
 
-                          // Update activity status to success (but don't increment counters)
-                          case activity_id {
-                            option.Some(id) -> {
-                              case
-                                jetstream_activity.update_status(
-                                  db,
-                                  id,
-                                  "success",
-                                  option.Some("Skipped: duplicate CID"),
-                                )
-                              {
-                                Ok(_) ->
-                                  // Publish activity event for real-time UI updates
-                                  stats_pubsub.publish(
-                                    stats_pubsub.ActivityLogged(
+                          // Continue with record insertion
+                          // Validation passed, insert record
+                          case
+                            records.insert(
+                              db,
+                              uri,
+                              cid_value,
+                              did,
+                              commit.collection,
+                              json_string,
+                            )
+                          {
+                            Ok(Inserted) -> {
+                              logging.log(
+                                logging.Info,
+                                "[jetstream] "
+                                  <> case is_create {
+                                  True -> "create"
+                                  False -> "update"
+                                }
+                                  <> " "
+                                  <> commit.collection
+                                  <> " ("
+                                  <> commit.rkey
+                                  <> ") "
+                                  <> did,
+                              )
+
+                              // Update activity status to success
+                              case activity_id {
+                                option.Some(id) -> {
+                                  case
+                                    jetstream_activity.update_status(
+                                      db,
                                       id,
-                                      timestamp,
-                                      commit.operation,
-                                      commit.collection,
-                                      did,
                                       "success",
-                                      option.Some("Skipped: duplicate CID"),
-                                      event_json,
-                                    ),
+                                      option.None,
+                                    )
+                                  {
+                                    Ok(_) ->
+                                      // Publish activity event for real-time UI updates
+                                      stats_pubsub.publish(
+                                        stats_pubsub.ActivityLogged(
+                                          id,
+                                          timestamp,
+                                          commit.operation,
+                                          commit.collection,
+                                          did,
+                                          "success",
+                                          option.None,
+                                          event_json,
+                                        ),
+                                      )
+                                    Error(_) -> Nil
+                                  }
+                                }
+                                option.None -> Nil
+                              }
+
+                              // Publish event to PubSub for GraphQL subscriptions
+                              let operation = case is_create {
+                                True -> pubsub.Create
+                                False -> pubsub.Update
+                              }
+
+                              // Convert event timestamp from microseconds to ISO8601
+                              let indexed_at = microseconds_to_iso8601(time_us)
+
+                              let event =
+                                pubsub.RecordEvent(
+                                  uri: uri,
+                                  cid: cid_value,
+                                  did: did,
+                                  collection: commit.collection,
+                                  value: json_string,
+                                  indexed_at: indexed_at,
+                                  operation: operation,
+                                )
+
+                              pubsub.publish(event)
+
+                              // Publish stats event for real-time stats updates
+                              case is_create {
+                                True ->
+                                  stats_pubsub.publish(
+                                    stats_pubsub.RecordCreated,
                                   )
-                                Error(_) -> Nil
+                                False -> Nil
                               }
                             }
-                            option.None -> Nil
+                            Ok(Skipped) -> {
+                              logging.log(
+                                logging.Info,
+                                "[jetstream] skipped (duplicate CID) "
+                                  <> commit.collection
+                                  <> " ("
+                                  <> commit.rkey
+                                  <> ") "
+                                  <> did,
+                              )
+
+                              // Update activity status to success (but don't increment counters)
+                              case activity_id {
+                                option.Some(id) -> {
+                                  case
+                                    jetstream_activity.update_status(
+                                      db,
+                                      id,
+                                      "success",
+                                      option.Some("Skipped: duplicate CID"),
+                                    )
+                                  {
+                                    Ok(_) ->
+                                      // Publish activity event for real-time UI updates
+                                      stats_pubsub.publish(
+                                        stats_pubsub.ActivityLogged(
+                                          id,
+                                          timestamp,
+                                          commit.operation,
+                                          commit.collection,
+                                          did,
+                                          "success",
+                                          option.Some("Skipped: duplicate CID"),
+                                          event_json,
+                                        ),
+                                      )
+                                    Error(_) -> Nil
+                                  }
+                                }
+                                option.None -> Nil
+                              }
+                              // Don't publish RecordCreated event - record wasn't actually created
+                            }
+                            Error(err) -> {
+                              logging.log(
+                                logging.Error,
+                                "[jetstream] Failed to insert record "
+                                  <> uri
+                                  <> ": "
+                                  <> string.inspect(err),
+                              )
+
+                              // Update activity status to error
+                              case activity_id {
+                                option.Some(id) -> {
+                                  case
+                                    jetstream_activity.update_status(
+                                      db,
+                                      id,
+                                      "error",
+                                      option.Some(
+                                        "Database insert failed: "
+                                        <> string.inspect(err),
+                                      ),
+                                    )
+                                  {
+                                    Ok(_) -> {
+                                      let error_msg =
+                                        "Database insert failed: "
+                                        <> string.inspect(err)
+                                      // Publish activity event for real-time UI updates
+                                      stats_pubsub.publish(
+                                        stats_pubsub.ActivityLogged(
+                                          id,
+                                          timestamp,
+                                          commit.operation,
+                                          commit.collection,
+                                          did,
+                                          "error",
+                                          option.Some(error_msg),
+                                          event_json,
+                                        ),
+                                      )
+                                    }
+                                    Error(_) -> Nil
+                                  }
+                                }
+                                option.None -> Nil
+                              }
+                            }
                           }
-                          // Don't publish RecordCreated event - record wasn't actually created
                         }
-                        Error(err) -> {
+                        Error(actor_err) -> {
                           logging.log(
                             logging.Error,
-                            "[jetstream] Failed to insert record "
+                            "[jetstream] Failed to validate/create actor for "
                               <> uri
                               <> ": "
-                              <> string.inspect(err),
+                              <> actor_err,
                           )
 
                           // Update activity status to error
@@ -348,15 +403,13 @@ pub fn handle_commit_event(
                                   id,
                                   "error",
                                   option.Some(
-                                    "Database insert failed: "
-                                    <> string.inspect(err),
+                                    "Actor validation failed: " <> actor_err,
                                   ),
                                 )
                               {
                                 Ok(_) -> {
                                   let error_msg =
-                                    "Database insert failed: "
-                                    <> string.inspect(err)
+                                    "Actor validation failed: " <> actor_err
                                   // Publish activity event for real-time UI updates
                                   stats_pubsub.publish(
                                     stats_pubsub.ActivityLogged(
@@ -379,31 +432,28 @@ pub fn handle_commit_event(
                         }
                       }
                     }
-                    Error(actor_err) -> {
+                    Error(validation_error) -> {
                       logging.log(
-                        logging.Error,
-                        "[jetstream] Failed to validate/create actor for "
+                        logging.Warning,
+                        "[jetstream] Validation failed for "
                           <> uri
                           <> ": "
-                          <> actor_err,
+                          <> errors.to_string(validation_error),
                       )
 
-                      // Update activity status to error
+                      // Update activity status to validation_error
                       case activity_id {
                         option.Some(id) -> {
                           case
                             jetstream_activity.update_status(
                               db,
                               id,
-                              "error",
-                              option.Some(
-                                "Actor validation failed: " <> actor_err,
-                              ),
+                              "validation_error",
+                              option.Some(errors.to_string(validation_error)),
                             )
                           {
                             Ok(_) -> {
-                              let error_msg =
-                                "Actor validation failed: " <> actor_err
+                              let error_msg = errors.to_string(validation_error)
                               // Publish activity event for real-time UI updates
                               stats_pubsub.publish(stats_pubsub.ActivityLogged(
                                 id,
@@ -411,7 +461,7 @@ pub fn handle_commit_event(
                                 commit.operation,
                                 commit.collection,
                                 did,
-                                "error",
+                                "validation_error",
                                 option.Some(error_msg),
                                 event_json,
                               ))
@@ -423,49 +473,6 @@ pub fn handle_commit_event(
                       }
                     }
                   }
-                }
-                Error(validation_error) -> {
-                  logging.log(
-                    logging.Warning,
-                    "[jetstream] Validation failed for "
-                      <> uri
-                      <> ": "
-                      <> errors.to_string(validation_error),
-                  )
-
-                  // Update activity status to validation_error
-                  case activity_id {
-                    option.Some(id) -> {
-                      case
-                        jetstream_activity.update_status(
-                          db,
-                          id,
-                          "validation_error",
-                          option.Some(errors.to_string(validation_error)),
-                        )
-                      {
-                        Ok(_) -> {
-                          let error_msg =
-                            errors.to_string(validation_error)
-                          // Publish activity event for real-time UI updates
-                          stats_pubsub.publish(stats_pubsub.ActivityLogged(
-                            id,
-                            timestamp,
-                            commit.operation,
-                            commit.collection,
-                            did,
-                            "validation_error",
-                            option.Some(error_msg),
-                            event_json,
-                          ))
-                        }
-                        Error(_) -> Nil
-                      }
-                    }
-                    option.None -> Nil
-                  }
-                }
-              }
                 Error(_lex_parse_err), _ | _, Error(_rec_parse_err) -> {
                   logging.log(
                     logging.Error,

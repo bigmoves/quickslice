@@ -4,7 +4,7 @@
 import gleam/dict
 import gleam/option.{None, Some}
 import gleeunit/should
-import lexicon_graphql/internal/lexicon/uri_extractor as uri_extractor
+import lexicon_graphql/internal/lexicon/uri_extractor
 import test_helpers
 
 // Test extracting URI from a strongRef object

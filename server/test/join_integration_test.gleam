@@ -167,8 +167,7 @@ pub fn forward_join_at_uri_resolves_test() {
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
 
   // Insert test records
   // Parent post
@@ -255,8 +254,7 @@ pub fn forward_join_strong_ref_resolves_test() {
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
     lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
@@ -352,11 +350,9 @@ pub fn reverse_join_resolves_test() {
   let post_lexicon = create_post_lexicon()
   let like_lexicon = create_like_lexicon()
 
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
 
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.like", like_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.like", like_lexicon)
 
   // Insert test records
   // A post
@@ -468,8 +464,7 @@ pub fn dataloader_batches_forward_joins_test() {
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
 
   // Insert multiple parent posts
   let parent1_uri = "at://did:plc:user1/app.bsky.feed.post/parent1"
@@ -594,8 +589,7 @@ pub fn reverse_join_with_strong_ref_test() {
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
     lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
@@ -720,10 +714,8 @@ pub fn forward_join_union_inline_fragments_test() {
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let like_lexicon = create_like_lexicon()
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.like", like_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.like", like_lexicon)
 
   // Insert a parent post
   let parent_post_uri = "at://did:plc:parent/app.bsky.feed.post/parent1"
@@ -912,8 +904,7 @@ pub fn did_join_to_literal_self_returns_single_test() {
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon_with_literal_self()
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
     lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
@@ -1010,8 +1001,7 @@ pub fn did_join_to_non_literal_self_returns_list_test() {
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon_with_literal_self()
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
     lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 
@@ -1129,8 +1119,7 @@ pub fn did_join_batches_queries_test() {
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon_with_literal_self()
-  let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
     lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
 

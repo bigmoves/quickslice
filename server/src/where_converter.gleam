@@ -19,9 +19,7 @@ fn convert_value(value: where.WhereValue) -> sqlight.Value {
 }
 
 /// Convert a where.WhereCondition to a where_clause.WhereCondition
-fn convert_condition(
-  cond: where.WhereCondition,
-) -> where_clause.WhereCondition {
+fn convert_condition(cond: where.WhereCondition) -> where_clause.WhereCondition {
   where_clause.WhereCondition(
     eq: option.map(cond.eq, convert_value),
     in_values: option.map(cond.in_values, fn(values) {

@@ -13,8 +13,8 @@ import gleam/result
 import gleam/string
 import gleeunit/should
 import handlers/graphql as graphql_handler
-import importer
 import honk
+import importer
 import simplifile
 import sqlight
 import wisp
@@ -41,7 +41,7 @@ fn load_grain_lexicons(db: sqlight.Connection) -> Result(Nil, String) {
   let all_json_strings = list.map(file_contents, fn(pair) { pair.1 })
   use all_jsons <- result.try(
     honk.parse_json_strings(all_json_strings)
-    |> result.map_error(fn(_) { "Failed to parse JSON" })
+    |> result.map_error(fn(_) { "Failed to parse JSON" }),
   )
 
   // Validate all schemas together (this allows cross-references to be resolved)

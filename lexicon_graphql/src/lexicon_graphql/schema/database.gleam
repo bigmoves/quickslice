@@ -12,18 +12,18 @@ import gleam/option
 import gleam/result
 import gleam/string
 import lexicon_graphql/input/aggregate as aggregate_input
-import lexicon_graphql/output/aggregate as aggregate_types
-import lexicon_graphql/internal/lexicon/collection_meta
 import lexicon_graphql/input/connection as lexicon_connection
-import lexicon_graphql/query/dataloader
-import lexicon_graphql/internal/lexicon/registry as lexicon_registry
-import lexicon_graphql/mutation/builder as mutation_builder
-import lexicon_graphql/internal/lexicon/nsid
+import lexicon_graphql/input/where as where_input
 import lexicon_graphql/internal/graphql/object_builder as object_type_builder
 import lexicon_graphql/internal/graphql/type_mapper
-import lexicon_graphql/types
+import lexicon_graphql/internal/lexicon/collection_meta
+import lexicon_graphql/internal/lexicon/nsid
+import lexicon_graphql/internal/lexicon/registry as lexicon_registry
 import lexicon_graphql/internal/lexicon/uri_extractor
-import lexicon_graphql/input/where as where_input
+import lexicon_graphql/mutation/builder as mutation_builder
+import lexicon_graphql/output/aggregate as aggregate_types
+import lexicon_graphql/query/dataloader
+import lexicon_graphql/types
 import swell/connection
 import swell/schema
 import swell/value
@@ -1284,8 +1284,12 @@ fn is_sortable_property(property: types.Property) -> Bool {
 /// Non-groupable types: blob, ref (complex types)
 fn is_groupable_property(property: types.Property) -> Bool {
   case property_to_field_type(property) {
-    StringField | IntField | BoolField | NumberField | DateTimeField | ArrayField ->
-      True
+    StringField
+    | IntField
+    | BoolField
+    | NumberField
+    | DateTimeField
+    | ArrayField -> True
     BlobField | RefField -> False
   }
 }
