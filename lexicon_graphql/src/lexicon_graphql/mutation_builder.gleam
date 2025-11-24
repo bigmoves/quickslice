@@ -153,7 +153,7 @@ fn build_create_mutation(
       Error(
         "Create mutation for "
         <> collection
-        <> " not yet implemented. Use XRPC endpoint instead.",
+        <> " not yet implemented.",
       )
     }
   }
@@ -208,7 +208,7 @@ fn build_update_mutation(
       Error(
         "Update mutation for "
         <> collection
-        <> " not yet implemented. Use XRPC endpoint instead.",
+        <> " not yet implemented.",
       )
     }
   }
@@ -252,7 +252,7 @@ fn build_delete_mutation(
       Error(
         "Delete mutation for "
         <> collection
-        <> " not yet implemented. Use XRPC endpoint instead.",
+        <> " not yet implemented.",
       )
     }
   }

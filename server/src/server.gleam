@@ -31,8 +31,6 @@ import stats_pubsub
 import upload_handler
 import wisp
 import wisp/wisp_mist
-import xrpc_handlers
-import xrpc_router
 
 pub type Context {
   Context(
@@ -575,61 +573,6 @@ fn handle_request(
       graphiql_handler.handle_graphiql_request(req, ctx.db, ctx.oauth_config)
     ["upload"] ->
       upload_handler.handle_upload_request(req, ctx.db, ctx.oauth_config)
-    ["xrpc", _] -> {
-      // Try to parse the XRPC route
-      case xrpc_router.parse_xrpc_path(segments) {
-        option.Some(route) -> {
-          // Check if lexicon exists for this NSID
-          case xrpc_router.validate_nsid(ctx.db, route.nsid) {
-            True -> {
-              // Route to the appropriate handler based on method
-              case xrpc_router.parse_method(route.method) {
-                xrpc_router.CreateRecord ->
-                  xrpc_handlers.handle_create_record(
-                    req,
-                    ctx.db,
-                    route.nsid,
-                    ctx.auth_base_url,
-                  )
-                xrpc_router.UpdateRecord ->
-                  xrpc_handlers.handle_update_record(req, ctx.db, route.nsid)
-                xrpc_router.DeleteRecord ->
-                  xrpc_handlers.handle_delete_record(req, ctx.db, route.nsid)
-                xrpc_router.GetRecord ->
-                  xrpc_handlers.handle_get_record(req, ctx.db, route.nsid)
-                xrpc_router.UnknownMethod -> {
-                  wisp.response(404)
-                  |> wisp.set_header("content-type", "application/json")
-                  |> wisp.set_body(wisp.Text(
-                    "{\"error\": \"MethodNotSupported\", \"message\": \"Unknown XRPC method: "
-                    <> route.method
-                    <> "\"}",
-                  ))
-                }
-              }
-            }
-            False -> {
-              // No lexicon found for this NSID
-              wisp.response(404)
-              |> wisp.set_header("content-type", "application/json")
-              |> wisp.set_body(wisp.Text(
-                "{\"error\": \"LexiconNotFound\", \"message\": \"No lexicon found for collection: "
-                <> route.nsid
-                <> "\"}",
-              ))
-            }
-          }
-        }
-        option.None -> {
-          // Invalid XRPC path format
-          wisp.response(400)
-          |> wisp.set_header("content-type", "application/json")
-          |> wisp.set_body(wisp.Text(
-            "{\"error\": \"InvalidRequest\", \"message\": \"Invalid XRPC path format\"}",
-          ))
-        }
-      }
-    }
     // Fallback: serve SPA index.html for client-side routing
     _ -> index_route(req, ctx)
   }
