@@ -2,8 +2,8 @@ import gleam/dict
 import gleam/option
 import gleeunit
 import gleeunit/should
-import lexicon_graphql/aggregate_input
-import lexicon_graphql/db_schema_builder
+import lexicon_graphql/input/aggregate as aggregate_input
+import lexicon_graphql/schema/database as db_schema_builder
 import lexicon_graphql/types
 
 pub fn main() {

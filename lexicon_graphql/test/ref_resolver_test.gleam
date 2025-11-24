@@ -4,7 +4,7 @@
 import gleam/dict
 import gleam/option.{None, Some}
 import gleeunit/should
-import lexicon_graphql/ref_resolver
+import lexicon_graphql/internal/lexicon/ref_resolver as ref_resolver
 import lexicon_graphql/types
 
 // Test resolving a local reference (within same lexicon)

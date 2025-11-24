@@ -1,26 +1,26 @@
 /// Converts GraphQL where input types to SQL where clause types
 ///
-/// This module bridges the gap between the GraphQL layer (lexicon_graphql/where_input)
+/// This module bridges the gap between the GraphQL layer (lexicon_graphql/input/where)
 /// and the database layer (where_clause with sqlight types).
 import gleam/dict
 import gleam/list
 import gleam/option
-import lexicon_graphql/where_input
+import lexicon_graphql/input/where
 import sqlight
 import where_clause
 
-/// Convert a where_input.WhereValue to a sqlight.Value
-fn convert_value(value: where_input.WhereValue) -> sqlight.Value {
+/// Convert a where.WhereValue to a sqlight.Value
+fn convert_value(value: where.WhereValue) -> sqlight.Value {
   case value {
-    where_input.StringValue(s) -> sqlight.text(s)
-    where_input.IntValue(i) -> sqlight.int(i)
-    where_input.BoolValue(b) -> sqlight.bool(b)
+    where.StringValue(s) -> sqlight.text(s)
+    where.IntValue(i) -> sqlight.int(i)
+    where.BoolValue(b) -> sqlight.bool(b)
   }
 }
 
-/// Convert a where_input.WhereCondition to a where_clause.WhereCondition
+/// Convert a where.WhereCondition to a where_clause.WhereCondition
 fn convert_condition(
-  cond: where_input.WhereCondition,
+  cond: where.WhereCondition,
 ) -> where_clause.WhereCondition {
   where_clause.WhereCondition(
     eq: option.map(cond.eq, convert_value),
@@ -35,9 +35,9 @@ fn convert_condition(
   )
 }
 
-/// Convert a where_input.WhereClause to a where_clause.WhereClause
+/// Convert a where.WhereClause to a where_clause.WhereClause
 pub fn convert_where_clause(
-  clause: where_input.WhereClause,
+  clause: where.WhereClause,
 ) -> where_clause.WhereClause {
   where_clause.WhereClause(
     conditions: dict.map_values(clause.conditions, fn(_key, value) {

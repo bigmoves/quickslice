@@ -4,7 +4,7 @@
 import gleam/list
 import gleam/option
 import gleeunit/should
-import lexicon_graphql/lexicon_parser
+import lexicon_graphql/internal/lexicon/parser as lexicon_parser
 import lexicon_graphql/types
 
 // Test parsing a simple record lexicon

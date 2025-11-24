@@ -9,7 +9,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
-import lexicon_graphql/aggregate_types
+import lexicon_graphql/output/aggregate
 import sqlight
 import where_clause
 
@@ -23,7 +23,7 @@ pub fn get_aggregated_records(
   where: Option(where_clause.WhereClause),
   order_by_count_desc: Bool,
   limit: Int,
-) -> Result(List(aggregate_types.AggregateResult), sqlight.Error) {
+) -> Result(List(aggregate.AggregateResult), sqlight.Error) {
   // Build SELECT clause with grouped fields
   let select_parts =
     group_by
@@ -120,7 +120,7 @@ pub fn get_aggregated_records(
         |> list.map(fn(i) { "field_" <> int.to_string(i) })
       let field_dict = dict.from_list(list.zip(field_names, group_values))
 
-      aggregate_types.AggregateResult(field_dict, count)
+      aggregate.AggregateResult(field_dict, count)
     })
   })
 }

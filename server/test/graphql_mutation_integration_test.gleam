@@ -4,8 +4,8 @@ import gleam/json
 import gleam/list
 import gleam/option
 import gleeunit/should
-import lexicon_graphql/db_schema_builder
-import lexicon_graphql/lexicon_parser
+import lexicon_graphql
+import lexicon_graphql/schema/database
 import sqlight
 import swell/schema
 
@@ -77,7 +77,7 @@ pub fn test_create_mutation_generates_correct_schema_test() {
   let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
-    |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
+    |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
 
   // Build schema with empty fetcher
   let empty_fetcher = fn(_collection, _params) {
@@ -85,7 +85,7 @@ pub fn test_create_mutation_generates_correct_schema_test() {
   }
 
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
       option.None,
@@ -134,13 +134,13 @@ pub fn test_create_mutation_field_signature_test() {
   let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
-    |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
+    |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
 
   let empty_fetcher = fn(_collection, _params) {
     Ok(#([], option.None, False, False, option.None))
   }
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
       option.None,
@@ -191,13 +191,13 @@ pub fn test_update_mutation_field_signature_test() {
   let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
-    |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
+    |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
 
   let empty_fetcher = fn(_collection, _params) {
     Ok(#([], option.None, False, False, option.None))
   }
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
       option.None,
@@ -247,13 +247,13 @@ pub fn test_delete_mutation_field_signature_test() {
   let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
-    |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
+    |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
 
   let empty_fetcher = fn(_collection, _params) {
     Ok(#([], option.None, False, False, option.None))
   }
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
       option.None,

@@ -8,8 +8,8 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
-import lexicon_graphql/connection
-import lexicon_graphql/db_schema_builder
+import lexicon_graphql/input/connection
+import lexicon_graphql/schema/database as db_schema_builder
 import lexicon_graphql/types
 import swell/introspection
 import swell/schema

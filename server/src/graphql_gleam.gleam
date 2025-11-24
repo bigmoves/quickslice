@@ -18,10 +18,10 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
-import lexicon_graphql/aggregate_input
-import lexicon_graphql/dataloader
-import lexicon_graphql/db_schema_builder
-import lexicon_graphql/lexicon_parser
+import lexicon_graphql
+import lexicon_graphql/input/aggregate
+import lexicon_graphql/query/dataloader
+import lexicon_graphql/schema/database
 import mutation_resolvers
 import sqlight
 import swell/executor
@@ -49,7 +49,7 @@ pub fn build_schema_from_db(
   let parsed_lexicons =
     lexicon_records
     |> list.filter_map(fn(lex) {
-      case lexicon_parser.parse_lexicon(lex.json) {
+      case lexicon_graphql.parse_lexicon(lex.json) {
         Ok(parsed) -> Ok(parsed)
         Error(_) -> Error(Nil)
       }
@@ -404,7 +404,7 @@ pub fn build_schema_from_db(
       // Step 5.5: Create an aggregate fetcher function
       let aggregate_fetcher = fn(
         collection_nsid: String,
-        params: db_schema_builder.AggregateParams,
+        params: database.AggregateParams,
       ) {
         // Convert GraphQL where clause to SQL where clause
         let where_clause = case params.where {
@@ -419,10 +419,10 @@ pub fn build_schema_from_db(
             case gb.interval {
               option.Some(interval) -> {
                 let db_interval = case interval {
-                  aggregate_input.Hour -> types.Hour
-                  aggregate_input.Day -> types.Day
-                  aggregate_input.Week -> types.Week
-                  aggregate_input.Month -> types.Month
+                  aggregate.Hour -> types.Hour
+                  aggregate.Day -> types.Day
+                  aggregate.Week -> types.Week
+                  aggregate.Month -> types.Month
                 }
                 types.TruncatedField(gb.field, db_interval)
               }
@@ -443,7 +443,7 @@ pub fn build_schema_from_db(
       }
 
       // Step 6: Build schema with database-backed resolvers, mutations, and subscriptions
-      db_schema_builder.build_schema_with_subscriptions(
+      database.build_schema_with_subscriptions(
         parsed_lexicons,
         record_fetcher,
         option.Some(batch_fetcher),

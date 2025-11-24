@@ -8,10 +8,10 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleeunit/should
-import lexicon_graphql/aggregate_types
-import lexicon_graphql/dataloader
-import lexicon_graphql/db_schema_builder
-import lexicon_graphql/lexicon_parser
+import lexicon_graphql
+import lexicon_graphql/output/aggregate
+import lexicon_graphql/query/dataloader
+import lexicon_graphql/schema/database
 import lexicon_graphql/types
 import swell/executor
 import swell/schema
@@ -40,13 +40,13 @@ pub fn groupby_field_enum_exists_test() {
   // Create a stub aggregate fetcher
   let stub_aggregate_fetcher = fn(
     _uri: String,
-    _params: db_schema_builder.AggregateParams,
-  ) -> Result(List(aggregate_types.AggregateResult), String) {
+    _params: database.AggregateParams,
+  ) -> Result(List(aggregate.AggregateResult), String) {
     Error("Not implemented for test")
   }
 
   let assert Ok(graphql_schema) =
-    db_schema_builder.build_schema_with_subscriptions(
+    database.build_schema_with_subscriptions(
       lexicons,
       stub_fetcher,
       option.None,
@@ -188,13 +188,13 @@ pub fn groupby_input_uses_field_enum_test() {
   // Create a stub aggregate fetcher
   let stub_aggregate_fetcher = fn(
     _uri: String,
-    _params: db_schema_builder.AggregateParams,
-  ) -> Result(List(aggregate_types.AggregateResult), String) {
+    _params: database.AggregateParams,
+  ) -> Result(List(aggregate.AggregateResult), String) {
     Error("Not implemented for test")
   }
 
   let assert Ok(graphql_schema) =
-    db_schema_builder.build_schema_with_subscriptions(
+    database.build_schema_with_subscriptions(
       lexicons,
       stub_fetcher,
       option.None,
@@ -348,7 +348,7 @@ fn load_test_lexicons() -> List(types.Lexicon) {
   }"
 
   [
-    lexicon_parser.parse_lexicon(post_json) |> result.unwrap(empty_lexicon()),
+    lexicon_graphql.parse_lexicon(post_json) |> result.unwrap(empty_lexicon()),
   ]
 }
 

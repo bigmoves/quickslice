@@ -4,7 +4,7 @@
 /// This enables dynamic forward and reverse join field generation.
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import lexicon_graphql/nsid
+import lexicon_graphql/internal/lexicon/nsid
 import lexicon_graphql/types
 
 /// Metadata about a collection extracted from its lexicon

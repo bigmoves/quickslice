@@ -6,7 +6,7 @@
 /// Based on the Elixir implementation but adapted for the pure Gleam GraphQL library.
 import gleam/dict.{type Dict}
 import gleam/option.{type Option}
-import lexicon_graphql/blob_type
+import lexicon_graphql/scalar/blob as blob_type
 import swell/schema
 
 /// Maps a lexicon type string to a GraphQL output Type.

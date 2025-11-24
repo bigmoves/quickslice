@@ -11,19 +11,19 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
-import lexicon_graphql/aggregate_input
-import lexicon_graphql/aggregate_types
-import lexicon_graphql/collection_meta
-import lexicon_graphql/connection as lexicon_connection
-import lexicon_graphql/dataloader
-import lexicon_graphql/lexicon_registry
-import lexicon_graphql/mutation_builder
-import lexicon_graphql/nsid
-import lexicon_graphql/object_type_builder
-import lexicon_graphql/type_mapper
+import lexicon_graphql/input/aggregate as aggregate_input
+import lexicon_graphql/output/aggregate as aggregate_types
+import lexicon_graphql/internal/lexicon/collection_meta
+import lexicon_graphql/input/connection as lexicon_connection
+import lexicon_graphql/query/dataloader
+import lexicon_graphql/internal/lexicon/registry as lexicon_registry
+import lexicon_graphql/mutation/builder as mutation_builder
+import lexicon_graphql/internal/lexicon/nsid
+import lexicon_graphql/internal/graphql/object_builder as object_type_builder
+import lexicon_graphql/internal/graphql/type_mapper
 import lexicon_graphql/types
-import lexicon_graphql/uri_extractor
-import lexicon_graphql/where_input
+import lexicon_graphql/internal/lexicon/uri_extractor
+import lexicon_graphql/input/where as where_input
 import swell/connection
 import swell/schema
 import swell/value

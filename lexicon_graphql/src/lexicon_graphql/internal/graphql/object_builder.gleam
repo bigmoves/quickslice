@@ -7,9 +7,9 @@ import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option
 import gleam/string
-import lexicon_graphql/lexicon_registry
-import lexicon_graphql/nsid
-import lexicon_graphql/type_mapper
+import lexicon_graphql/internal/lexicon/registry as lexicon_registry
+import lexicon_graphql/internal/lexicon/nsid
+import lexicon_graphql/internal/graphql/type_mapper
 import lexicon_graphql/types
 import swell/schema
 import swell/value

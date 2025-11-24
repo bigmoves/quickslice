@@ -4,7 +4,7 @@
 import gleam/dict
 import gleam/option.{None, Some}
 import gleeunit/should
-import lexicon_graphql/collection_meta
+import lexicon_graphql/internal/lexicon/collection_meta as collection_meta
 import lexicon_graphql/types
 
 // Test extracting metadata from a lexicon with strongRef fields

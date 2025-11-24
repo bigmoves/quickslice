@@ -11,8 +11,8 @@ import gleam/json
 import gleam/list
 import gleam/option
 import gleeunit/should
-import lexicon_graphql/db_schema_builder
-import lexicon_graphql/lexicon_parser
+import lexicon_graphql
+import lexicon_graphql/schema/database
 import sqlight
 import swell/executor
 import swell/schema
@@ -220,7 +220,7 @@ pub fn create_mutation_without_auth_fails_test() {
   let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
-    |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
+    |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
 
   let empty_fetcher = fn(_collection, _params) {
     Ok(#([], option.None, False, False, option.None))
@@ -229,7 +229,7 @@ pub fn create_mutation_without_auth_fails_test() {
   let create_factory = option.Some(mock_create_resolver_factory)
 
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
       option.None,
@@ -273,7 +273,7 @@ pub fn create_mutation_with_auth_succeeds_test() {
   let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
-    |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
+    |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
 
   let empty_fetcher = fn(_collection, _params) {
     Ok(#([], option.None, False, False, option.None))
@@ -282,7 +282,7 @@ pub fn create_mutation_with_auth_succeeds_test() {
   let create_factory = option.Some(mock_create_resolver_factory)
 
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
       option.None,
@@ -342,7 +342,7 @@ pub fn update_mutation_with_auth_succeeds_test() {
   let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
-    |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
+    |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
 
   let empty_fetcher = fn(_collection, _params) {
     Ok(#([], option.None, False, False, option.None))
@@ -351,7 +351,7 @@ pub fn update_mutation_with_auth_succeeds_test() {
   let update_factory = option.Some(mock_update_resolver_factory)
 
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
       option.None,
@@ -410,7 +410,7 @@ pub fn delete_mutation_with_auth_succeeds_test() {
   let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
-    |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
+    |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
 
   let empty_fetcher = fn(_collection, _params) {
     Ok(#([], option.None, False, False, option.None))
@@ -419,7 +419,7 @@ pub fn delete_mutation_with_auth_succeeds_test() {
   let delete_factory = option.Some(mock_delete_resolver_factory)
 
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
       option.None,
@@ -478,7 +478,7 @@ pub fn update_mutation_without_rkey_fails_test() {
   let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
-    |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
+    |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
 
   let empty_fetcher = fn(_collection, _params) {
     Ok(#([], option.None, False, False, option.None))
@@ -487,7 +487,7 @@ pub fn update_mutation_without_rkey_fails_test() {
   let update_factory = option.Some(mock_update_resolver_factory)
 
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
       option.None,
@@ -527,7 +527,7 @@ pub fn delete_mutation_without_rkey_fails_test() {
   let assert Ok(lexicon_records) = lexicons.get_all(db)
   let parsed_lexicons =
     lexicon_records
-    |> list.filter_map(fn(lex) { lexicon_parser.parse_lexicon(lex.json) })
+    |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
 
   let empty_fetcher = fn(_collection, _params) {
     Ok(#([], option.None, False, False, option.None))
@@ -536,7 +536,7 @@ pub fn delete_mutation_without_rkey_fails_test() {
   let delete_factory = option.Some(mock_delete_resolver_factory)
 
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
       option.None,
@@ -565,7 +565,7 @@ pub fn delete_mutation_without_rkey_fails_test() {
 pub fn test_upload_blob_mutation_success() {
   // Parse a minimal lexicon (we just need a valid schema to test uploadBlob)
   let lexicon_json = create_status_lexicon()
-  let assert Ok(lexicon) = lexicon_parser.parse_lexicon(lexicon_json)
+  let assert Ok(lexicon) = lexicon_graphql.parse_lexicon(lexicon_json)
   let parsed_lexicons = [lexicon]
 
   let empty_fetcher = fn(_collection, _params) {
@@ -595,7 +595,7 @@ pub fn test_upload_blob_mutation_success() {
   let upload_blob_factory = option.Some(mock_upload_blob_resolver_factory)
 
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
       option.None,
@@ -655,7 +655,7 @@ pub fn test_upload_blob_mutation_success() {
 pub fn test_upload_blob_mutation_requires_auth() {
   // Parse a minimal lexicon
   let lexicon_json = create_status_lexicon()
-  let assert Ok(lexicon) = lexicon_parser.parse_lexicon(lexicon_json)
+  let assert Ok(lexicon) = lexicon_graphql.parse_lexicon(lexicon_json)
   let parsed_lexicons = [lexicon]
 
   let empty_fetcher = fn(_collection, _params) {
@@ -672,7 +672,7 @@ pub fn test_upload_blob_mutation_requires_auth() {
   let upload_blob_factory = option.Some(mock_upload_blob_resolver_factory)
 
   let assert Ok(built_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       parsed_lexicons,
       empty_fetcher,
       option.None,

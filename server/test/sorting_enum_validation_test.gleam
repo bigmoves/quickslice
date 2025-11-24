@@ -9,9 +9,9 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleeunit/should
-import lexicon_graphql/dataloader
-import lexicon_graphql/db_schema_builder
-import lexicon_graphql/lexicon_parser
+import lexicon_graphql
+import lexicon_graphql/query/dataloader
+import lexicon_graphql/schema/database
 import lexicon_graphql/types
 import swell/executor
 import swell/schema
@@ -38,7 +38,7 @@ pub fn sorting_enum_input_types_are_unique_per_collection_test() {
   }
 
   let assert Ok(graphql_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       lexicons,
       stub_fetcher,
       option.None,
@@ -184,7 +184,7 @@ pub fn did_join_uses_correct_sort_enum_test() {
   }
 
   let assert Ok(graphql_schema) =
-    db_schema_builder.build_schema_with_fetcher(
+    database.build_schema_with_fetcher(
       lexicons,
       stub_fetcher,
       option.None,
@@ -392,10 +392,10 @@ fn load_social_grain_lexicons() -> List(types.Lexicon) {
   }"
 
   [
-    lexicon_parser.parse_lexicon(gallery_json) |> result.unwrap(empty_lexicon()),
-    lexicon_parser.parse_lexicon(gallery_item_json)
+    lexicon_graphql.parse_lexicon(gallery_json) |> result.unwrap(empty_lexicon()),
+    lexicon_graphql.parse_lexicon(gallery_item_json)
       |> result.unwrap(empty_lexicon()),
-    lexicon_parser.parse_lexicon(favorite_json)
+    lexicon_graphql.parse_lexicon(favorite_json)
       |> result.unwrap(empty_lexicon()),
   ]
 }

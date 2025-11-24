@@ -9,7 +9,7 @@ import gleam/result
 import gleam/string
 import gleeunit
 import gleeunit/should
-import lexicon_graphql/where_input
+import lexicon_graphql/input/where as where_input
 import sqlight
 import swell/value
 import where_converter

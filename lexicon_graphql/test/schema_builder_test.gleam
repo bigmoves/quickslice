@@ -6,7 +6,7 @@ import birdie
 import gleam/dict
 import gleam/option.{None, Some}
 import gleeunit/should
-import lexicon_graphql/schema_builder
+import lexicon_graphql/schema/builder as schema_builder
 import lexicon_graphql/types
 import swell/introspection
 import swell/schema

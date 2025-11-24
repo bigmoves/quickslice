@@ -4,7 +4,7 @@
 import gleam/dict
 import gleam/option.{Some}
 import gleeunit/should
-import lexicon_graphql/blob_type
+import lexicon_graphql/scalar/blob as blob_type
 import swell/schema
 import swell/value
 

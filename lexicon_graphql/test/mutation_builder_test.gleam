@@ -5,7 +5,7 @@ import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
 import gleeunit/should
-import lexicon_graphql/mutation_builder
+import lexicon_graphql/mutation/builder as mutation_builder
 import swell/schema
 import swell/value
 
