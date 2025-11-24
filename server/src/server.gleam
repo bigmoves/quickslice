@@ -2,7 +2,8 @@ import activity_cleanup
 import argv
 import backfill
 import backfill_state
-import client_graphql_handler
+import handlers/backfill as backfill_handler
+import handlers/client_graphql as client_graphql_handler
 import config
 import database/connection
 import database/repositories/lexicons
@@ -15,9 +16,11 @@ import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string
-import graphiql_handler
-import graphql_handler
-import graphql_ws_handler
+import handlers/graphiql as graphiql_handler
+import handlers/graphql as graphql_handler
+import handlers/graphql_ws as graphql_ws_handler
+import handlers/health as health_handler
+import handlers/index as index_handler
 import importer
 import jetstream_consumer
 import logging
@@ -25,10 +28,9 @@ import mist
 import oauth/handlers
 import oauth/registration
 import pubsub
-import simplifile
 import sqlight
 import stats_pubsub
-import upload_handler
+import handlers/upload as upload_handler
 import wisp
 import wisp/wisp_mist
 
@@ -547,14 +549,14 @@ fn handle_request(
   let segments = wisp.path_segments(req)
 
   case segments {
-    [] -> index_route(req, ctx)
-    ["health"] -> handle_health_check(ctx)
+    [] -> index_handler.handle()
+    ["health"] -> health_handler.handle(ctx.db)
     ["oauth", "authorize"] ->
       handlers.handle_oauth_authorize(req, ctx.db, ctx.oauth_config)
     ["oauth", "callback"] ->
       handlers.handle_oauth_callback(req, ctx.db, ctx.oauth_config)
     ["logout"] -> handlers.handle_logout(req, ctx.db)
-    ["backfill"] -> handle_backfill_request(req, ctx)
+    ["backfill"] -> backfill_handler.handle(req, ctx.db, ctx.config)
     ["admin", "graphql"] ->
       client_graphql_handler.handle_client_graphql_request(
         req,
@@ -574,121 +576,7 @@ fn handle_request(
     ["upload"] ->
       upload_handler.handle_upload_request(req, ctx.db, ctx.oauth_config)
     // Fallback: serve SPA index.html for client-side routing
-    _ -> index_route(req, ctx)
-  }
-}
-
-fn handle_backfill_request(req: wisp.Request, ctx: Context) -> wisp.Response {
-  case req.method {
-    gleam_http.Post -> {
-      // Get domain authority from config
-      let domain_authority = case config.get_domain_authority(ctx.config) {
-        option.Some(authority) -> authority
-        option.None -> ""
-      }
-
-      // Get all record-type lexicons
-      case lexicons.get_record_types(ctx.db) {
-        Ok(lexicons) -> {
-          case lexicons {
-            [] -> {
-              wisp.response(200)
-              |> wisp.set_header("content-type", "application/json")
-              |> wisp.set_body(wisp.Text(
-                "{\"status\": \"no_lexicons\", \"message\": \"No record-type lexicons found\"}",
-              ))
-            }
-            _ -> {
-              // Separate lexicons by domain authority
-              let #(collections, external_collections) =
-                lexicons
-                |> list.partition(fn(lex) {
-                  backfill.nsid_matches_domain_authority(
-                    lex.id,
-                    domain_authority,
-                  )
-                })
-
-              let collection_ids = list.map(collections, fn(lex) { lex.id })
-              let external_collection_ids =
-                list.map(external_collections, fn(lex) { lex.id })
-
-              // Run backfill in background process
-              let backfill_config = backfill.default_config()
-              process.spawn_unlinked(fn() {
-                backfill.backfill_collections(
-                  [],
-                  collection_ids,
-                  external_collection_ids,
-                  backfill_config,
-                  ctx.db,
-                )
-              })
-
-              wisp.response(200)
-              |> wisp.set_header("content-type", "application/json")
-              |> wisp.set_body(wisp.Text(
-                "{\"status\": \"started\", \"collections\": "
-                <> int.to_string(list.length(collection_ids))
-                <> ", \"external_collections\": "
-                <> int.to_string(list.length(external_collection_ids))
-                <> "}",
-              ))
-            }
-          }
-        }
-        Error(_) -> {
-          wisp.response(500)
-          |> wisp.set_header("content-type", "application/json")
-          |> wisp.set_body(wisp.Text(
-            "{\"error\": \"database_error\", \"message\": \"Failed to fetch lexicons\"}",
-          ))
-        }
-      }
-    }
-    _ -> {
-      wisp.response(405)
-      |> wisp.set_header("content-type", "application/json")
-      |> wisp.set_body(wisp.Text(
-        "{\"error\": \"method_not_allowed\", \"message\": \"Use POST to trigger backfill\"}",
-      ))
-    }
-  }
-}
-
-fn handle_health_check(ctx: Context) -> wisp.Response {
-  // Try a simple database query to verify connectivity
-  case lexicons.get_count(ctx.db) {
-    Ok(_) -> {
-      // Database is accessible
-      wisp.response(200)
-      |> wisp.set_header("content-type", "application/json")
-      |> wisp.set_body(wisp.Text("{\"status\": \"healthy\"}"))
-    }
-    Error(_) -> {
-      // Database is not accessible
-      wisp.response(503)
-      |> wisp.set_header("content-type", "application/json")
-      |> wisp.set_body(wisp.Text(
-        "{\"status\": \"unhealthy\", \"message\": \"Database connection failed\"}",
-      ))
-    }
-  }
-}
-
-fn index_route(_req: wisp.Request, _ctx: Context) -> wisp.Response {
-  // Serve the client SPA's index.html (bundled by lustre dev tools)
-  // The priv directory is resolved at startup and passed through the handler
-  let assert Ok(priv_dir) = wisp.priv_directory("server")
-  let index_path = priv_dir <> "/static/index.html"
-
-  case simplifile.read(index_path) {
-    Ok(contents) -> wisp.html_response(contents, 200)
-    Error(_) ->
-      wisp.html_response(
-        "<h1>Error</h1><p>Client application not found. Run 'gleam run -m lustre/dev build' in the client directory.</p>",
-        500,
-      )
+    _ -> index_handler.handle()
   }
 }
 

@@ -11,7 +11,7 @@ import gleam/json
 import gleam/list
 import gleam/string
 import gleeunit/should
-import graphql_handler
+import handlers/graphql as graphql_handler
 import sqlight
 import wisp
 import wisp/simulate

@@ -12,7 +12,7 @@ import gleam/list
 import gleam/result
 import gleam/string
 import gleeunit/should
-import graphql_handler
+import handlers/graphql as graphql_handler
 import importer
 import honk
 import simplifile
