@@ -41,7 +41,7 @@ pub fn header(auth_info: Option(#(String, Bool))) -> Element(msg) {
             html.form(
               [
                 attribute.method("POST"),
-                attribute.action("/oauth/authorize"),
+                attribute.action("/admin/oauth/authorize"),
                 attribute.class("flex gap-2 items-center"),
               ],
               [

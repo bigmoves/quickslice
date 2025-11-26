@@ -13,9 +13,11 @@ import gleam/http
 import gleam/int
 import gleam/json
 import gleam/list
+import gleam/option.{None}
 import gleam/string
 import gleeunit/should
 import handlers/graphql as graphql_handler
+import lib/oauth/did_cache
 import sqlight
 import wisp
 import wisp/simulate
@@ -168,11 +170,13 @@ pub fn graphql_post_request_with_records_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -240,11 +244,13 @@ pub fn graphql_post_request_empty_results_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -280,11 +286,13 @@ pub fn graphql_get_request_test() {
       "/graphql?query={ xyzStatusphereStatus { edges { node { uri } } } }",
     )
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -314,11 +322,13 @@ pub fn graphql_invalid_json_request_test() {
     |> simulate.string_body("not valid json")
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -352,11 +362,13 @@ pub fn graphql_missing_query_field_test() {
     |> simulate.string_body(body_json)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -382,11 +394,13 @@ pub fn graphql_method_not_allowed_test() {
   // Create DELETE request (not allowed)
   let request = simulate.request(http.Delete, "/graphql")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -480,11 +494,13 @@ pub fn graphql_multiple_lexicons_test() {
     |> simulate.string_body(query1)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache1) = did_cache.start()
   let response1 =
     graphql_handler.handle_graphql_request(
       request1,
       db,
-      "http://localhost:3000",
+      cache1,
+      None,
       "https://plc.directory",
     )
 
@@ -530,11 +546,13 @@ pub fn graphql_multiple_lexicons_test() {
     |> simulate.string_body(query2)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache2) = did_cache.start()
   let response2 =
     graphql_handler.handle_graphql_request(
       request2,
       db,
-      "http://localhost:3000",
+      cache2,
+      None,
       "https://plc.directory",
     )
 
@@ -597,11 +615,13 @@ pub fn graphql_record_limit_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -709,11 +729,13 @@ pub fn graphql_actor_handle_lookup_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -823,11 +845,13 @@ pub fn graphql_filter_by_actor_handle_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 

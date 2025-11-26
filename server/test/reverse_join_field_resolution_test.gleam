@@ -10,8 +10,10 @@ import database/schema/tables
 import gleam/bool
 import gleam/json
 import gleam/string
+import gleam/option
 import gleeunit/should
 import graphql_gleam
+import lib/oauth/did_cache
 import sqlight
 
 // Helper to create gallery lexicon
@@ -340,13 +342,15 @@ pub fn reverse_join_includes_forward_join_fields_test() {
     }
   }"
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       conn,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -419,13 +423,15 @@ pub fn integer_field_resolves_correctly_test() {
     }
   }"
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       conn,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -578,13 +584,15 @@ pub fn nested_query_profile_to_photos_test() {
     }
   }"
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       conn,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 

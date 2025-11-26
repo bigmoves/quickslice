@@ -10,9 +10,11 @@ import database/repositories/records
 import database/schema/tables
 import gleam/http
 import gleam/json
+import gleam/option
 import gleam/string
 import gleeunit/should
 import handlers/graphql as graphql_handler
+import lib/oauth/did_cache
 import sqlight
 import wisp
 import wisp/simulate
@@ -117,11 +119,13 @@ pub fn blob_field_query_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -211,11 +215,13 @@ pub fn blob_field_with_different_presets_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -280,11 +286,13 @@ pub fn blob_field_default_preset_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -341,11 +349,13 @@ pub fn blob_field_null_when_missing_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 

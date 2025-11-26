@@ -11,9 +11,9 @@ import gleam/option
 import gleam/string
 import importer
 import jetstream_consumer
+import lib/oauth/did_cache
 import logging
-import oauth/handlers
-import oauth/session
+import admin_session as session
 import simplifile
 import sqlight
 import wisp
@@ -23,23 +23,19 @@ import zip_helper
 pub type Context {
   Context(
     db: sqlight.Connection,
-    oauth_config: handlers.OAuthConfig,
     admin_dids: List(String),
     config: process.Subject(config.Message),
     jetstream_consumer: option.Option(
       process.Subject(jetstream_consumer.ManagerMessage),
     ),
+    did_cache: process.Subject(did_cache.Message),
   )
 }
 
 pub fn handle(req: wisp.Request, ctx: Context) -> wisp.Response {
-  // Get current user from session (with automatic token refresh)
-  let refresh_fn = fn(refresh_token) {
-    handlers.refresh_access_token(ctx.oauth_config, refresh_token)
-  }
-
+  // Get current user from session
   let #(current_user, user_is_admin) = case
-    session.get_current_user(req, ctx.db, refresh_fn)
+    session.get_current_user(req, ctx.db, ctx.did_cache)
   {
     Ok(#(did, handle, _access_token)) -> {
       let admin = is_admin(did, ctx.admin_dids)
@@ -369,20 +365,9 @@ fn handle_reset(
       let lexicons_result = lexicons.delete_all(ctx.db)
       let records_result = records.delete_all(ctx.db)
       let actors_result = actors.delete_all(ctx.db)
-      let oauth_result = config_repo.delete_oauth_credentials(ctx.db)
 
-      case
-        domain_result,
-        lexicons_result,
-        records_result,
-        actors_result,
-        oauth_result
-      {
-        Ok(_), Ok(_), Ok(_), Ok(_), Ok(_) -> {
-          logging.log(
-            logging.Info,
-            "[settings] OAuth credentials deleted, re-registration will occur on next interaction",
-          )
+      case domain_result, lexicons_result, records_result, actors_result {
+        Ok(_), Ok(_), Ok(_), Ok(_) -> {
           // Reload config cache
           let _ = config.reload(ctx.config, ctx.db)
 
@@ -402,7 +387,7 @@ fn handle_reset(
           wisp.redirect("/settings")
           |> wisp_flash.set_flash(req, "success", restart_message)
         }
-        _, _, _, _, _ -> {
+        _, _, _, _ -> {
           logging.log(logging.Error, "[settings] Failed to reset some data")
           wisp.redirect("/settings")
           |> wisp_flash.set_flash(req, "error", "Failed to reset all data")

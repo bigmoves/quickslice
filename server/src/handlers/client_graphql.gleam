@@ -6,12 +6,13 @@ import client_schema
 import gleam/bit_array
 import gleam/dict
 import gleam/dynamic/decode
-import gleam/erlang/process
+import gleam/erlang/process.{type Subject}
 import gleam/http
 import gleam/json
 import gleam/list
 import gleam/option
 import jetstream_consumer
+import lib/oauth/did_cache
 import sqlight
 import swell/executor
 import swell/schema as swell_schema
@@ -23,13 +24,13 @@ pub fn handle_client_graphql_request(
   req: wisp.Request,
   db: sqlight.Connection,
   admin_dids: List(String),
-  jetstream_subject: option.Option(
-    process.Subject(jetstream_consumer.ManagerMessage),
-  ),
+  jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
+  did_cache: Subject(did_cache.Message),
+  oauth_supported_scopes: List(String),
 ) -> wisp.Response {
   case req.method {
-    http.Post -> handle_post(req, db, admin_dids, jetstream_subject)
-    http.Get -> handle_get(req, db, admin_dids, jetstream_subject)
+    http.Post -> handle_post(req, db, admin_dids, jetstream_subject, did_cache, oauth_supported_scopes)
+    http.Get -> handle_get(req, db, admin_dids, jetstream_subject, did_cache, oauth_supported_scopes)
     _ -> method_not_allowed_response()
   }
 }
@@ -38,9 +39,9 @@ fn handle_post(
   req: wisp.Request,
   db: sqlight.Connection,
   admin_dids: List(String),
-  jetstream_subject: option.Option(
-    process.Subject(jetstream_consumer.ManagerMessage),
-  ),
+  jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
+  did_cache: Subject(did_cache.Message),
+  oauth_supported_scopes: List(String),
 ) -> wisp.Response {
   case wisp.read_body_bits(req) {
     Ok(body) -> {
@@ -53,6 +54,8 @@ fn handle_post(
                 db,
                 admin_dids,
                 jetstream_subject,
+                did_cache,
+                oauth_supported_scopes,
                 query,
                 variables,
               )
@@ -70,14 +73,23 @@ fn handle_get(
   req: wisp.Request,
   db: sqlight.Connection,
   admin_dids: List(String),
-  jetstream_subject: option.Option(
-    process.Subject(jetstream_consumer.ManagerMessage),
-  ),
+  jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
+  did_cache: Subject(did_cache.Message),
+  oauth_supported_scopes: List(String),
 ) -> wisp.Response {
   let query_params = wisp.get_query(req)
   case list.key_find(query_params, "query") {
     Ok(query) ->
-      execute_query(req, db, admin_dids, jetstream_subject, query, option.None)
+      execute_query(
+        req,
+        db,
+        admin_dids,
+        jetstream_subject,
+        did_cache,
+        oauth_supported_scopes,
+        query,
+        option.None,
+      )
     Error(_) -> bad_request_response("Missing 'query' parameter")
   }
 }
@@ -86,15 +98,22 @@ fn execute_query(
   req: wisp.Request,
   db: sqlight.Connection,
   admin_dids: List(String),
-  jetstream_subject: option.Option(
-    process.Subject(jetstream_consumer.ManagerMessage),
-  ),
+  jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
+  did_cache: Subject(did_cache.Message),
+  oauth_supported_scopes: List(String),
   query: String,
   variables: option.Option(value.Value),
 ) -> wisp.Response {
   // Build the schema
   let graphql_schema =
-    client_schema.build_schema(db, req, admin_dids, jetstream_subject)
+    client_schema.build_schema(
+      db,
+      req,
+      admin_dids,
+      jetstream_subject,
+      did_cache,
+      oauth_supported_scopes,
+    )
 
   // Create context with variables
   let ctx = case variables {

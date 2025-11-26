@@ -9,9 +9,11 @@ import database/repositories/lexicons
 import database/repositories/records
 import database/schema/tables
 import gleam/json
+import gleam/option
 import gleam/string
 import gleeunit/should
 import graphql_gleam
+import lib/oauth/did_cache
 import sqlight
 
 // Helper to create a post lexicon JSON
@@ -222,13 +224,15 @@ pub fn forward_join_at_uri_resolves_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -317,13 +321,15 @@ pub fn forward_join_strong_ref_resolves_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -429,13 +435,15 @@ pub fn reverse_join_resolves_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -552,13 +560,15 @@ pub fn dataloader_batches_forward_joins_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -679,13 +689,15 @@ pub fn reverse_join_with_strong_ref_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -816,13 +828,15 @@ pub fn forward_join_union_inline_fragments_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -963,13 +977,15 @@ pub fn did_join_to_literal_self_returns_single_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -1078,13 +1094,15 @@ pub fn did_join_to_non_literal_self_returns_list_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -1211,13 +1229,15 @@ pub fn did_join_batches_queries_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 

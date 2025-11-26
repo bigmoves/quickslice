@@ -13,8 +13,10 @@ import gleam/int
 import gleam/json
 import gleam/list
 import gleam/string
+import gleam/option
 import gleeunit/should
 import graphql_gleam
+import lib/oauth/did_cache
 import sqlight
 
 // Helper to create a status lexicon with createdAt field
@@ -193,13 +195,15 @@ pub fn did_join_sortby_createdat_desc_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -336,13 +340,15 @@ pub fn did_join_sortby_createdat_asc_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -454,13 +460,15 @@ pub fn did_join_where_filter_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -581,13 +589,15 @@ pub fn did_join_sortby_where_first_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -748,13 +758,15 @@ pub fn user_query_pattern_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 

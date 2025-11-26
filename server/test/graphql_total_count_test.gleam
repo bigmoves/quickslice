@@ -10,8 +10,10 @@ import gleam/int
 import gleam/json
 import gleam/list
 import gleam/string
+import gleam/option
 import gleeunit/should
 import handlers/graphql as graphql_handler
+import lib/oauth/did_cache
 import sqlight
 import wisp
 import wisp/simulate
@@ -136,11 +138,13 @@ pub fn graphql_total_count_basic_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -242,11 +246,13 @@ pub fn graphql_total_count_with_filter_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -302,11 +308,13 @@ pub fn graphql_total_count_empty_result_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -375,11 +383,13 @@ pub fn graphql_total_count_with_pagination_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 

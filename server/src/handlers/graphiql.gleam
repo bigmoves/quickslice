@@ -1,22 +1,19 @@
 /// GraphiQL interface handler
 ///
 /// Serves the GraphiQL interactive GraphQL IDE
-import oauth/handlers
-import oauth/session
+import gleam/erlang/process.{type Subject}
+import lib/oauth/did_cache
+import admin_session as session
 import sqlight
 import wisp
 
 pub fn handle_graphiql_request(
   req: wisp.Request,
   db: sqlight.Connection,
-  oauth_config: handlers.OAuthConfig,
+  did_cache: Subject(did_cache.Message),
 ) -> wisp.Response {
-  // Get token from session if logged in (with automatic refresh)
-  let refresh_fn = fn(refresh_token) {
-    handlers.refresh_access_token(oauth_config, refresh_token)
-  }
-
-  let oauth_token = case session.get_current_user(req, db, refresh_fn) {
+  // Get token from session if logged in
+  let oauth_token = case session.get_current_user(req, db, did_cache) {
     Ok(#(_did, _handle, access_token)) -> access_token
     Error(_) -> ""
   }

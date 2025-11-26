@@ -1,5 +1,5 @@
 -module(jose_ffi).
--export([generate_dpop_proof/5, sha256_hash/1]).
+-export([generate_dpop_proof/5, sha256_hash/1, compute_jwk_thumbprint/1, sha256_base64url/1]).
 
 %% Generate a DPoP proof JWT token
 %% Args: Method (binary), URL (binary), AccessToken (binary), JWKJson (binary), ServerNonce (binary)
@@ -16,25 +16,27 @@ generate_dpop_proof(Method, URL, AccessToken, JWKJson, ServerNonce) ->
         %% Generate a unique jti (different from the server nonce)
         Jti = base64:encode(crypto:strong_rand_bytes(16)),
 
-        %% Hash the access token for "ath" claim (base64url of SHA-256)
-        TokenHash = sha256_base64url(AccessToken),
-
         %% Create the DPoP header - include the public JWK
         {_, PublicJWK} = jose_jwk:to_public_map(JWK),
 
-        %% Create the base DPoP payload
+        %% Create the base DPoP payload (without ath)
         BasePayload = #{
             <<"jti">> => Jti,
             <<"htm">> => Method,
             <<"htu">> => URL,
-            <<"iat">> => Now,
-            <<"ath">> => TokenHash
+            <<"iat">> => Now
         },
+
+        %% Add ath only if access token is provided (not for token exchange)
+        Payload1 = case AccessToken of
+            <<>> -> BasePayload;
+            _ -> maps:put(<<"ath">>, sha256_base64url(AccessToken), BasePayload)
+        end,
 
         %% Add nonce field if ServerNonce is not empty
         Payload = case ServerNonce of
-            <<>> -> BasePayload;
-            _ -> maps:put(<<"nonce">>, ServerNonce, BasePayload)
+            <<>> -> Payload1;
+            _ -> maps:put(<<"nonce">>, ServerNonce, Payload1)
         end,
 
         %% Sign the JWT using jose compact API
@@ -98,4 +100,30 @@ detect_algorithm(JWK) ->
         _ ->
             <<"ES256">>  %% Default to ES256
     end.
+
+%% Compute JWK thumbprint (SHA-256 hash of the canonical JWK)
+compute_jwk_thumbprint(JWKJson) when is_binary(JWKJson) ->
+    try
+        case catch json:decode(JWKJson) of
+            {'EXIT', Reason} ->
+                {error, iolist_to_binary([<<"Invalid JWK JSON: ">>,
+                                           io_lib:format("~p", [Reason])])};
+            JWKMap when is_map(JWKMap) ->
+                JWK = jose_jwk:from_map(JWKMap),
+                {_Module, Thumbprint} = jose_jwk:thumbprint(JWK),
+                {ok, Thumbprint};
+            Other ->
+                {error, iolist_to_binary([<<"JWK decode returned unexpected type: ">>,
+                                           io_lib:format("~p", [Other])])}
+        end
+    catch
+        error:ErrorReason:ErrorStack ->
+            {error, iolist_to_binary([<<"JWK thumbprint error: ">>,
+                                       io_lib:format("~p at ~p", [ErrorReason, ErrorStack])])};
+        _:OtherError ->
+            {error, iolist_to_binary([<<"Unexpected error: ">>,
+                                       io_lib:format("~p", [OtherError])])}
+    end;
+compute_jwk_thumbprint(JWKJson) when is_list(JWKJson) ->
+    compute_jwk_thumbprint(list_to_binary(JWKJson)).
 

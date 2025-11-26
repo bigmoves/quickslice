@@ -18,7 +18,6 @@ RUN apk add --no-cache \
 ENV GIT_TERMINAL_PROMPT=0
 
 # Add local dependencies first (these change less frequently)
-COPY ./lexicon /build/lexicon
 COPY ./lexicon_graphql /build/lexicon_graphql
 COPY ./client /build/client
 
@@ -28,14 +27,8 @@ COPY ./server /build/server
 # Add patches directory
 COPY ./patches /build/patches
 
-# Build Rust NIFs for lexicon package (Linux build produces .so)
-RUN cd /build/lexicon/native/lexicon_nif && cargo build --release && \
-    mkdir -p /build/lexicon/priv && \
-    cp /build/lexicon/native/lexicon_nif/target/release/liblexicon_nif.so /build/lexicon/priv/liblexicon_nif.so
-
 # Install dependencies for all projects
 RUN cd /build/client && gleam deps download
-RUN cd /build/lexicon && gleam deps download
 RUN cd /build/lexicon_graphql && gleam deps download
 RUN cd /build/server && gleam deps download
 

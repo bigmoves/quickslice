@@ -1,5 +1,4 @@
 import gleam/dynamic/decode
-import gleam/option.{type Option, None, Some}
 import gleam/result
 import sqlight
 
@@ -83,30 +82,3 @@ pub fn delete_domain_authority(
   delete(conn, "domain_authority")
 }
 
-/// Get OAuth client credentials from config table
-/// Returns a tuple of (client_id, client_secret, redirect_uri) if all values exist
-pub fn get_oauth_credentials(
-  conn: sqlight.Connection,
-) -> Result(Option(#(String, String, String)), sqlight.Error) {
-  case get(conn, "oauth_client_id"), get(conn, "oauth_client_secret") {
-    Ok(client_id), Ok(client_secret) -> {
-      let redirect_uri = case get(conn, "oauth_redirect_uri") {
-        Ok(uri) -> uri
-        Error(_) -> ""
-      }
-      Ok(Some(#(client_id, client_secret, redirect_uri)))
-    }
-    Error(_), _ -> Ok(None)
-    _, Error(_) -> Ok(None)
-  }
-}
-
-/// Delete OAuth credentials from config table
-pub fn delete_oauth_credentials(
-  conn: sqlight.Connection,
-) -> Result(Nil, sqlight.Error) {
-  use _ <- result.try(delete(conn, "oauth_client_id"))
-  use _ <- result.try(delete(conn, "oauth_client_secret"))
-  use _ <- result.try(delete(conn, "oauth_redirect_uri"))
-  Ok(Nil)
-}

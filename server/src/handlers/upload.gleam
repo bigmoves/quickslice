@@ -1,19 +1,20 @@
 /// Upload interface handler
 ///
 /// Serves a simple form to upload blobs and test the uploadBlob mutation
+import gleam/erlang/process.{type Subject}
 import gleam/http
-import oauth/handlers
-import oauth/session
+import lib/oauth/did_cache
+import admin_session as session
 import sqlight
 import wisp
 
 pub fn handle_upload_request(
   req: wisp.Request,
   db: sqlight.Connection,
-  oauth_config: handlers.OAuthConfig,
+  did_cache: Subject(did_cache.Message),
 ) -> wisp.Response {
   case req.method {
-    http.Get -> handle_upload_form(req, db, oauth_config)
+    http.Get -> handle_upload_form(req, db, did_cache)
     http.Post -> handle_upload_submit(req)
     _ -> method_not_allowed_response()
   }
@@ -22,14 +23,10 @@ pub fn handle_upload_request(
 fn handle_upload_form(
   req: wisp.Request,
   db: sqlight.Connection,
-  oauth_config: handlers.OAuthConfig,
+  did_cache: Subject(did_cache.Message),
 ) -> wisp.Response {
-  // Require authentication - get token from session (with automatic refresh)
-  let refresh_fn = fn(refresh_token) {
-    handlers.refresh_access_token(oauth_config, refresh_token)
-  }
-
-  case session.get_current_user(req, db, refresh_fn) {
+  // Require authentication - get token from session
+  case session.get_current_user(req, db, did_cache) {
     Error(_) -> {
       // User is not logged in - redirect to home with error
       wisp.redirect("/?error=Please+log+in+to+upload+blobs")

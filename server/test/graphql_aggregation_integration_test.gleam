@@ -20,6 +20,7 @@ import gleam/string
 import gleeunit
 import gleeunit/should
 import handlers/graphql as graphql_handler
+import lib/oauth/did_cache
 import sqlight
 import wisp
 import wisp/simulate
@@ -259,11 +260,13 @@ pub fn graphql_simple_aggregation_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -305,11 +308,13 @@ pub fn graphql_multi_field_aggregation_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -348,11 +353,13 @@ pub fn graphql_aggregation_with_where_test() {
     |> simulate.string_body(query_no_where)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache2) = did_cache.start()
   let response_no_where =
     graphql_handler.handle_graphql_request(
       request_no_where,
       db,
-      "http://localhost:3000",
+      cache2,
+      None,
       "https://plc.directory",
     )
 
@@ -375,11 +382,13 @@ pub fn graphql_aggregation_with_where_test() {
     |> simulate.string_body(query_string)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache3) = did_cache.start()
   let response_string =
     graphql_handler.handle_graphql_request(
       request_string,
       db,
-      "http://localhost:3000",
+      cache3,
+      None,
       "https://plc.directory",
     )
 
@@ -403,11 +412,13 @@ pub fn graphql_aggregation_with_where_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -458,11 +469,13 @@ pub fn graphql_aggregation_with_order_by_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -498,11 +511,13 @@ pub fn graphql_aggregation_with_limit_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -538,11 +553,13 @@ pub fn graphql_status_aggregation_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -634,11 +651,13 @@ pub fn graphql_table_column_aggregation_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 
@@ -676,11 +695,13 @@ pub fn graphql_empty_aggregation_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      None,
       "https://plc.directory",
     )
 

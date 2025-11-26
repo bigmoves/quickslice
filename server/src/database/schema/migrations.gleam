@@ -1,9 +1,9 @@
+import database/repositories/oauth_clients
 import database/schema/tables
 import gleam/dynamic/decode
 import gleam/int
 import gleam/result
 import logging
-import oauth/session
 import sqlight
 
 // ===== Schema Version Tracking =====
@@ -90,10 +90,7 @@ fn migration_v1(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   // Create all tables and indexes
   use _ <- result.try(tables.create_record_table(conn))
   use _ <- result.try(tables.create_actor_table(conn))
-  use _ <- result.try(tables.create_lexicon_table(conn))
-  use _ <- result.try(session.init_db(conn))
-
-  Ok(Nil)
+  tables.create_lexicon_table(conn)
 }
 
 /// Migration v2: Add config table
@@ -123,6 +120,36 @@ fn migration_v5(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   tables.create_jetstream_cursor_table(conn)
 }
 
+/// Migration v6: Add OAuth tables
+fn migration_v6(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+  logging.log(logging.Info, "Running migration v6 (OAuth tables)...")
+
+  // Create OAuth tables in dependency order (oauth_client first due to foreign keys)
+  use _ <- result.try(tables.create_oauth_client_table(conn))
+  use _ <- result.try(tables.create_oauth_access_token_table(conn))
+  use _ <- result.try(tables.create_oauth_refresh_token_table(conn))
+  use _ <- result.try(tables.create_oauth_par_request_table(conn))
+  use _ <- result.try(tables.create_oauth_dpop_nonce_table(conn))
+  use _ <- result.try(tables.create_oauth_auth_request_table(conn))
+  use _ <- result.try(tables.create_oauth_atp_session_table(conn))
+  tables.create_oauth_atp_request_table(conn)
+}
+
+/// Migration v7: Add OAuth authorization code table
+fn migration_v7(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+  logging.log(
+    logging.Info,
+    "Running migration v7 (authorization code table)...",
+  )
+  tables.create_oauth_authorization_code_table(conn)
+}
+
+/// Migration v8: Add admin_session table for admin browser sessions
+fn migration_v8(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+  logging.log(logging.Info, "Running migration v8 (admin_session table)...")
+  tables.create_admin_session_table(conn)
+}
+
 /// Runs all pending migrations based on current schema version
 pub fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   use _ <- result.try(create_schema_version_table(conn))
@@ -134,43 +161,76 @@ pub fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   )
 
   // Apply migrations sequentially based on current version
-  case current_version {
+  use _ <- result.try(case current_version {
     // Fresh database or pre-migration database - run v1
     0 -> {
       use _ <- result.try(apply_migration(conn, 1, migration_v1))
       use _ <- result.try(apply_migration(conn, 2, migration_v2))
       use _ <- result.try(apply_migration(conn, 3, migration_v3))
       use _ <- result.try(apply_migration(conn, 4, migration_v4))
-      apply_migration(conn, 5, migration_v5)
+      use _ <- result.try(apply_migration(conn, 5, migration_v5))
+      use _ <- result.try(apply_migration(conn, 6, migration_v6))
+      use _ <- result.try(apply_migration(conn, 7, migration_v7))
+      apply_migration(conn, 8, migration_v8)
     }
 
-    // Run v2, v3, v4, and v5 migrations
+    // Run v2, v3, v4, v5, v6, v7, and v8 migrations
     1 -> {
       use _ <- result.try(apply_migration(conn, 2, migration_v2))
       use _ <- result.try(apply_migration(conn, 3, migration_v3))
       use _ <- result.try(apply_migration(conn, 4, migration_v4))
-      apply_migration(conn, 5, migration_v5)
+      use _ <- result.try(apply_migration(conn, 5, migration_v5))
+      use _ <- result.try(apply_migration(conn, 6, migration_v6))
+      use _ <- result.try(apply_migration(conn, 7, migration_v7))
+      apply_migration(conn, 8, migration_v8)
     }
 
-    // Run v3, v4, and v5 migrations
+    // Run v3, v4, v5, v6, v7, and v8 migrations
     2 -> {
       use _ <- result.try(apply_migration(conn, 3, migration_v3))
       use _ <- result.try(apply_migration(conn, 4, migration_v4))
-      apply_migration(conn, 5, migration_v5)
+      use _ <- result.try(apply_migration(conn, 5, migration_v5))
+      use _ <- result.try(apply_migration(conn, 6, migration_v6))
+      use _ <- result.try(apply_migration(conn, 7, migration_v7))
+      apply_migration(conn, 8, migration_v8)
     }
 
-    // Run v4 and v5 migrations
+    // Run v4, v5, v6, v7, and v8 migrations
     3 -> {
       use _ <- result.try(apply_migration(conn, 4, migration_v4))
-      apply_migration(conn, 5, migration_v5)
+      use _ <- result.try(apply_migration(conn, 5, migration_v5))
+      use _ <- result.try(apply_migration(conn, 6, migration_v6))
+      use _ <- result.try(apply_migration(conn, 7, migration_v7))
+      apply_migration(conn, 8, migration_v8)
     }
 
-    // Run v5 migration
-    4 -> apply_migration(conn, 5, migration_v5)
+    // Run v5, v6, v7, and v8 migrations
+    4 -> {
+      use _ <- result.try(apply_migration(conn, 5, migration_v5))
+      use _ <- result.try(apply_migration(conn, 6, migration_v6))
+      use _ <- result.try(apply_migration(conn, 7, migration_v7))
+      apply_migration(conn, 8, migration_v8)
+    }
+
+    // Run v6, v7, and v8 migrations
+    5 -> {
+      use _ <- result.try(apply_migration(conn, 6, migration_v6))
+      use _ <- result.try(apply_migration(conn, 7, migration_v7))
+      apply_migration(conn, 8, migration_v8)
+    }
+
+    // Run v7 and v8 migrations
+    6 -> {
+      use _ <- result.try(apply_migration(conn, 7, migration_v7))
+      apply_migration(conn, 8, migration_v8)
+    }
+
+    // Run v8 migration
+    7 -> apply_migration(conn, 8, migration_v8)
 
     // Already at latest version
-    5 -> {
-      logging.log(logging.Info, "Schema is up to date (v5)")
+    8 -> {
+      logging.log(logging.Info, "Schema is up to date (v8)")
       Ok(Nil)
     }
 
@@ -182,5 +242,8 @@ pub fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
       )
       Ok(Nil)
     }
-  }
+  })
+
+  // Ensure internal clients exist (idempotent)
+  oauth_clients.ensure_admin_client(conn)
 }

@@ -13,6 +13,7 @@ import database/types
 import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
+import gleam/erlang/process.{type Subject}
 import gleam/json
 import gleam/list
 import gleam/option
@@ -22,6 +23,7 @@ import lexicon_graphql
 import lexicon_graphql/input/aggregate
 import lexicon_graphql/query/dataloader
 import lexicon_graphql/schema/database
+import lib/oauth/did_cache
 import mutation_resolvers
 import sqlight
 import swell/executor
@@ -35,7 +37,8 @@ import where_converter
 /// and reuse it for multiple subscription executions.
 pub fn build_schema_from_db(
   db: sqlight.Connection,
-  auth_base_url: String,
+  did_cache: Subject(did_cache.Message),
+  signing_key: option.Option(String),
   plc_url: String,
   domain_authority: String,
 ) -> Result(schema.Schema, String) {
@@ -375,7 +378,8 @@ pub fn build_schema_from_db(
       let mutation_ctx =
         mutation_resolvers.MutationContext(
           db: db,
-          auth_base_url: auth_base_url,
+          did_cache: did_cache,
+          signing_key: signing_key,
           plc_url: plc_url,
           collection_ids: collection_ids,
           external_collection_ids: external_collection_ids,
@@ -467,7 +471,8 @@ pub fn execute_query_with_db(
   query_string: String,
   variables_json_str: String,
   auth_token: Result(String, Nil),
-  auth_base_url: String,
+  did_cache: Subject(did_cache.Message),
+  signing_key: option.Option(String),
   plc_url: String,
 ) -> Result(String, String) {
   // Start config cache actor to get domain authority
@@ -480,7 +485,8 @@ pub fn execute_query_with_db(
   // Build the schema
   use graphql_schema <- result.try(build_schema_from_db(
     db,
-    auth_base_url,
+    did_cache,
+    signing_key,
     plc_url,
     domain_authority,
   ))

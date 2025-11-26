@@ -3,15 +3,16 @@
 /// Handles WebSocket connections for GraphQL subscriptions using the graphql-ws protocol
 import database/repositories/actors
 import gleam/dict.{type Dict}
-import gleam/erlang/process
+import gleam/erlang/process.{type Subject}
 import gleam/http/request.{type Request}
 import gleam/http/response
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import graphql_gleam
 import graphql_ws
+import lib/oauth/did_cache
 import logging
 import mist.{
   type Connection, type ResponseData, type WebsocketConnection,
@@ -181,7 +182,8 @@ pub type State {
 pub fn handle_websocket(
   req: Request(Connection),
   db: sqlight.Connection,
-  auth_base_url: String,
+  did_cache: Subject(did_cache.Message),
+  signing_key: Option(String),
   plc_url: String,
   domain_authority: String,
 ) -> response.Response(ResponseData) {
@@ -194,7 +196,8 @@ pub fn handle_websocket(
       let graphql_schema = case
         graphql_gleam.build_schema_from_db(
           db,
-          auth_base_url,
+          did_cache,
+          signing_key,
           plc_url,
           domain_authority,
         )

@@ -12,12 +12,40 @@
 ///   }
 /// }
 /// ```
+/// ```graphql
+/// mutation CreateOAuthClient($clientName: String!, $clientType: String!, $redirectUris: [String!]!) {
+///   createOAuthClient(clientName: $clientName, clientType: $clientType, redirectUris: $redirectUris) {
+///     clientId
+///     clientSecret
+///     clientName
+///     clientType
+///     redirectUris
+///     createdAt
+///   }
+/// }
+/// ```
+/// ```graphql
+/// mutation UpdateOAuthClient($clientId: String!, $clientName: String!, $redirectUris: [String!]!) {
+///   updateOAuthClient(clientId: $clientId, clientName: $clientName, redirectUris: $redirectUris) {
+///     clientId
+///     clientSecret
+///     clientName
+///     clientType
+///     redirectUris
+///     createdAt
+///   }
+/// }
+/// ```
 import components/layout
 import file_upload
 import generated/queries
 import generated/queries/get_activity_buckets.{ONEDAY}
 import generated/queries/get_current_session
 import generated/queries/get_lexicons
+import generated/queries/get_o_auth_clients
+import generated/queries/create_o_auth_client
+import generated/queries/delete_o_auth_client
+import generated/queries/update_o_auth_client
 import generated/queries/get_recent_activity
 import generated/queries/get_settings
 import generated/queries/get_statistics
@@ -26,9 +54,12 @@ import generated/queries/trigger_backfill
 import generated/queries/update_domain_authority
 import generated/queries/upload_lexicons
 import gleam/io
+import gleam/dynamic/decode
 import gleam/json.{type Json}
 import gleam/list
 import gleam/option.{None}
+import gleam/set
+import gleam/string
 import gleam/uri
 import lustre
 import lustre/attribute
@@ -45,6 +76,30 @@ import squall_cache
 
 @external(javascript, "./quickslice_client.ffi.mjs", "getWindowOrigin")
 fn window_origin() -> String
+
+/// Extract the first error message from a GraphQL response body
+/// Returns Some(message) if errors exist, None otherwise
+fn extract_graphql_error(response_body: String) -> option.Option(String) {
+  case json.parse(response_body, decode.dynamic) {
+    Ok(parsed) -> {
+      let error_decoder = {
+        use errors <- decode.field(
+          "errors",
+          decode.list({
+            use message <- decode.field("message", decode.string)
+            decode.success(message)
+          }),
+        )
+        decode.success(errors)
+      }
+      case decode.run(parsed, error_decoder) {
+        Ok([first_error, ..]) -> option.Some(first_error)
+        _ -> option.None
+      }
+    }
+    Error(_) -> option.None
+  }
+}
 
 pub fn main() {
   let app = lustre.application(init, update, view)
@@ -155,9 +210,18 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
           get_settings.parse_get_settings_response,
         )
 
+      // GetOAuthClients query
+      let #(cache2, _) =
+        squall_cache.lookup(
+          cache1,
+          "GetOAuthClients",
+          json.object([]),
+          get_o_auth_clients.parse_get_o_auth_clients_response,
+        )
+
       // Process pending fetches
       let #(final_cache, fx) =
-        squall_cache.process_pending(cache1, reg, HandleQueryResponse, fn() {
+        squall_cache.process_pending(cache2, reg, HandleQueryResponse, fn() {
           0
         })
       #(final_cache, fx)
@@ -364,6 +428,28 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             Error(_) -> model.settings_page_model
           }
         }
+        "CreateOAuthClient" | "UpdateOAuthClient" | "DeleteOAuthClient" ->
+          case extract_graphql_error(response_body) {
+            option.Some(err) ->
+              settings.set_oauth_alert(
+                model.settings_page_model,
+                "error",
+                err,
+              )
+            option.None -> {
+              let message = case query_name {
+                "CreateOAuthClient" -> "OAuth client created successfully"
+                "UpdateOAuthClient" -> "OAuth client updated successfully"
+                "DeleteOAuthClient" -> "OAuth client deleted successfully"
+                _ -> "Operation completed"
+              }
+              settings.set_oauth_alert(
+                model.settings_page_model,
+                "success",
+                message,
+              )
+            }
+          }
         _ -> model.settings_page_model
       }
 
@@ -426,6 +512,30 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             )
           #(cache_invalidated, [])
         }
+        "CreateOAuthClient" | "UpdateOAuthClient" | "DeleteOAuthClient" -> {
+          // Invalidate and refetch OAuth clients list
+          let cache_invalidated =
+            squall_cache.invalidate(
+              final_cache,
+              "GetOAuthClients",
+              json.object([]),
+            )
+          let #(cache_with_lookup, _) =
+            squall_cache.lookup(
+              cache_invalidated,
+              "GetOAuthClients",
+              json.object([]),
+              get_o_auth_clients.parse_get_o_auth_clients_response,
+            )
+          let #(refetched_cache, refetch_effects) =
+            squall_cache.process_pending(
+              cache_with_lookup,
+              model.registry,
+              HandleQueryResponse,
+              fn() { 0 },
+            )
+          #(refetched_cache, refetch_effects)
+        }
         _ -> #(final_cache, [])
       }
 
@@ -474,6 +584,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         | "ResetAll"
         | "TriggerBackfill" ->
           settings.set_alert(
+            model.settings_page_model,
+            "error",
+            "Error: " <> err,
+          )
+        "CreateOAuthClient"
+        | "UpdateOAuthClient"
+        | "DeleteOAuthClient" ->
+          settings.set_oauth_alert(
             model.settings_page_model,
             "error",
             "Error: " <> err,
@@ -578,12 +696,21 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             }
             True -> {
               // Fetch settings data
-              let #(cache_with_lookup, _) =
+              let #(cache_with_settings, _) =
                 squall_cache.lookup(
                   model.cache,
                   "GetSettings",
                   json.object([]),
                   get_settings.parse_get_settings_response,
+                )
+
+              // Fetch OAuth clients data
+              let #(cache_with_lookup, _) =
+                squall_cache.lookup(
+                  cache_with_settings,
+                  "GetOAuthClients",
+                  json.object([]),
+                  get_o_auth_clients.parse_get_o_auth_clients_response,
                 )
 
               let #(final_cache, effects) =
@@ -748,29 +875,12 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               ),
             ])
 
-          // Create optimistic entity - get current oauthClientId from cache
-          let current_oauth_client_id = case
-            squall_cache.lookup(
-              model.cache,
-              "GetSettings",
-              json.object([]),
-              get_settings.parse_get_settings_response,
-            )
-          {
-            #(_, squall_cache.Data(data)) -> data.settings.oauth_client_id
-            _ -> None
-          }
-
           let optimistic_entity =
             json.object([
               #("id", json.string("Settings:singleton")),
               #(
                 "domainAuthority",
                 json.string(model.settings_page_model.domain_authority_input),
-              ),
-              #(
-                "oauthClientId",
-                json.nullable(current_oauth_client_id, json.string),
               ),
             ])
 
@@ -884,6 +994,409 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             ),
             effect.batch(effects),
           )
+        }
+
+        // OAuth Client Message Handlers
+        settings.ToggleNewClientForm -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              show_new_client_form: !model.settings_page_model.show_new_client_form,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.UpdateNewClientName(value) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              new_client_name: value,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.UpdateNewClientType(value) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              new_client_type: value,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.UpdateNewClientRedirectUris(value) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              new_client_redirect_uris: value,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.UpdateNewClientScope(value) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              new_client_scope: value,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.SubmitNewClient -> {
+          // Parse redirect URIs from newline-separated text
+          let uris =
+            string.split(model.settings_page_model.new_client_redirect_uris, "\n")
+            |> list.filter(fn(s) { string.length(string.trim(s)) > 0 })
+            |> list.map(string.trim)
+
+          let variables =
+            json.object([
+              #("clientName", json.string(model.settings_page_model.new_client_name)),
+              #("clientType", json.string("CONFIDENTIAL")),
+              #("redirectUris", json.array(uris, json.string)),
+              #("scope", json.string(model.settings_page_model.new_client_scope)),
+            ])
+
+          // Invalidate cached mutation to ensure fresh request
+          let cache_invalidated =
+            squall_cache.invalidate(
+              model.cache,
+              "CreateOAuthClient",
+              variables,
+            )
+
+          let #(cache_with_lookup, _) =
+            squall_cache.lookup(
+              cache_invalidated,
+              "CreateOAuthClient",
+              variables,
+              create_o_auth_client.parse_create_o_auth_client_response,
+            )
+
+          // Invalidate GetOAuthClients cache to trigger refetch
+          let cache_with_invalidated_query =
+            squall_cache.invalidate(
+              cache_with_lookup,
+              "GetOAuthClients",
+              json.object([]),
+            )
+
+          let #(final_cache, effects) =
+            squall_cache.process_pending(
+              cache_with_invalidated_query,
+              model.registry,
+              HandleQueryResponse,
+              fn() { 0 },
+            )
+
+          // Reset form state
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              show_new_client_form: False,
+              new_client_name: "",
+              new_client_type: "PUBLIC",
+              new_client_redirect_uris: "",
+              new_client_scope: "atproto transition:generic",
+            )
+
+          #(
+            Model(
+              ..model,
+              cache: final_cache,
+              settings_page_model: new_settings_model,
+            ),
+            effect.batch(effects),
+          )
+        }
+
+        settings.StartEditClient(client_id) -> {
+          // Look up client from cache to populate edit fields
+          let #(_cache, result) =
+            squall_cache.lookup(
+              model.cache,
+              "GetOAuthClients",
+              json.object([]),
+              get_o_auth_clients.parse_get_o_auth_clients_response,
+            )
+
+          let new_settings_model = case result {
+            squall_cache.Data(data) -> {
+              case
+                list.find(data.oauth_clients, fn(c) { c.client_id == client_id })
+              {
+                Ok(client) -> {
+                  settings.Model(
+                    ..model.settings_page_model,
+                    editing_client_id: option.Some(client_id),
+                    edit_client_name: client.client_name,
+                    edit_client_redirect_uris: string.join(
+                      client.redirect_uris,
+                      "\n",
+                    ),
+                    edit_client_scope: case client.scope {
+                      option.Some(s) -> s
+                      option.None -> ""
+                    },
+                  )
+                }
+                Error(_) -> model.settings_page_model
+              }
+            }
+            _ -> model.settings_page_model
+          }
+
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.CancelEditClient -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              editing_client_id: None,
+              edit_client_name: "",
+              edit_client_redirect_uris: "",
+              edit_client_scope: "",
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.UpdateEditClientName(value) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              edit_client_name: value,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.UpdateEditClientRedirectUris(value) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              edit_client_redirect_uris: value,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.UpdateEditClientScope(value) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              edit_client_scope: value,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.SubmitEditClient -> {
+          case model.settings_page_model.editing_client_id {
+            option.Some(client_id) -> {
+              // Parse redirect URIs from newline-separated text
+              let uris =
+                string.split(
+                  model.settings_page_model.edit_client_redirect_uris,
+                  "\n",
+                )
+                |> list.filter(fn(s) { string.length(string.trim(s)) > 0 })
+                |> list.map(string.trim)
+
+              let variables =
+                json.object([
+                  #("clientId", json.string(client_id)),
+                  #(
+                    "clientName",
+                    json.string(model.settings_page_model.edit_client_name),
+                  ),
+                  #("redirectUris", json.array(uris, json.string)),
+                  #("scope", json.string(model.settings_page_model.edit_client_scope)),
+                ])
+
+              // Invalidate cached mutation to ensure fresh request
+              let cache_invalidated =
+                squall_cache.invalidate(
+                  model.cache,
+                  "UpdateOAuthClient",
+                  variables,
+                )
+
+              let #(cache_with_lookup, _) =
+                squall_cache.lookup(
+                  cache_invalidated,
+                  "UpdateOAuthClient",
+                  variables,
+                  update_o_auth_client.parse_update_o_auth_client_response,
+                )
+
+              // Invalidate GetOAuthClients cache to trigger refetch
+              let cache_with_invalidated_query =
+                squall_cache.invalidate(
+                  cache_with_lookup,
+                  "GetOAuthClients",
+                  json.object([]),
+                )
+
+              let #(final_cache, effects) =
+                squall_cache.process_pending(
+                  cache_with_invalidated_query,
+                  model.registry,
+                  HandleQueryResponse,
+                  fn() { 0 },
+                )
+
+              // Clear edit state
+              let new_settings_model =
+                settings.Model(
+                  ..model.settings_page_model,
+                  editing_client_id: None,
+                  edit_client_name: "",
+                  edit_client_redirect_uris: "",
+                  edit_client_scope: "",
+                )
+
+              #(
+                Model(
+                  ..model,
+                  cache: final_cache,
+                  settings_page_model: new_settings_model,
+                ),
+                effect.batch(effects),
+              )
+            }
+            None -> #(model, effect.none())
+          }
+        }
+
+        settings.ToggleSecretVisibility(client_id) -> {
+          let new_visible_secrets = case
+            set.contains(model.settings_page_model.visible_secrets, client_id)
+          {
+            True ->
+              set.delete(model.settings_page_model.visible_secrets, client_id)
+            False ->
+              set.insert(model.settings_page_model.visible_secrets, client_id)
+          }
+
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              visible_secrets: new_visible_secrets,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.ConfirmDeleteClient(client_id) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              delete_confirm_client_id: option.Some(client_id),
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.CancelDeleteClient -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              delete_confirm_client_id: None,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.SubmitDeleteClient -> {
+          case model.settings_page_model.delete_confirm_client_id {
+            option.Some(client_id) -> {
+              let variables =
+                json.object([#("clientId", json.string(client_id))])
+
+              // Invalidate cached mutation to ensure fresh request
+              let cache_invalidated =
+                squall_cache.invalidate(
+                  model.cache,
+                  "DeleteOAuthClient",
+                  variables,
+                )
+
+              let #(cache_with_lookup, _) =
+                squall_cache.lookup(
+                  cache_invalidated,
+                  "DeleteOAuthClient",
+                  variables,
+                  delete_o_auth_client.parse_delete_o_auth_client_response,
+                )
+
+              // Invalidate GetOAuthClients cache to trigger refetch
+              let cache_with_invalidated_query =
+                squall_cache.invalidate(
+                  cache_with_lookup,
+                  "GetOAuthClients",
+                  json.object([]),
+                )
+
+              let #(final_cache, effects) =
+                squall_cache.process_pending(
+                  cache_with_invalidated_query,
+                  model.registry,
+                  HandleQueryResponse,
+                  fn() { 0 },
+                )
+
+              // Clear delete confirmation state
+              let new_settings_model =
+                settings.Model(
+                  ..model.settings_page_model,
+                  delete_confirm_client_id: None,
+                )
+
+              #(
+                Model(
+                  ..model,
+                  cache: final_cache,
+                  settings_page_model: new_settings_model,
+                ),
+                effect.batch(effects),
+              )
+            }
+            None -> #(model, effect.none())
+          }
         }
       }
     }

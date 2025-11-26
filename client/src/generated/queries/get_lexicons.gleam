@@ -15,11 +15,13 @@ pub fn lexicon_decoder() -> decode.Decoder(Lexicon) {
 }
 
 pub fn lexicon_to_json(input: Lexicon) -> json.Json {
-  json.object([
-    #("id", json.string(input.id)),
-    #("json", json.string(input.json)),
-    #("createdAt", json.string(input.created_at)),
-  ])
+  json.object(
+    [
+      #("id", json.string(input.id)),
+      #("json", json.string(input.json)),
+      #("createdAt", json.string(input.created_at)),
+    ],
+  )
 }
 
 pub type GetLexiconsResponse {
@@ -32,9 +34,11 @@ pub fn get_lexicons_response_decoder() -> decode.Decoder(GetLexiconsResponse) {
 }
 
 pub fn get_lexicons_response_to_json(input: GetLexiconsResponse) -> json.Json {
-  json.object([
-    #("lexicons", json.array(from: input.lexicons, of: lexicon_to_json)),
-  ])
+  json.object(
+    [
+      #("lexicons", json.array(from: input.lexicons, of: lexicon_to_json)),
+    ],
+  )
 }
 
 pub fn get_lexicons(client: squall.Client) -> Result(Request(String), String) {
@@ -45,8 +49,6 @@ pub fn get_lexicons(client: squall.Client) -> Result(Request(String), String) {
   )
 }
 
-pub fn parse_get_lexicons_response(
-  body: String,
-) -> Result(GetLexiconsResponse, String) {
+pub fn parse_get_lexicons_response(body: String) -> Result(GetLexiconsResponse, String) {
   squall.parse_response(body, get_lexicons_response_decoder())
 }

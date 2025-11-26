@@ -10,7 +10,7 @@ import database/repositories/records
 import dpop
 import gleam/dynamic
 import gleam/dynamic/decode
-import gleam/erlang/process
+import gleam/erlang/process.{type Subject}
 import gleam/int
 import gleam/json
 import gleam/list
@@ -18,6 +18,7 @@ import gleam/option
 import gleam/result
 import honk
 import honk/errors
+import lib/oauth/did_cache
 import sqlight
 import swell/schema
 import swell/value
@@ -26,7 +27,8 @@ import swell/value
 pub type MutationContext {
   MutationContext(
     db: sqlight.Connection,
-    auth_base_url: String,
+    did_cache: Subject(did_cache.Message),
+    signing_key: option.Option(String),
     plc_url: String,
     collection_ids: List(String),
     external_collection_ids: List(String),
@@ -94,14 +96,14 @@ pub fn create_resolver_factory(
 
     // Step 3: Verify OAuth token and get AT Protocol session
     use user_info <- result.try(
-      atproto_auth.verify_oauth_token(token, ctx.auth_base_url)
+      atproto_auth.verify_token(ctx.db, token)
       |> result.map_error(fn(err) {
         case err {
-          atproto_auth.UnauthorizedToken ->
-            "Invalid or expired authentication token"
+          atproto_auth.UnauthorizedToken -> "Unauthorized"
+          atproto_auth.TokenExpired -> "Token expired"
           atproto_auth.MissingAuthHeader -> "Missing authentication"
           atproto_auth.InvalidAuthHeader -> "Invalid authentication header"
-          _ -> "Authentication failed"
+          _ -> "Authentication error"
         }
       }),
     )
@@ -131,8 +133,17 @@ pub fn create_resolver_factory(
     }
 
     use session <- result.try(
-      atproto_auth.get_atproto_session(token, ctx.auth_base_url)
-      |> result.map_error(fn(_) { "Failed to get AT Protocol session" }),
+      atproto_auth.get_atp_session(ctx.db, ctx.did_cache, token, ctx.signing_key)
+      |> result.map_error(fn(err) {
+        case err {
+          atproto_auth.SessionNotFound -> "Session not found"
+          atproto_auth.SessionNotReady -> "Session not ready"
+          atproto_auth.RefreshFailed(msg) -> "Token refresh failed: " <> msg
+          atproto_auth.DIDResolutionFailed(msg) ->
+            "DID resolution failed: " <> msg
+          _ -> "Failed to get ATP session"
+        }
+      }),
     )
 
     // Step 5: Convert input to JSON for validation and AT Protocol
@@ -230,7 +241,8 @@ pub fn create_resolver_factory(
         )
 
         // Step 10: Return the created record as a GraphQL value
-        // Build the GraphQL object with all fields
+        // The field resolvers expect the record data under "value" key
+        // (same structure as query results)
         Ok(
           value.Object([
             #("uri", value.String(uri)),
@@ -238,7 +250,7 @@ pub fn create_resolver_factory(
             #("did", value.String(user_info.did)),
             #("collection", value.String(collection)),
             #("indexedAt", value.String("")),
-            // TODO: Add indexed_at from database query
+            #("value", input),
           ]),
         )
       }
@@ -289,14 +301,14 @@ pub fn update_resolver_factory(
 
     // Step 3: Verify OAuth token and get AT Protocol session
     use user_info <- result.try(
-      atproto_auth.verify_oauth_token(token, ctx.auth_base_url)
+      atproto_auth.verify_token(ctx.db, token)
       |> result.map_error(fn(err) {
         case err {
-          atproto_auth.UnauthorizedToken ->
-            "Invalid or expired authentication token"
+          atproto_auth.UnauthorizedToken -> "Unauthorized"
+          atproto_auth.TokenExpired -> "Token expired"
           atproto_auth.MissingAuthHeader -> "Missing authentication"
           atproto_auth.InvalidAuthHeader -> "Invalid authentication header"
-          _ -> "Authentication failed"
+          _ -> "Authentication error"
         }
       }),
     )
@@ -326,8 +338,17 @@ pub fn update_resolver_factory(
     }
 
     use session <- result.try(
-      atproto_auth.get_atproto_session(token, ctx.auth_base_url)
-      |> result.map_error(fn(_) { "Failed to get AT Protocol session" }),
+      atproto_auth.get_atp_session(ctx.db, ctx.did_cache, token, ctx.signing_key)
+      |> result.map_error(fn(err) {
+        case err {
+          atproto_auth.SessionNotFound -> "Session not found"
+          atproto_auth.SessionNotReady -> "Session not ready"
+          atproto_auth.RefreshFailed(msg) -> "Token refresh failed: " <> msg
+          atproto_auth.DIDResolutionFailed(msg) ->
+            "DID resolution failed: " <> msg
+          _ -> "Failed to get ATP session"
+        }
+      }),
     )
 
     // Step 5: Convert input to JSON for validation and AT Protocol
@@ -407,6 +428,7 @@ pub fn update_resolver_factory(
         )
 
         // Step 10: Return the updated record as a GraphQL value
+        // The field resolvers expect the record data under "value" key
         Ok(
           value.Object([
             #("uri", value.String(uri)),
@@ -414,7 +436,7 @@ pub fn update_resolver_factory(
             #("did", value.String(user_info.did)),
             #("collection", value.String(collection)),
             #("indexedAt", value.String("")),
-            // TODO: Add indexed_at from database query
+            #("value", input),
           ]),
         )
       }
@@ -458,14 +480,14 @@ pub fn delete_resolver_factory(
 
     // Step 3: Verify OAuth token and get AT Protocol session
     use user_info <- result.try(
-      atproto_auth.verify_oauth_token(token, ctx.auth_base_url)
+      atproto_auth.verify_token(ctx.db, token)
       |> result.map_error(fn(err) {
         case err {
-          atproto_auth.UnauthorizedToken ->
-            "Invalid or expired authentication token"
+          atproto_auth.UnauthorizedToken -> "Unauthorized"
+          atproto_auth.TokenExpired -> "Token expired"
           atproto_auth.MissingAuthHeader -> "Missing authentication"
           atproto_auth.InvalidAuthHeader -> "Invalid authentication header"
-          _ -> "Authentication failed"
+          _ -> "Authentication error"
         }
       }),
     )
@@ -495,8 +517,17 @@ pub fn delete_resolver_factory(
     }
 
     use session <- result.try(
-      atproto_auth.get_atproto_session(token, ctx.auth_base_url)
-      |> result.map_error(fn(_) { "Failed to get AT Protocol session" }),
+      atproto_auth.get_atp_session(ctx.db, ctx.did_cache, token, ctx.signing_key)
+      |> result.map_error(fn(err) {
+        case err {
+          atproto_auth.SessionNotFound -> "Session not found"
+          atproto_auth.SessionNotReady -> "Session not ready"
+          atproto_auth.RefreshFailed(msg) -> "Token refresh failed: " <> msg
+          atproto_auth.DIDResolutionFailed(msg) ->
+            "DID resolution failed: " <> msg
+          _ -> "Failed to get ATP session"
+        }
+      }),
     )
 
     // Step 5: Build the record URI to be deleted
@@ -583,14 +614,14 @@ pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
 
     // Step 3: Verify OAuth token and get AT Protocol session
     use user_info <- result.try(
-      atproto_auth.verify_oauth_token(token, ctx.auth_base_url)
+      atproto_auth.verify_token(ctx.db, token)
       |> result.map_error(fn(err) {
         case err {
-          atproto_auth.UnauthorizedToken ->
-            "Invalid or expired authentication token"
+          atproto_auth.UnauthorizedToken -> "Unauthorized"
+          atproto_auth.TokenExpired -> "Token expired"
           atproto_auth.MissingAuthHeader -> "Missing authentication"
           atproto_auth.InvalidAuthHeader -> "Invalid authentication header"
-          _ -> "Authentication failed"
+          _ -> "Authentication error"
         }
       }),
     )
@@ -620,8 +651,17 @@ pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
     }
 
     use session <- result.try(
-      atproto_auth.get_atproto_session(token, ctx.auth_base_url)
-      |> result.map_error(fn(_) { "Failed to get AT Protocol session" }),
+      atproto_auth.get_atp_session(ctx.db, ctx.did_cache, token, ctx.signing_key)
+      |> result.map_error(fn(err) {
+        case err {
+          atproto_auth.SessionNotFound -> "Session not found"
+          atproto_auth.SessionNotReady -> "Session not ready"
+          atproto_auth.RefreshFailed(msg) -> "Token refresh failed: " <> msg
+          atproto_auth.DIDResolutionFailed(msg) ->
+            "DID resolution failed: " <> msg
+          _ -> "Failed to get ATP session"
+        }
+      }),
     )
 
     // Step 5: Decode base64 data to binary

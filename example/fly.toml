@@ -13,9 +13,7 @@ primary_region = 'sjc'
   HOST = '0.0.0.0'
   PORT = '8080'
   DATABASE_URL = '/data/quickslice.db'
-  AIP_BASE_URL = 'https://auth.slices.network'
   EXTERNAL_BASE_URL = 'https://quickslice.fly.dev'
-  ENABLE_OAUTH_AUTO_REGISTER = 'true'
   ADMIN_DIDS = 'did:plc:bcgltzqazw5tb6k2g3ttenbj'
 
 [http_service]

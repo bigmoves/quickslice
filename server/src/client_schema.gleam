@@ -2,20 +2,25 @@
 ///
 /// This schema is separate from the main /graphql endpoint and serves
 /// the client SPA with stats and activity data via /admin/graphql
+import admin_session as session
 import backfill
 import database/repositories/actors
 import database/repositories/config as config_repo
 import database/repositories/jetstream_activity
 import database/repositories/lexicons
+import database/repositories/oauth_clients
 import database/repositories/records
 import database/types.{type ActivityBucket, type ActivityEntry, type Lexicon}
-import gleam/erlang/process
+import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/string
 import importer
 import jetstream_consumer
+import lib/oauth/did_cache
+import lib/oauth/token_generator
+import lib/oauth/validator
 import logging
-import oauth/session
 import sqlight
 import swell/schema
 import swell/value
@@ -26,6 +31,32 @@ import wisp
 /// Check if a DID is in the admin list
 fn is_admin(did: String, admin_dids: List(String)) -> Bool {
   list.contains(admin_dids, did)
+}
+
+/// Validate that all requested scopes are in the supported list
+fn validate_scope_against_supported(
+  requested_scope: String,
+  supported_scopes: List(String),
+) -> Result(Nil, String) {
+  let requested =
+    requested_scope
+    |> string.split(" ")
+    |> list.map(string.trim)
+    |> list.filter(fn(s) { !string.is_empty(s) })
+
+  let invalid =
+    list.filter(requested, fn(s) { !list.contains(supported_scopes, s) })
+
+  case invalid {
+    [] -> Ok(Nil)
+    _ ->
+      Error(
+        "Unsupported scope(s): "
+        <> string.join(invalid, ", ")
+        <> ". Supported: "
+        <> string.join(supported_scopes, ", "),
+      )
+  }
 }
 
 /// Convert CurrentSession data to GraphQL value
@@ -332,15 +363,117 @@ pub fn settings_type() -> schema.Type {
         }
       },
     ),
+  ])
+}
+
+/// OAuthClient type for client registration management
+pub fn oauth_client_type() -> schema.Type {
+  schema.object_type("OAuthClient", "OAuth client registration", [
     schema.field(
-      "oauthClientId",
-      schema.string_type(),
-      "OAuth client ID if registered",
+      "clientId",
+      schema.non_null(schema.string_type()),
+      "Client ID",
       fn(ctx) {
         case ctx.data {
           Some(value.Object(fields)) -> {
-            case list.key_find(fields, "oauthClientId") {
-              Ok(client_id) -> Ok(client_id)
+            case list.key_find(fields, "clientId") {
+              Ok(v) -> Ok(v)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
+    schema.field(
+      "clientSecret",
+      schema.string_type(),
+      "Client secret (confidential clients only)",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "clientSecret") {
+              Ok(v) -> Ok(v)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
+    schema.field(
+      "clientName",
+      schema.non_null(schema.string_type()),
+      "Client display name",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "clientName") {
+              Ok(v) -> Ok(v)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
+    schema.field(
+      "clientType",
+      schema.non_null(schema.string_type()),
+      "PUBLIC or CONFIDENTIAL",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "clientType") {
+              Ok(v) -> Ok(v)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
+    schema.field(
+      "redirectUris",
+      schema.non_null(schema.list_type(schema.non_null(schema.string_type()))),
+      "Allowed redirect URIs",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "redirectUris") {
+              Ok(v) -> Ok(v)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
+    schema.field(
+      "scope",
+      schema.string_type(),
+      "OAuth scopes for this client (space-separated)",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "scope") {
+              Ok(v) -> Ok(v)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
+    schema.field(
+      "createdAt",
+      schema.non_null(schema.int_type()),
+      "Creation timestamp",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "createdAt") {
+              Ok(v) -> Ok(v)
               Error(_) -> Ok(value.Null)
             }
           }
@@ -513,19 +646,33 @@ fn activity_entry_to_value(entry: ActivityEntry) -> value.Value {
   ])
 }
 
-fn settings_to_value(
-  domain_authority: String,
-  oauth_client_id: Option(String),
-) -> value.Value {
-  let oauth_value = case oauth_client_id {
-    Some(id) -> value.String(id)
-    None -> value.Null
-  }
-
+fn settings_to_value(domain_authority: String) -> value.Value {
   value.Object([
     #("id", value.String("Settings:singleton")),
     #("domainAuthority", value.String(domain_authority)),
-    #("oauthClientId", oauth_value),
+  ])
+}
+
+fn oauth_client_to_value(client: types.OAuthClient) -> value.Value {
+  let secret_value = case client.client_secret {
+    Some(s) -> value.String(s)
+    None -> value.Null
+  }
+  let scope_value = case client.scope {
+    Some(s) -> value.String(s)
+    None -> value.Null
+  }
+  value.Object([
+    #("clientId", value.String(client.client_id)),
+    #("clientSecret", secret_value),
+    #("clientName", value.String(client.client_name)),
+    #(
+      "clientType",
+      value.String(types.client_type_to_string(client.client_type)),
+    ),
+    #("redirectUris", value.List(list.map(client.redirect_uris, value.String))),
+    #("scope", scope_value),
+    #("createdAt", value.Int(client.created_at)),
   ])
 }
 
@@ -543,6 +690,7 @@ pub fn query_type(
   conn: sqlight.Connection,
   req: wisp.Request,
   admin_dids: List(String),
+  did_cache: Subject(did_cache.Message),
 ) -> schema.Type {
   schema.object_type("Query", "Root query type", [
     // currentSession query
@@ -551,7 +699,7 @@ pub fn query_type(
       current_session_type(),
       "Get current authenticated user session (null if not authenticated)",
       fn(_ctx) {
-        case session.get_current_session(req, conn) {
+        case session.get_current_session(req, conn, did_cache) {
           Ok(sess) -> {
             let user_is_admin = is_admin(sess.did, admin_dids)
             Ok(current_session_to_value(sess.did, sess.handle, user_is_admin))
@@ -589,12 +737,7 @@ pub fn query_type(
           Error(_) -> ""
         }
 
-        let oauth_client_id = case config_repo.get_oauth_credentials(conn) {
-          Ok(Some(#(client_id, _secret, _uri))) -> Some(client_id)
-          _ -> None
-        }
-
-        Ok(settings_to_value(domain_authority, oauth_client_id))
+        Ok(settings_to_value(domain_authority))
       },
     ),
     // lexicons query
@@ -607,6 +750,29 @@ pub fn query_type(
           Ok(lexicon_list) ->
             Ok(value.List(list.map(lexicon_list, lexicon_to_value)))
           Error(_) -> Error("Failed to fetch lexicons")
+        }
+      },
+    ),
+    // oauthClients query (admin only)
+    schema.field(
+      "oauthClients",
+      schema.non_null(schema.list_type(schema.non_null(oauth_client_type()))),
+      "Get all OAuth client registrations (admin only)",
+      fn(_ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            case is_admin(sess.did, admin_dids) {
+              True -> {
+                case oauth_clients.get_all(conn) {
+                  Ok(clients) ->
+                    Ok(value.List(list.map(clients, oauth_client_to_value)))
+                  Error(_) -> Error("Failed to fetch OAuth clients")
+                }
+              }
+              False -> Error("Admin privileges required")
+            }
+          }
+          Error(_) -> Error("Authentication required")
         }
       },
     ),
@@ -698,7 +864,9 @@ pub fn mutation_type(
   conn: sqlight.Connection,
   req: wisp.Request,
   admin_dids: List(String),
-  jetstream_subject: Option(process.Subject(jetstream_consumer.ManagerMessage)),
+  jetstream_subject: Option(Subject(jetstream_consumer.ManagerMessage)),
+  did_cache: Subject(did_cache.Message),
+  oauth_supported_scopes: List(String),
 ) -> schema.Type {
   schema.object_type("Mutation", "Root mutation type", [
     // updateDomainAuthority mutation
@@ -732,14 +900,7 @@ pub fn mutation_type(
                   None -> Nil
                 }
 
-                // Fetch OAuth client ID to return complete Settings
-                let oauth_client_id = case
-                  config_repo.get_oauth_credentials(conn)
-                {
-                  Ok(Some(#(client_id, _secret, _uri))) -> Some(client_id)
-                  _ -> None
-                }
-                Ok(settings_to_value(authority, oauth_client_id))
+                Ok(settings_to_value(authority))
               }
               Error(_) -> Error("Failed to update domain authority")
             }
@@ -826,7 +987,7 @@ pub fn mutation_type(
       ],
       fn(ctx) {
         // Check if user is authenticated and admin
-        case session.get_current_session(req, conn) {
+        case session.get_current_session(req, conn, did_cache) {
           Ok(sess) -> {
             case is_admin(sess.did, admin_dids) {
               True -> {
@@ -837,7 +998,6 @@ pub fn mutation_type(
                     let _ = actors.delete_all(conn)
                     let _ = lexicons.delete_all(conn)
                     let _ = config_repo.delete_domain_authority(conn)
-                    let _ = config_repo.delete_oauth_credentials(conn)
                     let _ = jetstream_activity.delete_all(conn)
 
                     // Restart Jetstream consumer after reset
@@ -873,7 +1033,7 @@ pub fn mutation_type(
       "Trigger a background backfill operation for all collections (admin only)",
       fn(_ctx) {
         // Check if user is authenticated and admin
-        case session.get_current_session(req, conn) {
+        case session.get_current_session(req, conn, did_cache) {
           Ok(sess) -> {
             case is_admin(sess.did, admin_dids) {
               True -> {
@@ -934,6 +1094,330 @@ pub fn mutation_type(
         }
       },
     ),
+    // createOAuthClient mutation
+    schema.field_with_args(
+      "createOAuthClient",
+      schema.non_null(oauth_client_type()),
+      "Create a new OAuth client (admin only)",
+      [
+        schema.argument(
+          "clientName",
+          schema.non_null(schema.string_type()),
+          "Client display name",
+          None,
+        ),
+        schema.argument(
+          "clientType",
+          schema.non_null(schema.string_type()),
+          "PUBLIC or CONFIDENTIAL",
+          None,
+        ),
+        schema.argument(
+          "redirectUris",
+          schema.non_null(
+            schema.list_type(schema.non_null(schema.string_type())),
+          ),
+          "Allowed redirect URIs",
+          None,
+        ),
+        schema.argument(
+          "scope",
+          schema.non_null(schema.string_type()),
+          "OAuth scopes (space-separated)",
+          None,
+        ),
+      ],
+      fn(ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            case is_admin(sess.did, admin_dids) {
+              True -> {
+                case
+                  schema.get_argument(ctx, "clientName"),
+                  schema.get_argument(ctx, "clientType"),
+                  schema.get_argument(ctx, "redirectUris"),
+                  schema.get_argument(ctx, "scope")
+                {
+                  Some(value.String(name)),
+                    Some(value.String(type_str)),
+                    Some(value.List(uris)),
+                    Some(value.String(scope))
+                  -> {
+                    // Validate client name
+                    let trimmed_name = string.trim(name)
+                    case trimmed_name {
+                      "" -> Error("Client name cannot be empty")
+                      _ -> {
+                        let client_type = case string.uppercase(type_str) {
+                          "CONFIDENTIAL" -> types.Confidential
+                          _ -> types.Public
+                        }
+                        let redirect_uris =
+                          list.filter_map(uris, fn(u) {
+                            case u {
+                              value.String(s) ->
+                                case string.trim(s) {
+                                  "" -> Error(Nil)
+                                  trimmed -> Ok(trimmed)
+                                }
+                              _ -> Error(Nil)
+                            }
+                          })
+                        // Validate at least one redirect URI
+                        case redirect_uris {
+                          [] ->
+                            Error("At least one redirect URI is required")
+                          _ -> {
+                            // Validate each redirect URI format
+                            let invalid_uri =
+                              list.find(redirect_uris, fn(uri) {
+                                case validator.validate_redirect_uri(uri) {
+                                  Ok(_) -> False
+                                  Error(_) -> True
+                                }
+                              })
+                            case invalid_uri {
+                              Ok(uri) ->
+                                Error(
+                                  "Invalid redirect URI: "
+                                  <> uri
+                                  <> ". URIs must use https://, or http:// only for localhost.",
+                                )
+                              Error(_) -> {
+                                // Validate scope against supported scopes
+                                case validate_scope_against_supported(scope, oauth_supported_scopes) {
+                                  Error(err) -> Error(err)
+                                  Ok(_) -> {
+                            let now = token_generator.current_timestamp()
+                            let client_id = token_generator.generate_client_id()
+                            let client_secret = case client_type {
+                              types.Confidential ->
+                                Some(token_generator.generate_client_secret())
+                              types.Public -> None
+                            }
+                            let client =
+                              types.OAuthClient(
+                                client_id: client_id,
+                                client_secret: client_secret,
+                                client_name: trimmed_name,
+                                redirect_uris: redirect_uris,
+                                grant_types: [
+                                  types.AuthorizationCode,
+                                  types.RefreshToken,
+                                ],
+                                response_types: [types.Code],
+                                scope: case string.trim(scope) {
+                                  "" -> None
+                                  s -> Some(s)
+                                },
+                                token_endpoint_auth_method: case client_type {
+                                  types.Confidential -> types.ClientSecretPost
+                                  types.Public -> types.AuthNone
+                                },
+                                client_type: client_type,
+                                created_at: now,
+                                updated_at: now,
+                                metadata: "{}",
+                                access_token_expiration: 3600,
+                                refresh_token_expiration: 86_400 * 30,
+                                require_redirect_exact: True,
+                                registration_access_token: None,
+                                jwks: None,
+                              )
+                            case oauth_clients.insert(conn, client) {
+                              Ok(_) -> Ok(oauth_client_to_value(client))
+                              Error(_) -> Error("Failed to create OAuth client")
+                            }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  _, _, _, _ -> Error("Invalid arguments")
+                }
+              }
+              False -> Error("Admin privileges required")
+            }
+          }
+          Error(_) -> Error("Authentication required")
+        }
+      },
+    ),
+    // updateOAuthClient mutation
+    schema.field_with_args(
+      "updateOAuthClient",
+      schema.non_null(oauth_client_type()),
+      "Update an existing OAuth client (admin only)",
+      [
+        schema.argument(
+          "clientId",
+          schema.non_null(schema.string_type()),
+          "Client ID to update",
+          None,
+        ),
+        schema.argument(
+          "clientName",
+          schema.non_null(schema.string_type()),
+          "New client display name",
+          None,
+        ),
+        schema.argument(
+          "redirectUris",
+          schema.non_null(
+            schema.list_type(schema.non_null(schema.string_type())),
+          ),
+          "New redirect URIs",
+          None,
+        ),
+        schema.argument(
+          "scope",
+          schema.non_null(schema.string_type()),
+          "OAuth scopes (space-separated)",
+          None,
+        ),
+      ],
+      fn(ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            case is_admin(sess.did, admin_dids) {
+              True -> {
+                case
+                  schema.get_argument(ctx, "clientId"),
+                  schema.get_argument(ctx, "clientName"),
+                  schema.get_argument(ctx, "redirectUris"),
+                  schema.get_argument(ctx, "scope")
+                {
+                  Some(value.String(client_id)),
+                    Some(value.String(name)),
+                    Some(value.List(uris)),
+                    Some(value.String(scope))
+                  -> {
+                    // Validate client name
+                    let trimmed_name = string.trim(name)
+                    case trimmed_name {
+                      "" -> Error("Client name cannot be empty")
+                      _ -> {
+                        case oauth_clients.get(conn, client_id) {
+                          Ok(Some(existing)) -> {
+                            let redirect_uris =
+                              list.filter_map(uris, fn(u) {
+                                case u {
+                                  value.String(s) ->
+                                    case string.trim(s) {
+                                      "" -> Error(Nil)
+                                      trimmed -> Ok(trimmed)
+                                    }
+                                  _ -> Error(Nil)
+                                }
+                              })
+                            // Validate at least one redirect URI
+                            case redirect_uris {
+                              [] ->
+                                Error("At least one redirect URI is required")
+                              _ -> {
+                                // Validate each redirect URI format
+                                let invalid_uri =
+                                  list.find(redirect_uris, fn(uri) {
+                                    case validator.validate_redirect_uri(uri) {
+                                      Ok(_) -> False
+                                      Error(_) -> True
+                                    }
+                                  })
+                                case invalid_uri {
+                                  Ok(uri) ->
+                                    Error(
+                                      "Invalid redirect URI: "
+                                      <> uri
+                                      <> ". URIs must use https://, or http:// only for localhost.",
+                                    )
+                                  Error(_) -> {
+                                    // Validate scope against supported scopes
+                                    case validate_scope_against_supported(scope, oauth_supported_scopes) {
+                                      Error(err) -> Error(err)
+                                      Ok(_) -> {
+                                let updated =
+                                  types.OAuthClient(
+                                    ..existing,
+                                    client_name: trimmed_name,
+                                    redirect_uris: redirect_uris,
+                                    scope: case string.trim(scope) {
+                                      "" -> None
+                                      s -> Some(s)
+                                    },
+                                    updated_at: token_generator.current_timestamp(),
+                                  )
+                                case oauth_clients.update(conn, updated) {
+                                  Ok(_) -> Ok(oauth_client_to_value(updated))
+                                  Error(_) ->
+                                    Error("Failed to update OAuth client")
+                                }
+                                      }
+                                    }
+                              }
+                                }
+                              }
+                            }
+                          }
+                          Ok(None) -> Error("OAuth client not found")
+                          Error(_) -> Error("Failed to fetch OAuth client")
+                        }
+                      }
+                    }
+                  }
+                  _, _, _, _ -> Error("Invalid arguments")
+                }
+              }
+              False -> Error("Admin privileges required")
+            }
+          }
+          Error(_) -> Error("Authentication required")
+        }
+      },
+    ),
+    // deleteOAuthClient mutation
+    schema.field_with_args(
+      "deleteOAuthClient",
+      schema.non_null(schema.boolean_type()),
+      "Delete an OAuth client (admin only)",
+      [
+        schema.argument(
+          "clientId",
+          schema.non_null(schema.string_type()),
+          "Client ID to delete",
+          None,
+        ),
+      ],
+      fn(ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            case is_admin(sess.did, admin_dids) {
+              True -> {
+                case schema.get_argument(ctx, "clientId") {
+                  Some(value.String(client_id)) -> {
+                    case client_id {
+                      "admin" -> Error("Cannot delete internal admin client")
+                      _ -> {
+                        case oauth_clients.delete(conn, client_id) {
+                          Ok(_) -> Ok(value.Boolean(True))
+                          Error(_) -> Error("Failed to delete OAuth client")
+                        }
+                      }
+                    }
+                  }
+                  _ -> Error("Invalid clientId argument")
+                }
+              }
+              False -> Error("Admin privileges required")
+            }
+          }
+          Error(_) -> Error("Authentication required")
+        }
+      },
+    ),
   ])
 }
 
@@ -942,10 +1426,12 @@ pub fn build_schema(
   conn: sqlight.Connection,
   req: wisp.Request,
   admin_dids: List(String),
-  jetstream_subject: Option(process.Subject(jetstream_consumer.ManagerMessage)),
+  jetstream_subject: Option(Subject(jetstream_consumer.ManagerMessage)),
+  did_cache: Subject(did_cache.Message),
+  oauth_supported_scopes: List(String),
 ) -> schema.Schema {
   schema.schema(
-    query_type(conn, req, admin_dids),
-    Some(mutation_type(conn, req, admin_dids, jetstream_subject)),
+    query_type(conn, req, admin_dids, did_cache),
+    Some(mutation_type(conn, req, admin_dids, jetstream_subject, did_cache, oauth_supported_scopes)),
   )
 }

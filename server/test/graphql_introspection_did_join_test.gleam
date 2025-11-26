@@ -12,8 +12,10 @@ import gleam/list
 import gleam/result
 import gleam/string
 import gleeunit/should
+import gleam/option
 import handlers/graphql as graphql_handler
 import honk
+import lib/oauth/did_cache
 import importer
 import simplifile
 import sqlight
@@ -125,11 +127,13 @@ pub fn introspection_query_includes_did_join_fields_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -211,11 +215,13 @@ pub fn introspection_query_profile_join_fields_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -378,11 +384,13 @@ pub fn introspection_query_did_join_field_structure_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -500,11 +508,13 @@ pub fn did_join_field_query_execution_test() {
     |> simulate.string_body(query)
     |> simulate.header("content-type", "application/json")
 
+  let assert Ok(cache) = did_cache.start()
   let response =
     graphql_handler.handle_graphql_request(
       request,
       db,
-      "http://localhost:3000",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 

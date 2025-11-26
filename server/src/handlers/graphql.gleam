@@ -4,12 +4,15 @@
 /// and executes GraphQL queries.
 import gleam/bit_array
 import gleam/dynamic/decode
+import gleam/erlang/process.{type Subject}
 import gleam/http
 import gleam/json
 import gleam/list
+import gleam/option
 import gleam/result
 import gleam/string
 import graphql_gleam
+import lib/oauth/did_cache
 import sqlight
 import wisp
 
@@ -22,12 +25,13 @@ import wisp
 pub fn handle_graphql_request(
   req: wisp.Request,
   db: sqlight.Connection,
-  auth_base_url: String,
+  did_cache: Subject(did_cache.Message),
+  signing_key: option.Option(String),
   plc_url: String,
 ) -> wisp.Response {
   case req.method {
-    http.Post -> handle_graphql_post(req, db, auth_base_url, plc_url)
-    http.Get -> handle_graphql_get(req, db, auth_base_url, plc_url)
+    http.Post -> handle_graphql_post(req, db, did_cache, signing_key, plc_url)
+    http.Get -> handle_graphql_get(req, db, did_cache, signing_key, plc_url)
     _ -> method_not_allowed_response()
   }
 }
@@ -35,7 +39,8 @@ pub fn handle_graphql_request(
 fn handle_graphql_post(
   req: wisp.Request,
   db: sqlight.Connection,
-  auth_base_url: String,
+  did_cache: Subject(did_cache.Message),
+  signing_key: option.Option(String),
   plc_url: String,
 ) -> wisp.Response {
   // Extract Authorization header (optional for queries, required for mutations)
@@ -57,7 +62,8 @@ fn handle_graphql_post(
                 query,
                 variables,
                 auth_token,
-                auth_base_url,
+                did_cache,
+                signing_key,
                 plc_url,
               )
             }
@@ -74,7 +80,8 @@ fn handle_graphql_post(
 fn handle_graphql_get(
   req: wisp.Request,
   db: sqlight.Connection,
-  auth_base_url: String,
+  did_cache: Subject(did_cache.Message),
+  signing_key: option.Option(String),
   plc_url: String,
 ) -> wisp.Response {
   // Extract Authorization header (optional for queries, required for mutations)
@@ -87,7 +94,15 @@ fn handle_graphql_get(
   let query_params = wisp.get_query(req)
   case list.key_find(query_params, "query") {
     Ok(query) ->
-      execute_graphql_query(db, query, "{}", auth_token, auth_base_url, plc_url)
+      execute_graphql_query(
+        db,
+        query,
+        "{}",
+        auth_token,
+        did_cache,
+        signing_key,
+        plc_url,
+      )
     Error(_) -> bad_request_response("Missing 'query' parameter")
   }
 }
@@ -97,7 +112,8 @@ fn execute_graphql_query(
   query: String,
   variables_json_str: String,
   auth_token: Result(String, Nil),
-  auth_base_url: String,
+  did_cache: Subject(did_cache.Message),
+  signing_key: option.Option(String),
   plc_url: String,
 ) -> wisp.Response {
   // Use the new pure Gleam GraphQL implementation
@@ -107,7 +123,8 @@ fn execute_graphql_query(
       query,
       variables_json_str,
       auth_token,
-      auth_base_url,
+      did_cache,
+      signing_key,
       plc_url,
     )
   {

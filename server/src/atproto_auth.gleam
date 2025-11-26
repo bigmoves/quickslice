@@ -1,10 +1,14 @@
-import gleam/dynamic/decode
-import gleam/http/request
-import gleam/httpc
-import gleam/json
-import gleam/option.{None, Some}
+import database/repositories/oauth_access_tokens
+import database/repositories/oauth_atp_sessions
+import gleam/erlang/process.{type Subject}
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+import lib/oauth/atproto/bridge
+import lib/oauth/atproto/did_resolver
+import lib/oauth/did_cache
+import lib/oauth/token_generator
+import sqlight
 
 /// UserInfo response from OAuth provider
 pub type UserInfo {
@@ -21,6 +25,11 @@ pub type AuthError {
   MissingAuthHeader
   InvalidAuthHeader
   UnauthorizedToken
+  TokenExpired
+  SessionNotFound
+  SessionNotReady
+  RefreshFailed(String)
+  DIDResolutionFailed(String)
   NetworkError
   ParseError
 }
@@ -68,29 +77,31 @@ fn list_find(
   }
 }
 
-/// Verify OAuth token with authorization server
-///
-/// Makes a request to the `/oauth/userinfo` endpoint to validate the token
-/// and retrieve user information.
-pub fn verify_oauth_token(
+/// Verify token from local database and return user info
+pub fn verify_token(
+  conn: sqlight.Connection,
   token: String,
-  auth_base_url: String,
 ) -> Result(UserInfo, AuthError) {
-  let url = auth_base_url <> "/oauth/userinfo"
-
-  case request.to(url) {
-    Error(_) -> Error(NetworkError)
-    Ok(req) -> {
-      let req =
-        req
-        |> request.set_header("authorization", "Bearer " <> token)
-
-      case httpc.send(req) {
-        Error(_) -> Error(NetworkError)
-        Ok(resp) -> {
-          case resp.status {
-            200 -> parse_userinfo(resp.body)
-            _ -> Error(UnauthorizedToken)
+  // Look up token in database
+  case oauth_access_tokens.get(conn, token) {
+    Error(_) -> Error(UnauthorizedToken)
+    Ok(None) -> Error(UnauthorizedToken)
+    Ok(Some(access_token)) -> {
+      // Check if revoked
+      case access_token.revoked {
+        True -> Error(UnauthorizedToken)
+        False -> {
+          // Check if expired
+          let now = token_generator.current_timestamp()
+          case access_token.expires_at < now {
+            True -> Error(TokenExpired)
+            False -> {
+              // Check user_id is present
+              case access_token.user_id {
+                None -> Error(UnauthorizedToken)
+                Some(did) -> Ok(UserInfo(sub: did, did: did))
+              }
+            }
           }
         }
       }
@@ -98,133 +109,107 @@ pub fn verify_oauth_token(
   }
 }
 
-/// Parse userinfo response JSON
-fn parse_userinfo(body: String) -> Result(UserInfo, AuthError) {
-  let decoder = {
-    use sub <- decode.field("sub", decode.string)
-    use did_opt <- decode.field("did", decode.optional(decode.string))
-
-    let did = case did_opt {
-      Some(d) -> d
-      None -> ""
-    }
-
-    decode.success(UserInfo(sub: sub, did: did))
-  }
-
-  body
-  |> json.parse(decoder)
-  |> result.replace_error(ParseError)
-}
-
-/// Get ATProto session from authorization server
-///
-/// Makes a request to the `/api/atprotocol/session` endpoint to retrieve
-/// the user's PDS endpoint, access token, and DPoP JWK.
-pub fn get_atproto_session(
+/// Get ATP session from local database, refreshing if needed
+pub fn get_atp_session(
+  conn: sqlight.Connection,
+  did_cache: Subject(did_cache.Message),
   token: String,
-  auth_base_url: String,
+  signing_key: Option(String),
 ) -> Result(AtprotoSession, AuthError) {
-  let url = auth_base_url <> "/api/atprotocol/session"
+  // Look up access token to get session_id and iteration
+  use access_token <- result.try(case oauth_access_tokens.get(conn, token) {
+    Error(_) -> Error(UnauthorizedToken)
+    Ok(None) -> Error(UnauthorizedToken)
+    Ok(Some(t)) -> Ok(t)
+  })
 
-  case request.to(url) {
-    Error(_) -> Error(NetworkError)
-    Ok(req) -> {
-      let req =
-        req
-        |> request.set_header("authorization", "Bearer " <> token)
+  // Get session_id and iteration
+  use #(session_id, iteration) <- result.try(
+    case access_token.session_id, access_token.session_iteration {
+      Some(sid), Some(iter) -> Ok(#(sid, iter))
+      _, _ -> Error(SessionNotFound)
+    },
+  )
 
-      case httpc.send(req) {
-        Error(_) -> Error(NetworkError)
-        Ok(resp) -> {
-          case resp.status {
-            200 -> parse_session(resp.body)
-            _ -> Error(UnauthorizedToken)
-          }
-        }
+  // Look up ATP session
+  use atp_session <- result.try(
+    case oauth_atp_sessions.get(conn, session_id, iteration) {
+      Error(_) -> Error(SessionNotFound)
+      Ok(None) -> Error(SessionNotFound)
+      Ok(Some(s)) -> Ok(s)
+    },
+  )
+
+  // Validate session is ready (exchanged, no error, has access token)
+  use _ <- result.try(case atp_session.exchange_error {
+    Some(_) -> Error(SessionNotReady)
+    None -> Ok(Nil)
+  })
+
+  use _ <- result.try(case atp_session.session_exchanged_at {
+    None -> Error(SessionNotReady)
+    Some(_) -> Ok(Nil)
+  })
+
+  use atp_access_token <- result.try(case atp_session.access_token {
+    None -> Error(SessionNotReady)
+    Some(t) -> Ok(t)
+  })
+
+  // Check if ATP token is expired and refresh if needed
+  let now = token_generator.current_timestamp()
+  use current_session <- result.try(case atp_session.access_token_expires_at {
+    Some(expires_at) if expires_at < now -> {
+      // Token expired, try to refresh
+      case
+        bridge.refresh_tokens(
+          conn,
+          did_cache,
+          atp_session,
+          access_token.client_id,
+          signing_key,
+        )
+      {
+        Ok(refreshed) -> Ok(refreshed)
+        Error(err) -> Error(RefreshFailed(string.inspect(err)))
       }
     }
-  }
-}
+    _ -> Ok(atp_session)
+  })
 
-/// Parse ATProto session response JSON
-fn parse_session(body: String) -> Result(AtprotoSession, AuthError) {
-  // Extract dpop_jwk field from the JSON response
-  // It should be a JSON object, so we need to extract it and re-stringify it
-  let dpop_jwk_json = case extract_dpop_jwk(body) {
-    Ok(jwk) -> jwk
-    Error(_) -> "{}"
-  }
+  // Get the (possibly refreshed) access token
+  use final_access_token <- result.try(case current_session.access_token {
+    None -> Error(SessionNotReady)
+    Some(t) -> Ok(t)
+  })
 
-  let decoder = {
-    use pds_endpoint <- decode.field("pds_endpoint", decode.string)
-    use access_token <- decode.field("access_token", decode.string)
+  // Get DID from session
+  use did <- result.try(case current_session.did {
+    None -> Error(SessionNotFound)
+    Some(d) -> Ok(d)
+  })
 
-    decode.success(AtprotoSession(
-      pds_endpoint: pds_endpoint,
-      access_token: access_token,
-      dpop_jwk: dpop_jwk_json,
-    ))
-  }
+  // Resolve DID to get PDS endpoint
+  use did_doc <- result.try(
+    did_resolver.resolve_did_with_cache(did_cache, did, False)
+    |> result.map_error(fn(err) { DIDResolutionFailed(string.inspect(err)) }),
+  )
 
-  body
-  |> json.parse(decoder)
-  |> result.replace_error(ParseError)
-}
+  use pds_endpoint <- result.try(case did_resolver.get_pds_endpoint(did_doc) {
+    None -> Error(DIDResolutionFailed("No PDS endpoint in DID document"))
+    Some(endpoint) -> Ok(endpoint)
+  })
 
-/// Extract the dpop_jwk field from the session response and convert it to a JSON string
-fn extract_dpop_jwk(body: String) -> Result(String, Nil) {
-  // Find the dpop_jwk field in the JSON
-  case string.split(body, "\"dpop_jwk\":") {
-    [_, rest] -> {
-      // Find the matching closing brace for the dpop_jwk object
-      case find_json_object(rest) {
-        Ok(jwk_json) -> Ok(jwk_json)
-        Error(_) -> Error(Nil)
-      }
-    }
-    _ -> Error(Nil)
-  }
-}
+  // Suppress unused variable warning for atp_access_token
+  let _ = atp_access_token
+  let _ = final_access_token
 
-/// Extract a JSON object from a string starting after the opening brace
-fn find_json_object(str: String) -> Result(String, Nil) {
-  // Skip whitespace and find the opening brace
-  let trimmed = string.trim_start(str)
-  case string.starts_with(trimmed, "{") {
-    False -> Error(Nil)
-    True -> {
-      // Count braces to find the matching closing brace
-      let chars = string.to_graphemes(trimmed)
-      case find_matching_brace(chars, 0, 0, "") {
-        Ok(json) -> Ok(json)
-        Error(_) -> Error(Nil)
-      }
-    }
-  }
-}
-
-/// Find the matching closing brace and extract the JSON object
-fn find_matching_brace(
-  chars: List(String),
-  depth: Int,
-  pos: Int,
-  acc: String,
-) -> Result(String, Nil) {
-  case chars {
-    [] -> Error(Nil)
-    [char, ..rest] -> {
-      let new_acc = acc <> char
-      let new_depth = case char {
-        "{" -> depth + 1
-        "}" -> depth - 1
-        _ -> depth
-      }
-
-      case new_depth {
-        0 if pos > 0 -> Ok(new_acc)
-        _ -> find_matching_brace(rest, new_depth, pos + 1, new_acc)
-      }
-    }
-  }
+  Ok(AtprotoSession(
+    pds_endpoint: pds_endpoint,
+    access_token: case current_session.access_token {
+      Some(t) -> t
+      None -> ""
+    },
+    dpop_jwk: current_session.dpop_key,
+  ))
 }

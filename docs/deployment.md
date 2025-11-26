@@ -11,11 +11,9 @@ This guide covers deploying quickslice on Fly.io and Railway. Both platforms sup
 | `PORT` | No | `8000` | Server port |
 | `SECRET_KEY_BASE` | Recommended | Auto-generated | Session encryption key (64+ chars). **Must persist across restarts** |
 | `ADMIN_DIDS` | Optional | - | Comma-separated DIDs for admin access (e.g., `did:plc:abc,did:plc:xyz`) |
-| `ENABLE_OAUTH_AUTO_REGISTER` | Optional | `false` | Enable automatic OAuth client registration with AIP on server boot |
-| `OAUTH_CLIENT_ID` | Optional | - | OAuth client ID (auto-registered if `ENABLE_OAUTH_AUTO_REGISTER=true`) |
-| `OAUTH_CLIENT_SECRET` | Optional | - | OAuth client secret (auto-registered if `ENABLE_OAUTH_AUTO_REGISTER=true`) |
-| `EXTERNAL_BASE_URL` | Optional | `http://localhost:8000` | Base URL of your application (used for OAuth redirect: `${EXTERNAL_BASE_URL}/oauth/callback`) |
-| `AIP_BASE_URL` | Optional | `https://auth.example.com` | AT Protocol Identity Provider URL |
+| `EXTERNAL_BASE_URL` | Optional | `http://localhost:8000` | Base URL of your application (used for OAuth redirect URIs and client metadata). Use `http://127.0.0.1:8000` for loopback mode |
+| `OAUTH_LOOPBACK_MODE` | Optional | `false` | Set to `true` for local development without ngrok. Uses loopback client IDs instead of client metadata URLs |
+| `OAUTH_SUPPORTED_SCOPES` | Optional | `atproto transition:generic` | Space-separated OAuth scopes to request (used in loopback client IDs and client metadata) |
 | `JETSTREAM_URL` | No | `wss://jetstream2.us-west.bsky.network/subscribe` | Jetstream WebSocket endpoint |
 | `RELAY_URL` | No | `https://relay1.us-west.bsky.network` | AT Protocol relay URL |
 | `PLC_DIRECTORY_URL` | No | `https://plc.directory` | PLC directory URL |
@@ -26,37 +24,6 @@ This guide covers deploying quickslice on Fly.io and Railway. Both platforms sup
 - **SECRET_KEY_BASE**: Generate with `openssl rand -base64 48`. Store as a secret and keep persistent
 - **HOST**: Set to `0.0.0.0` in container environments
 - **ADMIN_DIDS**: Required for backfill and settings page access
-
-### OAuth Configuration
-
-Quickslice supports two approaches for OAuth configuration:
-
-#### Option A: Auto-Registration (Recommended)
-
-Set `ENABLE_OAUTH_AUTO_REGISTER=true` to automatically register an OAuth client with your AIP server on startup. The server will:
-
-1. Check if OAuth credentials exist in the database
-2. If not found, automatically register with the AIP server at `/oauth/clients/register`
-3. Store the client ID and secret in the database for future use
-4. Retry with exponential backoff (2, 4, 8... up to 30 minutes) if registration fails
-
-**Benefits:**
-- No manual OAuth client setup required
-- Credentials persist in the database across restarts
-- Automatic retry if AIP server is temporarily unavailable
-
-**Requirements:**
-- `AIP_BASE_URL` must be set to your AIP server URL
-- AIP server must support dynamic client registration (RFC 7591)
-
-#### Option B: Manual Configuration
-
-Alternatively, you can manually register an OAuth client with your AIP server and provide the credentials via environment variables:
-
-- `OAUTH_CLIENT_ID`: Your pre-registered client ID
-- `OAUTH_CLIENT_SECRET`: Your pre-registered client secret
-
-**Note:** Manual credentials take precedence over auto-registered credentials.
 
 ## SQLite Volume Setup
 
@@ -115,18 +82,6 @@ fly secrets set SECRET_KEY_BASE=$(openssl rand -base64 48)
 
 # Optional: Admin access
 fly secrets set ADMIN_DIDS=did:plc:your_did
-
-# OAuth configuration (choose one approach):
-
-# Option A: Auto-registration (recommended)
-# Automatically registers OAuth client with AIP on startup
-fly secrets set ENABLE_OAUTH_AUTO_REGISTER=true
-fly secrets set AIP_BASE_URL=https://your-aip-server.com
-
-# Option B: Manual configuration
-# Use pre-existing OAuth client credentials
-fly secrets set OAUTH_CLIENT_ID=your_client_id
-fly secrets set OAUTH_CLIENT_SECRET=your_client_secret
 ```
 
 ### 4. Deploy
@@ -162,16 +117,6 @@ SECRET_KEY_BASE=<generate-with-openssl-rand>
 Optional variables:
 ```
 ADMIN_DIDS=did:plc:your_did
-
-# OAuth - Option A: Auto-registration (recommended)
-ENABLE_OAUTH_AUTO_REGISTER=true
-AIP_BASE_URL=https://your-aip-server.com
-EXTERNAL_BASE_URL=https://your-app.up.railway.app
-
-# OAuth - Option B: Manual configuration
-# OAUTH_CLIENT_ID=your_client_id
-# OAUTH_CLIENT_SECRET=your_client_secret
-# EXTERNAL_BASE_URL=https://your-app.up.railway.app
 ```
 
 ### 3. Add a volume
@@ -232,12 +177,6 @@ services:
       - DATABASE_URL=/data/quickslice.db
       - SECRET_KEY_BASE=${SECRET_KEY_BASE}
       - ADMIN_DIDS=${ADMIN_DIDS}
-      # OAuth auto-registration (recommended)
-      - ENABLE_OAUTH_AUTO_REGISTER=${ENABLE_OAUTH_AUTO_REGISTER:-false}
-      - AIP_BASE_URL=${AIP_BASE_URL}
-      # Or use manual OAuth configuration
-      # - OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}
-      # - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/health"]
@@ -254,14 +193,6 @@ Create a `.env` file for secrets:
 ```bash
 SECRET_KEY_BASE=<generate-with-openssl-rand>
 ADMIN_DIDS=did:plc:your_did
-
-# OAuth auto-registration (recommended)
-ENABLE_OAUTH_AUTO_REGISTER=true
-AIP_BASE_URL=https://your-aip-server.com
-
-# Or use manual OAuth configuration
-# OAUTH_CLIENT_ID=your_client_id
-# OAUTH_CLIENT_SECRET=your_client_secret
 ```
 
 Start the service:
@@ -338,4 +269,3 @@ docker compose logs -f quickslice
 2. **Use HTTPS in production** - Both Fly.io and Railway handle this automatically
 3. **Restrict admin access** - Set `ADMIN_DIDS` to limit who can access GraphiQL and backfill endpoints
 4. **Store secrets securely** - Use platform secret management, never commit secrets to git
-5. **Keep OAuth secrets private** - Use environment variables for client secrets

@@ -12,8 +12,10 @@ import gleam/int
 import gleam/json
 import gleam/list
 import gleam/string
+import gleam/option
 import gleeunit/should
 import graphql_gleam
+import lib/oauth/did_cache
 import sqlight
 
 // Helper to create a post lexicon JSON
@@ -225,13 +227,15 @@ pub fn did_join_first_one_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -341,13 +345,15 @@ pub fn did_join_first_two_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -455,13 +461,15 @@ pub fn reverse_join_first_one_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 
@@ -570,13 +578,15 @@ pub fn did_join_default_pagination_test() {
     }
   "
 
+  let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     graphql_gleam.execute_query_with_db(
       db,
       query,
       "{}",
       Error(Nil),
-      "",
+      cache,
+      option.None,
       "https://plc.directory",
     )
 

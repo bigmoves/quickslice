@@ -14,6 +14,9 @@ import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string
+import gleam/uri
+import handlers/admin_oauth_authorize as admin_oauth_authorize_handler
+import handlers/admin_oauth_callback as admin_oauth_callback_handler
 import handlers/backfill as backfill_handler
 import handlers/client_graphql as client_graphql_handler
 import handlers/graphiql as graphiql_handler
@@ -21,13 +24,23 @@ import handlers/graphql as graphql_handler
 import handlers/graphql_ws as graphql_ws_handler
 import handlers/health as health_handler
 import handlers/index as index_handler
+import handlers/oauth/atp_callback as oauth_atp_callback_handler
+import handlers/oauth/atp_session as oauth_atp_session_handler
+import handlers/oauth/authorize as oauth_authorize_handler
+import handlers/oauth/client_metadata as oauth_client_metadata_handler
+import handlers/oauth/dpop_nonce as oauth_dpop_nonce_handler
+import handlers/oauth/jwks as oauth_jwks_handler
+import handlers/oauth/metadata as oauth_metadata_handler
+import handlers/oauth/par as oauth_par_handler
+import handlers/oauth/register as oauth_register_handler
+import handlers/oauth/token as oauth_token_handler
+import handlers/logout as logout_handler
 import handlers/upload as upload_handler
 import importer
 import jetstream_consumer
+import lib/oauth/did_cache
 import logging
 import mist
-import oauth/handlers
-import oauth/registration
 import pubsub
 import sqlight
 import stats_pubsub
@@ -37,15 +50,18 @@ import wisp/wisp_mist
 pub type Context {
   Context(
     db: sqlight.Connection,
-    auth_base_url: String,
+    external_base_url: String,
     plc_url: String,
-    oauth_config: handlers.OAuthConfig,
     admin_dids: List(String),
     backfill_state: process.Subject(backfill_state.Message),
     config: process.Subject(config.Message),
     jetstream_consumer: option.Option(
       process.Subject(jetstream_consumer.ManagerMessage),
     ),
+    did_cache: process.Subject(did_cache.Message),
+    oauth_signing_key: option.Option(String),
+    oauth_supported_scopes: List(String),
+    oauth_loopback_mode: Bool,
   )
 }
 
@@ -305,12 +321,6 @@ fn start_server(
     }
   }
 
-  // Get auth_base_url from environment variable or use default
-  let auth_base_url = case envoy.get("AIP_BASE_URL") {
-    Ok(url) -> url
-    Error(_) -> "https://auth.example.com"
-  }
-
   // Get HOST and PORT from environment variables or use defaults
   let host = case envoy.get("HOST") {
     Ok(h) -> h
@@ -326,121 +336,11 @@ fn start_server(
     Error(_) -> 8000
   }
 
-  // OAuth configuration - check environment variables first for backwards compatibility
-  let enable_auto_register = case envoy.get("ENABLE_OAUTH_AUTO_REGISTER") {
-    Ok(val) -> val == "true" || val == "1"
-    Error(_) -> False
+  // Determine external base URL from EXTERNAL_BASE_URL environment variable
+  let external_base_url = case envoy.get("EXTERNAL_BASE_URL") {
+    Ok(base_url) -> base_url
+    Error(_) -> "http://" <> host <> ":" <> int.to_string(port)
   }
-
-  // Determine redirect URI from EXTERNAL_BASE_URL environment variable
-  let oauth_redirect_uri = case envoy.get("EXTERNAL_BASE_URL") {
-    Ok(base_url) -> base_url <> "/oauth/callback"
-    Error(_) ->
-      "http://" <> host <> ":" <> int.to_string(port) <> "/oauth/callback"
-  }
-
-  let oauth_config = case
-    envoy.get("OAUTH_CLIENT_ID"),
-    envoy.get("OAUTH_CLIENT_SECRET")
-  {
-    Ok(id), Ok(secret) if id != "" && secret != "" -> {
-      // Use environment variables if provided (backwards compatibility)
-      logging.log(
-        logging.Info,
-        "[oauth] Using OAuth credentials from environment variables",
-      )
-      handlers.OAuthConfig(
-        client_id: id,
-        client_secret: secret,
-        redirect_uri: oauth_redirect_uri,
-        auth_url: auth_base_url,
-      )
-    }
-    _, _ -> {
-      // Try auto-registration if enabled
-      case enable_auto_register {
-        True -> {
-          logging.log(
-            logging.Info,
-            "[oauth] Auto-registration enabled, checking for stored credentials...",
-          )
-
-          case
-            registration.ensure_oauth_client(
-              db,
-              auth_base_url,
-              oauth_redirect_uri,
-              "Quickslice Server",
-            )
-          {
-            Ok(config) -> config
-            Error(err) -> {
-              logging.log(
-                logging.Error,
-                "[oauth] OAuth auto-registration failed: " <> err,
-              )
-              logging.log(
-                logging.Warning,
-                "[oauth] Starting retry actor to attempt registration in background...",
-              )
-
-              // Start retry actor in background
-              case
-                registration.start_retry_actor(
-                  db,
-                  auth_base_url,
-                  oauth_redirect_uri,
-                  "Quickslice Server",
-                )
-              {
-                Ok(retry_subject) -> {
-                  logging.log(
-                    logging.Info,
-                    "[oauth] Retry actor started successfully",
-                  )
-                  // Trigger first retry attempt immediately
-                  registration.trigger_retry(retry_subject)
-                }
-                Error(_) -> {
-                  logging.log(
-                    logging.Error,
-                    "[oauth] Failed to start retry actor",
-                  )
-                }
-              }
-
-              // Return empty credentials for now
-              logging.log(
-                logging.Warning,
-                "[oauth] Server will start without OAuth support until registration succeeds",
-              )
-              handlers.OAuthConfig(
-                client_id: "",
-                client_secret: "",
-                redirect_uri: oauth_redirect_uri,
-                auth_url: auth_base_url,
-              )
-            }
-          }
-        }
-        False -> {
-          // Auto-registration disabled, use empty credentials
-          logging.log(
-            logging.Info,
-            "[oauth] Auto-registration disabled, OAuth will not be available",
-          )
-          handlers.OAuthConfig(
-            client_id: "",
-            client_secret: "",
-            redirect_uri: oauth_redirect_uri,
-            auth_url: auth_base_url,
-          )
-        }
-      }
-    }
-  }
-
-  logging.log(logging.Info, "[server] Using AIP server: " <> auth_base_url)
 
   // Parse ADMIN_DIDS from environment variable (comma-separated list)
   let admin_dids = case envoy.get("ADMIN_DIDS") {
@@ -459,6 +359,49 @@ fn start_server(
     Error(_) -> "https://plc.directory"
   }
 
+  // Get OAuth signing key from environment variable (multibase format)
+  let oauth_signing_key = case envoy.get("OAUTH_SIGNING_KEY") {
+    Ok(key) if key != "" -> {
+      logging.log(
+        logging.Info,
+        "[oauth] Using OAUTH_SIGNING_KEY from environment",
+      )
+      option.Some(key)
+    }
+    _ -> {
+      logging.log(
+        logging.Warning,
+        "[oauth] OAUTH_SIGNING_KEY not set, JWT signing and JWKS will be unavailable",
+      )
+      option.None
+    }
+  }
+
+  // Get OAuth supported scopes from environment variable (space-separated)
+  let oauth_supported_scopes = case envoy.get("OAUTH_SUPPORTED_SCOPES") {
+    Ok(scopes_str) -> {
+      scopes_str
+      |> string.split(" ")
+      |> list.map(string.trim)
+      |> list.filter(fn(s) { !string.is_empty(s) })
+    }
+    Error(_) -> ["atproto", "transition:generic"]
+  }
+
+  // Get OAuth loopback mode from environment variable
+  // When true, uses loopback client IDs (http://localhost/?redirect_uri=...)
+  // instead of client metadata URLs, allowing local development without ngrok
+  let oauth_loopback_mode = case envoy.get("OAUTH_LOOPBACK_MODE") {
+    Ok("true") -> {
+      logging.log(
+        logging.Info,
+        "[oauth] Loopback mode enabled - using loopback client IDs",
+      )
+      True
+    }
+    _ -> False
+  }
+
   // Start backfill state actor to track backfill status across requests
   let assert Ok(backfill_state_subject) = backfill_state.start()
   logging.log(logging.Info, "[server] Backfill state actor initialized")
@@ -467,16 +410,23 @@ fn start_server(
   let assert Ok(config_subject) = config.start(db)
   logging.log(logging.Info, "[server] Config cache actor initialized")
 
+  // Start DID cache actor
+  let assert Ok(did_cache_subject) = did_cache.start()
+  logging.log(logging.Info, "[server] DID cache actor initialized")
+
   let ctx =
     Context(
       db: db,
-      auth_base_url: auth_base_url,
+      external_base_url: external_base_url,
       plc_url: plc_url,
-      oauth_config: oauth_config,
       admin_dids: admin_dids,
       backfill_state: backfill_state_subject,
       config: config_subject,
       jetstream_consumer: jetstream_subject,
+      did_cache: did_cache_subject,
+      oauth_signing_key: oauth_signing_key,
+      oauth_supported_scopes: oauth_supported_scopes,
+      oauth_loopback_mode: oauth_loopback_mode,
     )
 
   let handler = fn(req) { handle_request(req, ctx, static_directory) }
@@ -514,7 +464,8 @@ fn start_server(
                 graphql_ws_handler.handle_websocket(
                   req,
                   ctx.db,
-                  ctx.auth_base_url,
+                  ctx.did_cache,
+                  ctx.oauth_signing_key,
                   ctx.plc_url,
                   domain_authority,
                 )
@@ -539,6 +490,16 @@ fn start_server(
   process.sleep_forever()
 }
 
+/// Build a loopback client ID for OAuth with native apps
+/// Format: http://localhost/?redirect_uri=...&scope=...
+/// Per RFC 8252, redirect_uri must use 127.0.0.1 (not localhost)
+fn build_loopback_client_id(redirect_uri: String, scope: String) -> String {
+  "http://localhost/?redirect_uri="
+  <> uri.percent_encode(redirect_uri)
+  <> "&scope="
+  <> uri.percent_encode(scope)
+}
+
 fn handle_request(
   req: wisp.Request,
   ctx: Context,
@@ -551,11 +512,45 @@ fn handle_request(
   case segments {
     [] -> index_handler.handle()
     ["health"] -> health_handler.handle(ctx.db)
-    ["oauth", "authorize"] ->
-      handlers.handle_oauth_authorize(req, ctx.db, ctx.oauth_config)
-    ["oauth", "callback"] ->
-      handlers.handle_oauth_callback(req, ctx.db, ctx.oauth_config)
-    ["logout"] -> handlers.handle_logout(req, ctx.db)
+    ["logout"] -> logout_handler.handle(req, ctx.db)
+    ["admin", "oauth", "authorize"] -> {
+      let redirect_uri = ctx.external_base_url <> "/admin/oauth/callback"
+      let client_id = case ctx.oauth_loopback_mode {
+        True ->
+          build_loopback_client_id(
+            redirect_uri,
+            string.join(ctx.oauth_supported_scopes, " "),
+          )
+        False -> ctx.external_base_url <> "/oauth-client-metadata.json"
+      }
+      admin_oauth_authorize_handler.handle(
+        req,
+        ctx.db,
+        ctx.did_cache,
+        redirect_uri,
+        client_id,
+        ctx.oauth_signing_key,
+      )
+    }
+    ["admin", "oauth", "callback"] -> {
+      let redirect_uri = ctx.external_base_url <> "/admin/oauth/callback"
+      let client_id = case ctx.oauth_loopback_mode {
+        True ->
+          build_loopback_client_id(
+            redirect_uri,
+            string.join(ctx.oauth_supported_scopes, " "),
+          )
+        False -> ctx.external_base_url <> "/oauth-client-metadata.json"
+      }
+      admin_oauth_callback_handler.handle(
+        req,
+        ctx.db,
+        ctx.did_cache,
+        redirect_uri,
+        client_id,
+        ctx.oauth_signing_key,
+      )
+    }
     ["backfill"] -> backfill_handler.handle(req, ctx.db, ctx.config)
     ["admin", "graphql"] ->
       client_graphql_handler.handle_client_graphql_request(
@@ -563,18 +558,83 @@ fn handle_request(
         ctx.db,
         ctx.admin_dids,
         ctx.jetstream_consumer,
+        ctx.did_cache,
+        ctx.oauth_supported_scopes,
       )
     ["graphql"] ->
       graphql_handler.handle_graphql_request(
         req,
         ctx.db,
-        ctx.auth_base_url,
+        ctx.did_cache,
+        ctx.oauth_signing_key,
         ctx.plc_url,
       )
     ["graphiql"] ->
-      graphiql_handler.handle_graphiql_request(req, ctx.db, ctx.oauth_config)
+      graphiql_handler.handle_graphiql_request(req, ctx.db, ctx.did_cache)
     ["upload"] ->
-      upload_handler.handle_upload_request(req, ctx.db, ctx.oauth_config)
+      upload_handler.handle_upload_request(req, ctx.db, ctx.did_cache)
+    // New OAuth 2.0 endpoints
+    [".well-known", "oauth-authorization-server"] ->
+      oauth_metadata_handler.handle(ctx.external_base_url)
+    [".well-known", "jwks.json"] ->
+      oauth_jwks_handler.handle(ctx.oauth_signing_key)
+    ["oauth-client-metadata.json"] ->
+      oauth_client_metadata_handler.handle(
+        ctx.external_base_url,
+        "Quickslice Server",
+        [
+          ctx.external_base_url <> "/admin/oauth/callback",
+          ctx.external_base_url <> "/oauth/atp/callback",
+        ],
+        "atproto transition:generic",
+        option.None,
+        option.Some(ctx.external_base_url <> "/.well-known/jwks.json"),
+      )
+    ["oauth", "dpop", "nonce"] -> oauth_dpop_nonce_handler.handle(ctx.db)
+    ["oauth", "register"] -> oauth_register_handler.handle(req, ctx.db)
+    ["oauth", "par"] -> oauth_par_handler.handle(req, ctx.db)
+    ["oauth", "authorize"] -> {
+      let redirect_uri = ctx.external_base_url <> "/oauth/atp/callback"
+      let client_id = case ctx.oauth_loopback_mode {
+        True ->
+          build_loopback_client_id(
+            redirect_uri,
+            string.join(ctx.oauth_supported_scopes, " "),
+          )
+        False -> ctx.external_base_url <> "/oauth-client-metadata.json"
+      }
+      oauth_authorize_handler.handle(
+        req,
+        ctx.db,
+        ctx.did_cache,
+        redirect_uri,
+        client_id,
+        ctx.oauth_signing_key,
+      )
+    }
+
+    ["oauth", "token"] -> oauth_token_handler.handle(req, ctx.db)
+    ["oauth", "atp", "callback"] -> {
+      let redirect_uri = ctx.external_base_url <> "/oauth/atp/callback"
+      let client_id = case ctx.oauth_loopback_mode {
+        True ->
+          build_loopback_client_id(
+            redirect_uri,
+            string.join(ctx.oauth_supported_scopes, " "),
+          )
+        False -> ctx.external_base_url <> "/oauth-client-metadata.json"
+      }
+      oauth_atp_callback_handler.handle(
+        req,
+        ctx.db,
+        ctx.did_cache,
+        redirect_uri,
+        client_id,
+        ctx.oauth_signing_key,
+      )
+    }
+    ["api", "atp", "sessions", session_id] ->
+      oauth_atp_session_handler.handle(req, ctx.db, session_id)
     // Fallback: serve SPA index.html for client-side routing
     _ -> index_handler.handle()
   }
