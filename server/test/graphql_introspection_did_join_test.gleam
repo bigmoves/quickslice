@@ -9,14 +9,14 @@ import gleam/dynamic/decode
 import gleam/http
 import gleam/json
 import gleam/list
+import gleam/option
 import gleam/result
 import gleam/string
 import gleeunit/should
-import gleam/option
 import handlers/graphql as graphql_handler
 import honk
-import lib/oauth/did_cache
 import importer
+import lib/oauth/did_cache
 import simplifile
 import sqlight
 import wisp

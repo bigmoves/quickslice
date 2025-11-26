@@ -1165,8 +1165,7 @@ pub fn mutation_type(
                           })
                         // Validate at least one redirect URI
                         case redirect_uris {
-                          [] ->
-                            Error("At least one redirect URI is required")
+                          [] -> Error("At least one redirect URI is required")
                           _ -> {
                             // Validate each redirect URI format
                             let invalid_uri =
@@ -1185,49 +1184,62 @@ pub fn mutation_type(
                                 )
                               Error(_) -> {
                                 // Validate scope against supported scopes
-                                case validate_scope_against_supported(scope, oauth_supported_scopes) {
+                                case
+                                  validate_scope_against_supported(
+                                    scope,
+                                    oauth_supported_scopes,
+                                  )
+                                {
                                   Error(err) -> Error(err)
                                   Ok(_) -> {
-                            let now = token_generator.current_timestamp()
-                            let client_id = token_generator.generate_client_id()
-                            let client_secret = case client_type {
-                              types.Confidential ->
-                                Some(token_generator.generate_client_secret())
-                              types.Public -> None
-                            }
-                            let client =
-                              types.OAuthClient(
-                                client_id: client_id,
-                                client_secret: client_secret,
-                                client_name: trimmed_name,
-                                redirect_uris: redirect_uris,
-                                grant_types: [
-                                  types.AuthorizationCode,
-                                  types.RefreshToken,
-                                ],
-                                response_types: [types.Code],
-                                scope: case string.trim(scope) {
-                                  "" -> None
-                                  s -> Some(s)
-                                },
-                                token_endpoint_auth_method: case client_type {
-                                  types.Confidential -> types.ClientSecretPost
-                                  types.Public -> types.AuthNone
-                                },
-                                client_type: client_type,
-                                created_at: now,
-                                updated_at: now,
-                                metadata: "{}",
-                                access_token_expiration: 3600,
-                                refresh_token_expiration: 86_400 * 30,
-                                require_redirect_exact: True,
-                                registration_access_token: None,
-                                jwks: None,
-                              )
-                            case oauth_clients.insert(conn, client) {
-                              Ok(_) -> Ok(oauth_client_to_value(client))
-                              Error(_) -> Error("Failed to create OAuth client")
-                            }
+                                    let now =
+                                      token_generator.current_timestamp()
+                                    let client_id =
+                                      token_generator.generate_client_id()
+                                    let client_secret = case client_type {
+                                      types.Confidential ->
+                                        Some(
+                                          token_generator.generate_client_secret(),
+                                        )
+                                      types.Public -> None
+                                    }
+                                    let client =
+                                      types.OAuthClient(
+                                        client_id: client_id,
+                                        client_secret: client_secret,
+                                        client_name: trimmed_name,
+                                        redirect_uris: redirect_uris,
+                                        grant_types: [
+                                          types.AuthorizationCode,
+                                          types.RefreshToken,
+                                        ],
+                                        response_types: [types.Code],
+                                        scope: case string.trim(scope) {
+                                          "" -> None
+                                          s -> Some(s)
+                                        },
+                                        token_endpoint_auth_method: case
+                                          client_type
+                                        {
+                                          types.Confidential ->
+                                            types.ClientSecretPost
+                                          types.Public -> types.AuthNone
+                                        },
+                                        client_type: client_type,
+                                        created_at: now,
+                                        updated_at: now,
+                                        metadata: "{}",
+                                        access_token_expiration: 3600,
+                                        refresh_token_expiration: 86_400 * 30,
+                                        require_redirect_exact: True,
+                                        registration_access_token: None,
+                                        jwks: None,
+                                      )
+                                    case oauth_clients.insert(conn, client) {
+                                      Ok(_) -> Ok(oauth_client_to_value(client))
+                                      Error(_) ->
+                                        Error("Failed to create OAuth client")
+                                    }
                                   }
                                 }
                               }
@@ -1336,28 +1348,38 @@ pub fn mutation_type(
                                     )
                                   Error(_) -> {
                                     // Validate scope against supported scopes
-                                    case validate_scope_against_supported(scope, oauth_supported_scopes) {
+                                    case
+                                      validate_scope_against_supported(
+                                        scope,
+                                        oauth_supported_scopes,
+                                      )
+                                    {
                                       Error(err) -> Error(err)
                                       Ok(_) -> {
-                                let updated =
-                                  types.OAuthClient(
-                                    ..existing,
-                                    client_name: trimmed_name,
-                                    redirect_uris: redirect_uris,
-                                    scope: case string.trim(scope) {
-                                      "" -> None
-                                      s -> Some(s)
-                                    },
-                                    updated_at: token_generator.current_timestamp(),
-                                  )
-                                case oauth_clients.update(conn, updated) {
-                                  Ok(_) -> Ok(oauth_client_to_value(updated))
-                                  Error(_) ->
-                                    Error("Failed to update OAuth client")
-                                }
+                                        let updated =
+                                          types.OAuthClient(
+                                            ..existing,
+                                            client_name: trimmed_name,
+                                            redirect_uris: redirect_uris,
+                                            scope: case string.trim(scope) {
+                                              "" -> None
+                                              s -> Some(s)
+                                            },
+                                            updated_at: token_generator.current_timestamp(),
+                                          )
+                                        case
+                                          oauth_clients.update(conn, updated)
+                                        {
+                                          Ok(_) ->
+                                            Ok(oauth_client_to_value(updated))
+                                          Error(_) ->
+                                            Error(
+                                              "Failed to update OAuth client",
+                                            )
+                                        }
                                       }
                                     }
-                              }
+                                  }
                                 }
                               }
                             }
@@ -1432,6 +1454,13 @@ pub fn build_schema(
 ) -> schema.Schema {
   schema.schema(
     query_type(conn, req, admin_dids, did_cache),
-    Some(mutation_type(conn, req, admin_dids, jetstream_subject, did_cache, oauth_supported_scopes)),
+    Some(mutation_type(
+      conn,
+      req,
+      admin_dids,
+      jetstream_subject,
+      did_cache,
+      oauth_supported_scopes,
+    )),
   )
 }

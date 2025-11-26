@@ -81,4 +81,3 @@ pub fn delete_domain_authority(
 ) -> Result(Nil, sqlight.Error) {
   delete(conn, "domain_authority")
 }
-

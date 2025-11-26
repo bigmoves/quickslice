@@ -133,7 +133,12 @@ pub fn create_resolver_factory(
     }
 
     use session <- result.try(
-      atproto_auth.get_atp_session(ctx.db, ctx.did_cache, token, ctx.signing_key)
+      atproto_auth.get_atp_session(
+        ctx.db,
+        ctx.did_cache,
+        token,
+        ctx.signing_key,
+      )
       |> result.map_error(fn(err) {
         case err {
           atproto_auth.SessionNotFound -> "Session not found"
@@ -338,7 +343,12 @@ pub fn update_resolver_factory(
     }
 
     use session <- result.try(
-      atproto_auth.get_atp_session(ctx.db, ctx.did_cache, token, ctx.signing_key)
+      atproto_auth.get_atp_session(
+        ctx.db,
+        ctx.did_cache,
+        token,
+        ctx.signing_key,
+      )
       |> result.map_error(fn(err) {
         case err {
           atproto_auth.SessionNotFound -> "Session not found"
@@ -517,7 +527,12 @@ pub fn delete_resolver_factory(
     }
 
     use session <- result.try(
-      atproto_auth.get_atp_session(ctx.db, ctx.did_cache, token, ctx.signing_key)
+      atproto_auth.get_atp_session(
+        ctx.db,
+        ctx.did_cache,
+        token,
+        ctx.signing_key,
+      )
       |> result.map_error(fn(err) {
         case err {
           atproto_auth.SessionNotFound -> "Session not found"
@@ -651,7 +666,12 @@ pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
     }
 
     use session <- result.try(
-      atproto_auth.get_atp_session(ctx.db, ctx.did_cache, token, ctx.signing_key)
+      atproto_auth.get_atp_session(
+        ctx.db,
+        ctx.did_cache,
+        token,
+        ctx.signing_key,
+      )
       |> result.map_error(fn(err) {
         case err {
           atproto_auth.SessionNotFound -> "Session not found"

@@ -29,8 +29,24 @@ pub fn handle_client_graphql_request(
   oauth_supported_scopes: List(String),
 ) -> wisp.Response {
   case req.method {
-    http.Post -> handle_post(req, db, admin_dids, jetstream_subject, did_cache, oauth_supported_scopes)
-    http.Get -> handle_get(req, db, admin_dids, jetstream_subject, did_cache, oauth_supported_scopes)
+    http.Post ->
+      handle_post(
+        req,
+        db,
+        admin_dids,
+        jetstream_subject,
+        did_cache,
+        oauth_supported_scopes,
+      )
+    http.Get ->
+      handle_get(
+        req,
+        db,
+        admin_dids,
+        jetstream_subject,
+        did_cache,
+        oauth_supported_scopes,
+      )
     _ -> method_not_allowed_response()
   }
 }

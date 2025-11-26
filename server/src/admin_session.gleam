@@ -183,4 +183,3 @@ pub fn should_refresh_token(db: Connection, session: OAuthSession) -> Bool {
     }
   }
 }
-

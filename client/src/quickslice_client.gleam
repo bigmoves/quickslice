@@ -39,22 +39,22 @@
 import components/layout
 import file_upload
 import generated/queries
+import generated/queries/create_o_auth_client
+import generated/queries/delete_o_auth_client
 import generated/queries/get_activity_buckets.{ONEDAY}
 import generated/queries/get_current_session
 import generated/queries/get_lexicons
 import generated/queries/get_o_auth_clients
-import generated/queries/create_o_auth_client
-import generated/queries/delete_o_auth_client
-import generated/queries/update_o_auth_client
 import generated/queries/get_recent_activity
 import generated/queries/get_settings
 import generated/queries/get_statistics
 import generated/queries/reset_all
 import generated/queries/trigger_backfill
 import generated/queries/update_domain_authority
+import generated/queries/update_o_auth_client
 import generated/queries/upload_lexicons
-import gleam/io
 import gleam/dynamic/decode
+import gleam/io
 import gleam/json.{type Json}
 import gleam/list
 import gleam/option.{None}
@@ -431,11 +431,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         "CreateOAuthClient" | "UpdateOAuthClient" | "DeleteOAuthClient" ->
           case extract_graphql_error(response_body) {
             option.Some(err) ->
-              settings.set_oauth_alert(
-                model.settings_page_model,
-                "error",
-                err,
-              )
+              settings.set_oauth_alert(model.settings_page_model, "error", err)
             option.None -> {
               let message = case query_name {
                 "CreateOAuthClient" -> "OAuth client created successfully"
@@ -588,9 +584,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             "error",
             "Error: " <> err,
           )
-        "CreateOAuthClient"
-        | "UpdateOAuthClient"
-        | "DeleteOAuthClient" ->
+        "CreateOAuthClient" | "UpdateOAuthClient" | "DeleteOAuthClient" ->
           settings.set_oauth_alert(
             model.settings_page_model,
             "error",
@@ -1011,10 +1005,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
         settings.UpdateNewClientName(value) -> {
           let new_settings_model =
-            settings.Model(
-              ..model.settings_page_model,
-              new_client_name: value,
-            )
+            settings.Model(..model.settings_page_model, new_client_name: value)
           #(
             Model(..model, settings_page_model: new_settings_model),
             effect.none(),
@@ -1023,10 +1014,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
         settings.UpdateNewClientType(value) -> {
           let new_settings_model =
-            settings.Model(
-              ..model.settings_page_model,
-              new_client_type: value,
-            )
+            settings.Model(..model.settings_page_model, new_client_type: value)
           #(
             Model(..model, settings_page_model: new_settings_model),
             effect.none(),
@@ -1047,10 +1035,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
         settings.UpdateNewClientScope(value) -> {
           let new_settings_model =
-            settings.Model(
-              ..model.settings_page_model,
-              new_client_scope: value,
-            )
+            settings.Model(..model.settings_page_model, new_client_scope: value)
           #(
             Model(..model, settings_page_model: new_settings_model),
             effect.none(),
@@ -1060,25 +1045,30 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         settings.SubmitNewClient -> {
           // Parse redirect URIs from newline-separated text
           let uris =
-            string.split(model.settings_page_model.new_client_redirect_uris, "\n")
+            string.split(
+              model.settings_page_model.new_client_redirect_uris,
+              "\n",
+            )
             |> list.filter(fn(s) { string.length(string.trim(s)) > 0 })
             |> list.map(string.trim)
 
           let variables =
             json.object([
-              #("clientName", json.string(model.settings_page_model.new_client_name)),
+              #(
+                "clientName",
+                json.string(model.settings_page_model.new_client_name),
+              ),
               #("clientType", json.string("CONFIDENTIAL")),
               #("redirectUris", json.array(uris, json.string)),
-              #("scope", json.string(model.settings_page_model.new_client_scope)),
+              #(
+                "scope",
+                json.string(model.settings_page_model.new_client_scope),
+              ),
             ])
 
           // Invalidate cached mutation to ensure fresh request
           let cache_invalidated =
-            squall_cache.invalidate(
-              model.cache,
-              "CreateOAuthClient",
-              variables,
-            )
+            squall_cache.invalidate(model.cache, "CreateOAuthClient", variables)
 
           let #(cache_with_lookup, _) =
             squall_cache.lookup(
@@ -1184,10 +1174,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
         settings.UpdateEditClientName(value) -> {
           let new_settings_model =
-            settings.Model(
-              ..model.settings_page_model,
-              edit_client_name: value,
-            )
+            settings.Model(..model.settings_page_model, edit_client_name: value)
           #(
             Model(..model, settings_page_model: new_settings_model),
             effect.none(),
@@ -1238,7 +1225,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                     json.string(model.settings_page_model.edit_client_name),
                   ),
                   #("redirectUris", json.array(uris, json.string)),
-                  #("scope", json.string(model.settings_page_model.edit_client_scope)),
+                  #(
+                    "scope",
+                    json.string(model.settings_page_model.edit_client_scope),
+                  ),
                 ])
 
               // Invalidate cached mutation to ensure fresh request

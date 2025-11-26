@@ -1,3 +1,4 @@
+import admin_session as session
 import config
 import database/repositories/actors
 import database/repositories/config as config_repo
@@ -13,7 +14,6 @@ import importer
 import jetstream_consumer
 import lib/oauth/did_cache
 import logging
-import admin_session as session
 import simplifile
 import sqlight
 import wisp

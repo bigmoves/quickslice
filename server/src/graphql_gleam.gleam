@@ -600,11 +600,12 @@ fn dynamic_to_value(dyn: dynamic.Dynamic) -> value.Value {
 }
 
 /// Format an executor.Response as JSON string
+/// Per GraphQL spec, only include "errors" field when there are actual errors
 pub fn format_response(response: executor.Response) -> String {
   let data_json = value_to_json(response.data)
 
-  let errors_json = case response.errors {
-    [] -> "[]"
+  case response.errors {
+    [] -> "{\"data\": " <> data_json <> "}"
     errors -> {
       let error_strings =
         list.map(errors, fn(err) {
@@ -615,11 +616,10 @@ pub fn format_response(response: executor.Response) -> String {
           "{\"message\": " <> message_json <> ", \"path\": " <> path_json <> "}"
         })
 
-      "[" <> string.join(error_strings, ",") <> "]"
+      let errors_json = "[" <> string.join(error_strings, ",") <> "]"
+      "{\"data\": " <> data_json <> ", \"errors\": " <> errors_json <> "}"
     }
   }
-
-  "{\"data\": " <> data_json <> ", \"errors\": " <> errors_json <> "}"
 }
 
 /// Convert a GraphQL value to JSON string

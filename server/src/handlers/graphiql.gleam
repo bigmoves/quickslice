@@ -1,9 +1,9 @@
 /// GraphiQL interface handler
 ///
 /// Serves the GraphiQL interactive GraphQL IDE
+import admin_session as session
 import gleam/erlang/process.{type Subject}
 import lib/oauth/did_cache
-import admin_session as session
 import sqlight
 import wisp
 

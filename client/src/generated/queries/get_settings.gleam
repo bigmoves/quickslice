@@ -14,12 +14,10 @@ pub fn settings_decoder() -> decode.Decoder(Settings) {
 }
 
 pub fn settings_to_json(input: Settings) -> json.Json {
-  json.object(
-    [
-      #("id", json.string(input.id)),
-      #("domainAuthority", json.string(input.domain_authority)),
-    ],
-  )
+  json.object([
+    #("id", json.string(input.id)),
+    #("domainAuthority", json.string(input.domain_authority)),
+  ])
 }
 
 pub type GetSettingsResponse {
@@ -43,6 +41,8 @@ pub fn get_settings(client: squall.Client) -> Result(Request(String), String) {
   )
 }
 
-pub fn parse_get_settings_response(body: String) -> Result(GetSettingsResponse, String) {
+pub fn parse_get_settings_response(
+  body: String,
+) -> Result(GetSettingsResponse, String) {
   squall.parse_response(body, get_settings_response_decoder())
 }

@@ -12,8 +12,8 @@ import database/schema/tables
 import gleam/int
 import gleam/json
 import gleam/list
-import gleam/string
 import gleam/option
+import gleam/string
 import gleeunit/should
 import graphql_gleam
 import lib/oauth/did_cache

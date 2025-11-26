@@ -9,8 +9,8 @@ import gleam/http
 import gleam/int
 import gleam/json
 import gleam/list
-import gleam/string
 import gleam/option
+import gleam/string
 import gleeunit/should
 import handlers/graphql as graphql_handler
 import lib/oauth/did_cache

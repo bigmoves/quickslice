@@ -1,10 +1,10 @@
 /// Upload interface handler
 ///
 /// Serves a simple form to upload blobs and test the uploadBlob mutation
+import admin_session as session
 import gleam/erlang/process.{type Subject}
 import gleam/http
 import lib/oauth/did_cache
-import admin_session as session
 import sqlight
 import wisp
 

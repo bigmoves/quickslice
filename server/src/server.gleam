@@ -24,6 +24,7 @@ import handlers/graphql as graphql_handler
 import handlers/graphql_ws as graphql_ws_handler
 import handlers/health as health_handler
 import handlers/index as index_handler
+import handlers/logout as logout_handler
 import handlers/oauth/atp_callback as oauth_atp_callback_handler
 import handlers/oauth/atp_session as oauth_atp_session_handler
 import handlers/oauth/authorize as oauth_authorize_handler
@@ -34,7 +35,6 @@ import handlers/oauth/metadata as oauth_metadata_handler
 import handlers/oauth/par as oauth_par_handler
 import handlers/oauth/register as oauth_register_handler
 import handlers/oauth/token as oauth_token_handler
-import handlers/logout as logout_handler
 import handlers/upload as upload_handler
 import importer
 import jetstream_consumer

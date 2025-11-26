@@ -110,12 +110,7 @@ pub fn get_all(
      FROM oauth_client WHERE client_id != 'admin'
      ORDER BY created_at DESC"
 
-  sqlight.query(
-    sql,
-    on: conn,
-    with: [],
-    expecting: decoder(),
-  )
+  sqlight.query(sql, on: conn, with: [], expecting: decoder())
 }
 
 /// Update an existing OAuth client
@@ -203,7 +198,9 @@ pub fn delete(
 
 /// Ensure the internal "admin" client exists for admin UI tokens
 /// Call this at startup after migrations
-pub fn ensure_admin_client(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+pub fn ensure_admin_client(
+  conn: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
   case get(conn, "admin") {
     Ok(Some(_)) -> {
       // Admin client already exists

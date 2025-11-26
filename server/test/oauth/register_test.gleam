@@ -15,7 +15,10 @@ pub fn register_valid_client_test() {
   let body =
     json.object([
       #("client_name", json.string("Test Client")),
-      #("redirect_uris", json.array([json.string("https://example.com/callback")], fn(x) { x })),
+      #(
+        "redirect_uris",
+        json.array([json.string("https://example.com/callback")], fn(x) { x }),
+      ),
     ])
     |> json.to_string
 
@@ -65,7 +68,10 @@ pub fn register_http_non_localhost_redirect_uri_rejected_test() {
   let body =
     json.object([
       #("client_name", json.string("Test Client")),
-      #("redirect_uris", json.array([json.string("http://example.com/callback")], fn(x) { x })),
+      #(
+        "redirect_uris",
+        json.array([json.string("http://example.com/callback")], fn(x) { x }),
+      ),
     ])
     |> json.to_string
 
@@ -95,7 +101,10 @@ pub fn register_http_localhost_redirect_uri_allowed_test() {
   let body =
     json.object([
       #("client_name", json.string("Test Client")),
-      #("redirect_uris", json.array([json.string("http://localhost:3000/callback")], fn(x) { x })),
+      #(
+        "redirect_uris",
+        json.array([json.string("http://localhost:3000/callback")], fn(x) { x }),
+      ),
     ])
     |> json.to_string
 

@@ -1,8 +1,8 @@
 import gleam/dynamic/decode
 import gleam/http/request.{type Request}
 import gleam/json
-import squall
 import gleam/option.{type Option}
+import squall
 
 pub type OAuthClient {
   OAuthClient(
@@ -18,7 +18,10 @@ pub type OAuthClient {
 
 pub fn o_auth_client_decoder() -> decode.Decoder(OAuthClient) {
   use client_id <- decode.field("clientId", decode.string)
-  use client_secret <- decode.field("clientSecret", decode.optional(decode.string))
+  use client_secret <- decode.field(
+    "clientSecret",
+    decode.optional(decode.string),
+  )
   use client_name <- decode.field("clientName", decode.string)
   use client_type <- decode.field("clientType", decode.string)
   use redirect_uris <- decode.field("redirectUris", decode.list(decode.string))
@@ -36,40 +39,45 @@ pub fn o_auth_client_decoder() -> decode.Decoder(OAuthClient) {
 }
 
 pub fn o_auth_client_to_json(input: OAuthClient) -> json.Json {
-  json.object(
-    [
-      #("clientId", json.string(input.client_id)),
-      #("clientSecret", json.nullable(input.client_secret, json.string)),
-      #("clientName", json.string(input.client_name)),
-      #("clientType", json.string(input.client_type)),
-      #("redirectUris", json.array(from: input.redirect_uris, of: json.string)),
-      #("scope", json.nullable(input.scope, json.string)),
-      #("createdAt", json.int(input.created_at)),
-    ],
-  )
+  json.object([
+    #("clientId", json.string(input.client_id)),
+    #("clientSecret", json.nullable(input.client_secret, json.string)),
+    #("clientName", json.string(input.client_name)),
+    #("clientType", json.string(input.client_type)),
+    #("redirectUris", json.array(from: input.redirect_uris, of: json.string)),
+    #("scope", json.nullable(input.scope, json.string)),
+    #("createdAt", json.int(input.created_at)),
+  ])
 }
 
 pub type GetOAuthClientsResponse {
   GetOAuthClientsResponse(oauth_clients: List(OAuthClient))
 }
 
-pub fn get_o_auth_clients_response_decoder() -> decode.Decoder(GetOAuthClientsResponse) {
-  use oauth_clients <- decode.field("oauthClients", decode.list(o_auth_client_decoder()))
+pub fn get_o_auth_clients_response_decoder() -> decode.Decoder(
+  GetOAuthClientsResponse,
+) {
+  use oauth_clients <- decode.field(
+    "oauthClients",
+    decode.list(o_auth_client_decoder()),
+  )
   decode.success(GetOAuthClientsResponse(oauth_clients: oauth_clients))
 }
 
-pub fn get_o_auth_clients_response_to_json(input: GetOAuthClientsResponse) -> json.Json {
-  json.object(
-    [
-      #("oauthClients", json.array(
-        from: input.oauth_clients,
-        of: o_auth_client_to_json,
-      )),
-    ],
-  )
+pub fn get_o_auth_clients_response_to_json(
+  input: GetOAuthClientsResponse,
+) -> json.Json {
+  json.object([
+    #(
+      "oauthClients",
+      json.array(from: input.oauth_clients, of: o_auth_client_to_json),
+    ),
+  ])
 }
 
-pub fn get_o_auth_clients(client: squall.Client) -> Result(Request(String), String) {
+pub fn get_o_auth_clients(
+  client: squall.Client,
+) -> Result(Request(String), String) {
   squall.prepare_request(
     client,
     "query GetOAuthClients {\n  oauthClients {\n    clientId\n    clientSecret\n    clientName\n    clientType\n    redirectUris\n    scope\n    createdAt\n  }\n}",
@@ -77,6 +85,8 @@ pub fn get_o_auth_clients(client: squall.Client) -> Result(Request(String), Stri
   )
 }
 
-pub fn parse_get_o_auth_clients_response(body: String) -> Result(GetOAuthClientsResponse, String) {
+pub fn parse_get_o_auth_clients_response(
+  body: String,
+) -> Result(GetOAuthClientsResponse, String) {
   squall.parse_response(body, get_o_auth_clients_response_decoder())
 }
