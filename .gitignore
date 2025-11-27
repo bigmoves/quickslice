@@ -1,5 +1,5 @@
 erl_crash.dump
-.claude
+.claude/.settings.local.json
 .playwright-mcp
 
 # Database files
