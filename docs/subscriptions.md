@@ -130,7 +130,7 @@ Response:
 ### 1. Connect
 
 ```
-ws://localhost:8000/graphql
+ws://localhost:8080/graphql
 ```
 
 ### 2. Initialize

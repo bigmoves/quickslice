@@ -208,7 +208,7 @@ Variables:
 When making HTTP requests, send variables in the request body:
 
 ```bash
-curl -X POST http://localhost:8000/graphql \
+curl -X POST http://localhost:8080/graphql \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <token>" \
   -d '{

@@ -331,9 +331,9 @@ fn start_server(
     Ok(p) ->
       case int.parse(p) {
         Ok(port_num) -> port_num
-        Error(_) -> 8000
+        Error(_) -> 8080
       }
-    Error(_) -> 8000
+    Error(_) -> 8080
   }
 
   // Determine external base URL from EXTERNAL_BASE_URL environment variable
@@ -653,7 +653,7 @@ fn middleware(
   // Get origin from request headers
   let origin = case request.get_header(req, "origin") {
     Ok(o) -> o
-    Error(_) -> "http://localhost:8000"
+    Error(_) -> "http://localhost:8080"
   }
 
   // Handle CORS preflight requests

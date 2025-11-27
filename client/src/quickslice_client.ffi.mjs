@@ -2,7 +2,7 @@
 
 /**
  * Get the window origin (protocol + host + port)
- * @returns {string} The window origin (e.g., "http://localhost:8000")
+ * @returns {string} The window origin (e.g., "http://localhost:8080")
  */
 export function getWindowOrigin() {
   return window.location.origin;

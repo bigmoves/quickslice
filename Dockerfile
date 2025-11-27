@@ -3,16 +3,14 @@ ARG GLEAM_VERSION=v1.13.0
 # Build stage - compile the application
 FROM ghcr.io/gleam-lang/gleam:${GLEAM_VERSION}-erlang-alpine AS builder
 
-# Install build dependencies including Rust for NIFs
+# Install build dependencies
 RUN apk add --no-cache \
     bash \
     git \
     nodejs \
     npm \
     build-base \
-    sqlite-dev \
-    rust \
-    cargo
+    sqlite-dev
 
 # Configure git for non-interactive use
 ENV GIT_TERMINAL_PROMPT=0
@@ -64,7 +62,7 @@ RUN mkdir -p /data && chmod 755 /data
 
 # Set environment variables
 ENV HOST=0.0.0.0
-ENV PORT=8000
+ENV PORT=8080
 
 # Expose the port the server will run on
 EXPOSE $PORT

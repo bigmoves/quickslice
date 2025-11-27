@@ -657,7 +657,7 @@ Expected: Server starts successfully
 
 **Step 4: Test health endpoint**
 
-Run: `curl http://localhost:8000/health`
+Run: `curl http://localhost:8080/health`
 Expected: `{"status": "healthy"}` response
 
 **Step 5: Verify file structure**

@@ -8,10 +8,10 @@ This guide covers deploying quickslice on Fly.io and Railway. Both platforms sup
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | No | `quickslice.db` | Path to SQLite database file. Use `/data/quickslice.db` with volume mount |
 | `HOST` | No | `127.0.0.1` | Server bind address. Set to `0.0.0.0` for containers |
-| `PORT` | No | `8000` | Server port |
+| `PORT` | No | `8080` | Server port |
 | `SECRET_KEY_BASE` | Recommended | Auto-generated | Session encryption key (64+ chars). **Must persist across restarts** |
 | `ADMIN_DIDS` | Optional | - | Comma-separated DIDs for admin access (e.g., `did:plc:abc,did:plc:xyz`) |
-| `EXTERNAL_BASE_URL` | Optional | `http://localhost:8000` | Base URL of your application (used for OAuth redirect URIs and client metadata). Use `http://127.0.0.1:8000` for loopback mode |
+| `EXTERNAL_BASE_URL` | Optional | `http://localhost:8080` | Base URL of your application (used for OAuth redirect URIs and client metadata). Use `http://127.0.0.1:8080` for loopback mode |
 | `OAUTH_LOOPBACK_MODE` | Optional | `false` | Set to `true` for local development without ngrok. Uses loopback client IDs instead of client metadata URLs |
 | `OAUTH_SUPPORTED_SCOPES` | Optional | `atproto transition:generic` | Space-separated OAuth scopes to request (used in loopback client IDs and client metadata) |
 | `JETSTREAM_URL` | No | `wss://jetstream2.us-west.bsky.network/subscribe` | Jetstream WebSocket endpoint |
@@ -110,7 +110,7 @@ In the Railway dashboard, add these variables:
 ```
 DATABASE_URL=/data/quickslice.db
 HOST=0.0.0.0
-PORT=8000
+PORT=8080
 SECRET_KEY_BASE=<generate-with-openssl-rand>
 ```
 
@@ -167,19 +167,19 @@ services:
   quickslice:
     image: ghcr.io/bigmoves/quickslice:latest
     ports:
-      - "8000:8000"
+      - "8080:8080"
     volumes:
       - quickslice-data:/data
       - ./lexicons:/app/priv/lexicons:ro  # Optional: custom lexicons
     environment:
       - HOST=0.0.0.0
-      - PORT=8000
+      - PORT=8080
       - DATABASE_URL=/data/quickslice.db
       - SECRET_KEY_BASE=${SECRET_KEY_BASE}
       - ADMIN_DIDS=${ADMIN_DIDS}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
