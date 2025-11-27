@@ -1,6 +1,7 @@
 import database/repositories/records
 import database/schema/tables
 import gleam/dict
+import gleam/dynamic/decode
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
@@ -76,6 +77,7 @@ pub fn filter_by_did_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -124,6 +126,7 @@ pub fn filter_by_json_contains_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -172,6 +175,7 @@ pub fn filter_by_json_comparison_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -217,6 +221,7 @@ pub fn filter_range_query_test() {
             gte: Some(sqlight.int(50)),
             lt: Some(sqlight.int(150)),
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -262,6 +267,7 @@ pub fn filter_nested_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -282,6 +288,7 @@ pub fn filter_nested_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -341,6 +348,7 @@ pub fn filter_nested_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -361,6 +369,7 @@ pub fn filter_nested_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -440,6 +449,7 @@ pub fn filter_with_pagination_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -466,6 +476,133 @@ pub fn filter_with_pagination_test() {
       should.be_true(has_next)
       should.be_false(has_prev)
       should.be_true(option.is_some(next_cursor))
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+// Test: Numeric comparison with is_numeric=True uses INTEGER cast
+pub fn filter_numeric_with_cast_test() {
+  let assert Ok(conn) = setup_test_db()
+
+  // Test that numeric comparisons work with is_numeric: True
+  let where_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "likes",
+          where_clause.WhereCondition(
+            eq: None,
+            in_values: None,
+            contains: None,
+            gt: Some(sqlight.int(75)),
+            gte: None,
+            lt: None,
+            lte: None,
+            is_numeric: True,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
+
+  let result =
+    records.get_by_collection_paginated_with_where(
+      conn,
+      "app.bsky.feed.post",
+      Some(10),
+      None,
+      None,
+      None,
+      None,
+      Some(where_clause),
+    )
+
+  case result {
+    Ok(#(records, _, _, _)) -> {
+      // Should match records with likes > 75 (100 and 200)
+      list.length(records) |> should.equal(2)
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+// Test: String datetime comparison without INTEGER cast
+pub fn filter_datetime_string_comparison_test() {
+  let assert Ok(conn) = setup_test_db()
+
+  // Insert records with ISO datetime strings in JSON
+  let assert Ok(_) =
+    sqlight.query(
+      "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
+       VALUES (?, 'cid5', 'did:plc:5', 'app.bsky.feed.post', ?, datetime('now'))",
+      on: conn,
+      with: [
+        sqlight.text("at://did:plc:5/app.bsky.feed.post/5"),
+        sqlight.text(
+          "{\"text\":\"Old post\",\"playedTime\":\"2024-01-01T00:00:00Z\"}",
+        ),
+      ],
+      expecting: decode.string,
+    )
+
+  let assert Ok(_) =
+    sqlight.query(
+      "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
+       VALUES (?, 'cid6', 'did:plc:6', 'app.bsky.feed.post', ?, datetime('now'))",
+      on: conn,
+      with: [
+        sqlight.text("at://did:plc:6/app.bsky.feed.post/6"),
+        sqlight.text(
+          "{\"text\":\"New post\",\"playedTime\":\"2024-12-01T00:00:00Z\"}",
+        ),
+      ],
+      expecting: decode.string,
+    )
+
+  // Filter for records with playedTime >= "2024-06-01" (string comparison)
+  let where_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "playedTime",
+          where_clause.WhereCondition(
+            eq: None,
+            in_values: None,
+            contains: None,
+            gt: None,
+            gte: Some(sqlight.text("2024-06-01T00:00:00Z")),
+            lt: None,
+            lte: None,
+            is_numeric: False,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
+
+  let result =
+    records.get_by_collection_paginated_with_where(
+      conn,
+      "app.bsky.feed.post",
+      Some(10),
+      None,
+      None,
+      None,
+      None,
+      Some(where_clause),
+    )
+
+  case result {
+    Ok(#(records, _, _, _)) -> {
+      // Should only match the "New post" with playedTime in December
+      list.length(records) |> should.equal(1)
+      case list.first(records) {
+        Ok(record) -> should.be_true(string.contains(record.json, "New post"))
+        Error(_) -> should.fail()
+      }
     }
     Error(_) -> should.fail()
   }

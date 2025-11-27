@@ -3,6 +3,7 @@
 /// Provides parsing functions to convert GraphQL values to intermediate where clause types.
 /// These are simple value types that can be passed to the database layer for SQL generation.
 import gleam/dict.{type Dict}
+import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import swell/value
@@ -71,26 +72,28 @@ pub fn parse_condition(filter_value: value.Value) -> WhereCondition {
         _ -> None
       }
 
+      // For comparison operators, try to parse string values as integers
+      // This allows numeric comparisons even when the GraphQL schema uses String types
       let gt = case list.key_find(fields, "gt") {
-        Ok(value.String(s)) -> Some(StringValue(s))
+        Ok(value.String(s)) -> Some(parse_string_or_int(s))
         Ok(value.Int(i)) -> Some(IntValue(i))
         _ -> None
       }
 
       let gte = case list.key_find(fields, "gte") {
-        Ok(value.String(s)) -> Some(StringValue(s))
+        Ok(value.String(s)) -> Some(parse_string_or_int(s))
         Ok(value.Int(i)) -> Some(IntValue(i))
         _ -> None
       }
 
       let lt = case list.key_find(fields, "lt") {
-        Ok(value.String(s)) -> Some(StringValue(s))
+        Ok(value.String(s)) -> Some(parse_string_or_int(s))
         Ok(value.Int(i)) -> Some(IntValue(i))
         _ -> None
       }
 
       let lte = case list.key_find(fields, "lte") {
-        Ok(value.String(s)) -> Some(StringValue(s))
+        Ok(value.String(s)) -> Some(parse_string_or_int(s))
         Ok(value.Int(i)) -> Some(IntValue(i))
         _ -> None
       }
@@ -169,4 +172,13 @@ pub fn parse_where_clause(where_value: value.Value) -> WhereClause {
 /// Check if a where clause is empty
 pub fn is_clause_empty(clause: WhereClause) -> Bool {
   dict.is_empty(clause.conditions) && clause.and == None && clause.or == None
+}
+
+/// Parse a string value that might be an integer
+/// Returns IntValue if it parses as an integer, StringValue otherwise
+fn parse_string_or_int(s: String) -> WhereValue {
+  case int.parse(s) {
+    Ok(i) -> IntValue(i)
+    Error(_) -> StringValue(s)
+  }
 }

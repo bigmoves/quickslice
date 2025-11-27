@@ -31,6 +31,7 @@ pub fn build_where_eq_on_table_column_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -60,6 +61,7 @@ pub fn build_where_in_operator_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -85,6 +87,7 @@ pub fn build_where_gt_operator_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -110,6 +113,7 @@ pub fn build_where_gte_operator_test() {
       gte: Some(sqlight.int(2000)),
       lt: None,
       lte: None,
+      is_numeric: True,
     )
   let clause =
     where_clause.WhereClause(
@@ -136,6 +140,7 @@ pub fn build_where_lt_operator_test() {
       gte: None,
       lt: Some(sqlight.text("2024-12-31T23:59:59Z")),
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -161,6 +166,7 @@ pub fn build_where_lte_operator_test() {
       gte: None,
       lt: None,
       lte: Some(sqlight.int(100)),
+      is_numeric: True,
     )
   let clause =
     where_clause.WhereClause(
@@ -187,6 +193,7 @@ pub fn build_where_range_query_test() {
       gte: None,
       lt: Some(sqlight.text("2024-02-01T00:00:00Z")),
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -213,6 +220,7 @@ pub fn build_where_multiple_fields_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let cond2 =
     where_clause.WhereCondition(
@@ -223,6 +231,7 @@ pub fn build_where_multiple_fields_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -256,6 +265,7 @@ pub fn build_where_json_field_eq_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -281,6 +291,7 @@ pub fn build_where_nested_json_path_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -306,6 +317,7 @@ pub fn build_where_deeply_nested_json_path_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -331,6 +343,7 @@ pub fn build_where_json_field_comparison_test() {
       gte: None,
       lt: Some(sqlight.int(1000)),
       lte: None,
+      is_numeric: True,
     )
   let clause =
     where_clause.WhereClause(
@@ -360,6 +373,7 @@ pub fn build_where_mixed_table_and_json_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let cond2 =
     where_clause.WhereCondition(
@@ -370,6 +384,7 @@ pub fn build_where_mixed_table_and_json_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: True,
     )
   let clause =
     where_clause.WhereClause(
@@ -406,6 +421,7 @@ pub fn build_where_contains_json_field_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -434,6 +450,7 @@ pub fn build_where_contains_table_column_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -459,6 +476,7 @@ pub fn build_where_contains_special_chars_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -485,6 +503,7 @@ pub fn build_where_multiple_contains_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let cond2 =
     where_clause.WhereCondition(
@@ -495,6 +514,7 @@ pub fn build_where_multiple_contains_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -525,6 +545,7 @@ pub fn build_where_contains_with_other_operators_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
   let clause =
     where_clause.WhereClause(
@@ -559,6 +580,7 @@ pub fn build_where_nested_and_simple_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -579,6 +601,7 @@ pub fn build_where_nested_and_simple_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -617,6 +640,7 @@ pub fn build_where_and_with_root_conditions_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -637,6 +661,7 @@ pub fn build_where_and_with_root_conditions_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -669,6 +694,7 @@ pub fn build_where_complex_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -689,6 +715,7 @@ pub fn build_where_complex_and_test() {
             gte: Some(sqlight.int(2000)),
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -729,6 +756,7 @@ pub fn build_where_deeply_nested_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -749,6 +777,7 @@ pub fn build_where_deeply_nested_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -769,6 +798,7 @@ pub fn build_where_deeply_nested_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -803,6 +833,7 @@ pub fn build_where_simple_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -823,6 +854,7 @@ pub fn build_where_simple_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -864,6 +896,7 @@ pub fn build_where_combined_and_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -884,6 +917,7 @@ pub fn build_where_combined_and_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -911,6 +945,7 @@ pub fn build_where_combined_and_or_test() {
             gte: Some(sqlight.int(2000)),
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -952,6 +987,7 @@ pub fn build_where_complex_nested_or_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -972,6 +1008,7 @@ pub fn build_where_complex_nested_or_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -999,6 +1036,7 @@ pub fn build_where_complex_nested_or_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -1019,6 +1057,7 @@ pub fn build_where_complex_nested_or_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -1046,6 +1085,7 @@ pub fn build_where_complex_nested_or_and_test() {
             gte: Some(sqlight.int(2000)),
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -1087,6 +1127,7 @@ pub fn build_where_multiple_or_at_root_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -1107,6 +1148,7 @@ pub fn build_where_multiple_or_at_root_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),
@@ -1127,6 +1169,7 @@ pub fn build_where_multiple_or_at_root_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_numeric: False,
           ),
         ),
       ]),

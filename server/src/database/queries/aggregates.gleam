@@ -61,13 +61,14 @@ pub fn get_aggregated_records(
   let mut_bind_values = [sqlight.text(collection)]
 
   // Add where clause conditions if provided
+  // Note: Always use table prefix (True) because the FROM clause uses "record" as the table name
   let #(where_parts, bind_values) = case where {
     Some(wc) -> {
       case where_clause.is_clause_empty(wc) {
         True -> #(mut_where_parts, mut_bind_values)
         False -> {
           let #(where_sql, where_params) =
-            where_clause.build_where_sql(wc, needs_actor_join)
+            where_clause.build_where_sql(wc, True)
           let new_where = list.append(mut_where_parts, [where_sql])
           let new_binds = list.append(mut_bind_values, where_params)
           #(new_where, new_binds)

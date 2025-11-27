@@ -4,7 +4,7 @@
 /// and the database layer (where_clause with sqlight types).
 import gleam/dict
 import gleam/list
-import gleam/option
+import gleam/option.{type Option}
 import lexicon_graphql/input/where
 import sqlight
 import where_clause
@@ -16,6 +16,29 @@ fn convert_value(value: where.WhereValue) -> sqlight.Value {
     where.IntValue(i) -> sqlight.int(i)
     where.BoolValue(b) -> sqlight.bool(b)
   }
+}
+
+/// Check if a WhereValue is numeric (Int)
+fn is_numeric_value(value: where.WhereValue) -> Bool {
+  case value {
+    where.IntValue(_) -> True
+    where.StringValue(_) -> False
+    where.BoolValue(_) -> False
+  }
+}
+
+/// Check if any comparison value in the condition is numeric
+fn has_numeric_comparison(cond: where.WhereCondition) -> Bool {
+  let check_opt = fn(opt: Option(where.WhereValue)) -> Bool {
+    case opt {
+      option.Some(v) -> is_numeric_value(v)
+      option.None -> False
+    }
+  }
+  check_opt(cond.gt)
+  || check_opt(cond.gte)
+  || check_opt(cond.lt)
+  || check_opt(cond.lte)
 }
 
 /// Convert a where.WhereCondition to a where_clause.WhereCondition
@@ -30,6 +53,7 @@ fn convert_condition(cond: where.WhereCondition) -> where_clause.WhereCondition 
     gte: option.map(cond.gte, convert_value),
     lt: option.map(cond.lt, convert_value),
     lte: option.map(cond.lte, convert_value),
+    is_numeric: has_numeric_comparison(cond),
   )
 }
 

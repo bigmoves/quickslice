@@ -15,6 +15,8 @@ pub type WhereCondition {
     gte: Option(sqlight.Value),
     lt: Option(sqlight.Value),
     lte: Option(sqlight.Value),
+    /// Whether the comparison values are numeric (affects JSON field casting)
+    is_numeric: Bool,
   )
 }
 
@@ -40,6 +42,7 @@ pub fn empty_condition() -> WhereCondition {
     gte: None,
     lt: None,
     lte: None,
+    is_numeric: False,
   )
 }
 
@@ -59,6 +62,7 @@ pub fn is_condition_empty(condition: WhereCondition) -> Bool {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: _,
     ) -> True
     _ -> False
   }
@@ -121,13 +125,17 @@ fn build_field_ref(field: String, use_table_prefix: Bool) -> String {
 }
 
 /// Helper to determine if we should cast to numeric
-/// Since sqlight.Value is opaque, we check the condition operators
+/// Uses the is_numeric flag set during value conversion
 fn should_cast_numeric(condition: WhereCondition) -> Bool {
-  // If any of the numeric comparison operators are present, we should cast
-  option.is_some(condition.gt)
-  || option.is_some(condition.gte)
-  || option.is_some(condition.lt)
-  || option.is_some(condition.lte)
+  // Only cast if we have numeric comparison operators AND the values are numeric
+  // String values (like ISO dates) should not be cast
+  condition.is_numeric
+  && {
+    option.is_some(condition.gt)
+    || option.is_some(condition.gte)
+    || option.is_some(condition.lt)
+    || option.is_some(condition.lte)
+  }
 }
 
 /// Builds field reference with optional numeric cast for JSON fields

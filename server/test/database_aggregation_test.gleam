@@ -177,6 +177,7 @@ pub fn test_group_by_with_where_filter() {
       gte: None,
       lt: None,
       lte: None,
+      is_numeric: False,
     )
 
   let where_clause =
