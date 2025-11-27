@@ -8,6 +8,8 @@ import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
 import gleam/hackney
 import gleam/http/request
+import gleam/http/response as gleam_http_response
+import gleam/int
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -15,6 +17,7 @@ import gleam/result
 import gleam/string
 import gleam/time/duration
 import gleam/time/timestamp
+import lib/oauth/did_cache
 import logging
 import sqlight
 
@@ -59,7 +62,8 @@ pub type BackfillConfig {
   BackfillConfig(
     plc_directory_url: String,
     index_actors: Bool,
-    max_workers: Int,
+    max_concurrent_per_pds: Int,
+    did_cache: Option(Subject(did_cache.Message)),
   )
 }
 
@@ -71,6 +75,17 @@ pub fn default_config() -> BackfillConfig {
     Error(_) -> "https://plc.directory"
   }
 
+  // Get max concurrent per PDS from environment or use default of 6
+  let max_pds_concurrent = case envoy.get("BACKFILL_PDS_CONCURRENCY") {
+    Ok(val) -> {
+      case int.parse(val) {
+        Ok(n) -> n
+        Error(_) -> 6
+      }
+    }
+    Error(_) -> 6
+  }
+
   // Configure hackney pool for better connection reuse
   // We'll call directly into Erlang to set up the pool
   configure_hackney_pool()
@@ -78,14 +93,41 @@ pub fn default_config() -> BackfillConfig {
   BackfillConfig(
     plc_directory_url: plc_url,
     index_actors: True,
-    max_workers: 100,
+    max_concurrent_per_pds: max_pds_concurrent,
+    did_cache: None,
   )
+}
+
+/// Creates a backfill configuration with a DID cache
+pub fn config_with_cache(cache: Subject(did_cache.Message)) -> BackfillConfig {
+  let config = default_config()
+  BackfillConfig(..config, did_cache: Some(cache))
 }
 
 /// Configure hackney connection pool with higher limits
 /// Called via Erlang FFI to avoid atom conversion issues
 @external(erlang, "backfill_ffi", "configure_pool")
 fn configure_hackney_pool() -> Nil
+
+/// Acquire a permit from the global HTTP semaphore
+/// Blocks if at the concurrent request limit (150)
+@external(erlang, "backfill_ffi", "acquire_permit")
+fn acquire_permit() -> Nil
+
+/// Release a permit back to the global HTTP semaphore
+@external(erlang, "backfill_ffi", "release_permit")
+fn release_permit() -> Nil
+
+/// Execute an HTTP request with semaphore-based rate limiting
+/// Acquires a permit before sending, releases after completion
+fn send_with_permit(
+  req: request.Request(String),
+) -> Result(gleam_http_response.Response(String), hackney.Error) {
+  acquire_permit()
+  let result = hackney.send(req)
+  release_permit()
+  result
+}
 
 /// Check if an NSID matches the configured domain authority
 /// NSID format is like "com.example.post" where "com.example" is the authority
@@ -107,6 +149,77 @@ pub fn resolve_did(did: String, plc_url: String) -> Result(AtprotoData, String) 
   }
 }
 
+/// Resolve a DID with caching support
+/// Uses the did_cache if provided, otherwise falls back to direct resolution
+pub fn resolve_did_cached(
+  did: String,
+  plc_url: String,
+  cache: Option(Subject(did_cache.Message)),
+) -> Result(AtprotoData, String) {
+  case cache {
+    Some(c) -> {
+      // Try to get from cache first
+      case did_cache.get(c, did) {
+        Ok(cached_json) -> {
+          // Parse cached ATP data
+          case parse_cached_atp_data(cached_json) {
+            Ok(data) -> Ok(data)
+            Error(_) -> {
+              // Cache had invalid data, resolve fresh
+              resolve_and_cache(did, plc_url, c)
+            }
+          }
+        }
+        Error(_) -> {
+          // Not in cache, resolve and cache
+          resolve_and_cache(did, plc_url, c)
+        }
+      }
+    }
+    None -> resolve_did(did, plc_url)
+  }
+}
+
+/// Resolve DID and store in cache
+fn resolve_and_cache(
+  did: String,
+  plc_url: String,
+  cache: Subject(did_cache.Message),
+) -> Result(AtprotoData, String) {
+  case resolve_did(did, plc_url) {
+    Ok(data) -> {
+      // Cache for 1 hour (3600 seconds)
+      let cached_json = encode_atp_data(data)
+      did_cache.put(cache, did, cached_json, 3600)
+      Ok(data)
+    }
+    err -> err
+  }
+}
+
+/// Encode AtprotoData to JSON for caching
+fn encode_atp_data(data: AtprotoData) -> String {
+  json.object([
+    #("did", json.string(data.did)),
+    #("handle", json.string(data.handle)),
+    #("pds", json.string(data.pds)),
+  ])
+  |> json.to_string
+}
+
+/// Parse AtprotoData from cached JSON
+fn parse_cached_atp_data(json_str: String) -> Result(AtprotoData, String) {
+  let decoder = {
+    use did <- decode.field("did", decode.string)
+    use handle <- decode.field("handle", decode.string)
+    use pds <- decode.field("pds", decode.string)
+    decode.success(AtprotoData(did: did, handle: handle, pds: pds))
+  }
+
+  json.parse(json_str, decoder)
+  |> result.map_error(fn(_) { "Failed to parse cached ATP data" })
+}
+
 /// Resolve a did:web DID by fetching the DID document from HTTPS
 fn resolve_did_web(did: String) -> Result(AtprotoData, String) {
   // Extract the domain from did:web:example.com
@@ -125,7 +238,7 @@ fn resolve_did_web(did: String) -> Result(AtprotoData, String) {
       case request.to(url) {
         Error(_) -> Error("Failed to create request for did:web DID: " <> did)
         Ok(req) -> {
-          case hackney.send(req) {
+          case send_with_permit(req) {
             Error(_) -> Error("Failed to fetch did:web DID data for: " <> did)
             Ok(resp) -> {
               case resp.status {
@@ -155,7 +268,7 @@ fn resolve_did_plc(did: String, plc_url: String) -> Result(AtprotoData, String) 
   case request.to(url) {
     Error(_) -> Error("Failed to create request for DID: " <> did)
     Ok(req) -> {
-      case hackney.send(req) {
+      case send_with_permit(req) {
         Error(_) -> Error("Failed to fetch DID data for: " <> did)
         Ok(resp) -> {
           case resp.status {
@@ -233,9 +346,10 @@ fn parse_atproto_data(body: String, did: String) -> Result(AtprotoData, String) 
 fn resolve_did_worker(
   did: String,
   plc_url: String,
+  cache: Option(Subject(did_cache.Message)),
   reply_to: Subject(Result(AtprotoData, Nil)),
 ) -> Nil {
-  let result = case resolve_did(did, plc_url) {
+  let result = case resolve_did_cached(did, plc_url, cache) {
     Ok(atp_data) -> Ok(atp_data)
     Error(err) -> {
       logging.log(
@@ -262,7 +376,12 @@ pub fn get_atp_data_for_repos(
     repos
     |> list.map(fn(repo) {
       process.spawn_unlinked(fn() {
-        resolve_did_worker(repo, config.plc_directory_url, subject)
+        resolve_did_worker(
+          repo,
+          config.plc_directory_url,
+          config.did_cache,
+          subject,
+        )
       })
     })
 
@@ -276,23 +395,27 @@ pub fn get_atp_data_for_repos(
   })
 }
 
-/// Fetch records for a single repo and collection with pagination
-pub fn fetch_records_for_repo_collection(
+/// Fetch and stream records directly to the database
+/// Returns the count of records inserted instead of accumulating them
+pub fn fetch_records_streaming(
   repo: String,
   collection: String,
   pds_url: String,
-) -> List(Record) {
-  fetch_records_paginated(repo, collection, pds_url, None, [])
+  conn: sqlight.Connection,
+) -> Int {
+  fetch_records_paginated_streaming(repo, collection, pds_url, None, conn, 0)
 }
 
-/// Helper function for paginated record fetching
-fn fetch_records_paginated(
+/// Helper function for streaming paginated record fetching
+/// Inserts records to DB after each page fetch to reduce memory usage
+fn fetch_records_paginated_streaming(
   repo: String,
   collection: String,
   pds_url: String,
   cursor: Option(String),
-  acc: List(Record),
-) -> List(Record) {
+  conn: sqlight.Connection,
+  count: Int,
+) -> Int {
   // Build URL with query parameters
   let base_url =
     pds_url
@@ -313,12 +436,11 @@ fn fetch_records_paginated(
         logging.Error,
         "[backfill] Failed to create request for: " <> url,
       )
-      acc
+      count
     }
     Ok(req) -> {
-      case hackney.send(req) {
+      case send_with_permit(req) {
         Error(err) -> {
-          // Log all errors with details
           let err_str = string.inspect(err)
           let is_expected_error =
             string.contains(err_str, "TlsAlert")
@@ -353,48 +475,50 @@ fn fetch_records_paginated(
                   <> err_str,
               )
           }
-          acc
+          count
         }
         Ok(resp) -> {
           case resp.status {
             200 -> {
               case parse_list_records_response(resp.body, repo, collection) {
-                Ok(#(records, next_cursor)) -> {
-                  let new_acc = list.append(acc, records)
-                  let total_so_far = list.length(new_acc)
+                Ok(#(recs, next_cursor)) -> {
+                  // Insert this batch immediately
+                  index_records(recs, conn)
+                  let new_count = count + list.length(recs)
 
                   case next_cursor {
                     Some(c) -> {
                       logging.log(
                         logging.Info,
-                        "[backfill] Fetched "
-                          <> string.inspect(list.length(records))
+                        "[backfill] Streamed "
+                          <> string.inspect(list.length(recs))
                           <> " records (total: "
-                          <> string.inspect(total_so_far)
-                          <> "), continuing with cursor for "
+                          <> string.inspect(new_count)
+                          <> ") for "
                           <> repo
                           <> "/"
                           <> collection,
                       )
-                      fetch_records_paginated(
+                      fetch_records_paginated_streaming(
                         repo,
                         collection,
                         pds_url,
                         Some(c),
-                        new_acc,
+                        conn,
+                        new_count,
                       )
                     }
                     None -> {
                       logging.log(
                         logging.Info,
-                        "[backfill] Completed fetching "
-                          <> string.inspect(total_so_far)
+                        "[backfill] Completed streaming "
+                          <> string.inspect(new_count)
                           <> " records for "
                           <> repo
                           <> "/"
                           <> collection,
                       )
-                      new_acc
+                      new_count
                     }
                   }
                 }
@@ -408,19 +532,13 @@ fn fetch_records_paginated(
                       <> ": "
                       <> err,
                   )
-                  acc
+                  count
                 }
               }
             }
-            // Expected errors - return empty silently
-            // 400/404: collection doesn't exist
-            // 302/308: redirect (PDS moved)
-            // 403: forbidden (private account)
-            // 502/520: bad gateway / cloudflare error (server down)
-            400 | 404 | 302 | 308 | 403 | 502 | 520 -> {
-              acc
-            }
-            // Other unexpected errors should be logged
+            // Expected errors - return count silently
+            400 | 404 | 302 | 308 | 403 | 502 | 520 -> count
+            // Unexpected errors
             _ -> {
               logging.log(
                 logging.Error,
@@ -431,12 +549,9 @@ fn fetch_records_paginated(
                   <> "/"
                   <> collection
                   <> " from "
-                  <> pds_url
-                  <> " (URL: "
-                  <> url
-                  <> ")",
+                  <> pds_url,
               )
-              acc
+              count
             }
           }
         }
@@ -512,113 +627,132 @@ fn parse_list_records_response(
   }
 }
 
-/// Fetch records with retry logic (matches Rust implementation)
-/// If the first attempt fails, re-resolve the DID and retry once
-fn fetch_records_with_retry(
+/// Streaming worker that fetches and inserts records directly to DB
+fn fetch_records_worker_streaming(
   repo: String,
   collection: String,
   pds: String,
-  plc_url: String,
-) -> List(Record) {
-  // First attempt with provided PDS
-  let records = fetch_records_for_repo_collection(repo, collection, pds)
+  conn: sqlight.Connection,
+  reply_to: Subject(Int),
+) -> Nil {
+  let count = fetch_records_streaming(repo, collection, pds, conn)
+  process.send(reply_to, count)
+}
 
-  // If we got records, we're done
-  case list.is_empty(records) {
-    False -> records
-    True -> {
-      // Empty result - might be an error or truly no records
-      // Try re-resolving the DID in case PDS URL changed
-      case resolve_did(repo, plc_url) {
-        Ok(fresh_atp_data) -> {
-          // Retry with fresh PDS URL
-          fetch_records_for_repo_collection(
-            repo,
-            collection,
-            fresh_atp_data.pds,
+/// Streaming worker that processes jobs for a single PDS with sliding window
+/// Keeps N workers always in-flight for maximum throughput
+/// Inserts records directly to DB instead of accumulating
+fn pds_worker_streaming(
+  pds_url: String,
+  jobs: List(#(String, String)),
+  max_concurrent: Int,
+  conn: sqlight.Connection,
+  reply_to: Subject(Int),
+) -> Nil {
+  let subject = process.new_subject()
+
+  // Start initial batch of workers
+  let #(initial_jobs, remaining_jobs) = list.split(jobs, max_concurrent)
+  let initial_count = list.length(initial_jobs)
+
+  // Spawn initial workers
+  list.each(initial_jobs, fn(job) {
+    let #(repo, collection) = job
+    process.spawn_unlinked(fn() {
+      fetch_records_worker_streaming(repo, collection, pds_url, conn, subject)
+    })
+  })
+
+  // Process with sliding window - as each worker completes, start the next one
+  let total_count =
+    sliding_window_process(
+      remaining_jobs,
+      subject,
+      initial_count,
+      pds_url,
+      conn,
+      0,
+    )
+
+  process.send(reply_to, total_count)
+}
+
+/// Process jobs with a sliding window pattern
+/// As each worker completes, start the next one to keep N always in-flight
+fn sliding_window_process(
+  remaining: List(#(String, String)),
+  subject: Subject(Int),
+  in_flight: Int,
+  pds_url: String,
+  conn: sqlight.Connection,
+  total: Int,
+) -> Int {
+  case in_flight {
+    0 -> total
+    _ -> {
+      // Wait for one worker to complete
+      case process.receive(subject, 60_000) {
+        Ok(count) -> {
+          let new_total = total + count
+          // Start next job if available
+          case remaining {
+            [next, ..rest] -> {
+              let #(repo, collection) = next
+              process.spawn_unlinked(fn() {
+                fetch_records_worker_streaming(
+                  repo,
+                  collection,
+                  pds_url,
+                  conn,
+                  subject,
+                )
+              })
+              // Keep the same in_flight count (one completed, one started)
+              sliding_window_process(
+                rest,
+                subject,
+                in_flight,
+                pds_url,
+                conn,
+                new_total,
+              )
+            }
+            [] ->
+              // No more jobs to start, decrement in_flight
+              sliding_window_process(
+                [],
+                subject,
+                in_flight - 1,
+                pds_url,
+                conn,
+                new_total,
+              )
+          }
+        }
+        Error(_) ->
+          // Timeout - decrement in_flight and continue
+          sliding_window_process(
+            remaining,
+            subject,
+            in_flight - 1,
+            pds_url,
+            conn,
+            total,
           )
-        }
-        Error(_) -> {
-          // Can't re-resolve, return empty
-          []
-        }
       }
     }
   }
 }
 
-/// Worker function that fetches records for a repo/collection pair
-fn fetch_records_worker(
-  repo: String,
-  collection: String,
-  pds: String,
-  plc_url: String,
-  reply_to: Subject(List(Record)),
-) -> Nil {
-  let records = fetch_records_with_retry(repo, collection, pds, plc_url)
-  process.send(reply_to, records)
-}
-
-/// Worker that processes jobs for a single PDS with rate limiting
-fn pds_worker(
-  pds_url: String,
-  jobs: List(#(String, String)),
-  plc_url: String,
-  reply_to: Subject(List(Record)),
-) -> Nil {
-  // Process jobs in chunks of 3 to avoid overwhelming the PDS
-  let max_concurrent_per_pds = 3
-  let all_records =
-    jobs
-    |> list.sized_chunk(max_concurrent_per_pds)
-    |> list.flat_map(fn(chunk) {
-      // Spawn workers for this chunk
-      let chunk_subject = process.new_subject()
-
-      let _chunk_workers =
-        chunk
-        |> list.map(fn(job) {
-          let #(repo, collection) = job
-          process.spawn_unlinked(fn() {
-            fetch_records_worker(
-              repo,
-              collection,
-              pds_url,
-              plc_url,
-              chunk_subject,
-            )
-          })
-        })
-
-      // Collect results from this chunk
-      let chunk_results =
-        list.range(1, list.length(chunk))
-        |> list.flat_map(fn(_) {
-          case process.receive(chunk_subject, 60_000) {
-            Ok(records) -> records
-            Error(_) -> []
-          }
-        })
-
-      // Small delay between chunks to be kind to PDS servers
-      case list.length(chunk) == max_concurrent_per_pds {
-        True -> process.sleep(100)
-        False -> Nil
-      }
-
-      chunk_results
-    })
-
-  process.send(reply_to, all_records)
-}
-
-/// Get all records for multiple repos and collections with PDS rate limiting
-pub fn get_records_for_repos(
+/// Streaming version: fetch and insert records directly to DB
+/// Returns the total count of records inserted instead of the records themselves
+pub fn get_records_for_repos_streaming(
   repos: List(String),
   collections: List(String),
   atp_data: List(AtprotoData),
   config: BackfillConfig,
-) -> List(Record) {
+  conn: sqlight.Connection,
+) -> Int {
   // Create all repo/collection job pairs grouped by PDS
   let jobs_by_pds =
     repos
@@ -660,16 +794,22 @@ pub fn get_records_for_repos(
         })
 
       process.spawn_unlinked(fn() {
-        pds_worker(pds_url, job_pairs, config.plc_directory_url, subject)
+        pds_worker_streaming(
+          pds_url,
+          job_pairs,
+          config.max_concurrent_per_pds,
+          conn,
+          subject,
+        )
       })
     })
 
-  // Collect results from all PDS workers
+  // Collect counts from all PDS workers
   list.range(1, pds_count)
-  |> list.flat_map(fn(_) {
+  |> list.fold(0, fn(acc, _) {
     case process.receive(subject, 120_000) {
-      Ok(records) -> records
-      Error(_) -> []
+      Ok(count) -> acc + count
+      Error(_) -> acc
     }
   })
 }
@@ -687,26 +827,25 @@ pub fn index_records(records: List(Record), conn: sqlight.Connection) -> Nil {
   }
 }
 
-/// Index actors into the database
+/// Index actors into the database using batch upsert for efficiency
 pub fn index_actors(
   atp_data: List(AtprotoData),
   conn: sqlight.Connection,
 ) -> Nil {
-  atp_data
-  |> list.each(fn(data) {
-    case actors.upsert(conn, data.did, data.handle) {
-      Ok(_) -> Nil
-      Error(err) -> {
-        logging.log(
-          logging.Error,
-          "[backfill] Failed to upsert actor "
-            <> data.did
-            <> ": "
-            <> string.inspect(err),
-        )
-      }
+  // Convert AtprotoData to tuples for batch upsert
+  let actor_tuples =
+    atp_data
+    |> list.map(fn(data) { #(data.did, data.handle) })
+
+  case actors.batch_upsert(conn, actor_tuples) {
+    Ok(_) -> Nil
+    Error(err) -> {
+      logging.log(
+        logging.Error,
+        "[backfill] Failed to batch upsert actors: " <> string.inspect(err),
+      )
     }
-  })
+  }
 }
 
 /// Backfill all collections (primary and external) for a newly discovered actor
@@ -737,31 +876,37 @@ pub fn backfill_collections_for_actor(
   // Resolve DID to get PDS endpoint
   case resolve_did(did, plc_url) {
     Ok(atp_data) -> {
-      // Fetch and index records for all collections (primary + external)
-      list.each(all_collections, fn(collection) {
-        logging.log(
-          logging.Info,
-          "[backfill] Fetching " <> collection <> " for " <> did,
-        )
+      // Stream records directly to DB for all collections (primary + external)
+      let total_records =
+        list.fold(all_collections, 0, fn(acc, collection) {
+          logging.log(
+            logging.Info,
+            "[backfill] Streaming " <> collection <> " for " <> did,
+          )
 
-        let records =
-          fetch_records_for_repo_collection(did, collection, atp_data.pds)
+          let count = fetch_records_streaming(did, collection, atp_data.pds, db)
 
-        logging.log(
-          logging.Info,
-          "[backfill] Fetched "
-            <> string.inspect(list.length(records))
-            <> " records from "
-            <> collection
-            <> " for "
-            <> did,
-        )
+          logging.log(
+            logging.Info,
+            "[backfill] Streamed "
+              <> string.inspect(count)
+              <> " records from "
+              <> collection
+              <> " for "
+              <> did,
+          )
 
-        // Index the records
-        index_records(records, db)
-      })
+          acc + count
+        })
 
-      logging.log(logging.Info, "[backfill] Completed sync for " <> did)
+      logging.log(
+        logging.Info,
+        "[backfill] Completed sync for "
+          <> did
+          <> " ("
+          <> string.inspect(total_records)
+          <> " total records)",
+      )
     }
     Error(err) -> {
       logging.log(
@@ -806,7 +951,7 @@ fn fetch_repos_paginated(
   case request.to(url) {
     Error(_) -> Error("Failed to create request for collection: " <> collection)
     Ok(req) -> {
-      case hackney.send(req) {
+      case send_with_permit(req) {
         Error(_) ->
           Error("Failed to fetch repos for collection: " <> collection)
         Ok(resp) -> {
@@ -989,30 +1134,7 @@ fn run_backfill(
       <> " repositories",
   )
 
-  // Get all records for all repos and collections (main collections only)
-  logging.log(
-    logging.Info,
-    "[backfill] Fetching records for repositories and collections...",
-  )
-  let main_records =
-    get_records_for_repos(all_repos, collections, atp_data, config)
-
-  // Get external collections for the same repos
-  let external_records = case external_collections {
-    [] -> []
-    _ ->
-      get_records_for_repos(all_repos, external_collections, atp_data, config)
-  }
-
-  let all_records = list.append(main_records, external_records)
-  logging.log(
-    logging.Info,
-    "[backfill] Fetched "
-      <> string.inspect(list.length(all_records))
-      <> " total records",
-  )
-
-  // Index actors (if enabled in config)
+  // Index actors first (if enabled in config)
   case config.index_actors {
     True -> {
       logging.log(logging.Info, "[backfill] Indexing actors...")
@@ -1031,13 +1153,26 @@ fn run_backfill(
       )
   }
 
-  // Index records
+  // Combine main and external collections for concurrent processing
+  let all_collections = list.append(collections, external_collections)
+
+  // Stream records directly to DB (all collections in one pass)
   logging.log(
     logging.Info,
-    "[backfill] Indexing "
-      <> string.inspect(list.length(all_records))
-      <> " records...",
+    "[backfill] Streaming records for repositories and collections...",
   )
-  index_records(all_records, conn)
-  logging.log(logging.Info, "[backfill] Backfill complete!")
+  let total_count =
+    get_records_for_repos_streaming(
+      all_repos,
+      all_collections,
+      atp_data,
+      config,
+      conn,
+    )
+  logging.log(
+    logging.Info,
+    "[backfill] Backfill complete! Streamed "
+      <> string.inspect(total_count)
+      <> " total records",
+  )
 }

@@ -9,6 +9,7 @@ import gleam/http as gleam_http
 import gleam/int
 import gleam/list
 import gleam/option
+import lib/oauth/did_cache
 import sqlight
 import wisp
 
@@ -18,6 +19,7 @@ pub fn handle(
   req: wisp.Request,
   db: sqlight.Connection,
   config_subject: process.Subject(config.Message),
+  cache: process.Subject(did_cache.Message),
 ) -> wisp.Response {
   case req.method {
     gleam_http.Post -> {
@@ -53,8 +55,8 @@ pub fn handle(
               let external_collection_ids =
                 list.map(external_collections, fn(lex) { lex.id })
 
-              // Run backfill in background process
-              let backfill_config = backfill.default_config()
+              // Run backfill in background process with DID cache
+              let backfill_config = backfill.config_with_cache(cache)
               process.spawn_unlinked(fn() {
                 backfill.backfill_collections(
                   [],

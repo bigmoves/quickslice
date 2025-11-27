@@ -551,7 +551,8 @@ fn handle_request(
         ctx.oauth_signing_key,
       )
     }
-    ["backfill"] -> backfill_handler.handle(req, ctx.db, ctx.config)
+    ["backfill"] ->
+      backfill_handler.handle(req, ctx.db, ctx.config, ctx.did_cache)
     ["admin", "graphql"] ->
       client_graphql_handler.handle_client_graphql_request(
         req,

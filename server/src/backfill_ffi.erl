@@ -1,5 +1,8 @@
 -module(backfill_ffi).
--export([configure_pool/0]).
+-export([configure_pool/0, init_semaphore/0, acquire_permit/0, release_permit/0]).
+
+%% Maximum concurrent HTTP requests for backfill
+-define(MAX_CONCURRENT, 150).
 
 %% Configure hackney connection pool with higher limits
 configure_pool() ->
@@ -18,7 +21,7 @@ configure_pool() ->
     %% recv_timeout: how long to wait for response data (ms)
     Options = [
         {timeout, 150000},
-        {max_connections, 200},
+        {max_connections, 300},
         {recv_timeout, 30000}
     ],
 
@@ -29,5 +32,45 @@ configure_pool() ->
         _ -> ok
     end,
 
+    %% Initialize the semaphore for rate limiting
+    init_semaphore(),
+
     %% Return nil (atom 'nil' in Gleam)
+    nil.
+
+%% Initialize the global semaphore using atomics
+%% Uses persistent_term for fast global access
+init_semaphore() ->
+    case persistent_term:get(backfill_semaphore, undefined) of
+        undefined ->
+            Ref = atomics:new(1, [{signed, true}]),
+            atomics:put(Ref, 1, ?MAX_CONCURRENT),
+            persistent_term:put(backfill_semaphore, Ref);
+        _ ->
+            %% Already initialized
+            ok
+    end.
+
+%% Acquire a permit from the semaphore
+%% Blocks (with sleep) if no permits available
+acquire_permit() ->
+    Ref = persistent_term:get(backfill_semaphore),
+    acquire_loop(Ref).
+
+acquire_loop(Ref) ->
+    case atomics:sub_get(Ref, 1, 1) of
+        N when N >= 0 ->
+            %% Got a permit
+            nil;
+        _ ->
+            %% No permit available, restore and wait
+            atomics:add(Ref, 1, 1),
+            timer:sleep(10),
+            acquire_loop(Ref)
+    end.
+
+%% Release a permit back to the semaphore
+release_permit() ->
+    Ref = persistent_term:get(backfill_semaphore),
+    atomics:add(Ref, 1, 1),
     nil.

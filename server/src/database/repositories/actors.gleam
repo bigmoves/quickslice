@@ -1,6 +1,8 @@
 import database/types.{type Actor, Actor}
 import gleam/dynamic/decode
+import gleam/list
 import gleam/result
+import gleam/string
 import sqlight
 
 // ===== Actor Functions =====
@@ -99,4 +101,48 @@ pub fn delete_all(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
 
   sqlight.exec(sql, conn)
   |> result.map(fn(_) { Nil })
+}
+
+/// Batch upsert multiple actors in a single transaction
+/// More efficient than individual upserts for large datasets
+pub fn batch_upsert(
+  conn: sqlight.Connection,
+  actors: List(#(String, String)),
+) -> Result(Nil, sqlight.Error) {
+  case actors {
+    [] -> Ok(Nil)
+    _ -> {
+      // Process in chunks of 100 to avoid SQLite parameter limits
+      // (999 max params, 2 params per actor = 400 safe, use 100 for safety)
+      let batch_size = 100
+
+      list.sized_chunk(actors, batch_size)
+      |> list.try_each(fn(batch) {
+        // Build the SQL with multiple value sets
+        let value_placeholders =
+          list.repeat("(?, ?, datetime('now'))", list.length(batch))
+          |> string.join(", ")
+
+        let sql =
+          "INSERT INTO actor (did, handle, indexed_at) VALUES "
+          <> value_placeholders
+          <> " ON CONFLICT(did) DO UPDATE SET handle = excluded.handle, indexed_at = excluded.indexed_at"
+
+        // Flatten actor tuples into parameter list
+        let params =
+          list.flat_map(batch, fn(actor) {
+            let #(did, handle) = actor
+            [sqlight.text(did), sqlight.text(handle)]
+          })
+
+        use _ <- result.try(sqlight.query(
+          sql,
+          on: conn,
+          with: params,
+          expecting: decode.string,
+        ))
+        Ok(Nil)
+      })
+    }
+  }
 }
