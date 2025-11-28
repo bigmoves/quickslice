@@ -54,14 +54,19 @@ pub fn handle_graphiql_request(
           \"react-dom\": \"https://esm.sh/react-dom@19.1.0\",
           \"react-dom/\": \"https://esm.sh/react-dom@19.1.0/\",
 
-          \"graphiql\": \"https://esm.sh/graphiql?standalone&external=react,react-dom,@graphiql/react,graphql\",
-          \"graphiql/\": \"https://esm.sh/graphiql/\",
+          \"graphiql\": \"https://esm.sh/graphiql@5.2.1?standalone&external=react,react-dom,@graphiql/react,graphql,monaco-editor,monaco-graphql\",
+          \"graphiql/\": \"https://esm.sh/graphiql@5.2.1/\",
           \"@graphiql/plugin-explorer\": \"https://esm.sh/@graphiql/plugin-explorer?standalone&external=react,@graphiql/react,graphql\",
-          \"@graphiql/react\": \"https://esm.sh/@graphiql/react?standalone&external=react,react-dom,graphql,@graphiql/toolkit,@emotion/is-prop-valid\",
+          \"@graphiql/react\": \"https://esm.sh/@graphiql/react@0.37.2?standalone&external=react,react-dom,graphql,@graphiql/toolkit,@emotion/is-prop-valid,monaco-editor,monaco-graphql\",
 
           \"@graphiql/toolkit\": \"https://esm.sh/@graphiql/toolkit?standalone&external=graphql\",
           \"graphql\": \"https://esm.sh/graphql@16.11.0\",
-          \"@emotion/is-prop-valid\": \"data:text/javascript,\"
+          \"@emotion/is-prop-valid\": \"data:text/javascript,\",
+
+          \"monaco-editor\": \"https://esm.sh/monaco-editor@0.52.2\",
+          \"monaco-editor/\": \"https://esm.sh/monaco-editor@0.52.2/\",
+          \"monaco-graphql\": \"https://esm.sh/monaco-graphql@1.6.0?deps=monaco-editor@0.52.2,graphql@16.11.0\",
+          \"monaco-graphql/\": \"https://esm.sh/monaco-graphql@1.6.0/\"
         }
       }
     </script>
@@ -71,7 +76,20 @@ pub fn handle_graphiql_request(
       import { GraphiQL, HISTORY_PLUGIN } from 'graphiql';
       import { createGraphiQLFetcher } from '@graphiql/toolkit';
       import { explorerPlugin } from '@graphiql/plugin-explorer';
-      import 'graphiql/setup-workers/esm.sh';
+
+      // Manual worker setup - graphiql/setup-workers/esm.sh has compatibility issues
+      // Pin to monaco-editor@0.52.2 per https://github.com/graphql/graphiql/issues/4104
+      import JsonWorker from 'https://esm.sh/monaco-editor@0.52.2/esm/vs/language/json/json.worker.js?worker';
+      import GraphQLWorker from 'https://esm.sh/monaco-graphql@1.6.0/esm/graphql.worker.js?worker&external=monaco-editor&deps=graphql@16.11.0';
+      import EditorWorker from 'https://esm.sh/monaco-editor@0.52.2/esm/vs/editor/editor.worker.js?worker';
+
+      globalThis.MonacoEnvironment = {
+        getWorker(_workerId, label) {
+          if (label === 'json') return new JsonWorker();
+          if (label === 'graphql') return new GraphQLWorker();
+          return new EditorWorker();
+        },
+      };
 
       const token = '" <> oauth_token <> "';
       const fetcher = createGraphiQLFetcher({
