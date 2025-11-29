@@ -1,0 +1,42 @@
+-module(cbor_ffi).
+-export([decode/1, sanitize_for_json/1]).
+
+%% Decode CBOR binary data using erl_cbor
+%% Returns {ok, Term} or {error, Reason}
+decode(Binary) ->
+    case erl_cbor:decode(Binary) of
+        {ok, Term, _Rest} -> {ok, Term};
+        {error, Reason} -> {error, Reason}
+    end.
+
+%% Sanitize CBOR-decoded data for JSON encoding
+%% Converts CBOR tag 42 (CID links) to base32-encoded $link objects
+%% Recursively walks the structure to handle nested CIDs
+sanitize_for_json(Term) ->
+    sanitize_term(Term).
+
+sanitize_term({42, CidBytes}) when is_binary(CidBytes) ->
+    %% CBOR tag 42 is a CID link - convert to $link object for JSON
+    %% CID bytes are already the full CID (multibase prefix not included in DAG-CBOR)
+    %% Encode as base32lower with 'b' prefix per CIDv1 spec
+    Base32 = base32:encode(CidBytes, [lower, nopad]),
+    CidString = <<"b", Base32/binary>>,
+    #{<<"$link">> => CidString};
+
+sanitize_term(Map) when is_map(Map) ->
+    maps:map(fun(_K, V) -> sanitize_term(V) end, Map);
+
+sanitize_term(List) when is_list(List) ->
+    [sanitize_term(Item) || Item <- List];
+
+sanitize_term({Tag, Value}) when is_integer(Tag) ->
+    %% Other CBOR tags - just return the value
+    sanitize_term(Value);
+
+sanitize_term(Tuple) when is_tuple(Tuple) ->
+    %% Convert tuples to lists for JSON
+    list_to_tuple([sanitize_term(E) || E <- tuple_to_list(Tuple)]);
+
+sanitize_term(Other) ->
+    %% Atoms, numbers, binaries, etc - pass through
+    Other.

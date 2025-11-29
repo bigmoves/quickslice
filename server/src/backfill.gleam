@@ -1,7 +1,12 @@
+import car/car
+import car/cid
 import database/repositories/actors
+import database/repositories/lexicons
 import database/repositories/records
 import database/types.{type Record, Record}
 import envoy
+import gleam/bit_array
+import gleam/bytes_tree
 import gleam/dict
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
@@ -17,40 +22,22 @@ import gleam/result
 import gleam/string
 import gleam/time/duration
 import gleam/time/timestamp
+import honk
+import honk/errors
 import lib/oauth/did_cache
 import logging
 import sqlight
 
-/// Convert a Dynamic value (Erlang term) to JSON string
-fn dynamic_to_json(value: Dynamic) -> String {
-  // Erlang's json:encode returns an iolist, we need to convert it to a string
-  let iolist = do_json_encode(value)
-  iolist_to_string(iolist)
-}
+/// Opaque type for monotonic time
+pub type MonotonicTime
 
-/// Encode a dynamic value to JSON (returns iolist)
-@external(erlang, "json", "encode")
-fn do_json_encode(value: Dynamic) -> Dynamic
+/// Get current monotonic time for timing measurements
+@external(erlang, "backfill_ffi", "monotonic_now")
+fn monotonic_now() -> MonotonicTime
 
-/// Convert an iolist to a string
-@external(erlang, "erlang", "iolist_to_binary")
-fn iolist_to_binary(iolist: Dynamic) -> Dynamic
-
-/// Wrapper to convert iolist to string
-fn iolist_to_string(iolist: Dynamic) -> String {
-  let binary = iolist_to_binary(iolist)
-  // The binary is already a string in Gleam's representation
-  case decode.run(binary, decode.string) {
-    Ok(str) -> str
-    Error(_) -> {
-      logging.log(
-        logging.Warning,
-        "[backfill] Failed to convert iolist to string",
-      )
-      string.inspect(iolist)
-    }
-  }
-}
+/// Get elapsed milliseconds since a start time
+@external(erlang, "backfill_ffi", "elapsed_ms")
+fn elapsed_ms(start: MonotonicTime) -> Int
 
 /// ATP data resolved from DID
 pub type AtprotoData {
@@ -127,6 +114,262 @@ fn send_with_permit(
   let result = hackney.send(req)
   release_permit()
   result
+}
+
+/// Execute an HTTP request with permit, returning raw binary response
+/// Used for binary data like CAR files
+fn send_bits_with_permit(
+  req: request.Request(bytes_tree.BytesTree),
+) -> Result(gleam_http_response.Response(BitArray), hackney.Error) {
+  acquire_permit()
+  let result = hackney.send_bits(req)
+  release_permit()
+  result
+}
+
+/// Fetch a repo as a CAR file using com.atproto.sync.getRepo
+/// Returns raw CAR bytes
+fn fetch_repo_car(did: String, pds_url: String) -> Result(BitArray, String) {
+  let url = pds_url <> "/xrpc/com.atproto.sync.getRepo?did=" <> did
+
+  case request.to(url) {
+    Error(_) -> Error("Failed to create request for getRepo: " <> did)
+    Ok(req) -> {
+      // Convert to BytesTree body for send_bits (empty for GET request)
+      let bits_req = request.set_body(req, bytes_tree.new())
+
+      case send_bits_with_permit(bits_req) {
+        Error(err) -> {
+          Error(
+            "Failed to fetch repo CAR for "
+            <> did
+            <> ": "
+            <> string.inspect(err),
+          )
+        }
+        Ok(resp) -> {
+          case resp.status {
+            200 -> {
+              // Response body is already BitArray
+              Ok(resp.body)
+            }
+            status -> {
+              Error(
+                "getRepo failed for "
+                <> did
+                <> " (status: "
+                <> string.inspect(status)
+                <> ")",
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Convert a CAR record (with proper MST path) to a database Record type
+fn car_record_with_path_to_db_record(
+  car_record: car.RecordWithPath,
+  did: String,
+) -> Record {
+  let now =
+    timestamp.system_time()
+    |> timestamp.to_rfc3339(duration.seconds(0))
+
+  Record(
+    uri: "at://"
+      <> did
+      <> "/"
+      <> car_record.collection
+      <> "/"
+      <> car_record.rkey,
+    cid: cid.to_string(car_record.cid),
+    did: did,
+    collection: car_record.collection,
+    json: car.record_to_json(car_record),
+    indexed_at: now,
+  )
+}
+
+/// Result of record validation
+type ValidationResult {
+  /// Record passed validation
+  Valid
+  /// Record failed schema validation - should be skipped
+  Invalid(String)
+  /// Could not parse JSON for validation - insert anyway (CBOR edge cases)
+  ParseError(String)
+}
+
+/// Validate a record against lexicon schemas using pre-built context
+fn validate_record(
+  ctx: honk.ValidationContext,
+  collection: String,
+  json_string: String,
+) -> ValidationResult {
+  case honk.parse_json_string(json_string) {
+    Error(e) ->
+      // JSON parse failure - likely CBOR edge case, allow record through
+      ParseError("Failed to parse record JSON: " <> errors.to_string(e))
+    Ok(record_json) -> {
+      case honk.validate_record_with_context(ctx, collection, record_json) {
+        Ok(_) -> Valid
+        Error(e) -> Invalid(errors.to_string(e))
+      }
+    }
+  }
+}
+
+/// Load lexicons and build validation context
+/// Returns None on error (validation will be skipped)
+fn load_validation_context(
+  conn: sqlight.Connection,
+) -> Option(honk.ValidationContext) {
+  case lexicons.get_all(conn) {
+    Error(_) -> {
+      logging.log(
+        logging.Warning,
+        "[backfill] Failed to load lexicons, skipping validation",
+      )
+      None
+    }
+    Ok(lexs) -> {
+      let lexicon_jsons =
+        lexs
+        |> list.filter_map(fn(lex) {
+          case honk.parse_json_string(lex.json) {
+            Ok(json_val) -> Ok(json_val)
+            Error(_) -> Error(Nil)
+          }
+        })
+      // Build context once from all lexicons
+      case honk.build_validation_context(lexicon_jsons) {
+        Ok(ctx) -> Some(ctx)
+        Error(_) -> {
+          logging.log(
+            logging.Warning,
+            "[backfill] Failed to build validation context, skipping validation",
+          )
+          None
+        }
+      }
+    }
+  }
+}
+
+/// Backfill a single repo using CAR file approach
+/// Fetches entire repo, parses CAR with MST walking, filters by collections, indexes records
+fn backfill_repo_car(
+  did: String,
+  pds_url: String,
+  collections: List(String),
+  conn: sqlight.Connection,
+) -> Int {
+  // Load validation context - this path is used for single-repo backfills (e.g., new actor sync)
+  let validation_ctx = load_validation_context(conn)
+  backfill_repo_car_with_context(
+    did,
+    pds_url,
+    collections,
+    conn,
+    validation_ctx,
+  )
+}
+
+/// Backfill a single repo with pre-built validation context
+fn backfill_repo_car_with_context(
+  did: String,
+  pds_url: String,
+  collections: List(String),
+  conn: sqlight.Connection,
+  validation_ctx: Option(honk.ValidationContext),
+) -> Int {
+  let total_start = monotonic_now()
+
+  // Phase 1: Fetch
+  let fetch_start = monotonic_now()
+  case fetch_repo_car(did, pds_url) {
+    Ok(car_bytes) -> {
+      let fetch_ms = elapsed_ms(fetch_start)
+      let car_size = bit_array.byte_size(car_bytes)
+
+      // Phase 2: Parse CAR and walk MST
+      let parse_start = monotonic_now()
+      case car.extract_records_with_paths(car_bytes, collections) {
+        Ok(car_records) -> {
+          let parse_ms = elapsed_ms(parse_start)
+
+          // Phase 3: Convert and validate
+          let validate_start = monotonic_now()
+          let #(db_records, invalid_count) =
+            car_records
+            |> list.fold(#([], 0), fn(acc, r) {
+              let #(records, invalids) = acc
+              let db_record = car_record_with_path_to_db_record(r, did)
+              case validation_ctx {
+                None -> #([db_record, ..records], invalids)
+                Some(ctx) -> {
+                  case validate_record(ctx, r.collection, db_record.json) {
+                    Valid -> #([db_record, ..records], invalids)
+                    ParseError(_) -> #([db_record, ..records], invalids)
+                    Invalid(_) -> #(records, invalids + 1)
+                  }
+                }
+              }
+            })
+          let validate_ms = elapsed_ms(validate_start)
+
+          // Phase 4: Insert into database
+          let insert_start = monotonic_now()
+          index_records(db_records, conn)
+          let insert_ms = elapsed_ms(insert_start)
+
+          let count = list.length(db_records)
+          let total_ms = elapsed_ms(total_start)
+
+          // Log summary at debug level (detailed per-repo timing)
+          logging.log(
+            logging.Debug,
+            "[backfill] "
+              <> did
+              <> " fetch="
+              <> int.to_string(fetch_ms)
+              <> "ms parse="
+              <> int.to_string(parse_ms)
+              <> "ms validate="
+              <> int.to_string(validate_ms)
+              <> "ms insert="
+              <> int.to_string(insert_ms)
+              <> "ms total="
+              <> int.to_string(total_ms)
+              <> "ms records="
+              <> int.to_string(count)
+              <> " invalid="
+              <> int.to_string(invalid_count)
+              <> " size="
+              <> int.to_string(car_size),
+          )
+          count
+        }
+        Error(err) -> {
+          logging.log(
+            logging.Warning,
+            "[backfill] CAR parse error for "
+              <> did
+              <> ": "
+              <> string.inspect(err),
+          )
+          0
+        }
+      }
+    }
+    Error(err) -> {
+      logging.log(logging.Warning, "[backfill] " <> err)
+      0
+    }
+  }
 }
 
 /// Check if an NSID matches the configured domain authority
@@ -395,423 +638,303 @@ pub fn get_atp_data_for_repos(
   })
 }
 
-/// Fetch and stream records directly to the database
-/// Returns the count of records inserted instead of accumulating them
-pub fn fetch_records_streaming(
+/// CAR-based worker that fetches entire repo and filters by collections
+fn fetch_repo_car_worker(
   repo: String,
-  collection: String,
-  pds_url: String,
-  conn: sqlight.Connection,
-) -> Int {
-  fetch_records_paginated_streaming(repo, collection, pds_url, None, conn, 0)
-}
-
-/// Helper function for streaming paginated record fetching
-/// Inserts records to DB after each page fetch to reduce memory usage
-fn fetch_records_paginated_streaming(
-  repo: String,
-  collection: String,
-  pds_url: String,
-  cursor: Option(String),
-  conn: sqlight.Connection,
-  count: Int,
-) -> Int {
-  // Build URL with query parameters
-  let base_url =
-    pds_url
-    <> "/xrpc/com.atproto.repo.listRecords?repo="
-    <> repo
-    <> "&collection="
-    <> collection
-    <> "&limit=100"
-
-  let url = case cursor {
-    Some(c) -> base_url <> "&cursor=" <> c
-    None -> base_url
-  }
-
-  case request.to(url) {
-    Error(_) -> {
-      logging.log(
-        logging.Error,
-        "[backfill] Failed to create request for: " <> url,
-      )
-      count
-    }
-    Ok(req) -> {
-      case send_with_permit(req) {
-        Error(err) -> {
-          let err_str = string.inspect(err)
-          let is_expected_error =
-            string.contains(err_str, "TlsAlert")
-            || string.contains(err_str, "Nxdomain")
-            || string.contains(err_str, "Timeout")
-            || string.contains(err_str, "Econnrefused")
-            || string.contains(err_str, "Closed")
-
-          case is_expected_error {
-            True ->
-              logging.log(
-                logging.Warning,
-                "[backfill] Network error fetching "
-                  <> repo
-                  <> "/"
-                  <> collection
-                  <> " from "
-                  <> pds_url
-                  <> ": "
-                  <> err_str,
-              )
-            False ->
-              logging.log(
-                logging.Error,
-                "[backfill] Failed to fetch records for "
-                  <> repo
-                  <> "/"
-                  <> collection
-                  <> " from "
-                  <> pds_url
-                  <> ": "
-                  <> err_str,
-              )
-          }
-          count
-        }
-        Ok(resp) -> {
-          case resp.status {
-            200 -> {
-              case parse_list_records_response(resp.body, repo, collection) {
-                Ok(#(recs, next_cursor)) -> {
-                  // Insert this batch immediately
-                  index_records(recs, conn)
-                  let new_count = count + list.length(recs)
-
-                  case next_cursor {
-                    Some(c) -> {
-                      logging.log(
-                        logging.Info,
-                        "[backfill] Streamed "
-                          <> string.inspect(list.length(recs))
-                          <> " records (total: "
-                          <> string.inspect(new_count)
-                          <> ") for "
-                          <> repo
-                          <> "/"
-                          <> collection,
-                      )
-                      fetch_records_paginated_streaming(
-                        repo,
-                        collection,
-                        pds_url,
-                        Some(c),
-                        conn,
-                        new_count,
-                      )
-                    }
-                    None -> {
-                      logging.log(
-                        logging.Info,
-                        "[backfill] Completed streaming "
-                          <> string.inspect(new_count)
-                          <> " records for "
-                          <> repo
-                          <> "/"
-                          <> collection,
-                      )
-                      new_count
-                    }
-                  }
-                }
-                Error(err) -> {
-                  logging.log(
-                    logging.Error,
-                    "[backfill] Failed to parse records for "
-                      <> repo
-                      <> "/"
-                      <> collection
-                      <> ": "
-                      <> err,
-                  )
-                  count
-                }
-              }
-            }
-            // Expected errors - return count silently
-            400 | 404 | 302 | 308 | 403 | 502 | 520 -> count
-            // Unexpected errors
-            _ -> {
-              logging.log(
-                logging.Error,
-                "[backfill] Unexpected status "
-                  <> string.inspect(resp.status)
-                  <> " fetching "
-                  <> repo
-                  <> "/"
-                  <> collection
-                  <> " from "
-                  <> pds_url,
-              )
-              count
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-/// Parse the response from com.atproto.repo.listRecords
-fn parse_list_records_response(
-  body: String,
-  repo: String,
-  collection: String,
-) -> Result(#(List(Record), Option(String)), String) {
-  let decoder = {
-    use records <- decode.field(
-      "records",
-      decode.list({
-        use uri <- decode.field("uri", decode.string)
-        use cid <- decode.field("cid", decode.string)
-        use value <- decode.field("value", decode.dynamic)
-        decode.success(#(uri, cid, value))
-      }),
-    )
-
-    decode.success(records)
-  }
-
-  // Parse the records first
-  case json.parse(body, decoder) {
-    Error(err) -> {
-      logging.log(
-        logging.Error,
-        "[backfill] Failed to parse records: " <> string.inspect(err),
-      )
-      logging.log(
-        logging.Error,
-        "[backfill] Response body snippet: " <> string.slice(body, 0, 200),
-      )
-      Error("Failed to parse listRecords response")
-    }
-    Ok(record_tuples) -> {
-      // Try to extract cursor separately (it might not exist in the JSON)
-      let cursor_decoder = {
-        use cursor <- decode.field("cursor", decode.optional(decode.string))
-        decode.success(cursor)
-      }
-
-      let cursor = case json.parse(body, cursor_decoder) {
-        Ok(c) -> c
-        Error(_) -> None
-      }
-
-      let now =
-        timestamp.system_time()
-        |> timestamp.to_rfc3339(duration.seconds(0))
-      let records =
-        record_tuples
-        |> list.map(fn(tuple) {
-          let #(uri, cid, value) = tuple
-          Record(
-            uri: uri,
-            cid: cid,
-            did: repo,
-            collection: collection,
-            json: dynamic_to_json(value),
-            indexed_at: now,
-          )
-        })
-
-      Ok(#(records, cursor))
-    }
-  }
-}
-
-/// Streaming worker that fetches and inserts records directly to DB
-fn fetch_records_worker_streaming(
-  repo: String,
-  collection: String,
   pds: String,
+  collections: List(String),
   conn: sqlight.Connection,
+  validation_ctx: Option(honk.ValidationContext),
   reply_to: Subject(Int),
 ) -> Nil {
-  let count = fetch_records_streaming(repo, collection, pds, conn)
+  // Wrap in rescue to catch any crashes
+  let count = rescue_car_backfill(repo, pds, collections, conn, validation_ctx)
   process.send(reply_to, count)
 }
 
-/// Streaming worker that processes jobs for a single PDS with sliding window
-/// Keeps N workers always in-flight for maximum throughput
-/// Inserts records directly to DB instead of accumulating
-fn pds_worker_streaming(
+/// Wrapper to catch crashes in CAR backfill
+fn rescue_car_backfill(
+  repo: String,
+  pds: String,
+  collections: List(String),
+  conn: sqlight.Connection,
+  validation_ctx: Option(honk.ValidationContext),
+) -> Int {
+  case
+    rescue(fn() {
+      backfill_repo_car_with_context(
+        repo,
+        pds,
+        collections,
+        conn,
+        validation_ctx,
+      )
+    })
+  {
+    Ok(count) -> count
+    Error(err) -> {
+      logging.log(
+        logging.Error,
+        "[backfill] CAR worker crashed for "
+          <> repo
+          <> ": "
+          <> string.inspect(err),
+      )
+      0
+    }
+  }
+}
+
+/// Rescue wrapper - catches exceptions
+@external(erlang, "backfill_ffi", "rescue")
+fn rescue(f: fn() -> a) -> Result(a, Dynamic)
+
+/// CAR-based PDS worker - fetches each repo as CAR and filters locally
+fn pds_worker_car(
   pds_url: String,
-  jobs: List(#(String, String)),
+  repos: List(String),
+  collections: List(String),
   max_concurrent: Int,
   conn: sqlight.Connection,
+  validation_ctx: Option(honk.ValidationContext),
   reply_to: Subject(Int),
 ) -> Nil {
+  logging.log(
+    logging.Debug,
+    "[backfill] PDS worker starting for "
+      <> pds_url
+      <> " with "
+      <> string.inspect(list.length(repos))
+      <> " repos",
+  )
   let subject = process.new_subject()
 
   // Start initial batch of workers
-  let #(initial_jobs, remaining_jobs) = list.split(jobs, max_concurrent)
-  let initial_count = list.length(initial_jobs)
+  let #(initial_repos, remaining_repos) = list.split(repos, max_concurrent)
+  let initial_count = list.length(initial_repos)
 
   // Spawn initial workers
-  list.each(initial_jobs, fn(job) {
-    let #(repo, collection) = job
+  list.each(initial_repos, fn(repo) {
     process.spawn_unlinked(fn() {
-      fetch_records_worker_streaming(repo, collection, pds_url, conn, subject)
+      fetch_repo_car_worker(
+        repo,
+        pds_url,
+        collections,
+        conn,
+        validation_ctx,
+        subject,
+      )
     })
   })
 
-  // Process with sliding window - as each worker completes, start the next one
+  // Process with sliding window
   let total_count =
-    sliding_window_process(
-      remaining_jobs,
+    sliding_window_car(
+      remaining_repos,
       subject,
       initial_count,
       pds_url,
+      collections,
       conn,
+      validation_ctx,
       0,
     )
 
+  logging.log(
+    logging.Debug,
+    "[backfill] PDS worker finished for "
+      <> pds_url
+      <> " with "
+      <> string.inspect(total_count)
+      <> " total records",
+  )
   process.send(reply_to, total_count)
 }
 
-/// Process jobs with a sliding window pattern
-/// As each worker completes, start the next one to keep N always in-flight
-fn sliding_window_process(
-  remaining: List(#(String, String)),
+/// Sliding window for CAR-based processing
+fn sliding_window_car(
+  remaining: List(String),
   subject: Subject(Int),
   in_flight: Int,
   pds_url: String,
+  collections: List(String),
   conn: sqlight.Connection,
+  validation_ctx: Option(honk.ValidationContext),
   total: Int,
 ) -> Int {
   case in_flight {
     0 -> total
     _ -> {
-      // Wait for one worker to complete
-      case process.receive(subject, 60_000) {
+      // 5 minute timeout per CAR worker (validation adds processing time for large repos)
+      case process.receive(subject, 300_000) {
         Ok(count) -> {
           let new_total = total + count
-          // Start next job if available
           case remaining {
             [next, ..rest] -> {
-              let #(repo, collection) = next
               process.spawn_unlinked(fn() {
-                fetch_records_worker_streaming(
-                  repo,
-                  collection,
+                fetch_repo_car_worker(
+                  next,
                   pds_url,
+                  collections,
                   conn,
+                  validation_ctx,
                   subject,
                 )
               })
-              // Keep the same in_flight count (one completed, one started)
-              sliding_window_process(
+              sliding_window_car(
                 rest,
                 subject,
                 in_flight,
                 pds_url,
+                collections,
                 conn,
+                validation_ctx,
                 new_total,
               )
             }
             [] ->
-              // No more jobs to start, decrement in_flight
-              sliding_window_process(
+              sliding_window_car(
                 [],
                 subject,
                 in_flight - 1,
                 pds_url,
+                collections,
                 conn,
+                validation_ctx,
                 new_total,
               )
           }
         }
-        Error(_) ->
-          // Timeout - decrement in_flight and continue
-          sliding_window_process(
+        Error(_) -> {
+          logging.log(
+            logging.Warning,
+            "[backfill] Timeout waiting for CAR worker on "
+              <> pds_url
+              <> " (in_flight: "
+              <> string.inspect(in_flight)
+              <> ", remaining: "
+              <> string.inspect(list.length(remaining))
+              <> ")",
+          )
+          sliding_window_car(
             remaining,
             subject,
             in_flight - 1,
             pds_url,
+            collections,
             conn,
+            validation_ctx,
             total,
           )
+        }
       }
     }
   }
 }
 
-/// Streaming version: fetch and insert records directly to DB
-/// Returns the total count of records inserted instead of the records themselves
-pub fn get_records_for_repos_streaming(
+/// CAR-based streaming: fetch repos as CAR files and filter locally
+/// One request per repo instead of one per (repo, collection)
+pub fn get_records_for_repos_car(
   repos: List(String),
   collections: List(String),
   atp_data: List(AtprotoData),
   config: BackfillConfig,
   conn: sqlight.Connection,
 ) -> Int {
-  // Create all repo/collection job pairs grouped by PDS
-  let jobs_by_pds =
+  // Build validation context ONCE for all repos
+  let validation_ctx = load_validation_context(conn)
+
+  // Group repos by PDS
+  let repos_by_pds =
     repos
-    |> list.flat_map(fn(repo) {
+    |> list.filter_map(fn(repo) {
       case list.find(atp_data, fn(data) { data.did == repo }) {
         Error(_) -> {
           logging.log(
             logging.Error,
             "[backfill] No ATP data found for repo: " <> repo,
           )
-          []
+          Error(Nil)
         }
-        Ok(data) -> {
-          collections
-          |> list.map(fn(collection) { #(data.pds, repo, collection) })
-        }
+        Ok(data) -> Ok(#(data.pds, repo))
       }
     })
-    |> list.group(fn(job) {
-      let #(pds, _repo, _collection) = job
+    |> list.group(fn(pair) {
+      let #(pds, _repo) = pair
       pds
     })
 
-  // Spawn one worker per PDS server
+  // Spawn one worker per PDS
   let subject = process.new_subject()
-  let pds_entries = dict.to_list(jobs_by_pds)
+  let pds_entries = dict.to_list(repos_by_pds)
   let pds_count = list.length(pds_entries)
 
   let _pds_workers =
     pds_entries
     |> list.map(fn(pds_entry) {
-      let #(pds_url, jobs) = pds_entry
-      // Extract just the repo/collection pairs
-      let job_pairs =
-        jobs
-        |> list.map(fn(job) {
-          let #(_pds, repo, collection) = job
-          #(repo, collection)
+      let #(pds_url, repo_pairs) = pds_entry
+      let pds_repos =
+        repo_pairs
+        |> list.map(fn(pair) {
+          let #(_pds, repo) = pair
+          repo
         })
 
       process.spawn_unlinked(fn() {
-        pds_worker_streaming(
+        pds_worker_car(
           pds_url,
-          job_pairs,
+          pds_repos,
+          collections,
           config.max_concurrent_per_pds,
           conn,
+          validation_ctx,
           subject,
         )
       })
     })
 
   // Collect counts from all PDS workers
-  list.range(1, pds_count)
-  |> list.fold(0, fn(acc, _) {
-    case process.receive(subject, 120_000) {
-      Ok(count) -> acc + count
-      Error(_) -> acc
-    }
-  })
+  logging.log(
+    logging.Info,
+    "[backfill] Waiting for " <> string.inspect(pds_count) <> " PDS workers...",
+  )
+  let result =
+    list.range(1, pds_count)
+    |> list.fold(0, fn(acc, i) {
+      case process.receive(subject, 300_000) {
+        Ok(count) -> {
+          logging.log(
+            logging.Info,
+            "[backfill] PDS worker "
+              <> string.inspect(i)
+              <> "/"
+              <> string.inspect(pds_count)
+              <> " done ("
+              <> string.inspect(count)
+              <> " records)",
+          )
+          acc + count
+        }
+        Error(_) -> {
+          logging.log(
+            logging.Warning,
+            "[backfill] PDS worker "
+              <> string.inspect(i)
+              <> "/"
+              <> string.inspect(pds_count)
+              <> " timed out",
+          )
+          acc
+        }
+      }
+    })
+  logging.log(
+    logging.Info,
+    "[backfill] All PDS workers complete, total: "
+      <> string.inspect(result)
+      <> " records",
+  )
+  result
 }
 
 /// Index records into the database using batch inserts
@@ -876,28 +999,9 @@ pub fn backfill_collections_for_actor(
   // Resolve DID to get PDS endpoint
   case resolve_did(did, plc_url) {
     Ok(atp_data) -> {
-      // Stream records directly to DB for all collections (primary + external)
+      // Use CAR-based approach - single request gets all collections
       let total_records =
-        list.fold(all_collections, 0, fn(acc, collection) {
-          logging.log(
-            logging.Info,
-            "[backfill] Streaming " <> collection <> " for " <> did,
-          )
-
-          let count = fetch_records_streaming(did, collection, atp_data.pds, db)
-
-          logging.log(
-            logging.Info,
-            "[backfill] Streamed "
-              <> string.inspect(count)
-              <> " records from "
-              <> collection
-              <> " for "
-              <> did,
-          )
-
-          acc + count
-        })
+        backfill_repo_car(did, atp_data.pds, all_collections, db)
 
       logging.log(
         logging.Info,
@@ -1156,13 +1260,13 @@ fn run_backfill(
   // Combine main and external collections for concurrent processing
   let all_collections = list.append(collections, external_collections)
 
-  // Stream records directly to DB (all collections in one pass)
+  // Use CAR-based approach: one getRepo request per repo, filter locally
   logging.log(
     logging.Info,
-    "[backfill] Streaming records for repositories and collections...",
+    "[backfill] Fetching repos as CAR files and filtering locally...",
   )
   let total_count =
-    get_records_for_repos_streaming(
+    get_records_for_repos_car(
       all_repos,
       all_collections,
       atp_data,
@@ -1171,8 +1275,8 @@ fn run_backfill(
     )
   logging.log(
     logging.Info,
-    "[backfill] Backfill complete! Streamed "
+    "[backfill] Backfill complete! Indexed "
       <> string.inspect(total_count)
-      <> " total records",
+      <> " total records via CAR",
   )
 }

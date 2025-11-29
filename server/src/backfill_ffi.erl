@@ -1,5 +1,5 @@
 -module(backfill_ffi).
--export([configure_pool/0, init_semaphore/0, acquire_permit/0, release_permit/0]).
+-export([configure_pool/0, init_semaphore/0, acquire_permit/0, release_permit/0, rescue/1, monotonic_now/0, elapsed_ms/1]).
 
 %% Maximum concurrent HTTP requests for backfill
 -define(MAX_CONCURRENT, 150).
@@ -74,3 +74,22 @@ release_permit() ->
     Ref = persistent_term:get(backfill_semaphore),
     atomics:add(Ref, 1, 1),
     nil.
+
+%% Rescue wrapper - catches exceptions and returns Result
+rescue(Fun) ->
+    try
+        Result = Fun(),
+        {ok, Result}
+    catch
+        Class:Reason:Stacktrace ->
+            {error, {Class, Reason, Stacktrace}}
+    end.
+
+%% Get monotonic time in native units for timing measurements
+monotonic_now() ->
+    erlang:monotonic_time().
+
+%% Calculate elapsed milliseconds from a start time
+elapsed_ms(Start) ->
+    End = erlang:monotonic_time(),
+    erlang:convert_time_unit(End - Start, native, millisecond).
