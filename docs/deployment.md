@@ -251,6 +251,40 @@ View logs in the dashboard or use `railway logs`.
 docker compose logs -f quickslice
 ```
 
+## Backfill Configuration
+
+Control memory usage during backfill operations with these environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BACKFILL_MAX_PDS_WORKERS` | 10 | Max concurrent PDS endpoints being processed |
+| `BACKFILL_PDS_CONCURRENCY` | 4 | Max concurrent repo fetches per PDS |
+| `BACKFILL_MAX_HTTP_CONCURRENT` | 50 | Global HTTP request limit |
+| `BACKFILL_REPO_TIMEOUT` | 60 | Timeout per repo fetch (seconds) |
+
+### Recommended Settings by VPS Size
+
+**1GB RAM (e.g., Railway starter):**
+```
+BACKFILL_MAX_PDS_WORKERS=8
+BACKFILL_PDS_CONCURRENCY=2
+BACKFILL_MAX_HTTP_CONCURRENT=30
+```
+
+**2GB RAM:**
+```
+BACKFILL_MAX_PDS_WORKERS=15
+BACKFILL_PDS_CONCURRENCY=4
+BACKFILL_MAX_HTTP_CONCURRENT=50
+```
+
+**4GB+ RAM:**
+```
+BACKFILL_MAX_PDS_WORKERS=25
+BACKFILL_PDS_CONCURRENCY=6
+BACKFILL_MAX_HTTP_CONCURRENT=100
+```
+
 ## Resource Requirements
 
 **Minimum**:

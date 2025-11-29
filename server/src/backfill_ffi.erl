@@ -1,31 +1,22 @@
 -module(backfill_ffi).
--export([configure_pool/0, init_semaphore/0, acquire_permit/0, release_permit/0, rescue/1, monotonic_now/0, elapsed_ms/1]).
+-export([configure_pool/1, init_semaphore/1, acquire_permit/0, release_permit/0, rescue/1, monotonic_now/0, elapsed_ms/1]).
 
-%% Maximum concurrent HTTP requests for backfill
--define(MAX_CONCURRENT, 150).
-
-%% Configure hackney connection pool with higher limits
-configure_pool() ->
+%% Configure hackney connection pool with specified limits
+configure_pool(MaxConcurrent) ->
     %% Suppress SSL handshake error notices (TLS alerts from bad certificates)
-    %% These clutter the logs when connecting to self-hosted PDS with bad certs
-    %% Set both the ssl application log level and logger level
     application:set_env(ssl, log_level, error),
     logger:set_application_level(ssl, error),
 
     %% Stop the default pool if it exists (ignore errors)
     _ = hackney_pool:stop_pool(default),
 
-    %% Start pool with increased connection limits and timeouts
-    %% timeout: how long to keep connections alive in the pool (ms)
-    %% max_connections: maximum number of connections in the pool
-    %% recv_timeout: how long to wait for response data (ms)
+    %% Start pool with configured connection limits
     Options = [
         {timeout, 150000},
-        {max_connections, 300},
+        {max_connections, MaxConcurrent * 2},
         {recv_timeout, 30000}
     ],
 
-    %% Start the pool (this will create it if it doesn't exist)
     case hackney_pool:start_pool(default, Options) of
         ok -> ok;
         {error, {already_started, _}} -> ok;
@@ -33,23 +24,17 @@ configure_pool() ->
     end,
 
     %% Initialize the semaphore for rate limiting
-    init_semaphore(),
+    init_semaphore(MaxConcurrent),
 
-    %% Return nil (atom 'nil' in Gleam)
     nil.
 
 %% Initialize the global semaphore using atomics
-%% Uses persistent_term for fast global access
-init_semaphore() ->
-    case persistent_term:get(backfill_semaphore, undefined) of
-        undefined ->
-            Ref = atomics:new(1, [{signed, true}]),
-            atomics:put(Ref, 1, ?MAX_CONCURRENT),
-            persistent_term:put(backfill_semaphore, Ref);
-        _ ->
-            %% Already initialized
-            ok
-    end.
+init_semaphore(MaxConcurrent) ->
+    %% Always recreate to pick up new limit
+    Ref = atomics:new(1, [{signed, true}]),
+    atomics:put(Ref, 1, MaxConcurrent),
+    persistent_term:put(backfill_semaphore, Ref),
+    ok.
 
 %% Acquire a permit from the semaphore
 %% Blocks (with sleep) if no permits available

@@ -50,6 +50,9 @@ pub type BackfillConfig {
     plc_directory_url: String,
     index_actors: Bool,
     max_concurrent_per_pds: Int,
+    max_pds_workers: Int,
+    max_http_concurrent: Int,
+    repo_fetch_timeout_ms: Int,
     did_cache: Option(Subject(did_cache.Message)),
   )
 }
@@ -62,25 +65,60 @@ pub fn default_config() -> BackfillConfig {
     Error(_) -> "https://plc.directory"
   }
 
-  // Get max concurrent per PDS from environment or use default of 6
+  // Get max concurrent per PDS from environment or use default of 4
   let max_pds_concurrent = case envoy.get("BACKFILL_PDS_CONCURRENCY") {
     Ok(val) -> {
       case int.parse(val) {
         Ok(n) -> n
-        Error(_) -> 6
+        Error(_) -> 4
       }
     }
-    Error(_) -> 6
+    Error(_) -> 4
   }
 
-  // Configure hackney pool for better connection reuse
-  // We'll call directly into Erlang to set up the pool
-  configure_hackney_pool()
+  // Get max PDS workers from environment or use default of 10
+  let max_pds_workers = case envoy.get("BACKFILL_MAX_PDS_WORKERS") {
+    Ok(val) -> {
+      case int.parse(val) {
+        Ok(n) -> n
+        Error(_) -> 10
+      }
+    }
+    Error(_) -> 10
+  }
+
+  // Get max HTTP concurrent from environment or use default of 50
+  let max_http = case envoy.get("BACKFILL_MAX_HTTP_CONCURRENT") {
+    Ok(val) -> {
+      case int.parse(val) {
+        Ok(n) -> n
+        Error(_) -> 50
+      }
+    }
+    Error(_) -> 50
+  }
+
+  // Get repo fetch timeout from environment or use default of 60s
+  let repo_timeout = case envoy.get("BACKFILL_REPO_TIMEOUT") {
+    Ok(val) -> {
+      case int.parse(val) {
+        Ok(n) -> n * 1000
+        Error(_) -> 60_000
+      }
+    }
+    Error(_) -> 60_000
+  }
+
+  // Configure hackney pool with the configured HTTP limit
+  configure_hackney_pool(max_http)
 
   BackfillConfig(
     plc_directory_url: plc_url,
     index_actors: True,
     max_concurrent_per_pds: max_pds_concurrent,
+    max_pds_workers: max_pds_workers,
+    max_http_concurrent: max_http,
+    repo_fetch_timeout_ms: repo_timeout,
     did_cache: None,
   )
 }
@@ -91,10 +129,9 @@ pub fn config_with_cache(cache: Subject(did_cache.Message)) -> BackfillConfig {
   BackfillConfig(..config, did_cache: Some(cache))
 }
 
-/// Configure hackney connection pool with higher limits
-/// Called via Erlang FFI to avoid atom conversion issues
+/// Configure hackney connection pool with specified limits
 @external(erlang, "backfill_ffi", "configure_pool")
-fn configure_hackney_pool() -> Nil
+fn configure_hackney_pool(max_concurrent: Int) -> Nil
 
 /// Acquire a permit from the global HTTP semaphore
 /// Blocks if at the concurrent request limit (150)
@@ -697,6 +734,7 @@ fn pds_worker_car(
   max_concurrent: Int,
   conn: sqlight.Connection,
   validation_ctx: Option(honk.ValidationContext),
+  timeout_ms: Int,
   reply_to: Subject(Int),
 ) -> Nil {
   logging.log(
@@ -704,7 +742,7 @@ fn pds_worker_car(
     "[backfill] PDS worker starting for "
       <> pds_url
       <> " with "
-      <> string.inspect(list.length(repos))
+      <> int.to_string(list.length(repos))
       <> " repos",
   )
   let subject = process.new_subject()
@@ -737,6 +775,7 @@ fn pds_worker_car(
       collections,
       conn,
       validation_ctx,
+      timeout_ms,
       0,
     )
 
@@ -745,7 +784,7 @@ fn pds_worker_car(
     "[backfill] PDS worker finished for "
       <> pds_url
       <> " with "
-      <> string.inspect(total_count)
+      <> int.to_string(total_count)
       <> " total records",
   )
   process.send(reply_to, total_count)
@@ -760,13 +799,13 @@ fn sliding_window_car(
   collections: List(String),
   conn: sqlight.Connection,
   validation_ctx: Option(honk.ValidationContext),
+  timeout_ms: Int,
   total: Int,
 ) -> Int {
   case in_flight {
     0 -> total
     _ -> {
-      // 5 minute timeout per CAR worker (validation adds processing time for large repos)
-      case process.receive(subject, 300_000) {
+      case process.receive(subject, timeout_ms) {
         Ok(count) -> {
           let new_total = total + count
           case remaining {
@@ -789,6 +828,7 @@ fn sliding_window_car(
                 collections,
                 conn,
                 validation_ctx,
+                timeout_ms,
                 new_total,
               )
             }
@@ -801,6 +841,7 @@ fn sliding_window_car(
                 collections,
                 conn,
                 validation_ctx,
+                timeout_ms,
                 new_total,
               )
           }
@@ -811,9 +852,9 @@ fn sliding_window_car(
             "[backfill] Timeout waiting for CAR worker on "
               <> pds_url
               <> " (in_flight: "
-              <> string.inspect(in_flight)
+              <> int.to_string(in_flight)
               <> ", remaining: "
-              <> string.inspect(list.length(remaining))
+              <> int.to_string(list.length(remaining))
               <> ")",
           )
           sliding_window_car(
@@ -824,7 +865,119 @@ fn sliding_window_car(
             collections,
             conn,
             validation_ctx,
+            timeout_ms,
             total,
+          )
+        }
+      }
+    }
+  }
+}
+
+/// Sliding window for PDS worker processing
+/// Limits how many PDS endpoints are processed concurrently
+fn sliding_window_pds(
+  remaining: List(#(String, List(#(String, String)))),
+  subject: Subject(Int),
+  in_flight: Int,
+  collections: List(String),
+  max_concurrent_per_pds: Int,
+  conn: sqlight.Connection,
+  validation_ctx: Option(honk.ValidationContext),
+  timeout_ms: Int,
+  total: Int,
+  pds_count: Int,
+  completed: Int,
+) -> Int {
+  case in_flight {
+    0 -> total
+    _ -> {
+      // 5 minute timeout per PDS worker
+      case process.receive(subject, 300_000) {
+        Ok(count) -> {
+          let new_total = total + count
+          let new_completed = completed + 1
+          logging.log(
+            logging.Info,
+            "[backfill] PDS worker "
+              <> int.to_string(new_completed)
+              <> "/"
+              <> int.to_string(pds_count)
+              <> " done ("
+              <> int.to_string(count)
+              <> " records)",
+          )
+          case remaining {
+            [#(pds_url, repo_pairs), ..rest] -> {
+              let pds_repos =
+                repo_pairs
+                |> list.map(fn(pair) {
+                  let #(_pds, repo) = pair
+                  repo
+                })
+              process.spawn_unlinked(fn() {
+                pds_worker_car(
+                  pds_url,
+                  pds_repos,
+                  collections,
+                  max_concurrent_per_pds,
+                  conn,
+                  validation_ctx,
+                  timeout_ms,
+                  subject,
+                )
+              })
+              sliding_window_pds(
+                rest,
+                subject,
+                in_flight,
+                collections,
+                max_concurrent_per_pds,
+                conn,
+                validation_ctx,
+                timeout_ms,
+                new_total,
+                pds_count,
+                new_completed,
+              )
+            }
+            [] ->
+              sliding_window_pds(
+                [],
+                subject,
+                in_flight - 1,
+                collections,
+                max_concurrent_per_pds,
+                conn,
+                validation_ctx,
+                timeout_ms,
+                new_total,
+                pds_count,
+                new_completed,
+              )
+          }
+        }
+        Error(_) -> {
+          logging.log(
+            logging.Warning,
+            "[backfill] PDS worker timed out (in_flight: "
+              <> int.to_string(in_flight)
+              <> ", remaining: "
+              <> int.to_string(list.length(remaining))
+              <> ")",
+          )
+          sliding_window_pds(
+            remaining,
+            subject,
+            in_flight - 1,
+            collections,
+            max_concurrent_per_pds,
+            conn,
+            validation_ctx,
+            timeout_ms,
+            total,
+            pds_count,
+            completed,
           )
         }
       }
@@ -864,74 +1017,68 @@ pub fn get_records_for_repos_car(
       pds
     })
 
-  // Spawn one worker per PDS
-  let subject = process.new_subject()
   let pds_entries = dict.to_list(repos_by_pds)
   let pds_count = list.length(pds_entries)
 
-  let _pds_workers =
-    pds_entries
-    |> list.map(fn(pds_entry) {
-      let #(pds_url, repo_pairs) = pds_entry
-      let pds_repos =
-        repo_pairs
-        |> list.map(fn(pair) {
-          let #(_pds, repo) = pair
-          repo
-        })
-
-      process.spawn_unlinked(fn() {
-        pds_worker_car(
-          pds_url,
-          pds_repos,
-          collections,
-          config.max_concurrent_per_pds,
-          conn,
-          validation_ctx,
-          subject,
-        )
-      })
-    })
-
-  // Collect counts from all PDS workers
   logging.log(
     logging.Info,
-    "[backfill] Waiting for " <> string.inspect(pds_count) <> " PDS workers...",
+    "[backfill] Processing "
+      <> int.to_string(pds_count)
+      <> " PDS endpoints (max "
+      <> int.to_string(config.max_pds_workers)
+      <> " concurrent)...",
   )
-  let result =
-    list.range(1, pds_count)
-    |> list.fold(0, fn(acc, i) {
-      case process.receive(subject, 300_000) {
-        Ok(count) -> {
-          logging.log(
-            logging.Info,
-            "[backfill] PDS worker "
-              <> string.inspect(i)
-              <> "/"
-              <> string.inspect(pds_count)
-              <> " done ("
-              <> string.inspect(count)
-              <> " records)",
-          )
-          acc + count
-        }
-        Error(_) -> {
-          logging.log(
-            logging.Warning,
-            "[backfill] PDS worker "
-              <> string.inspect(i)
-              <> "/"
-              <> string.inspect(pds_count)
-              <> " timed out",
-          )
-          acc
-        }
-      }
+
+  // Use sliding window to limit concurrent PDS workers
+  let subject = process.new_subject()
+  let #(initial_pds, remaining_pds) =
+    list.split(pds_entries, config.max_pds_workers)
+  let initial_count = list.length(initial_pds)
+
+  // Spawn initial batch of PDS workers
+  list.each(initial_pds, fn(pds_entry) {
+    let #(pds_url, repo_pairs) = pds_entry
+    let pds_repos =
+      repo_pairs
+      |> list.map(fn(pair) {
+        let #(_pds, repo) = pair
+        repo
+      })
+
+    process.spawn_unlinked(fn() {
+      pds_worker_car(
+        pds_url,
+        pds_repos,
+        collections,
+        config.max_concurrent_per_pds,
+        conn,
+        validation_ctx,
+        config.repo_fetch_timeout_ms,
+        subject,
+      )
     })
+  })
+
+  // Process remaining with sliding window
+  let result =
+    sliding_window_pds(
+      remaining_pds,
+      subject,
+      initial_count,
+      collections,
+      config.max_concurrent_per_pds,
+      conn,
+      validation_ctx,
+      config.repo_fetch_timeout_ms,
+      0,
+      pds_count,
+      0,
+    )
+
   logging.log(
     logging.Info,
     "[backfill] All PDS workers complete, total: "
-      <> string.inspect(result)
+      <> int.to_string(result)
       <> " records",
   )
   result
