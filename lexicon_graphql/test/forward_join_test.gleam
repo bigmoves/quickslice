@@ -52,6 +52,7 @@ pub fn strong_ref_generates_forward_join_field_test() {
                 required: True,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -61,6 +62,7 @@ pub fn strong_ref_generates_forward_join_field_test() {
                 required: False,
                 format: None,
                 ref: Some("com.atproto.repo.strongRef"),
+                items: None,
               ),
             ),
           ]),
@@ -95,6 +97,7 @@ pub fn at_uri_generates_forward_join_field_test() {
                 required: True,
                 format: Some("at-uri"),
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -104,6 +107,7 @@ pub fn at_uri_generates_forward_join_field_test() {
                 required: True,
                 format: Some("datetime"),
                 ref: None,
+                items: None,
               ),
             ),
           ]),
@@ -137,6 +141,7 @@ pub fn multiple_forward_join_fields_test() {
                 required: True,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -146,6 +151,7 @@ pub fn multiple_forward_join_fields_test() {
                 required: False,
                 format: None,
                 ref: Some("com.atproto.repo.strongRef"),
+                items: None,
               ),
             ),
             #(
@@ -155,6 +161,7 @@ pub fn multiple_forward_join_fields_test() {
                 required: False,
                 format: Some("at-uri"),
                 ref: None,
+                items: None,
               ),
             ),
           ]),
@@ -191,6 +198,7 @@ pub fn no_join_fields_test() {
                 required: True,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -200,6 +208,7 @@ pub fn no_join_fields_test() {
                 required: True,
                 format: Some("datetime"),
                 ref: None,
+                items: None,
               ),
             ),
           ]),
@@ -239,6 +248,7 @@ pub fn record_union_type_exists_test() {
                 required: True,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -248,6 +258,7 @@ pub fn record_union_type_exists_test() {
                 required: False,
                 format: None,
                 ref: Some("com.atproto.repo.strongRef"),
+                items: None,
               ),
             ),
           ]),
@@ -281,6 +292,7 @@ pub fn forward_join_field_has_union_type_test() {
                 required: True,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -290,6 +302,7 @@ pub fn forward_join_field_has_union_type_test() {
                 required: False,
                 format: None,
                 ref: Some("com.atproto.repo.strongRef"),
+                items: None,
               ),
             ),
           ]),

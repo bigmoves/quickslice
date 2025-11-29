@@ -262,7 +262,7 @@ fn build_input_type(
 ) -> schema.Type {
   let input_fields =
     list.map(properties, fn(prop) {
-      let #(name, types.Property(type_, required, _, _)) = prop
+      let #(name, types.Property(type_, required, _, _, _)) = prop
       // Use map_input_type to get input-compatible types (e.g., BlobInput instead of Blob)
       let graphql_type = type_mapper.map_input_type(type_)
 

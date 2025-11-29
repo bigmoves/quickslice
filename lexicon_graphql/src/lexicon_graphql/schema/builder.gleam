@@ -43,8 +43,11 @@ pub fn build_schema(lexicons: List(Lexicon)) -> Result(schema.Schema, String) {
   case lexicons {
     [] -> Error("Cannot build schema from empty lexicon list")
     _ -> {
-      // Extract record types from lexicons
-      let record_types = extract_record_types(lexicons)
+      // First extract ref object types from lexicon "others" (e.g., #artist, #aspectRatio)
+      let ref_object_types = extract_ref_object_types(lexicons)
+
+      // Extract record types from lexicons, passing ref_object_types for field resolution
+      let record_types = extract_record_types(lexicons, ref_object_types)
 
       // Build object types dict for sharing between queries and mutations
       let object_types = build_object_types_dict(record_types)
@@ -70,13 +73,19 @@ pub fn build_schema(lexicons: List(Lexicon)) -> Result(schema.Schema, String) {
 }
 
 /// Extract record types from lexicon definitions
-fn extract_record_types(lexicons: List(Lexicon)) -> List(RecordType) {
+fn extract_record_types(
+  lexicons: List(Lexicon),
+  ref_object_types: dict.Dict(String, schema.Type),
+) -> List(RecordType) {
   lexicons
-  |> list.filter_map(parse_lexicon)
+  |> list.filter_map(fn(lex) { parse_lexicon(lex, ref_object_types) })
 }
 
 /// Parse a single lexicon into a RecordType
-fn parse_lexicon(lexicon: Lexicon) -> Result(RecordType, Nil) {
+fn parse_lexicon(
+  lexicon: Lexicon,
+  ref_object_types: dict.Dict(String, schema.Type),
+) -> Result(RecordType, Nil) {
   case lexicon {
     types.Lexicon(
       id,
@@ -84,7 +93,7 @@ fn parse_lexicon(lexicon: Lexicon) -> Result(RecordType, Nil) {
     ) -> {
       let type_name = nsid.to_type_name(id)
       let field_name = nsid.to_field_name(id)
-      let fields = build_fields(properties)
+      let fields = build_fields(properties, ref_object_types)
 
       Ok(RecordType(
         nsid: id,
@@ -98,7 +107,10 @@ fn parse_lexicon(lexicon: Lexicon) -> Result(RecordType, Nil) {
 }
 
 /// Build GraphQL fields from lexicon properties
-fn build_fields(properties: List(#(String, Property))) -> List(schema.Field) {
+fn build_fields(
+  properties: List(#(String, Property)),
+  ref_object_types: dict.Dict(String, schema.Type),
+) -> List(schema.Field) {
   // Add standard AT Proto fields
   let standard_fields = [
     schema.field("uri", schema.string_type(), "Record URI", fn(_ctx) {
@@ -121,8 +133,9 @@ fn build_fields(properties: List(#(String, Property))) -> List(schema.Field) {
   // Build fields from lexicon properties
   let lexicon_fields =
     list.map(properties, fn(prop) {
-      let #(name, types.Property(type_, _required, _, _)) = prop
-      let graphql_type = type_mapper.map_type(type_)
+      let #(name, property) = prop
+      let graphql_type =
+        type_mapper.map_property_type(property, ref_object_types)
 
       schema.field(name, graphql_type, "Field from lexicon", fn(_ctx) {
         Ok(value.Null)
@@ -145,6 +158,43 @@ fn build_object_types_dict(
         record_type.fields,
       )
     dict.insert(acc, record_type.nsid, object_type)
+  })
+}
+
+/// Extract object types from lexicon "others" defs (e.g., #artist, #aspectRatio)
+/// Returns a dict keyed by full ref like "fm.teal.alpha.feed.track#artist"
+fn extract_ref_object_types(
+  lexicons: List(Lexicon),
+) -> dict.Dict(String, schema.Type) {
+  list.fold(lexicons, dict.new(), fn(acc, lexicon) {
+    let types.Lexicon(id, types.Defs(_, others)) = lexicon
+    dict.fold(others, acc, fn(inner_acc, def_name, def) {
+      case def {
+        types.Object(types.ObjectDef(_, _, properties)) -> {
+          // Build full ref: "fm.teal.alpha.feed.track#artist"
+          let full_ref = id <> "#" <> def_name
+          let type_name = nsid.to_type_name(id <> "." <> def_name)
+
+          // Build fields for the object type
+          let fields =
+            list.map(properties, fn(prop) {
+              let #(name, property) = prop
+              let graphql_type = type_mapper.map_type(property.type_)
+              schema.field(
+                name,
+                graphql_type,
+                "Field from object def",
+                fn(_ctx) { Ok(value.Null) },
+              )
+            })
+
+          let object_type =
+            schema.object_type(type_name, "Object type: " <> full_ref, fields)
+          dict.insert(inner_acc, full_ref, object_type)
+        }
+        types.Record(_) -> inner_acc
+      }
+    })
   })
 }
 

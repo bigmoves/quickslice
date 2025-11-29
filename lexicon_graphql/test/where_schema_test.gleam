@@ -224,6 +224,7 @@ pub fn where_input_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -233,6 +234,7 @@ pub fn where_input_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -242,6 +244,7 @@ pub fn where_input_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -251,6 +254,7 @@ pub fn where_input_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -260,6 +264,7 @@ pub fn where_input_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: Some("at-uri"),
                 ref: None,
+                items: None,
               ),
             ),
             // Non-sortable types that should be excluded
@@ -270,6 +275,7 @@ pub fn where_input_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -279,6 +285,7 @@ pub fn where_input_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: None,
                 ref: Some("app.bsky.test.object"),
+                items: None,
               ),
             ),
           ]),
@@ -344,6 +351,7 @@ pub fn where_input_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -353,6 +361,7 @@ pub fn where_input_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -362,6 +371,7 @@ pub fn where_input_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -371,6 +381,7 @@ pub fn where_input_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -380,6 +391,7 @@ pub fn where_input_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: Some("datetime"),
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -389,6 +401,7 @@ pub fn where_input_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: Some("at-uri"),
                 ref: None,
+                items: None,
               ),
             ),
             // Non-sortable types
@@ -399,6 +412,7 @@ pub fn where_input_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -408,6 +422,7 @@ pub fn where_input_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: Some("com.atproto.repo.strongRef"),
+                items: None,
               ),
             ),
           ]),

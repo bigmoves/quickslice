@@ -69,6 +69,7 @@ pub fn single_lexicon_with_sorting_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -78,6 +79,7 @@ pub fn single_lexicon_with_sorting_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
           ]),
@@ -112,6 +114,7 @@ pub fn multiple_lexicons_with_distinct_sort_enums_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -121,6 +124,7 @@ pub fn multiple_lexicons_with_distinct_sort_enums_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
           ]),
@@ -142,6 +146,7 @@ pub fn multiple_lexicons_with_distinct_sort_enums_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -151,6 +156,7 @@ pub fn multiple_lexicons_with_distinct_sort_enums_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
           ]),
@@ -185,6 +191,7 @@ pub fn sortby_argument_is_list_type_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
           ]),
@@ -229,6 +236,7 @@ pub fn connection_has_all_pagination_arguments_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
           ]),
@@ -271,6 +279,7 @@ pub fn db_schema_all_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -280,6 +289,7 @@ pub fn db_schema_all_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
           ]),
@@ -315,6 +325,7 @@ pub fn sort_enum_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -324,6 +335,7 @@ pub fn sort_enum_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -333,6 +345,7 @@ pub fn sort_enum_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -342,6 +355,7 @@ pub fn sort_enum_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -351,6 +365,7 @@ pub fn sort_enum_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: Some("at-uri"),
                 ref: None,
+                items: None,
               ),
             ),
             // Non-sortable types that should be excluded
@@ -361,6 +376,7 @@ pub fn sort_enum_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -370,6 +386,7 @@ pub fn sort_enum_excludes_blob_and_ref_types_test() {
                 required: False,
                 format: None,
                 ref: Some("app.bsky.test.object"),
+                items: None,
               ),
             ),
           ]),
@@ -433,6 +450,7 @@ pub fn sort_enum_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -442,6 +460,7 @@ pub fn sort_enum_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -451,6 +470,7 @@ pub fn sort_enum_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -460,6 +480,7 @@ pub fn sort_enum_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -469,6 +490,7 @@ pub fn sort_enum_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: Some("datetime"),
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -478,6 +500,7 @@ pub fn sort_enum_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: Some("at-uri"),
                 ref: None,
+                items: None,
               ),
             ),
             // Non-sortable types
@@ -488,6 +511,7 @@ pub fn sort_enum_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                items: None,
               ),
             ),
             #(
@@ -497,6 +521,7 @@ pub fn sort_enum_with_mixed_field_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: Some("com.atproto.repo.strongRef"),
+                items: None,
               ),
             ),
           ]),

@@ -1,8 +1,11 @@
 /// Tests for Lexicon Type Mapper
 ///
 /// Maps AT Protocol lexicon types to GraphQL types
+import gleam/dict
+import gleam/option
 import gleeunit/should
 import lexicon_graphql/internal/graphql/type_mapper
+import lexicon_graphql/types
 import swell/schema
 
 pub fn map_string_type_test() {
@@ -67,5 +70,80 @@ pub fn map_union_type_test() {
 pub fn map_default_fallback_test() {
   // Any unknown type falls back to String
   type_mapper.map_type("somethingWeird")
+  |> should.equal(schema.string_type())
+}
+
+// Array type mapping tests
+
+pub fn map_array_of_strings_test() {
+  let items =
+    types.ArrayItems(type_: "string", ref: option.None, refs: option.None)
+  let result = type_mapper.map_array_type(option.Some(items), dict.new())
+
+  // Should be [String!] - list of non-null strings
+  schema.type_name(result)
+  |> should.equal("[String!]")
+}
+
+pub fn map_array_of_integers_test() {
+  let items =
+    types.ArrayItems(type_: "integer", ref: option.None, refs: option.None)
+  let result = type_mapper.map_array_type(option.Some(items), dict.new())
+
+  schema.type_name(result)
+  |> should.equal("[Int!]")
+}
+
+pub fn map_array_without_items_test() {
+  let result = type_mapper.map_array_type(option.None, dict.new())
+
+  // Should fallback to [String!]
+  schema.type_name(result)
+  |> should.equal("[String!]")
+}
+
+pub fn ref_to_type_name_test() {
+  type_mapper.ref_to_type_name("fm.teal.alpha.feed.defs#artist")
+  |> should.equal("FmTealAlphaFeedDefsArtist")
+}
+
+pub fn ref_to_type_name_simple_test() {
+  type_mapper.ref_to_type_name("app.bsky.feed.post")
+  |> should.equal("AppBskyFeedPost")
+}
+
+// map_property_type tests
+
+pub fn map_property_type_array_test() {
+  let items =
+    types.ArrayItems(type_: "string", ref: option.None, refs: option.None)
+  let property =
+    types.Property(
+      type_: "array",
+      required: True,
+      format: option.None,
+      ref: option.None,
+      items: option.Some(items),
+    )
+
+  let result = type_mapper.map_property_type(property, dict.new())
+
+  schema.type_name(result)
+  |> should.equal("[String!]")
+}
+
+pub fn map_property_type_string_test() {
+  let property =
+    types.Property(
+      type_: "string",
+      required: True,
+      format: option.None,
+      ref: option.None,
+      items: option.None,
+    )
+
+  let result = type_mapper.map_property_type(property, dict.new())
+
+  result
   |> should.equal(schema.string_type())
 }

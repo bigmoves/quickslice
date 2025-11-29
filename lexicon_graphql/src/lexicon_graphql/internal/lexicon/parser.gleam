@@ -90,14 +90,23 @@ fn decode_object_def_inner(
         let #(name, prop_dyn) = entry
         let is_required = list.contains(required_fields, name)
 
-        let #(prop_type, prop_format, prop_ref) = case
+        let #(prop_type, prop_format, prop_ref, prop_items) = case
           decode_property(prop_dyn)
         {
-          Ok(#(t, f, r)) -> #(t, f, r)
-          Error(_) -> #("string", None, None)
+          Ok(#(t, f, r, i)) -> #(t, f, r, i)
+          Error(_) -> #("string", None, None, None)
         }
 
-        #(name, types.Property(prop_type, is_required, prop_format, prop_ref))
+        #(
+          name,
+          types.Property(
+            prop_type,
+            is_required,
+            prop_format,
+            prop_ref,
+            prop_items,
+          ),
+        )
       })
 
     decode.success(types.ObjectDef(type_:, required_fields:, properties:))
@@ -134,24 +143,40 @@ fn decode_record_object() -> decode.Decoder(List(#(String, types.Property))) {
       let #(name, prop_dyn) = entry
       let is_required = list.contains(required_list, name)
 
-      // Extract type, format, and ref from the property
-      let #(prop_type, prop_format, prop_ref) = case decode_property(prop_dyn) {
-        Ok(#(t, f, r)) -> #(t, f, r)
-        Error(_) -> #("string", None, None)
+      // Extract type, format, ref, and items from the property
+      let #(prop_type, prop_format, prop_ref, prop_items) = case
+        decode_property(prop_dyn)
+      {
+        Ok(#(t, f, r, i)) -> #(t, f, r, i)
+        Error(_) -> #("string", None, None, None)
         // Default fallback
       }
 
-      #(name, types.Property(prop_type, is_required, prop_format, prop_ref))
+      #(
+        name,
+        types.Property(
+          prop_type,
+          is_required,
+          prop_format,
+          prop_ref,
+          prop_items,
+        ),
+      )
     })
 
   decode.success(properties)
 }
 
-/// Decode a property's type, format, and ref fields
+/// Decode a property's type, format, ref, and items fields
 fn decode_property(
   dyn: decode.Dynamic,
 ) -> Result(
-  #(String, option.Option(String), option.Option(String)),
+  #(
+    String,
+    option.Option(String),
+    option.Option(String),
+    option.Option(types.ArrayItems),
+  ),
   List(decode.DecodeError),
 ) {
   let property_decoder = {
@@ -166,8 +191,44 @@ fn decode_property(
       None,
       decode.optional(decode.string),
     )
+    use items_dyn <- decode.optional_field(
+      "items",
+      None,
+      decode.optional(decode.dynamic),
+    )
 
-    decode.success(#(type_, format, ref))
+    // Decode items if present
+    let items = case items_dyn {
+      option.Some(dyn) ->
+        case decode_array_items(dyn) {
+          Ok(arr_items) -> option.Some(arr_items)
+          Error(_) -> None
+        }
+      None -> None
+    }
+
+    decode.success(#(type_, format, ref, items))
   }
   decode.run(dyn, property_decoder)
+}
+
+/// Decode array items (type, ref, refs)
+fn decode_array_items(
+  dyn: decode.Dynamic,
+) -> Result(types.ArrayItems, List(decode.DecodeError)) {
+  let items_decoder = {
+    use type_ <- decode.field("type", decode.string)
+    use ref <- decode.optional_field(
+      "ref",
+      None,
+      decode.optional(decode.string),
+    )
+    use refs <- decode.optional_field(
+      "refs",
+      None,
+      decode.optional(decode.list(decode.string)),
+    )
+    decode.success(types.ArrayItems(type_:, ref:, refs:))
+  }
+  decode.run(dyn, items_decoder)
 }

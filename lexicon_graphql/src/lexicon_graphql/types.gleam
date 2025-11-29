@@ -48,5 +48,11 @@ pub type Property {
     required: Bool,
     format: Option(String),
     ref: Option(String),
+    items: Option(ArrayItems),
   )
+}
+
+/// Array items definition (for array properties)
+pub type ArrayItems {
+  ArrayItems(type_: String, ref: Option(String), refs: Option(List(String)))
 }

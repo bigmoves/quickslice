@@ -104,3 +104,175 @@ pub fn parse_lexicon_missing_id_test() {
 
   should.be_error(result)
 }
+
+// Test parsing lexicon with array property containing ref items
+pub fn parse_array_with_ref_items_test() {
+  let json =
+    "{
+      \"lexicon\": 1,
+      \"id\": \"fm.teal.alpha.feed.track\",
+      \"defs\": {
+        \"main\": {
+          \"type\": \"record\",
+          \"record\": {
+            \"type\": \"object\",
+            \"properties\": {
+              \"artists\": {
+                \"type\": \"array\",
+                \"items\": {
+                  \"type\": \"ref\",
+                  \"ref\": \"fm.teal.alpha.feed.defs#artist\"
+                }
+              }
+            }
+          }
+        }
+      }
+    }"
+
+  let result = lexicon_parser.parse_lexicon(json)
+  should.be_ok(result)
+
+  case result {
+    Ok(lexicon) -> {
+      case lexicon.defs.main {
+        option.Some(types.RecordDef(type_: _, key: _, properties: props)) -> {
+          case list.find(props, fn(p) { p.0 == "artists" }) {
+            Ok(#(_, prop)) -> {
+              should.equal(prop.type_, "array")
+              case prop.items {
+                option.Some(items) -> {
+                  should.equal(items.type_, "ref")
+                  should.equal(
+                    items.ref,
+                    option.Some("fm.teal.alpha.feed.defs#artist"),
+                  )
+                }
+                option.None -> should.fail()
+              }
+            }
+            Error(_) -> should.fail()
+          }
+        }
+        option.None -> should.fail()
+      }
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+// Test parsing lexicon with array property containing union items
+pub fn parse_array_with_union_items_test() {
+  let json =
+    "{
+      \"lexicon\": 1,
+      \"id\": \"fm.teal.alpha.feed.track\",
+      \"defs\": {
+        \"main\": {
+          \"type\": \"record\",
+          \"record\": {
+            \"type\": \"object\",
+            \"properties\": {
+              \"creators\": {
+                \"type\": \"array\",
+                \"items\": {
+                  \"type\": \"union\",
+                  \"refs\": [
+                    \"fm.teal.alpha.feed.defs#artist\",
+                    \"fm.teal.alpha.feed.defs#band\"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }"
+
+  let result = lexicon_parser.parse_lexicon(json)
+  should.be_ok(result)
+
+  case result {
+    Ok(lexicon) -> {
+      case lexicon.defs.main {
+        option.Some(types.RecordDef(type_: _, key: _, properties: props)) -> {
+          case list.find(props, fn(p) { p.0 == "creators" }) {
+            Ok(#(_, prop)) -> {
+              should.equal(prop.type_, "array")
+              case prop.items {
+                option.Some(items) -> {
+                  should.equal(items.type_, "union")
+                  should.equal(
+                    items.refs,
+                    option.Some([
+                      "fm.teal.alpha.feed.defs#artist",
+                      "fm.teal.alpha.feed.defs#band",
+                    ]),
+                  )
+                }
+                option.None -> should.fail()
+              }
+            }
+            Error(_) -> should.fail()
+          }
+        }
+        option.None -> should.fail()
+      }
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+// Test parsing lexicon with array property containing string items
+pub fn parse_array_with_string_items_test() {
+  let json =
+    "{
+      \"lexicon\": 1,
+      \"id\": \"fm.teal.alpha.feed.track\",
+      \"defs\": {
+        \"main\": {
+          \"type\": \"record\",
+          \"record\": {
+            \"type\": \"object\",
+            \"properties\": {
+              \"artistNames\": {
+                \"type\": \"array\",
+                \"items\": {
+                  \"type\": \"string\"
+                }
+              }
+            }
+          }
+        }
+      }
+    }"
+
+  let result = lexicon_parser.parse_lexicon(json)
+  should.be_ok(result)
+
+  case result {
+    Ok(lexicon) -> {
+      case lexicon.defs.main {
+        option.Some(types.RecordDef(type_: _, key: _, properties: props)) -> {
+          // Find artistNames property
+          case list.find(props, fn(p) { p.0 == "artistNames" }) {
+            Ok(#(_, prop)) -> {
+              should.equal(prop.type_, "array")
+              case prop.items {
+                option.Some(items) -> {
+                  should.equal(items.type_, "string")
+                  should.equal(items.ref, option.None)
+                  should.equal(items.refs, option.None)
+                }
+                option.None -> should.fail()
+              }
+            }
+            Error(_) -> should.fail()
+          }
+        }
+        option.None -> should.fail()
+      }
+    }
+    Error(_) -> should.fail()
+  }
+}

@@ -32,7 +32,7 @@ fn build_object_fields(
   object_types_dict: Dict(String, schema.Type),
 ) -> List(schema.Field) {
   list.map(properties, fn(prop) {
-    let #(name, types.Property(type_, required, format, ref)) = prop
+    let #(name, types.Property(type_, required, format, ref, _items)) = prop
 
     // Map the type, using the object_types_dict to resolve refs
     let graphql_type =

@@ -19,6 +19,7 @@ pub fn property_to_field_type_datetime_test() {
       required: True,
       format: option.Some("datetime"),
       ref: option.None,
+      items: option.None,
     )
 
   db_schema_builder.property_to_field_type(property)
@@ -32,6 +33,7 @@ pub fn property_to_field_type_string_test() {
       required: True,
       format: option.None,
       ref: option.None,
+      items: option.None,
     )
 
   db_schema_builder.property_to_field_type(property)
@@ -45,6 +47,7 @@ pub fn property_to_field_type_integer_test() {
       required: True,
       format: option.None,
       ref: option.None,
+      items: option.None,
     )
 
   db_schema_builder.property_to_field_type(property)
@@ -58,6 +61,7 @@ pub fn property_to_field_type_number_test() {
       required: True,
       format: option.None,
       ref: option.None,
+      items: option.None,
     )
 
   db_schema_builder.property_to_field_type(property)
@@ -71,6 +75,7 @@ pub fn property_to_field_type_boolean_test() {
       required: True,
       format: option.None,
       ref: option.None,
+      items: option.None,
     )
 
   db_schema_builder.property_to_field_type(property)
@@ -84,6 +89,7 @@ pub fn property_to_field_type_array_test() {
       required: True,
       format: option.None,
       ref: option.None,
+      items: option.None,
     )
 
   db_schema_builder.property_to_field_type(property)
@@ -97,6 +103,7 @@ pub fn property_to_field_type_blob_test() {
       required: True,
       format: option.None,
       ref: option.None,
+      items: option.None,
     )
 
   db_schema_builder.property_to_field_type(property)
@@ -110,6 +117,7 @@ pub fn property_to_field_type_ref_test() {
       required: True,
       format: option.None,
       ref: option.Some("app.bsky.actor.defs#profileView"),
+      items: option.None,
     )
 
   db_schema_builder.property_to_field_type(property)
@@ -127,6 +135,7 @@ pub fn build_field_type_map_test() {
         required: True,
         format: option.Some("datetime"),
         ref: option.None,
+        items: option.None,
       ),
     ),
     #(
@@ -136,6 +145,7 @@ pub fn build_field_type_map_test() {
         required: True,
         format: option.None,
         ref: option.None,
+        items: option.None,
       ),
     ),
     #(
@@ -145,6 +155,7 @@ pub fn build_field_type_map_test() {
         required: False,
         format: option.None,
         ref: option.None,
+        items: option.None,
       ),
     ),
     #(
@@ -154,6 +165,7 @@ pub fn build_field_type_map_test() {
         required: True,
         format: option.None,
         ref: option.None,
+        items: option.None,
       ),
     ),
   ]

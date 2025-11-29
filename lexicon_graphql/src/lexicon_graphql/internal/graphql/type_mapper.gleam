@@ -5,8 +5,12 @@
 ///
 /// Based on the Elixir implementation but adapted for the pure Gleam GraphQL library.
 import gleam/dict.{type Dict}
+import gleam/list
 import gleam/option.{type Option}
+import gleam/string
+import lexicon_graphql/internal/lexicon/nsid
 import lexicon_graphql/scalar/blob as blob_type
+import lexicon_graphql/types
 import swell/schema
 
 /// Maps a lexicon type string to a GraphQL output Type.
@@ -104,5 +108,128 @@ pub fn map_type_with_registry(
         option.None -> schema.string_type()
       }
     _ -> map_type(lexicon_type)
+  }
+}
+
+/// Maps array items to a GraphQL list type.
+/// Returns [ItemType!] where ItemType depends on the items definition.
+pub fn map_array_type(
+  items: Option(types.ArrayItems),
+  object_types: Dict(String, schema.Type),
+) -> schema.Type {
+  case items {
+    option.None ->
+      // Fallback: array without items info -> [String!]
+      schema.list_type(schema.non_null(schema.string_type()))
+
+    option.Some(types.ArrayItems(
+      type_: item_type,
+      ref: item_ref,
+      refs: item_refs,
+    )) ->
+      case item_type {
+        "string" -> schema.list_type(schema.non_null(schema.string_type()))
+        "integer" -> schema.list_type(schema.non_null(schema.int_type()))
+        "boolean" -> schema.list_type(schema.non_null(schema.boolean_type()))
+        "number" -> schema.list_type(schema.non_null(schema.float_type()))
+
+        "ref" -> {
+          case item_ref {
+            option.Some(ref_str) -> {
+              // Use raw ref string for lookup - object_types dict is keyed by raw refs
+              case dict.get(object_types, ref_str) {
+                Ok(obj_type) -> schema.list_type(schema.non_null(obj_type))
+                Error(_) ->
+                  schema.list_type(schema.non_null(schema.string_type()))
+              }
+            }
+            option.None ->
+              schema.list_type(schema.non_null(schema.string_type()))
+          }
+        }
+
+        "union" -> {
+          case item_refs {
+            option.Some(refs) -> {
+              let union_type = build_array_union_type(refs, object_types)
+              schema.list_type(schema.non_null(union_type))
+            }
+            option.None ->
+              schema.list_type(schema.non_null(schema.string_type()))
+          }
+        }
+
+        // Fallback for unknown item types
+        _ -> schema.list_type(schema.non_null(schema.string_type()))
+      }
+  }
+}
+
+/// Convert a ref string to a type name.
+/// "fm.teal.alpha.feed.defs#artist" -> "FmTealAlphaFeedDefsArtist"
+pub fn ref_to_type_name(ref: String) -> String {
+  ref
+  |> string.replace("#", ".")
+  |> nsid.to_type_name()
+}
+
+/// Build a union type from a list of refs.
+/// Returns a GraphQL union with name like "FmTealAlphaFeedDefsArtistOrFmTealAlphaFeedDefsTrack"
+fn build_array_union_type(
+  refs: List(String),
+  object_types: Dict(String, schema.Type),
+) -> schema.Type {
+  // Convert refs to type names
+  let type_names = list.map(refs, ref_to_type_name)
+
+  // Build union name: "TypeAOrTypeBOrTypeC"
+  let union_name = string.join(type_names, "Or")
+
+  // Look up member types from object_types dict using raw refs (dict is keyed by raw refs)
+  let member_types =
+    list.filter_map(refs, fn(ref) {
+      case dict.get(object_types, ref) {
+        Ok(t) -> Ok(t)
+        Error(_) -> Error(Nil)
+      }
+    })
+
+  // Type resolver - inspect context to determine concrete type
+  let type_resolver = fn(_ctx: schema.Context) -> Result(String, String) {
+    // For now, return first type - proper implementation needs __typename or type field
+    case type_names {
+      [first, ..] -> Ok(first)
+      [] -> Error("No types in union")
+    }
+  }
+
+  schema.union_type(
+    union_name,
+    "Union of array item types",
+    member_types,
+    type_resolver,
+  )
+}
+
+/// Maps a lexicon Property to a GraphQL type.
+/// Handles arrays specially by looking at the items field.
+pub fn map_property_type(
+  property: types.Property,
+  object_types: Dict(String, schema.Type),
+) -> schema.Type {
+  case property.type_ {
+    "array" -> map_array_type(property.items, object_types)
+    "ref" -> {
+      case property.ref {
+        option.Some(ref_str) -> {
+          case dict.get(object_types, ref_str) {
+            Ok(obj_type) -> obj_type
+            Error(_) -> schema.string_type()
+          }
+        }
+        option.None -> schema.string_type()
+      }
+    }
+    _ -> map_type(property.type_)
   }
 }

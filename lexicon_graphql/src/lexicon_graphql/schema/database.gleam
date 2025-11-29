@@ -1238,10 +1238,11 @@ fn build_fields(
   // Build fields from lexicon properties
   let lexicon_fields =
     list.map(properties, fn(prop) {
-      let #(name, types.Property(type_, _required, format, ref)) = prop
-      // Use map_type_with_registry to resolve refs to object types
+      let #(name, property) = prop
+      let types.Property(type_, _required, _format, _ref, _items) = property
+      // Use map_property_type to handle arrays, refs, and primitives
       let graphql_type =
-        type_mapper.map_type_with_registry(type_, format, ref, ref_object_types)
+        type_mapper.map_property_type(property, ref_object_types)
 
       schema.field(name, graphql_type, "Field from lexicon", fn(ctx) {
         // Special handling for blob fields
