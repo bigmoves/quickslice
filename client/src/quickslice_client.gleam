@@ -42,6 +42,7 @@
 /// }
 /// ```
 import backfill_polling
+import components/actor_autocomplete
 import components/layout
 import file_upload
 import generated/queries
@@ -140,6 +141,7 @@ pub type Model {
     backfill_status: backfill_polling.BackfillStatus,
     auth_state: AuthState,
     mobile_menu_open: Bool,
+    login_autocomplete: actor_autocomplete.Model,
   )
 }
 
@@ -280,6 +282,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       backfill_status: backfill_polling.Idle,
       auth_state: NotAuthenticated,
       mobile_menu_open: False,
+      login_autocomplete: actor_autocomplete.init(),
     ),
     combined_effects,
   )
@@ -298,6 +301,14 @@ pub type Msg {
   FileRead(Result(String, String))
   BackfillPollTick
   ToggleMobileMenu
+  // Login autocomplete messages
+  LoginAutocompleteInput(String)
+  LoginAutocompleteKeydown(String)
+  LoginAutocompleteSelect(String)
+  LoginAutocompleteBlur
+  LoginAutocompleteFocus
+  LoginAutocompleteSearchResult(Result(List(actor_autocomplete.Actor), String))
+  LoginAutocompleteDoClose
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
@@ -1619,6 +1630,131 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         settings.set_alert(model.settings_page_model, "error", err)
       #(Model(..model, settings_page_model: new_settings_model), effect.none())
     }
+
+    // Login autocomplete message handlers
+    LoginAutocompleteInput(query) -> {
+      let #(new_autocomplete, autocomplete_effect) =
+        actor_autocomplete.update(
+          model.login_autocomplete,
+          actor_autocomplete.UpdateQuery(query),
+        )
+      #(
+        Model(..model, login_autocomplete: new_autocomplete),
+        effect.map(autocomplete_effect, fn(msg) {
+          case msg {
+            actor_autocomplete.SearchResult(result) ->
+              LoginAutocompleteSearchResult(result)
+            _ -> LoginAutocompleteInput("")
+          }
+        }),
+      )
+    }
+
+    LoginAutocompleteSearchResult(result) -> {
+      let #(new_autocomplete, _) =
+        actor_autocomplete.update(
+          model.login_autocomplete,
+          actor_autocomplete.SearchResult(result),
+        )
+      #(Model(..model, login_autocomplete: new_autocomplete), effect.none())
+    }
+
+    LoginAutocompleteKeydown(key) -> {
+      case key {
+        "ArrowDown" -> {
+          let #(new_autocomplete, _) =
+            actor_autocomplete.update(
+              model.login_autocomplete,
+              actor_autocomplete.HighlightNext,
+            )
+          #(Model(..model, login_autocomplete: new_autocomplete), effect.none())
+        }
+        "ArrowUp" -> {
+          let #(new_autocomplete, _) =
+            actor_autocomplete.update(
+              model.login_autocomplete,
+              actor_autocomplete.HighlightPrevious,
+            )
+          #(Model(..model, login_autocomplete: new_autocomplete), effect.none())
+        }
+        "Enter" -> {
+          case
+            actor_autocomplete.get_highlighted_actor(model.login_autocomplete)
+          {
+            option.Some(actor) -> {
+              let #(new_autocomplete, _) =
+                actor_autocomplete.update(
+                  model.login_autocomplete,
+                  actor_autocomplete.SelectActor(actor),
+                )
+              #(
+                Model(..model, login_autocomplete: new_autocomplete),
+                effect.none(),
+              )
+            }
+            option.None -> #(model, effect.none())
+          }
+        }
+        "Escape" -> {
+          let #(new_autocomplete, _) =
+            actor_autocomplete.update(
+              model.login_autocomplete,
+              actor_autocomplete.Close,
+            )
+          #(Model(..model, login_autocomplete: new_autocomplete), effect.none())
+        }
+        _ -> #(model, effect.none())
+      }
+    }
+
+    LoginAutocompleteSelect(handle) -> {
+      // Find the actor by handle and select it
+      let actor = case
+        list.find(model.login_autocomplete.actors, fn(a) { a.handle == handle })
+      {
+        Ok(a) -> a
+        Error(_) ->
+          actor_autocomplete.Actor(
+            did: "",
+            handle: handle,
+            display_name: "",
+            avatar: option.None,
+          )
+      }
+      let #(new_autocomplete, _) =
+        actor_autocomplete.update(
+          model.login_autocomplete,
+          actor_autocomplete.SelectActor(actor),
+        )
+      #(Model(..model, login_autocomplete: new_autocomplete), effect.none())
+    }
+
+    LoginAutocompleteBlur -> {
+      // Small delay to allow click events to fire first
+      let close_effect =
+        effect.from(fn(dispatch) {
+          set_timeout(150, fn() { dispatch(LoginAutocompleteDoClose) })
+        })
+      #(model, close_effect)
+    }
+
+    LoginAutocompleteDoClose -> {
+      let #(new_autocomplete, _) =
+        actor_autocomplete.update(
+          model.login_autocomplete,
+          actor_autocomplete.Close,
+        )
+      #(Model(..model, login_autocomplete: new_autocomplete), effect.none())
+    }
+
+    LoginAutocompleteFocus -> {
+      let #(new_autocomplete, _) =
+        actor_autocomplete.update(
+          model.login_autocomplete,
+          actor_autocomplete.Open,
+        )
+      #(Model(..model, login_autocomplete: new_autocomplete), effect.none())
+    }
   }
 }
 
@@ -1642,6 +1778,12 @@ fn view(model: Model) -> Element(Msg) {
             backfill_polling.should_poll(model.backfill_status),
             model.mobile_menu_open,
             ToggleMobileMenu,
+            model.login_autocomplete,
+            LoginAutocompleteInput,
+            LoginAutocompleteSelect,
+            LoginAutocompleteKeydown,
+            fn() { LoginAutocompleteBlur },
+            fn() { LoginAutocompleteFocus },
           ),
           case model.route {
             Home -> view_home(model)

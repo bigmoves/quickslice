@@ -1,3 +1,4 @@
+import components/actor_autocomplete
 import components/backfill_animation
 import components/icon
 import components/logo
@@ -18,6 +19,12 @@ pub fn header(
   is_backfilling: Bool,
   mobile_menu_open: Bool,
   on_toggle_menu: msg,
+  login_autocomplete: actor_autocomplete.Model,
+  on_autocomplete_input: fn(String) -> msg,
+  on_autocomplete_select: fn(String) -> msg,
+  on_autocomplete_keydown: fn(String) -> msg,
+  on_autocomplete_blur: fn() -> msg,
+  on_autocomplete_focus: fn() -> msg,
 ) -> Element(msg) {
   html.div([attribute.class("mb-8")], [
     // Main header row
@@ -71,7 +78,15 @@ pub fn header(
           // Desktop navigation (hidden on mobile)
           html.div(
             [attribute.class("hidden sm:flex gap-4 text-xs items-center")],
-            desktop_nav_content(auth_info),
+            desktop_nav_content(
+              auth_info,
+              login_autocomplete,
+              on_autocomplete_input,
+              on_autocomplete_select,
+              on_autocomplete_keydown,
+              on_autocomplete_blur,
+              on_autocomplete_focus,
+            ),
           ),
           // Hamburger button (mobile only)
           html.button(
@@ -93,14 +108,31 @@ pub fn header(
     ),
     // Mobile dropdown menu
     case mobile_menu_open {
-      True -> mobile_menu(auth_info)
+      True ->
+        mobile_menu(
+          auth_info,
+          login_autocomplete,
+          on_autocomplete_input,
+          on_autocomplete_select,
+          on_autocomplete_keydown,
+          on_autocomplete_blur,
+          on_autocomplete_focus,
+        )
       False -> element.none()
     },
   ])
 }
 
 /// Desktop navigation content (inline in header)
-fn desktop_nav_content(auth_info: Option(#(String, Bool))) -> List(Element(msg)) {
+fn desktop_nav_content(
+  auth_info: Option(#(String, Bool)),
+  login_autocomplete: actor_autocomplete.Model,
+  on_autocomplete_input: fn(String) -> msg,
+  on_autocomplete_select: fn(String) -> msg,
+  on_autocomplete_keydown: fn(String) -> msg,
+  on_autocomplete_blur: fn() -> msg,
+  on_autocomplete_focus: fn() -> msg,
+) -> List(Element(msg)) {
   case auth_info {
     option.None -> [
       // Login form when not authenticated
@@ -111,15 +143,18 @@ fn desktop_nav_content(auth_info: Option(#(String, Bool))) -> List(Element(msg))
           attribute.class("flex gap-2 items-center"),
         ],
         [
-          html.input([
-            attribute.type_("text"),
-            attribute.name("login_hint"),
-            attribute.placeholder("handle.bsky.social"),
-            attribute.class(
-              "bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 placeholder-zinc-600 focus:border-zinc-500 focus:outline-none w-48",
-            ),
-            attribute.required(True),
-          ]),
+          actor_autocomplete.view(
+            login_autocomplete,
+            "login-hint-desktop",
+            "login_hint",
+            "handle.bsky.social",
+            "bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 placeholder-zinc-600 focus:border-zinc-500 focus:outline-none w-48",
+            on_autocomplete_input,
+            on_autocomplete_select,
+            on_autocomplete_keydown,
+            on_autocomplete_blur,
+            on_autocomplete_focus,
+          ),
           html.button(
             [
               attribute.type_("submit"),
@@ -192,7 +227,15 @@ fn desktop_nav_content(auth_info: Option(#(String, Bool))) -> List(Element(msg))
 }
 
 /// Mobile dropdown menu content
-fn mobile_menu(auth_info: Option(#(String, Bool))) -> Element(msg) {
+fn mobile_menu(
+  auth_info: Option(#(String, Bool)),
+  login_autocomplete: actor_autocomplete.Model,
+  on_autocomplete_input: fn(String) -> msg,
+  on_autocomplete_select: fn(String) -> msg,
+  on_autocomplete_keydown: fn(String) -> msg,
+  on_autocomplete_blur: fn() -> msg,
+  on_autocomplete_focus: fn() -> msg,
+) -> Element(msg) {
   html.div(
     [
       attribute.class(
@@ -209,15 +252,18 @@ fn mobile_menu(auth_info: Option(#(String, Bool))) -> Element(msg) {
             attribute.class("flex flex-col gap-3"),
           ],
           [
-            html.input([
-              attribute.type_("text"),
-              attribute.name("login_hint"),
-              attribute.placeholder("handle.bsky.social"),
-              attribute.class(
-                "bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 focus:border-zinc-500 focus:outline-none w-full",
-              ),
-              attribute.required(True),
-            ]),
+            actor_autocomplete.view(
+              login_autocomplete,
+              "login-hint-mobile",
+              "login_hint",
+              "handle.bsky.social",
+              "bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 focus:border-zinc-500 focus:outline-none w-full",
+              on_autocomplete_input,
+              on_autocomplete_select,
+              on_autocomplete_keydown,
+              on_autocomplete_blur,
+              on_autocomplete_focus,
+            ),
             html.button(
               [
                 attribute.type_("submit"),
