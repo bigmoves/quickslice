@@ -2,6 +2,7 @@
 ///
 /// This handler serves the /admin/graphql endpoint which provides
 /// stats and activity data to the client SPA using a separate schema
+import backfill_state
 import client_schema
 import gleam/bit_array
 import gleam/dict
@@ -27,6 +28,7 @@ pub fn handle_client_graphql_request(
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
+  backfill_state_subject: Subject(backfill_state.Message),
 ) -> wisp.Response {
   case req.method {
     http.Post ->
@@ -37,6 +39,7 @@ pub fn handle_client_graphql_request(
         jetstream_subject,
         did_cache,
         oauth_supported_scopes,
+        backfill_state_subject,
       )
     http.Get ->
       handle_get(
@@ -46,6 +49,7 @@ pub fn handle_client_graphql_request(
         jetstream_subject,
         did_cache,
         oauth_supported_scopes,
+        backfill_state_subject,
       )
     _ -> method_not_allowed_response()
   }
@@ -58,6 +62,7 @@ fn handle_post(
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
+  backfill_state_subject: Subject(backfill_state.Message),
 ) -> wisp.Response {
   case wisp.read_body_bits(req) {
     Ok(body) -> {
@@ -72,6 +77,7 @@ fn handle_post(
                 jetstream_subject,
                 did_cache,
                 oauth_supported_scopes,
+                backfill_state_subject,
                 query,
                 variables,
               )
@@ -92,6 +98,7 @@ fn handle_get(
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
+  backfill_state_subject: Subject(backfill_state.Message),
 ) -> wisp.Response {
   let query_params = wisp.get_query(req)
   case list.key_find(query_params, "query") {
@@ -103,6 +110,7 @@ fn handle_get(
         jetstream_subject,
         did_cache,
         oauth_supported_scopes,
+        backfill_state_subject,
         query,
         option.None,
       )
@@ -117,6 +125,7 @@ fn execute_query(
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
+  backfill_state_subject: Subject(backfill_state.Message),
   query: String,
   variables: option.Option(value.Value),
 ) -> wisp.Response {
@@ -129,6 +138,7 @@ fn execute_query(
       jetstream_subject,
       did_cache,
       oauth_supported_scopes,
+      backfill_state_subject,
     )
 
   // Create context with variables

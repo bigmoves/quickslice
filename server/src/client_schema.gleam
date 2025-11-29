@@ -4,6 +4,7 @@
 /// the client SPA with stats and activity data via /admin/graphql
 import admin_session as session
 import backfill
+import backfill_state
 import database/repositories/actors
 import database/repositories/config as config_repo
 import database/repositories/jetstream_activity
@@ -14,6 +15,7 @@ import database/types.{type ActivityBucket, type ActivityEntry, type Lexicon}
 import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/otp/actor
 import gleam/string
 import importer
 import jetstream_consumer
@@ -691,6 +693,7 @@ pub fn query_type(
   req: wisp.Request,
   admin_dids: List(String),
   did_cache: Subject(did_cache.Message),
+  backfill_state_subject: Subject(backfill_state.Message),
 ) -> schema.Type {
   schema.object_type("Query", "Root query type", [
     // currentSession query
@@ -738,6 +741,21 @@ pub fn query_type(
         }
 
         Ok(settings_to_value(domain_authority))
+      },
+    ),
+    // isBackfilling query
+    schema.field(
+      "isBackfilling",
+      schema.non_null(schema.boolean_type()),
+      "Check if a backfill operation is currently running",
+      fn(_ctx) {
+        let is_backfilling =
+          actor.call(
+            backfill_state_subject,
+            waiting: 100,
+            sending: backfill_state.IsBackfilling,
+          )
+        Ok(value.Boolean(is_backfilling))
       },
     ),
     // lexicons query
@@ -867,6 +885,7 @@ pub fn mutation_type(
   jetstream_subject: Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
+  backfill_state_subject: Subject(backfill_state.Message),
 ) -> schema.Type {
   schema.object_type("Mutation", "Root mutation type", [
     // updateDomainAuthority mutation
@@ -1037,6 +1056,12 @@ pub fn mutation_type(
           Ok(sess) -> {
             case is_admin(sess.did, admin_dids) {
               True -> {
+                // Mark backfill as started
+                process.send(
+                  backfill_state_subject,
+                  backfill_state.StartBackfill,
+                )
+
                 // Spawn background process to run backfill
                 process.spawn_unlinked(fn() {
                   logging.log(
@@ -1081,6 +1106,12 @@ pub fn mutation_type(
                   logging.log(
                     logging.Info,
                     "[triggerBackfill] Background backfill completed",
+                  )
+
+                  // Mark backfill as stopped
+                  process.send(
+                    backfill_state_subject,
+                    backfill_state.StopBackfill,
                   )
                 })
 
@@ -1451,9 +1482,10 @@ pub fn build_schema(
   jetstream_subject: Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
+  backfill_state_subject: Subject(backfill_state.Message),
 ) -> schema.Schema {
   schema.schema(
-    query_type(conn, req, admin_dids, did_cache),
+    query_type(conn, req, admin_dids, did_cache, backfill_state_subject),
     Some(mutation_type(
       conn,
       req,
@@ -1461,6 +1493,7 @@ pub fn build_schema(
       jetstream_subject,
       did_cache,
       oauth_supported_scopes,
+      backfill_state_subject,
     )),
   )
 }

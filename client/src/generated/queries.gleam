@@ -14,6 +14,13 @@ pub fn init_registry() -> unstable_registry.Registry {
   let reg =
     unstable_registry.register(
       reg,
+      "IsBackfilling",
+      "query IsBackfilling {\n  isBackfilling\n}",
+      "generated/queries/is_backfilling",
+    )
+  let reg =
+    unstable_registry.register(
+      reg,
       "GetCurrentSession",
       "query GetCurrentSession {\n  currentSession {\n    __typename\n    did\n    handle\n    isAdmin\n  }\n}",
       "generated/queries/get_current_session",

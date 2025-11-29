@@ -1,6 +1,7 @@
 /// Home Page Component
 ///
 /// Displays dashboard with stats cards, activity chart, and recent activity
+import backfill_polling
 import components/activity_chart
 import components/activity_log
 import components/alert
@@ -24,7 +25,7 @@ pub type Msg {
 pub fn view(
   cache: Cache,
   time_range: get_activity_buckets.TimeRange,
-  is_backfilling: Bool,
+  backfill_status: backfill_polling.BackfillStatus,
   is_admin: Bool,
   is_authenticated: Bool,
 ) -> Element(Msg) {
@@ -62,30 +63,43 @@ pub fn view(
     // Action buttons (only shown when authenticated)
     case is_authenticated {
       True ->
-        html.div([attribute.class("mb-8 flex gap-3")], case is_admin {
-          True -> [
-            button.button(
-              disabled: False,
-              on_click: OpenGraphiQL,
-              text: "Open GraphiQL",
-            ),
-            button.button(
-              disabled: is_backfilling,
-              on_click: TriggerBackfill,
-              text: case is_backfilling {
-                True -> "Backfilling..."
-                False -> "Trigger Backfill"
-              },
-            ),
-          ]
-          False -> [
-            button.button(
-              disabled: False,
-              on_click: OpenGraphiQL,
-              text: "Open GraphiQL",
-            ),
-          ]
-        })
+        html.div(
+          [attribute.class("mb-8 flex gap-3 flex-wrap items-start")],
+          case is_admin {
+            True -> [
+              button.button(
+                disabled: False,
+                on_click: OpenGraphiQL,
+                text: "Open GraphiQL",
+              ),
+              html.div([attribute.class("flex items-center gap-3")], [
+                button.button(
+                  disabled: backfill_polling.should_poll(backfill_status),
+                  on_click: TriggerBackfill,
+                  text: case backfill_status {
+                    backfill_polling.Triggered -> "Backfilling..."
+                    backfill_polling.InProgress -> "Backfilling..."
+                    _ -> "Trigger Backfill"
+                  },
+                ),
+                case backfill_status {
+                  backfill_polling.Completed ->
+                    html.p([attribute.class("text-sm text-green-600")], [
+                      html.text("Backfill complete!"),
+                    ])
+                  _ -> element.none()
+                },
+              ]),
+            ]
+            False -> [
+              button.button(
+                disabled: False,
+                on_click: OpenGraphiQL,
+                text: "Open GraphiQL",
+              ),
+            ]
+          },
+        )
       False -> element.none()
     },
     // Stats cards component

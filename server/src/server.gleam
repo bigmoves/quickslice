@@ -561,6 +561,7 @@ fn handle_request(
         ctx.jetstream_consumer,
         ctx.did_cache,
         ctx.oauth_supported_scopes,
+        ctx.backfill_state,
       )
     ["graphql"] ->
       graphql_handler.handle_graphql_request(

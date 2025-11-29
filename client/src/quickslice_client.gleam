@@ -4,6 +4,11 @@
 /// }
 /// ```
 /// ```graphql
+/// query IsBackfilling {
+///   isBackfilling
+/// }
+/// ```
+/// ```graphql
 /// query GetCurrentSession {
 ///   currentSession {
 ///     did
@@ -36,6 +41,7 @@
 ///   }
 /// }
 /// ```
+import backfill_polling
 import components/layout
 import file_upload
 import generated/queries
@@ -48,6 +54,7 @@ import generated/queries/get_o_auth_clients
 import generated/queries/get_recent_activity
 import generated/queries/get_settings
 import generated/queries/get_statistics
+import generated/queries/is_backfilling
 import generated/queries/reset_all
 import generated/queries/trigger_backfill
 import generated/queries/update_domain_authority
@@ -76,6 +83,9 @@ import squall_cache
 
 @external(javascript, "./quickslice_client.ffi.mjs", "getWindowOrigin")
 fn window_origin() -> String
+
+@external(javascript, "./quickslice_client.ffi.mjs", "setTimeout")
+fn set_timeout(ms: Int, callback: fn() -> Nil) -> Nil
 
 /// Extract the first error message from a GraphQL response body
 /// Returns Some(message) if errors exist, None otherwise
@@ -127,7 +137,7 @@ pub type Model {
     route: Route,
     time_range: get_activity_buckets.TimeRange,
     settings_page_model: settings.Model,
-    is_backfilling: Bool,
+    backfill_status: backfill_polling.BackfillStatus,
     auth_state: AuthState,
   )
 }
@@ -154,13 +164,22 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       get_current_session.parse_get_current_session_response,
     )
 
+  // Check if a backfill is already in progress (persists across page refresh)
+  let #(cache_with_backfill_check, _) =
+    squall_cache.lookup(
+      cache_with_session,
+      "IsBackfilling",
+      json.object([]),
+      is_backfilling.parse_is_backfilling_response,
+    )
+
   // Trigger initial data fetches for the route
   let #(initial_cache, data_effects) = case initial_route {
     Home -> {
       // GetStatistics query
       let #(cache1, _) =
         squall_cache.lookup(
-          cache_with_session,
+          cache_with_backfill_check,
           "GetStatistics",
           json.object([]),
           get_statistics.parse_get_statistics_response,
@@ -204,7 +223,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       // GetSettings query
       let #(cache1, _) =
         squall_cache.lookup(
-          cache_with_session,
+          cache_with_backfill_check,
           "GetSettings",
           json.object([]),
           get_settings.parse_get_settings_response,
@@ -230,7 +249,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       // GetLexicons query
       let #(cache1, _) =
         squall_cache.lookup(
-          cache_with_session,
+          cache_with_backfill_check,
           "GetLexicons",
           json.object([]),
           get_lexicons.parse_get_lexicons_response,
@@ -243,7 +262,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
         })
       #(final_cache, fx)
     }
-    _ -> #(cache_with_session, [])
+    _ -> #(cache_with_backfill_check, [])
   }
 
   // Combine modem effect with data fetching effects
@@ -257,7 +276,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       route: initial_route,
       time_range: ONEDAY,
       settings_page_model: settings.init(),
-      is_backfilling: False,
+      backfill_status: backfill_polling.Idle,
       auth_state: NotAuthenticated,
     ),
     combined_effects,
@@ -275,6 +294,7 @@ pub type Msg {
   SettingsPageMsg(settings.Msg)
   LexiconsPageMsg(lexicons.Msg)
   FileRead(Result(String, String))
+  BackfillPollTick
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
@@ -356,10 +376,59 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           fn() { 0 },
         )
 
-      // Reset is_backfilling flag for TriggerBackfill mutation
-      let updated_is_backfilling = case query_name {
-        "TriggerBackfill" -> False
-        _ -> model.is_backfilling
+      // Update backfill status when IsBackfilling response arrives
+      let new_backfill_status = case query_name {
+        "IsBackfilling" -> {
+          case is_backfilling.parse_is_backfilling_response(response_body) {
+            Ok(data) -> {
+              case model.backfill_status, data.is_backfilling {
+                // On init (Idle), if server says backfilling, go to InProgress
+                backfill_polling.Idle, True -> backfill_polling.InProgress
+                // Otherwise use the normal state machine
+                _, _ ->
+                  backfill_polling.update_status(
+                    model.backfill_status,
+                    data.is_backfilling,
+                  )
+              }
+            }
+            Error(_) -> model.backfill_status
+          }
+        }
+        _ -> model.backfill_status
+      }
+
+      // Schedule next poll if:
+      // 1. This is an IsBackfilling response
+      // 2. We were already polling (not from init where we were Idle)
+      // 3. We should continue polling
+      let poll_effect = case
+        query_name,
+        backfill_polling.should_poll(model.backfill_status),
+        backfill_polling.should_poll(new_backfill_status)
+      {
+        "IsBackfilling", True, True -> [
+          effect.from(fn(dispatch) {
+            set_timeout(10_000, fn() { dispatch(BackfillPollTick) })
+          }),
+        ]
+        // Coming from Idle (init) and now InProgress - start the first poll
+        "IsBackfilling", False, True -> [
+          effect.from(fn(dispatch) {
+            set_timeout(10_000, fn() { dispatch(BackfillPollTick) })
+          }),
+        ]
+        _, _, _ -> []
+      }
+
+      // When backfill completes, invalidate home page queries to refresh data
+      let backfill_just_completed = case
+        model.backfill_status,
+        new_backfill_status
+      {
+        backfill_polling.InProgress, backfill_polling.Completed -> True
+        backfill_polling.Triggered, backfill_polling.Completed -> True
+        _, _ -> False
       }
 
       // Update auth state when GetCurrentSession response arrives
@@ -535,6 +604,81 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         _ -> #(final_cache, [])
       }
 
+      // When backfill completes, invalidate and refetch home page queries
+      let #(cache_after_backfill, backfill_effects) = case
+        backfill_just_completed
+      {
+        True -> {
+          // Invalidate home page queries
+          let cache1 =
+            squall_cache.invalidate(
+              cache_after_mutation,
+              "GetStatistics",
+              json.object([]),
+            )
+          let cache2 =
+            squall_cache.invalidate(
+              cache1,
+              "GetActivityBuckets",
+              json.object([
+                #(
+                  "range",
+                  json.string(get_activity_buckets.time_range_to_string(
+                    model.time_range,
+                  )),
+                ),
+              ]),
+            )
+          let cache3 =
+            squall_cache.invalidate(
+              cache2,
+              "GetRecentActivity",
+              json.object([#("hours", json.int(24))]),
+            )
+
+          // Refetch the queries
+          let #(cache4, _) =
+            squall_cache.lookup(
+              cache3,
+              "GetStatistics",
+              json.object([]),
+              get_statistics.parse_get_statistics_response,
+            )
+          let #(cache5, _) =
+            squall_cache.lookup(
+              cache4,
+              "GetActivityBuckets",
+              json.object([
+                #(
+                  "range",
+                  json.string(get_activity_buckets.time_range_to_string(
+                    model.time_range,
+                  )),
+                ),
+              ]),
+              get_activity_buckets.parse_get_activity_buckets_response,
+            )
+          let #(cache6, _) =
+            squall_cache.lookup(
+              cache5,
+              "GetRecentActivity",
+              json.object([#("hours", json.int(24))]),
+              get_recent_activity.parse_get_recent_activity_response,
+            )
+
+          let #(final_cache_backfill, refetch_effects) =
+            squall_cache.process_pending(
+              cache6,
+              model.registry,
+              HandleQueryResponse,
+              fn() { 0 },
+            )
+
+          #(final_cache_backfill, refetch_effects)
+        }
+        False -> #(cache_after_mutation, [])
+      }
+
       // Check if we need to redirect after session loads
       let redirect_effect = case query_name {
         "GetCurrentSession" -> {
@@ -555,24 +699,25 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       #(
         Model(
           ..model,
-          cache: cache_after_mutation,
+          cache: cache_after_backfill,
           settings_page_model: new_settings_model,
-          is_backfilling: updated_is_backfilling,
+          backfill_status: new_backfill_status,
           auth_state: new_auth_state,
         ),
         effect.batch(
-          [effects, mutation_effects, redirect_effect] |> list.flatten,
+          [
+            effects,
+            mutation_effects,
+            backfill_effects,
+            redirect_effect,
+            poll_effect,
+          ]
+          |> list.flatten,
         ),
       )
     }
 
     HandleQueryResponse(query_name, _variables, Error(err)) -> {
-      // Reset is_backfilling flag for TriggerBackfill mutation
-      let updated_is_backfilling = case query_name {
-        "TriggerBackfill" -> False
-        _ -> model.is_backfilling
-      }
-
       // Show error message for mutations
       let new_settings_model = case query_name {
         "UpdateDomainAuthority"
@@ -593,14 +738,22 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         _ -> model.settings_page_model
       }
 
-      #(
-        Model(
-          ..model,
-          settings_page_model: new_settings_model,
-          is_backfilling: updated_is_backfilling,
-        ),
-        effect.none(),
-      )
+      #(Model(..model, settings_page_model: new_settings_model), effect.none())
+    }
+
+    BackfillPollTick -> {
+      case backfill_polling.should_poll(model.backfill_status) {
+        True -> {
+          let #(updated_cache, effects) =
+            backfill_polling.poll(
+              model.cache,
+              model.registry,
+              HandleQueryResponse,
+            )
+          #(Model(..model, cache: updated_cache), effect.batch(effects))
+        }
+        False -> #(model, effect.none())
+      }
     }
 
     OnRouteChange(route) -> {
@@ -830,10 +983,20 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               fn() { 0 },
             )
 
-          // Set is_backfilling to True while request is pending
+          // Start polling for backfill status after 10 seconds
+          let poll_effect =
+            effect.from(fn(dispatch) {
+              set_timeout(10_000, fn() { dispatch(BackfillPollTick) })
+            })
+
+          // Set backfill_status to Triggered (waiting for server confirmation)
           #(
-            Model(..model, cache: final_cache, is_backfilling: True),
-            effect.batch(effects),
+            Model(
+              ..model,
+              cache: final_cache,
+              backfill_status: backfill_polling.Triggered,
+            ),
+            effect.batch([effect.batch(effects), poll_effect]),
           )
         }
       }
@@ -1458,7 +1621,10 @@ fn view(model: Model) -> Element(Msg) {
     [attribute.class("bg-zinc-950 text-zinc-300 font-mono min-h-screen")],
     [
       html.div([attribute.class("max-w-4xl mx-auto px-6 py-12")], [
-        layout.header(auth_info),
+        layout.header(
+          auth_info,
+          backfill_polling.should_poll(model.backfill_status),
+        ),
         case model.route {
           Home -> view_home(model)
           Settings -> view_settings(model)
@@ -1480,7 +1646,7 @@ fn view_home(model: Model) -> Element(Msg) {
     home.view(
       model.cache,
       model.time_range,
-      model.is_backfilling,
+      model.backfill_status,
       is_admin,
       is_authenticated,
     ),

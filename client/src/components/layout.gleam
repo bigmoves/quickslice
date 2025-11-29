@@ -1,3 +1,4 @@
+import components/backfill_animation
 import components/logo
 import gleam/list
 import gleam/option.{type Option}
@@ -7,29 +8,36 @@ import lustre/element/html
 
 /// Renders the unified header with logo and nav
 /// auth_info: Option containing (handle, is_admin) if authenticated, None if not
-pub fn header(auth_info: Option(#(String, Bool))) -> Element(msg) {
+/// is_backfilling: True if a backfill is in progress (shows animation instead of logo)
+pub fn header(
+  auth_info: Option(#(String, Bool)),
+  is_backfilling: Bool,
+) -> Element(msg) {
   html.div([attribute.class("border-b border-zinc-800 pb-3 mb-8")], [
     html.div([attribute.class("flex items-center justify-between")], [
-      // Left: Brand with logo
+      // Left: Brand with logo (or animation if backfilling)
       html.a(
         [
           attribute.href("/"),
           attribute.class(
-            "flex items-center gap-3 hover:opacity-80 transition-opacity",
+            "flex items-center gap-3 hover:opacity-80 transition-opacity ml-1",
           ),
         ],
         [
-          logo.view("w-10 h-10"),
-          html.div([], [
-            html.h1(
-              [
-                attribute.class(
-                  "text-xs font-medium uppercase tracking-wider text-zinc-500",
-                ),
-              ],
-              [element.text("quickslice")],
-            ),
+          html.div([attribute.class("overflow-visible")], [
+            case is_backfilling {
+              True -> backfill_animation.view("w-10 h-10")
+              False -> logo.view("w-10 h-10")
+            },
           ]),
+          html.h1(
+            [
+              attribute.class(
+                "text-xs font-medium uppercase tracking-wider text-zinc-500",
+              ),
+            ],
+            [element.text("quickslice")],
+          ),
         ],
       ),
       // Right: Navigation and Auth
