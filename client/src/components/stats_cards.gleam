@@ -30,7 +30,7 @@ pub fn view(cache: Cache) -> Element(msg) {
 
   case result {
     squall_cache.Loading ->
-      html.div([attribute.class("mb-8 grid grid-cols-3 gap-4")], [
+      html.div([attribute.class("mb-8 grid grid-cols-1 sm:grid-cols-3 gap-4")], [
         loading_card("Total Records"),
         loading_card("Total Actors"),
         loading_card("Total Lexicons"),
@@ -46,7 +46,7 @@ pub fn view(cache: Cache) -> Element(msg) {
     squall_cache.Data(data) -> {
       let stats = data.statistics
 
-      html.div([attribute.class("mb-8 grid grid-cols-3 gap-4")], [
+      html.div([attribute.class("mb-8 grid grid-cols-1 sm:grid-cols-3 gap-4")], [
         stat_card(
           "Total Records",
           number_formatter.format_number(stats.record_count),

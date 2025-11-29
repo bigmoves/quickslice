@@ -139,6 +139,7 @@ pub type Model {
     settings_page_model: settings.Model,
     backfill_status: backfill_polling.BackfillStatus,
     auth_state: AuthState,
+    mobile_menu_open: Bool,
   )
 }
 
@@ -278,6 +279,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       settings_page_model: settings.init(),
       backfill_status: backfill_polling.Idle,
       auth_state: NotAuthenticated,
+      mobile_menu_open: False,
     ),
     combined_effects,
   )
@@ -295,6 +297,7 @@ pub type Msg {
   LexiconsPageMsg(lexicons.Msg)
   FileRead(Result(String, String))
   BackfillPollTick
+  ToggleMobileMenu
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
@@ -756,6 +759,13 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       }
     }
 
+    ToggleMobileMenu -> {
+      #(
+        Model(..model, mobile_menu_open: !model.mobile_menu_open),
+        effect.none(),
+      )
+    }
+
     OnRouteChange(route) -> {
       // Clear any alerts when navigating away from settings
       let cleared_settings_model = case model.route {
@@ -825,6 +835,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               route: route,
               cache: final_cache,
               settings_page_model: cleared_settings_model,
+              mobile_menu_open: False,
             ),
             effect.batch(effects),
           )
@@ -874,6 +885,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                   route: route,
                   cache: final_cache,
                   settings_page_model: cleared_settings_model,
+                  mobile_menu_open: False,
                 ),
                 effect.batch(effects),
               )
@@ -904,6 +916,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               route: route,
               cache: final_cache,
               settings_page_model: cleared_settings_model,
+              mobile_menu_open: False,
             ),
             effect.batch(effects),
           )
@@ -913,6 +926,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             ..model,
             route: route,
             settings_page_model: cleared_settings_model,
+            mobile_menu_open: False,
           ),
           effect.none(),
         )
@@ -1620,18 +1634,23 @@ fn view(model: Model) -> Element(Msg) {
   html.div(
     [attribute.class("bg-zinc-950 text-zinc-300 font-mono min-h-screen")],
     [
-      html.div([attribute.class("max-w-4xl mx-auto px-6 py-12")], [
-        layout.header(
-          auth_info,
-          backfill_polling.should_poll(model.backfill_status),
-        ),
-        case model.route {
-          Home -> view_home(model)
-          Settings -> view_settings(model)
-          Lexicons -> view_lexicons(model)
-          Upload -> view_upload(model)
-        },
-      ]),
+      html.div(
+        [attribute.class("max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-12")],
+        [
+          layout.header(
+            auth_info,
+            backfill_polling.should_poll(model.backfill_status),
+            model.mobile_menu_open,
+            ToggleMobileMenu,
+          ),
+          case model.route {
+            Home -> view_home(model)
+            Settings -> view_settings(model)
+            Lexicons -> view_lexicons(model)
+            Upload -> view_upload(model)
+          },
+        ],
+      ),
     ],
   )
 }
