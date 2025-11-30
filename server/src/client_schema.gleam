@@ -12,6 +12,7 @@ import database/repositories/lexicons
 import database/repositories/oauth_clients
 import database/repositories/records
 import database/types.{type ActivityBucket, type ActivityEntry, type Lexicon}
+import envoy
 import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -1119,6 +1120,99 @@ pub fn mutation_type(
                 Ok(value.Boolean(True))
               }
               False -> Error("Admin privileges required to trigger backfill")
+            }
+          }
+          Error(_) -> Error("Authentication required to trigger backfill")
+        }
+      },
+    ),
+    // backfillActor mutation - sync a specific actor's collections
+    schema.field_with_args(
+      "backfillActor",
+      schema.non_null(schema.boolean_type()),
+      "Trigger a background backfill for a specific actor's collections",
+      [
+        schema.argument(
+          "did",
+          schema.non_null(schema.string_type()),
+          "The DID of the actor to backfill",
+          None,
+        ),
+      ],
+      fn(ctx) {
+        // Check if user is authenticated (any logged-in user can trigger)
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(_sess) -> {
+            case schema.get_argument(ctx, "did") {
+              Some(value.String(did)) -> {
+                // Get all record-type collections from database
+                let collections = case lexicons.get_record_types(conn) {
+                  Ok(lexicon_list) -> list.map(lexicon_list, fn(lex) { lex.id })
+                  Error(_) -> []
+                }
+
+                // Get domain authority to determine external collections
+                let domain_authority = case
+                  config_repo.get(conn, "domain_authority")
+                {
+                  Ok(authority) -> authority
+                  Error(_) -> ""
+                }
+
+                // Split collections into primary and external
+                let #(primary_collections, external_collections) =
+                  list.partition(collections, fn(collection) {
+                    backfill.nsid_matches_domain_authority(
+                      collection,
+                      domain_authority,
+                    )
+                  })
+
+                // Get PLC URL from environment
+                let plc_url = case envoy.get("PLC_DIRECTORY_URL") {
+                  Ok(url) -> url
+                  Error(_) -> "https://plc.directory"
+                }
+
+                // Spawn background process to run backfill for this actor
+                process.spawn_unlinked(fn() {
+                  logging.log(
+                    logging.Info,
+                    "[backfillActor] Starting background backfill for " <> did,
+                  )
+
+                  case
+                    backfill.rescue(fn() {
+                      backfill.backfill_collections_for_actor(
+                        conn,
+                        did,
+                        primary_collections,
+                        external_collections,
+                        plc_url,
+                      )
+                    })
+                  {
+                    Ok(_) ->
+                      logging.log(
+                        logging.Info,
+                        "[backfillActor] Background backfill completed for "
+                          <> did,
+                      )
+                    Error(err) ->
+                      logging.log(
+                        logging.Error,
+                        "[backfillActor] Background backfill FAILED for "
+                          <> did
+                          <> ": "
+                          <> string.inspect(err),
+                      )
+                  }
+                })
+
+                // Return immediately
+                Ok(value.Boolean(True))
+              }
+              _ -> Error("DID argument is required")
             }
           }
           Error(_) -> Error("Authentication required to trigger backfill")

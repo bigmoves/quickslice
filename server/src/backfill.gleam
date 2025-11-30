@@ -130,8 +130,9 @@ pub fn config_with_cache(cache: Subject(did_cache.Message)) -> BackfillConfig {
 }
 
 /// Configure hackney connection pool with specified limits
+/// This initializes the HTTP semaphore for rate limiting
 @external(erlang, "backfill_ffi", "configure_pool")
-fn configure_hackney_pool(max_concurrent: Int) -> Nil
+pub fn configure_hackney_pool(max_concurrent: Int) -> Nil
 
 /// Acquire a permit from the global HTTP semaphore
 /// Blocks if at the concurrent request limit (150)
@@ -724,7 +725,7 @@ fn rescue_car_backfill(
 
 /// Rescue wrapper - catches exceptions
 @external(erlang, "backfill_ffi", "rescue")
-fn rescue(f: fn() -> a) -> Result(a, Dynamic)
+pub fn rescue(f: fn() -> a) -> Result(a, Dynamic)
 
 /// CAR-based PDS worker - fetches each repo as CAR and filters locally
 fn pds_worker_car(
@@ -1127,6 +1128,9 @@ pub fn backfill_collections_for_actor(
   external_collection_ids: List(String),
   plc_url: String,
 ) -> Nil {
+  // Ensure HTTP semaphore is initialized (may not be if called outside normal backfill flow)
+  configure_hackney_pool(150)
+
   let all_collections = list.append(collection_ids, external_collection_ids)
   let total_count = list.length(all_collections)
 

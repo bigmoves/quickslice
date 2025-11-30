@@ -46,6 +46,7 @@ import components/actor_autocomplete
 import components/layout
 import file_upload
 import generated/queries
+import generated/queries/backfill_actor
 import generated/queries/create_o_auth_client
 import generated/queries/delete_o_auth_client
 import generated/queries/get_activity_buckets.{ONEDAY}
@@ -76,6 +77,7 @@ import lustre/element.{type Element}
 import lustre/element/html
 import modem
 import navigation
+import pages/backfill
 import pages/home
 import pages/lexicons
 import pages/settings
@@ -124,6 +126,7 @@ pub type Route {
   Settings
   Lexicons
   Upload
+  Backfill
 }
 
 pub type AuthState {
@@ -138,6 +141,7 @@ pub type Model {
     route: Route,
     time_range: get_activity_buckets.TimeRange,
     settings_page_model: settings.Model,
+    backfill_page_model: backfill.Model,
     backfill_status: backfill_polling.BackfillStatus,
     auth_state: AuthState,
     mobile_menu_open: Bool,
@@ -279,6 +283,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       route: initial_route,
       time_range: ONEDAY,
       settings_page_model: settings.init(),
+      backfill_page_model: backfill.init(),
       backfill_status: backfill_polling.Idle,
       auth_state: NotAuthenticated,
       mobile_menu_open: False,
@@ -298,6 +303,7 @@ pub type Msg {
   HomePageMsg(home.Msg)
   SettingsPageMsg(settings.Msg)
   LexiconsPageMsg(lexicons.Msg)
+  BackfillPageMsg(backfill.Msg)
   FileRead(Result(String, String))
   BackfillPollTick
   ToggleMobileMenu
@@ -537,6 +543,19 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         _ -> model.settings_page_model
       }
 
+      // Handle BackfillActor success
+      let new_backfill_model = case query_name {
+        "BackfillActor" ->
+          model.backfill_page_model
+          |> backfill.set_submitting(False)
+          |> backfill.set_alert(
+            "success",
+            "Backfill started for " <> model.backfill_page_model.did_input,
+          )
+          |> fn(m) { backfill.Model(..m, did_input: "") }
+        _ -> model.backfill_page_model
+      }
+
       // Invalidate queries after mutations that change data
       let #(cache_after_mutation, mutation_effects) = case query_name {
         "ResetAll" -> {
@@ -720,6 +739,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           ..model,
           cache: cache_after_backfill,
           settings_page_model: new_settings_model,
+          backfill_page_model: new_backfill_model,
           backfill_status: new_backfill_status,
           auth_state: new_auth_state,
         ),
@@ -757,7 +777,22 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         _ -> model.settings_page_model
       }
 
-      #(Model(..model, settings_page_model: new_settings_model), effect.none())
+      let new_backfill_model = case query_name {
+        "BackfillActor" ->
+          model.backfill_page_model
+          |> backfill.set_submitting(False)
+          |> backfill.set_alert("error", "Error: " <> err)
+        _ -> model.backfill_page_model
+      }
+
+      #(
+        Model(
+          ..model,
+          settings_page_model: new_settings_model,
+          backfill_page_model: new_backfill_model,
+        ),
+        effect.none(),
+      )
     }
 
     BackfillPollTick -> {
@@ -936,6 +971,29 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             ),
             effect.batch(effects),
           )
+        }
+        Backfill -> {
+          // Check if user is authenticated
+          case model.auth_state {
+            NotAuthenticated -> {
+              // Not authenticated - redirect to home
+              #(model, modem.push("/", option.None, option.None))
+            }
+            Authenticated(_, _, _) -> {
+              // Authenticated - clear alert and stay on page
+              let new_backfill_model =
+                backfill.clear_alert(model.backfill_page_model)
+              #(
+                Model(
+                  ..model,
+                  route: Backfill,
+                  backfill_page_model: new_backfill_model,
+                  mobile_menu_open: False,
+                ),
+                effect.none(),
+              )
+            }
+          }
         }
         _ -> #(
           Model(
@@ -1628,6 +1686,60 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       #(model, effect.map(eff, LexiconsPageMsg))
     }
 
+    BackfillPageMsg(backfill_msg) -> {
+      case backfill_msg {
+        backfill.UpdateDidInput(value) -> {
+          let new_backfill_model =
+            backfill.Model(..model.backfill_page_model, did_input: value)
+            |> backfill.clear_alert
+          #(
+            Model(..model, backfill_page_model: new_backfill_model),
+            effect.none(),
+          )
+        }
+
+        backfill.SubmitBackfill -> {
+          let did = model.backfill_page_model.did_input
+          let variables = json.object([#("did", json.string(did))])
+
+          // Mark as submitting
+          let new_backfill_model =
+            model.backfill_page_model
+            |> backfill.set_submitting(True)
+            |> backfill.clear_alert
+
+          // Invalidate any cached result
+          let cache_invalidated =
+            squall_cache.invalidate(model.cache, "BackfillActor", variables)
+
+          let #(cache_with_lookup, _) =
+            squall_cache.lookup(
+              cache_invalidated,
+              "BackfillActor",
+              variables,
+              backfill_actor.parse_backfill_actor_response,
+            )
+
+          let #(final_cache, effects) =
+            squall_cache.process_pending(
+              cache_with_lookup,
+              model.registry,
+              HandleQueryResponse,
+              fn() { 0 },
+            )
+
+          #(
+            Model(
+              ..model,
+              cache: final_cache,
+              backfill_page_model: new_backfill_model,
+            ),
+            effect.batch(effects),
+          )
+        }
+      }
+    }
+
     FileRead(Error(err)) -> {
       // Handle file read error
       io.println("[FileRead] Error reading file: " <> err)
@@ -1795,6 +1907,7 @@ fn view(model: Model) -> Element(Msg) {
             Settings -> view_settings(model)
             Lexicons -> view_lexicons(model)
             Upload -> view_upload(model)
+            Backfill -> view_backfill(model)
           },
         ],
       ),
@@ -1847,6 +1960,10 @@ fn view_upload(_model: Model) -> Element(Msg) {
   ])
 }
 
+fn view_backfill(model: Model) -> Element(Msg) {
+  element.map(backfill.view(model.backfill_page_model), BackfillPageMsg)
+}
+
 // ROUTING
 
 fn on_url_change(uri: uri.Uri) -> Msg {
@@ -1859,6 +1976,7 @@ fn parse_route(uri: uri.Uri) -> Route {
     "/settings" -> Settings
     "/lexicons" -> Lexicons
     "/upload" -> Upload
+    "/backfill" -> Backfill
     _ -> Home
   }
 }

@@ -17,7 +17,6 @@ import gleam/string
 import gleam/uri
 import handlers/admin_oauth_authorize as admin_oauth_authorize_handler
 import handlers/admin_oauth_callback as admin_oauth_callback_handler
-import handlers/backfill as backfill_handler
 import handlers/client_graphql as client_graphql_handler
 import handlers/graphiql as graphiql_handler
 import handlers/graphql as graphql_handler
@@ -551,8 +550,6 @@ fn handle_request(
         ctx.oauth_signing_key,
       )
     }
-    ["backfill"] ->
-      backfill_handler.handle(req, ctx.db, ctx.config, ctx.did_cache)
     ["admin", "graphql"] ->
       client_graphql_handler.handle_client_graphql_request(
         req,

@@ -119,6 +119,13 @@ pub fn init_registry() -> unstable_registry.Registry {
   let reg =
     unstable_registry.register(
       reg,
+      "BackfillActor",
+      "mutation BackfillActor($did: String!) {\n  backfillActor(did: $did)\n}",
+      "generated/queries/backfill_actor",
+    )
+  let reg =
+    unstable_registry.register(
+      reg,
       "GetLexicons",
       "query GetLexicons {\n  lexicons {\n    __typename\n    id\n    json\n    createdAt\n  }\n}",
       "generated/queries/get_lexicons",
