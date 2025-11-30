@@ -10,6 +10,13 @@ pub fn connect(path: String) -> Result(sqlight.Connection, sqlight.Error) {
   // Enable WAL mode for better concurrency
   use _ <- result.try(sqlight.exec("PRAGMA journal_mode = WAL", conn))
 
+  // Performance tuning - safe with WAL mode
+  use _ <- result.try(sqlight.exec("PRAGMA synchronous = NORMAL", conn))
+  use _ <- result.try(sqlight.exec("PRAGMA cache_size = -64000", conn))
+  use _ <- result.try(sqlight.exec("PRAGMA mmap_size = 268435456", conn))
+  use _ <- result.try(sqlight.exec("PRAGMA temp_store = MEMORY", conn))
+  use _ <- result.try(sqlight.exec("PRAGMA busy_timeout = 5000", conn))
+
   // Enable foreign key constraints
   use _ <- result.try(sqlight.exec("PRAGMA foreign_keys = ON", conn))
 
