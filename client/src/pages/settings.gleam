@@ -335,9 +335,7 @@ fn lexicons_section(_model: Model) -> Element(Msg) {
         ]),
       ]),
       html.p([attribute.class("text-sm text-zinc-500 mb-4")], [
-        element.text(
-          "Upload a ZIP file containing lexicon JSON files. The ZIP file will be extracted and all .json files will be imported into the database. This replaces the need to manually place lexicons in the priv/lexicons directory.",
-        ),
+        element.text("Upload a ZIP file containing lexicon JSON files."),
       ]),
       html.div([attribute.class("flex gap-3")], [
         button.button(disabled: False, on_click: UploadLexicons, text: "Upload"),
