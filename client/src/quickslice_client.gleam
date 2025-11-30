@@ -481,11 +481,16 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         "UploadLexicons" -> {
           // Clear the file input so the same file can be uploaded again
           file_upload.clear_file_input("lexicon-file-input")
-          settings.set_alert(
-            model.settings_page_model,
-            "success",
-            "Lexicons uploaded successfully",
-          )
+          case extract_graphql_error(response_body) {
+            option.Some(err) ->
+              settings.set_alert(model.settings_page_model, "error", err)
+            option.None ->
+              settings.set_alert(
+                model.settings_page_model,
+                "success",
+                "Lexicons uploaded successfully",
+              )
+          }
         }
         "ResetAll" -> {
           // Clear the domain authority input when reset completes

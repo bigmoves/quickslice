@@ -62,12 +62,12 @@ pub fn import_lexicons_from_directory(
           Ok(Nil)
         }
         Error(err_map) -> {
+          let error_details = format_validation_errors(err_map)
           logging.log(
             logging.Error,
-            "[import]   Validation failed: "
-              <> format_validation_errors(err_map),
+            "[import]   Validation failed: " <> error_details,
           )
-          Error("Validation failed")
+          Error("Validation failed: " <> error_details)
         }
       }
     Error(_) -> {
@@ -79,21 +79,16 @@ pub fn import_lexicons_from_directory(
   logging.log(logging.Info, "")
   logging.log(logging.Info, "[import] Importing lexicons to database...")
 
-  // Import each file (skip individual validation since we already validated all together)
-  let results = case validation_result {
-    Error(_) -> {
-      // If validation failed, don't import anything
-      file_paths |> list.map(fn(_) { Error("Validation failed") })
-    }
-    Ok(_) -> {
-      // Validation succeeded, import each lexicon
-      file_contents
-      |> list.map(fn(pair) {
-        let #(file_path, json_content) = pair
-        import_validated_lexicon(db, file_path, json_content)
-      })
-    }
-  }
+  // If validation failed, return error immediately
+  use _ <- result.try(validation_result)
+
+  // Validation succeeded, import each lexicon
+  let results =
+    file_contents
+    |> list.map(fn(pair) {
+      let #(file_path, json_content) = pair
+      import_validated_lexicon(db, file_path, json_content)
+    })
 
   // Calculate stats
   let total = list.length(results)
