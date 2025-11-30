@@ -17,10 +17,8 @@ sanitize_for_json(Term) ->
 
 sanitize_term({42, CidBytes}) when is_binary(CidBytes) ->
     %% CBOR tag 42 is a CID link - convert to $link object for JSON
-    %% CID bytes are already the full CID (multibase prefix not included in DAG-CBOR)
-    %% Encode as base32lower with 'b' prefix per CIDv1 spec
-    Base32 = base32:encode(CidBytes, [lower, nopad]),
-    CidString = <<"b", Base32/binary>>,
+    %% Use cid_ffi to properly strip 0x00 prefix and encode
+    CidString = cid_ffi:encode_cid_from_cbor_tag(CidBytes),
     #{<<"$link">> => CidString};
 
 sanitize_term(Map) when is_map(Map) ->
