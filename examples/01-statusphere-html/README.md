@@ -25,37 +25,19 @@ make run
 
 ### 2. Register an OAuth Client
 
-Via GraphQL mutation:
+Navigate to the admin settings page at `http://localhost:8080/admin/settings` and register a new OAuth client with:
 
-```graphql
-mutation {
-  createOAuthClient(input: {
-    name: "Statusphere HTML Example"
-    redirectUris: ["http://localhost:3000/index.html"]
-    tokenEndpointAuthMethod: "none"
-  }) {
-    clientId
-  }
-}
-```
-
-Or use the quickslice admin UI.
+- **Name:** Statusphere HTML Example
+- **Token Endpoint Auth Method:** Public
+- **Redirect URIs:** `http://127.0.0.1:3000/`
 
 **Important:** Set the redirect URI to match where you'll serve this HTML file.
 
 ### 3. Serve the HTML File
 
-Option A - Python:
 ```bash
-cd examples/01-statusphere-html
-python -m http.server 3000
-# Open http://localhost:3000/index.html
-```
-
-Option B - Node.js:
-```bash
-npx serve examples/01-statusphere-html -p 3000
-# Open http://localhost:3000/index.html
+npx http-server . -p 3000
+# Open http://127.0.0.1:3000
 ```
 
 ### 4. Login
@@ -83,7 +65,6 @@ npx serve examples/01-statusphere-html -p 3000
 
 **"Failed to load statuses"**
 - Ensure quickslice server is running at localhost:8080
-- Check browser console for CORS errors
 
 **OAuth redirect fails**
 - Verify redirect URI matches exactly in OAuth client config
