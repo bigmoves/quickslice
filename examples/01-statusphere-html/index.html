@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src http://localhost:8080; img-src 'self' https: data:;">
+  <title>Statusphere</title>
+  <style>
+/* CSS Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+* {
+  margin: 0;
+}
+body {
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+input, button {
+  font: inherit;
+}
+
+/* CSS Variables */
+:root {
+  --primary-500: #0078ff;
+  --primary-400: #339dff;
+  --primary-600: #0060cc;
+  --gray-100: #f5f5f5;
+  --gray-200: #e5e5e5;
+  --gray-500: #737373;
+  --gray-700: #404040;
+  --gray-900: #171717;
+  --border-color: #e5e5e5;
+  --error-bg: #fef2f2;
+  --error-border: #fecaca;
+  --error-text: #dc2626;
+}
+
+/* Layout */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--gray-100);
+  color: var(--gray-900);
+  min-height: 100vh;
+  padding: 2rem 1rem;
+}
+
+#app {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* Header */
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  font-size: 2.5rem;
+  color: var(--primary-500);
+  margin-bottom: 0.25rem;
+}
+
+.tagline {
+  color: var(--gray-500);
+  font-size: 1rem;
+}
+
+/* Cards */
+.card {
+  background: white;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Auth Section */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.form-group label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--gray-700);
+}
+
+.form-group input {
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  font-size: 1rem;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px rgba(0, 120, 255, 0.1);
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.btn-primary {
+  background: var(--primary-500);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-600);
+}
+
+.btn-primary:disabled {
+  background: var(--gray-200);
+  color: var(--gray-500);
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--gray-200);
+  color: var(--gray-700);
+}
+
+.btn-secondary:hover {
+  background: var(--border-color);
+}
+
+/* User Card */
+.user-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--gray-200);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-name {
+  font-weight: 600;
+}
+
+.user-handle {
+  font-size: 0.875rem;
+  color: var(--gray-500);
+}
+
+/* Emoji Picker */
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 0.5rem;
+}
+
+.emoji-btn {
+  width: 100%;
+  aspect-ratio: 1;
+  font-size: 1.5rem;
+  border: 2px solid var(--border-color);
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emoji-btn:hover {
+  background: rgba(0, 120, 255, 0.1);
+  border-color: var(--primary-400);
+}
+
+.emoji-btn.selected {
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px rgba(0, 120, 255, 0.2);
+}
+
+.emoji-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.emoji-btn:disabled:hover {
+  background: white;
+  border-color: var(--border-color);
+}
+
+/* Status Feed */
+.feed-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--gray-700);
+}
+
+.status-list {
+  list-style: none;
+  padding: 0;
+}
+
+.status-item {
+  position: relative;
+  padding-left: 2rem;
+  padding-bottom: 1.5rem;
+}
+
+.status-item::before {
+  content: "";
+  position: absolute;
+  left: 0.75rem;
+  top: 1.5rem;
+  bottom: 0;
+  width: 2px;
+  background: var(--border-color);
+}
+
+.status-item:last-child::before {
+  display: none;
+}
+
+.status-item:last-child {
+  padding-bottom: 0;
+}
+
+.status-emoji {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 1.5rem;
+}
+
+.status-content {
+  padding-top: 0.25rem;
+}
+
+.status-author {
+  color: var(--primary-500);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.status-author:hover {
+  text-decoration: underline;
+}
+
+.status-text {
+  color: var(--gray-700);
+}
+
+.status-date {
+  font-size: 0.875rem;
+  color: var(--gray-500);
+}
+
+/* Error Banner */
+#error-banner {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  color: var(--error-text);
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 90%;
+  z-index: 100;
+}
+
+#error-banner.hidden {
+  display: none;
+}
+
+#error-banner button {
+  background: none;
+  border: none;
+  color: var(--error-text);
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+/* Loading State */
+.loading {
+  text-align: center;
+  color: var(--gray-500);
+  padding: 2rem;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .emoji-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  .emoji-btn {
+    font-size: 1.25rem;
+  }
+}
+
+/* Hidden utility */
+.hidden {
+  display: none !important;
+}
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Statusphere</h1>
+      <p class="tagline">Set your status on the Atmosphere</p>
+    </header>
+    <main>
+      <div id="auth-section"></div>
+      <div id="emoji-picker"></div>
+      <div id="status-feed"></div>
+    </main>
+    <div id="error-banner" class="hidden"></div>
+  </div>
+  <script>
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+const GRAPHQL_URL = 'http://localhost:8080/graphql';
+const OAUTH_AUTHORIZE_URL = 'http://localhost:8080/oauth/authorize';
+const OAUTH_TOKEN_URL = 'http://localhost:8080/oauth/token';
+
+const EMOJIS = [
+  '👍', '👎', '💙', '😧', '😤', '🙃', '😉', '😎', '🤩',
+  '🥳', '😭', '😱', '🥺', '😡', '💀', '🤖', '👻', '👽',
+  '🎃', '🤡', '💩', '🔥', '⭐', '🌈', '🍕', '🎉', '💯'
+];
+
+const STORAGE_KEYS = {
+  accessToken: 'qs_access_token',
+  refreshToken: 'qs_refresh_token',
+  userDid: 'qs_user_did',
+  codeVerifier: 'qs_code_verifier',
+  oauthState: 'qs_oauth_state',
+  clientId: 'qs_client_id'
+};
+
+// =============================================================================
+// STORAGE UTILITIES
+// =============================================================================
+
+const storage = {
+  get(key) {
+    return sessionStorage.getItem(key);
+  },
+  set(key, value) {
+    sessionStorage.setItem(key, value);
+  },
+  remove(key) {
+    sessionStorage.removeItem(key);
+  },
+  clear() {
+    Object.values(STORAGE_KEYS).forEach(key => sessionStorage.removeItem(key));
+  }
+};
+
+// =============================================================================
+// PKCE UTILITIES
+// =============================================================================
+
+function base64UrlEncode(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+async function generateCodeVerifier() {
+  const randomBytes = new Uint8Array(32);
+  crypto.getRandomValues(randomBytes);
+  return base64UrlEncode(randomBytes);
+}
+
+async function generateCodeChallenge(verifier) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return base64UrlEncode(hash);
+}
+
+function generateState() {
+  const randomBytes = new Uint8Array(16);
+  crypto.getRandomValues(randomBytes);
+  return base64UrlEncode(randomBytes);
+}
+
+// =============================================================================
+// OAUTH FUNCTIONS
+// =============================================================================
+
+async function initiateLogin(clientId, handle) {
+  const codeVerifier = await generateCodeVerifier();
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
+  const state = generateState();
+
+  // Store for callback
+  storage.set(STORAGE_KEYS.codeVerifier, codeVerifier);
+  storage.set(STORAGE_KEYS.oauthState, state);
+  storage.set(STORAGE_KEYS.clientId, clientId);
+
+  // Build redirect URI (current page without query params)
+  const redirectUri = window.location.origin + window.location.pathname;
+
+  // Build authorization URL
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+    state: state,
+    login_hint: handle
+  });
+
+  window.location.href = `${OAUTH_AUTHORIZE_URL}?${params.toString()}`;
+}
+
+async function handleOAuthCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+  const error = params.get('error');
+
+  if (error) {
+    throw new Error(`OAuth error: ${error} - ${params.get('error_description') || ''}`);
+  }
+
+  if (!code || !state) {
+    return false; // Not a callback
+  }
+
+  // Verify state
+  const storedState = storage.get(STORAGE_KEYS.oauthState);
+  if (state !== storedState) {
+    throw new Error('OAuth state mismatch - possible CSRF attack');
+  }
+
+  // Get stored values
+  const codeVerifier = storage.get(STORAGE_KEYS.codeVerifier);
+  const clientId = storage.get(STORAGE_KEYS.clientId);
+  const redirectUri = window.location.origin + window.location.pathname;
+
+  if (!codeVerifier || !clientId) {
+    throw new Error('Missing OAuth session data');
+  }
+
+  // Exchange code for tokens
+  const tokenResponse = await fetch(OAUTH_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: redirectUri,
+      client_id: clientId,
+      code_verifier: codeVerifier
+    })
+  });
+
+  if (!tokenResponse.ok) {
+    const errorData = await tokenResponse.json().catch(() => ({}));
+    throw new Error(`Token exchange failed: ${errorData.error_description || tokenResponse.statusText}`);
+  }
+
+  const tokens = await tokenResponse.json();
+
+  // Store tokens
+  storage.set(STORAGE_KEYS.accessToken, tokens.access_token);
+  if (tokens.refresh_token) {
+    storage.set(STORAGE_KEYS.refreshToken, tokens.refresh_token);
+  }
+
+  // Extract DID from token response (sub claim) or we'll fetch it later
+  if (tokens.sub) {
+    storage.set(STORAGE_KEYS.userDid, tokens.sub);
+  }
+
+  // Clean up OAuth state
+  storage.remove(STORAGE_KEYS.codeVerifier);
+  storage.remove(STORAGE_KEYS.oauthState);
+
+  // Clear URL params
+  window.history.replaceState({}, document.title, window.location.pathname);
+
+  return true;
+}
+
+function logout() {
+  storage.clear();
+  window.location.reload();
+}
+
+function isLoggedIn() {
+  return !!storage.get(STORAGE_KEYS.accessToken);
+}
+
+function getAccessToken() {
+  return storage.get(STORAGE_KEYS.accessToken);
+}
+
+function getUserDid() {
+  return storage.get(STORAGE_KEYS.userDid);
+}
+
+// =============================================================================
+// GRAPHQL UTILITIES
+// =============================================================================
+
+async function graphqlQuery(query, variables = {}, requireAuth = false) {
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+
+  if (requireAuth) {
+    const token = getAccessToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(GRAPHQL_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ query, variables })
+  });
+
+  if (!response.ok) {
+    throw new Error(`GraphQL request failed: ${response.statusText}`);
+  }
+
+  const result = await response.json();
+
+  if (result.errors && result.errors.length > 0) {
+    throw new Error(`GraphQL error: ${result.errors[0].message}`);
+  }
+
+  return result.data;
+}
+
+// =============================================================================
+// DATA FETCHING
+// =============================================================================
+
+async function fetchStatuses() {
+  const query = `
+    query GetStatuses {
+      xyzStatusphereStatus(
+        first: 20
+        sortBy: [{ field: "createdAt", direction: DESC }]
+      ) {
+        edges {
+          node {
+            uri
+            did
+            status
+            createdAt
+            appBskyActorProfileByDid {
+              actorHandle
+              displayName
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await graphqlQuery(query);
+  return data.xyzStatusphereStatus?.edges?.map(e => e.node) || [];
+}
+
+async function fetchViewer() {
+  const query = `
+    query {
+      viewer {
+        did
+        handle
+        appBskyActorProfileByDid {
+          displayName
+          avatar { url }
+        }
+      }
+    }
+  `;
+
+  const data = await graphqlQuery(query, {}, true);
+  return data?.viewer;
+}
+
+async function postStatus(emoji) {
+  const mutation = `
+    mutation CreateStatus($status: String!, $createdAt: DateTime!) {
+      createXyzStatusphereStatus(
+        input: { status: $status, createdAt: $createdAt }
+      ) {
+        uri
+        status
+        createdAt
+      }
+    }
+  `;
+
+  const variables = {
+    status: emoji,
+    createdAt: new Date().toISOString()
+  };
+
+  const data = await graphqlQuery(mutation, variables, true);
+  return data.createXyzStatusphereStatus;
+}
+
+// =============================================================================
+// UI RENDERING
+// =============================================================================
+
+function showError(message) {
+  const banner = document.getElementById('error-banner');
+  banner.innerHTML = `
+    <span>${escapeHtml(message)}</span>
+    <button onclick="hideError()">&times;</button>
+  `;
+  banner.classList.remove('hidden');
+}
+
+function hideError() {
+  document.getElementById('error-banner').classList.add('hidden');
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+
+  if (isToday) {
+    return 'today';
+  }
+
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+  });
+}
+
+function renderLoginForm() {
+  const container = document.getElementById('auth-section');
+  const savedClientId = storage.get(STORAGE_KEYS.clientId) || '';
+
+  container.innerHTML = `
+    <div class="card">
+      <form class="login-form" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label for="client-id">OAuth Client ID</label>
+          <input
+            type="text"
+            id="client-id"
+            placeholder="your-client-id"
+            value="${escapeHtml(savedClientId)}"
+            required
+          >
+        </div>
+        <div class="form-group">
+          <label for="handle">Bluesky Handle</label>
+          <input
+            type="text"
+            id="handle"
+            placeholder="you.bsky.social"
+            required
+          >
+        </div>
+        <button type="submit" class="btn btn-primary">Login with Bluesky</button>
+      </form>
+      <p style="margin-top: 1rem; font-size: 0.875rem; color: var(--gray-500); text-align: center;">
+        Don't have a Bluesky account? <a href="https://bsky.app" target="_blank">Sign up</a>
+      </p>
+    </div>
+  `;
+}
+
+function renderUserCard(profile) {
+  const container = document.getElementById('auth-section');
+  const displayName = profile?.displayName || 'User';
+  const handle = profile?.actorHandle || 'unknown';
+  const avatarUrl = profile?.avatar?.url;
+
+  container.innerHTML = `
+    <div class="card user-card">
+      <div class="user-info">
+        <div class="user-avatar">
+          ${avatarUrl
+            ? `<img src="${escapeHtml(avatarUrl)}" alt="Avatar">`
+            : '👤'}
+        </div>
+        <div>
+          <div class="user-name">Hi, ${escapeHtml(displayName)}!</div>
+          <div class="user-handle">@${escapeHtml(handle)}</div>
+        </div>
+      </div>
+      <button class="btn btn-secondary" onclick="logout()">Logout</button>
+    </div>
+  `;
+}
+
+function renderEmojiPicker(currentStatus, enabled = true) {
+  const container = document.getElementById('emoji-picker');
+
+  container.innerHTML = `
+    <div class="card">
+      <div class="emoji-grid">
+        ${EMOJIS.map(emoji => `
+          <button
+            class="emoji-btn ${emoji === currentStatus ? 'selected' : ''}"
+            onclick="selectStatus('${emoji}')"
+            ${!enabled ? 'disabled' : ''}
+            title="${enabled ? 'Set status' : 'Login to set status'}"
+          >
+            ${emoji}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderStatusFeed(statuses) {
+  const container = document.getElementById('status-feed');
+
+  if (statuses.length === 0) {
+    container.innerHTML = `
+      <div class="card">
+        <p class="loading">No statuses yet. Be the first to post!</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="card">
+      <h2 class="feed-title">Recent Statuses</h2>
+      <ul class="status-list">
+        ${statuses.map(status => {
+          const handle = status.appBskyActorProfileByDid?.actorHandle || status.did;
+          const displayHandle = handle.startsWith('did:') ? handle.substring(0, 20) + '...' : handle;
+          const profileUrl = handle.startsWith('did:')
+            ? `https://bsky.app/profile/${status.did}`
+            : `https://bsky.app/profile/${handle}`;
+
+          return `
+            <li class="status-item">
+              <span class="status-emoji">${status.status}</span>
+              <div class="status-content">
+                <span class="status-text">
+                  <a href="${profileUrl}" target="_blank" class="status-author">@${escapeHtml(displayHandle)}</a>
+                  is feeling ${status.status}
+                </span>
+                <div class="status-date">${formatDate(status.createdAt)}</div>
+              </div>
+            </li>
+          `;
+        }).join('')}
+      </ul>
+    </div>
+  `;
+}
+
+function renderLoading(container) {
+  document.getElementById(container).innerHTML = `
+    <div class="card">
+      <p class="loading">Loading...</p>
+    </div>
+  `;
+}
+
+// =============================================================================
+// EVENT HANDLERS
+// =============================================================================
+
+async function handleLogin(event) {
+  event.preventDefault();
+
+  const clientId = document.getElementById('client-id').value.trim();
+  const handle = document.getElementById('handle').value.trim();
+
+  if (!clientId || !handle) {
+    showError('Please enter both Client ID and Handle');
+    return;
+  }
+
+  try {
+    await initiateLogin(clientId, handle);
+  } catch (error) {
+    showError(`Login failed: ${error.message}`);
+  }
+}
+
+async function selectStatus(emoji) {
+  if (!isLoggedIn()) {
+    showError('Please login to set your status');
+    return;
+  }
+
+  try {
+    // Disable buttons while posting
+    document.querySelectorAll('.emoji-btn').forEach(btn => btn.disabled = true);
+
+    await postStatus(emoji);
+
+    // Refresh the page to show new status
+    window.location.reload();
+  } catch (error) {
+    showError(`Failed to post status: ${error.message}`);
+    // Re-enable buttons
+    document.querySelectorAll('.emoji-btn').forEach(btn => btn.disabled = false);
+  }
+}
+
+// =============================================================================
+// MAIN INITIALIZATION
+// =============================================================================
+
+async function main() {
+  try {
+    // Check if this is an OAuth callback
+    const isCallback = await handleOAuthCallback();
+    if (isCallback) {
+      console.log('OAuth callback handled successfully');
+    }
+  } catch (error) {
+    showError(`Authentication failed: ${error.message}`);
+    storage.clear();
+  }
+
+  // Render auth section
+  if (isLoggedIn()) {
+    try {
+      const viewer = await fetchViewer();
+      if (viewer) {
+        const profile = {
+          did: viewer.did,
+          actorHandle: viewer.handle,
+          displayName: viewer.appBskyActorProfileByDid?.displayName,
+          avatar: viewer.appBskyActorProfileByDid?.avatar,
+        };
+        renderUserCard(profile);
+      } else {
+        renderUserCard(null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch viewer:', error);
+      renderUserCard(null);
+    }
+  } else {
+    renderLoginForm();
+  }
+
+  // Render emoji picker (enabled only if logged in)
+  renderEmojiPicker(null, isLoggedIn());
+
+  // Fetch and render statuses
+  renderLoading('status-feed');
+  try {
+    const statuses = await fetchStatuses();
+    renderStatusFeed(statuses);
+  } catch (error) {
+    console.error('Failed to fetch statuses:', error);
+    document.getElementById('status-feed').innerHTML = `
+      <div class="card">
+        <p class="loading" style="color: var(--error-text);">
+          Failed to load statuses. Is the quickslice server running at localhost:8080?
+        </p>
+      </div>
+    `;
+  }
+}
+
+// Run on page load
+main();
+  </script>
+</body>
+</html>

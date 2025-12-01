@@ -1,6 +1,7 @@
 /// Pure Gleam GraphQL Implementation
 ///
 /// This module provides GraphQL schema building and query execution
+import atproto_auth
 import backfill
 import config
 import cursor
@@ -446,6 +447,21 @@ pub fn build_schema_from_db(
         |> result.map_error(fn(_) { "Failed to fetch aggregated records" })
       }
 
+      // Step 5.6: Create a viewer fetcher function for authenticated user info
+      let viewer_fetcher = fn(token: String) {
+        case atproto_auth.verify_token(db, token) {
+          Error(_) -> Error("Invalid or expired token")
+          Ok(user_info) -> {
+            // Get handle from actors table
+            let handle = case actors.get(db, user_info.did) {
+              Ok([actor, ..]) -> option.Some(actor.handle)
+              _ -> option.None
+            }
+            Ok(#(user_info.did, handle))
+          }
+        }
+      }
+
       // Step 6: Build schema with database-backed resolvers, mutations, and subscriptions
       database.build_schema_with_subscriptions(
         parsed_lexicons,
@@ -457,6 +473,7 @@ pub fn build_schema_from_db(
         delete_factory,
         upload_blob_factory,
         option.Some(aggregate_fetcher),
+        option.Some(viewer_fetcher),
       )
     }
   }

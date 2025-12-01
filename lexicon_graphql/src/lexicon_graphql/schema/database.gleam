@@ -122,6 +122,10 @@ pub type AggregateFetcher =
   fn(String, AggregateParams) ->
     Result(List(aggregate_types.AggregateResult), String)
 
+/// Fetches viewer info (did, handle) from auth token
+pub type ViewerFetcher =
+  fn(String) -> Result(#(String, option.Option(String)), String)
+
 /// Build a GraphQL schema from lexicons with database-backed resolvers
 ///
 /// The fetcher parameter should be a function that queries the database for records with pagination
@@ -156,6 +160,9 @@ pub fn build_schema_with_fetcher(
           fetcher,
           option.None,
           dict.new(),
+          batch_fetcher,
+          paginated_batch_fetcher,
+          option.None,
         )
 
       // Build the mutation type with provided resolver factories
@@ -190,6 +197,7 @@ pub fn build_schema_with_subscriptions(
   delete_factory: option.Option(mutation_builder.ResolverFactory),
   upload_blob_factory: option.Option(mutation_builder.UploadBlobResolverFactory),
   aggregate_fetcher: option.Option(AggregateFetcher),
+  viewer_fetcher: option.Option(ViewerFetcher),
 ) -> Result(schema.Schema, String) {
   case lexicons {
     [] -> Error("Cannot build schema from empty lexicon list")
@@ -210,6 +218,9 @@ pub fn build_schema_with_subscriptions(
           fetcher,
           aggregate_fetcher,
           field_type_registry,
+          batch_fetcher,
+          paginated_batch_fetcher,
+          viewer_fetcher,
         )
 
       // Build the mutation type
@@ -1463,6 +1474,9 @@ fn build_query_type(
   fetcher: RecordFetcher,
   aggregate_fetcher: option.Option(AggregateFetcher),
   field_type_registry: dict.Dict(String, dict.Dict(String, FieldType)),
+  batch_fetcher: option.Option(dataloader.BatchFetcher),
+  paginated_batch_fetcher: option.Option(dataloader.PaginatedBatchFetcher),
+  viewer_fetcher: option.Option(ViewerFetcher),
 ) -> schema.Type {
   // Build regular query fields
   let query_fields =
@@ -1558,8 +1572,252 @@ fn build_query_type(
     option.None -> []
   }
 
-  // Combine regular and aggregate query fields
-  let all_query_fields = list.append(query_fields, aggregate_query_fields)
+  // Build viewer query field if viewer_fetcher provided
+  let viewer_field = case viewer_fetcher {
+    option.Some(vf) -> {
+      // Build Viewer object type with did, handle, and DID-based joins to all record types
+      let viewer_base_fields = [
+        schema.field(
+          "did",
+          schema.non_null(schema.string_type()),
+          "User DID",
+          fn(ctx) {
+            case ctx.data {
+              option.Some(value.Object(fields)) ->
+                case list.key_find(fields, "did") {
+                  Ok(v) -> Ok(v)
+                  Error(_) -> Ok(value.Null)
+                }
+              _ -> Ok(value.Null)
+            }
+          },
+        ),
+        schema.field("handle", schema.string_type(), "User handle", fn(ctx) {
+          case ctx.data {
+            option.Some(value.Object(fields)) ->
+              case list.key_find(fields, "handle") {
+                Ok(v) -> Ok(v)
+                Error(_) -> Ok(value.Null)
+              }
+            _ -> Ok(value.Null)
+          }
+        }),
+      ]
+
+      // Build DID-based join fields for all record types
+      // Check has_unique_did to determine if we return single object or connection
+      let did_join_fields =
+        list.filter_map(record_types, fn(record_type) {
+          case dict.get(object_types, record_type.nsid) {
+            Ok(target_object_type) -> {
+              let field_name = lowercase_first(record_type.type_name) <> "ByDid"
+              let target_nsid = record_type.nsid
+
+              case record_type.meta.has_unique_did {
+                True -> {
+                  // Unique DID join - returns single nullable object (e.g., profile)
+                  Ok(
+                    schema.field(
+                      field_name,
+                      target_object_type,
+                      "DID join: "
+                        <> record_type.nsid
+                        <> " record for this user",
+                      fn(ctx) {
+                        case ctx.data {
+                          option.Some(value.Object(fields)) ->
+                            case list.key_find(fields, "did") {
+                              Ok(value.String(did)) -> {
+                                case batch_fetcher {
+                                  option.Some(bf) -> {
+                                    case
+                                      dataloader.batch_fetch_by_did(
+                                        [did],
+                                        target_nsid,
+                                        bf,
+                                      )
+                                    {
+                                      Ok(results) ->
+                                        case dict.get(results, did) {
+                                          Ok([first, ..]) -> Ok(first)
+                                          _ -> Ok(value.Null)
+                                        }
+                                      Error(_) -> Ok(value.Null)
+                                    }
+                                  }
+                                  option.None -> Ok(value.Null)
+                                }
+                              }
+                              _ -> Ok(value.Null)
+                            }
+                          _ -> Ok(value.Null)
+                        }
+                      },
+                    ),
+                  )
+                }
+                False -> {
+                  // Non-unique DID join - returns connection (e.g., posts, statuses)
+                  let edge_type =
+                    connection.edge_type(
+                      record_type.type_name,
+                      target_object_type,
+                    )
+                  let connection_type =
+                    connection.connection_type(record_type.type_name, edge_type)
+
+                  // Build connection args with sortBy and where support
+                  let sort_field_enum = build_sort_field_enum(record_type)
+                  let where_input_type = build_where_input_type(record_type)
+                  let connection_args =
+                    lexicon_connection.lexicon_connection_args_with_field_enum_and_where(
+                      record_type.type_name,
+                      sort_field_enum,
+                      where_input_type,
+                    )
+
+                  Ok(
+                    schema.field_with_args(
+                      field_name,
+                      connection_type,
+                      "DID join: "
+                        <> record_type.nsid
+                        <> " records for this user",
+                      connection_args,
+                      fn(ctx) {
+                        case ctx.data {
+                          option.Some(value.Object(fields)) ->
+                            case list.key_find(fields, "did") {
+                              Ok(value.String(did)) -> {
+                                case paginated_batch_fetcher {
+                                  option.Some(fetcher) -> {
+                                    // Extract pagination params from context
+                                    let pagination_params =
+                                      extract_pagination_params(ctx)
+
+                                    // Use paginated DataLoader to fetch records by DID
+                                    case
+                                      dataloader.batch_fetch_by_did_paginated(
+                                        did,
+                                        target_nsid,
+                                        pagination_params,
+                                        fetcher,
+                                      )
+                                    {
+                                      Ok(batch_result) -> {
+                                        // Build edges from records with their cursors
+                                        let edges =
+                                          list.map(
+                                            batch_result.edges,
+                                            fn(edge_tuple) {
+                                              let #(record_value, record_cursor) =
+                                                edge_tuple
+                                              connection.Edge(
+                                                node: record_value,
+                                                cursor: record_cursor,
+                                              )
+                                            },
+                                          )
+
+                                        // Build PageInfo
+                                        let page_info =
+                                          connection.PageInfo(
+                                            has_next_page: batch_result.has_next_page,
+                                            has_previous_page: batch_result.has_previous_page,
+                                            start_cursor: case
+                                              list.first(edges)
+                                            {
+                                              Ok(edge) ->
+                                                option.Some(edge.cursor)
+                                              Error(_) -> option.None
+                                            },
+                                            end_cursor: case list.last(edges) {
+                                              Ok(edge) ->
+                                                option.Some(edge.cursor)
+                                              Error(_) -> option.None
+                                            },
+                                          )
+
+                                        // Build Connection
+                                        let conn =
+                                          connection.Connection(
+                                            edges: edges,
+                                            page_info: page_info,
+                                            total_count: batch_result.total_count,
+                                          )
+
+                                        Ok(connection.connection_to_value(conn))
+                                      }
+                                      Error(_) -> {
+                                        Ok(empty_connection_value())
+                                      }
+                                    }
+                                  }
+                                  option.None -> {
+                                    Ok(empty_connection_value())
+                                  }
+                                }
+                              }
+                              _ -> Ok(empty_connection_value())
+                            }
+                          _ -> Ok(empty_connection_value())
+                        }
+                      },
+                    ),
+                  )
+                }
+              }
+            }
+            Error(_) -> Error(Nil)
+          }
+        })
+
+      let viewer_fields = list.append(viewer_base_fields, did_join_fields)
+      let viewer_type =
+        schema.object_type("Viewer", "Authenticated user", viewer_fields)
+
+      // Create the viewer query field
+      [
+        schema.field(
+          "viewer",
+          viewer_type,
+          "The currently authenticated user, or null if not authenticated",
+          fn(ctx) {
+            // Extract auth_token from context
+            case ctx.data {
+              option.Some(value.Object(fields)) ->
+                case list.key_find(fields, "auth_token") {
+                  Ok(value.String(token)) -> {
+                    case vf(token) {
+                      Ok(#(did, handle_opt)) -> {
+                        let handle_value = case handle_opt {
+                          option.Some(h) -> value.String(h)
+                          option.None -> value.Null
+                        }
+                        Ok(
+                          value.Object([
+                            #("did", value.String(did)),
+                            #("handle", handle_value),
+                          ]),
+                        )
+                      }
+                      Error(_) -> Ok(value.Null)
+                    }
+                  }
+                  _ -> Ok(value.Null)
+                }
+              _ -> Ok(value.Null)
+            }
+          },
+        ),
+      ]
+    }
+    option.None -> []
+  }
+
+  // Combine all query fields
+  let all_query_fields =
+    list.flatten([query_fields, aggregate_query_fields, viewer_field])
 
   schema.object_type("Query", "Root query type", all_query_fields)
 }

@@ -662,7 +662,10 @@ fn middleware(
       |> wisp.set_header("access-control-allow-origin", origin)
       |> wisp.set_header("access-control-allow-credentials", "true")
       |> wisp.set_header("access-control-allow-methods", "GET, POST, OPTIONS")
-      |> wisp.set_header("access-control-allow-headers", "Content-Type")
+      |> wisp.set_header(
+        "access-control-allow-headers",
+        "Content-Type, Authorization",
+      )
       |> wisp.set_body(wisp.Text(""))
     }
     _ -> {
@@ -671,7 +674,10 @@ fn middleware(
       |> wisp.set_header("access-control-allow-origin", origin)
       |> wisp.set_header("access-control-allow-credentials", "true")
       |> wisp.set_header("access-control-allow-methods", "GET, POST, OPTIONS")
-      |> wisp.set_header("access-control-allow-headers", "Content-Type")
+      |> wisp.set_header(
+        "access-control-allow-headers",
+        "Content-Type, Authorization",
+      )
     }
   }
 }

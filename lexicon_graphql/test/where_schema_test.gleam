@@ -47,6 +47,7 @@ fn create_test_schema_from_lexicons(
       option.None,
       option.None,
       option.Some(aggregate_fetcher),
+      option.None,
     )
   {
     Ok(s) -> s

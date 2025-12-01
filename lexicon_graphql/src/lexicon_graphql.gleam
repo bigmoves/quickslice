@@ -38,6 +38,10 @@ pub type ObjectDef =
 pub type Property =
   types.Property
 
+// Re-export fetcher types
+pub type ViewerFetcher =
+  db_schema_builder.ViewerFetcher
+
 // Re-export main schema building functions
 pub fn build_schema(lexicons: List(Lexicon)) {
   schema_builder.build_schema(lexicons)
@@ -53,6 +57,7 @@ pub fn build_schema_with_subscriptions(
   delete_factory: Option(mutation_builder.ResolverFactory),
   upload_blob_factory: Option(mutation_builder.UploadBlobResolverFactory),
   aggregate_fetcher: Option(db_schema_builder.AggregateFetcher),
+  viewer_fetcher: Option(ViewerFetcher),
 ) {
   db_schema_builder.build_schema_with_subscriptions(
     lexicons,
@@ -64,6 +69,7 @@ pub fn build_schema_with_subscriptions(
     delete_factory,
     upload_blob_factory,
     aggregate_fetcher,
+    viewer_fetcher,
   )
 }
 
