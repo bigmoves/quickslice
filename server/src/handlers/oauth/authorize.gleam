@@ -4,7 +4,9 @@ import database/repositories/oauth_atp_requests
 import database/repositories/oauth_atp_sessions
 import database/repositories/oauth_auth_requests
 import database/repositories/oauth_clients
-import database/types.{OAuthAtpRequest, OAuthAtpSession, OAuthAuthRequest}
+import database/types.{
+  type OAuthClient, OAuthAtpRequest, OAuthAtpSession, OAuthAuthRequest,
+}
 import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
 import gleam/http
@@ -20,6 +22,7 @@ import lib/oauth/atproto/did_resolver
 import lib/oauth/did_cache
 import lib/oauth/dpop/keygen
 import lib/oauth/pkce
+import lib/oauth/scopes/validator as scope_validator
 import lib/oauth/token_generator
 import lib/oauth/types/error
 import lib/oauth/types/request.{type AuthorizationRequest, AuthorizationRequest}
@@ -147,6 +150,7 @@ fn handle_standard_flow(
   // Process authorization
   process_authorization(
     auth_request,
+    client,
     conn,
     did_cache,
     server_redirect_uri,
@@ -191,7 +195,7 @@ fn parse_authorization_request(
 /// Validate authorization request against client
 fn validate_authorization_request(
   req: AuthorizationRequest,
-  client: types.OAuthClient,
+  client: OAuthClient,
 ) -> Result(Nil, String) {
   // Validate response_type
   use _ <- result.try(case req.response_type {
@@ -215,19 +219,29 @@ fn validate_authorization_request(
   )
 
   // Validate PKCE if provided
-  case req.code_challenge, req.code_challenge_method {
+  use _ <- result.try(case req.code_challenge, req.code_challenge_method {
     Some(_), Some(method) ->
       validator.validate_code_challenge_method(method)
       |> result.map_error(fn(e) { error.error_description(e) })
     Some(_), None -> Error("code_challenge_method required")
     None, Some(_) -> Error("code_challenge required")
     None, None -> Ok(Nil)
+  })
+
+  // Validate scope format if provided
+  case req.scope {
+    Some(scope_str) ->
+      scope_validator.validate_scope_format(scope_str)
+      |> result.map(fn(_) { Nil })
+      |> result.map_error(fn(e) { error.error_description(e) })
+    None -> Ok(Nil)
   }
 }
 
 /// Process the authorization - store request and redirect to ATP
 fn process_authorization(
   req: AuthorizationRequest,
+  client: OAuthClient,
   conn: sqlight.Connection,
   did_cache: Subject(did_cache.Message),
   server_redirect_uri: String,
@@ -351,10 +365,14 @@ fn process_authorization(
     |> result.map_error(fn(_) { "Failed to get authorization server metadata" }),
   )
 
-  // Build authorization URL
+  // Build authorization URL - use request scope, or fall back to client's configured scope
   let scope = case req.scope {
     Some(s) -> s
-    None -> "atproto transition:generic"
+    None ->
+      case client.scope {
+        Some(s) -> s
+        None -> "atproto"
+      }
   }
 
   let auth_url =

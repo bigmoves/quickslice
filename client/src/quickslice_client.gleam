@@ -1309,7 +1309,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                 "clientName",
                 json.string(model.settings_page_model.new_client_name),
               ),
-              #("clientType", json.string("CONFIDENTIAL")),
+              #(
+                "clientType",
+                json.string(model.settings_page_model.new_client_type),
+              ),
               #("redirectUris", json.array(uris, json.string)),
               #(
                 "scope",

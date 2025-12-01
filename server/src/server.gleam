@@ -38,6 +38,8 @@ import handlers/upload as upload_handler
 import importer
 import jetstream_consumer
 import lib/oauth/did_cache
+import lib/oauth/scopes/validator as scope_validator
+import lib/oauth/types/error
 import logging
 import mist
 import pubsub
@@ -377,12 +379,31 @@ fn start_server(
   }
 
   // Get OAuth supported scopes from environment variable (space-separated)
+  // Validate format at startup - panic on invalid configuration
   let oauth_supported_scopes = case envoy.get("OAUTH_SUPPORTED_SCOPES") {
     Ok(scopes_str) -> {
-      scopes_str
-      |> string.split(" ")
-      |> list.map(string.trim)
-      |> list.filter(fn(s) { !string.is_empty(s) })
+      // Strip surrounding quotes if present (dotenv doesn't strip them)
+      let scopes_str = case string.starts_with(scopes_str, "\"") {
+        True ->
+          scopes_str
+          |> string.drop_start(1)
+          |> string.drop_end(1)
+        False -> scopes_str
+      }
+      case scope_validator.validate_scope_format(scopes_str) {
+        Ok(_) -> {
+          scopes_str
+          |> string.split(" ")
+          |> list.map(string.trim)
+          |> list.filter(fn(s) { !string.is_empty(s) })
+        }
+        Error(e) -> {
+          let msg =
+            "Invalid OAUTH_SUPPORTED_SCOPES: " <> error.error_description(e)
+          logging.log(logging.Error, msg)
+          panic as msg
+        }
+      }
     }
     Error(_) -> ["atproto", "transition:generic"]
   }
@@ -529,6 +550,7 @@ fn handle_request(
         redirect_uri,
         client_id,
         ctx.oauth_signing_key,
+        ctx.oauth_supported_scopes,
       )
     }
     ["admin", "oauth", "callback"] -> {
@@ -574,7 +596,10 @@ fn handle_request(
       upload_handler.handle_upload_request(req, ctx.db, ctx.did_cache)
     // New OAuth 2.0 endpoints
     [".well-known", "oauth-authorization-server"] ->
-      oauth_metadata_handler.handle(ctx.external_base_url)
+      oauth_metadata_handler.handle(
+        ctx.external_base_url,
+        ctx.oauth_supported_scopes,
+      )
     [".well-known", "jwks.json"] ->
       oauth_jwks_handler.handle(ctx.oauth_signing_key)
     ["oauth-client-metadata.json"] ->
@@ -585,7 +610,7 @@ fn handle_request(
           ctx.external_base_url <> "/admin/oauth/callback",
           ctx.external_base_url <> "/oauth/atp/callback",
         ],
-        "atproto transition:generic",
+        string.join(ctx.oauth_supported_scopes, " "),
         option.None,
         option.Some(ctx.external_base_url <> "/.well-known/jwks.json"),
       )

@@ -479,6 +479,44 @@ fn new_client_form(model: Model) -> Element(Msg) {
             event.on_input(UpdateNewClientName),
           ]),
         ]),
+        // Client Type dropdown
+        html.div([], [
+          html.label([attribute.class("block text-sm text-zinc-400 mb-1")], [
+            element.text("Client Type"),
+          ]),
+          html.select(
+            [
+              attribute.class(
+                "font-mono px-3 py-2 text-sm text-zinc-300 bg-zinc-800 border border-zinc-700 rounded w-full",
+              ),
+              event.on_change(UpdateNewClientType),
+            ],
+            [
+              html.option(
+                [
+                  attribute.value("PUBLIC"),
+                  attribute.selected(model.new_client_type == "PUBLIC"),
+                ],
+                "Public",
+              ),
+              html.option(
+                [
+                  attribute.value("CONFIDENTIAL"),
+                  attribute.selected(model.new_client_type == "CONFIDENTIAL"),
+                ],
+                "Confidential",
+              ),
+            ],
+          ),
+          html.p([attribute.class("text-xs text-zinc-500 mt-1")], [
+            element.text(case model.new_client_type {
+              "CONFIDENTIAL" ->
+                "For server-side apps that can securely store a client secret"
+              _ ->
+                "For browser apps (SPAs) and mobile apps that cannot securely store a secret"
+            }),
+          ]),
+        ]),
         // Redirect URIs
         html.div([], [
           html.label([attribute.class("block text-sm text-zinc-400 mb-1")], [
@@ -583,6 +621,19 @@ fn oauth_client_card(
             ]),
             html.code([attribute.class("text-xs text-zinc-400 font-mono")], [
               element.text(client.client_id),
+            ]),
+          ]),
+          // Client Type
+          html.div([attribute.class("mb-2")], [
+            html.span([attribute.class("text-xs text-zinc-500")], [
+              element.text("Type: "),
+            ]),
+            html.span([attribute.class("text-xs text-zinc-400")], [
+              element.text(case client.client_type {
+                "PUBLIC" -> "Public"
+                "CONFIDENTIAL" -> "Confidential"
+                _ -> client.client_type
+              }),
             ]),
           ]),
           // Client Secret (if confidential)

@@ -2,7 +2,11 @@ import gleeunit/should
 import handlers/oauth/metadata
 
 pub fn generate_metadata_test() {
-  let meta = metadata.generate_metadata("https://example.com")
+  let meta =
+    metadata.generate_metadata("https://example.com", [
+      "atproto",
+      "transition:generic",
+    ])
 
   meta.issuer |> should.equal("https://example.com")
   meta.authorization_endpoint
@@ -16,7 +20,11 @@ pub fn generate_metadata_test() {
 }
 
 pub fn encode_metadata_test() {
-  let meta = metadata.generate_metadata("https://example.com")
+  let meta =
+    metadata.generate_metadata("https://example.com", [
+      "atproto",
+      "transition:generic",
+    ])
   let json = metadata.encode_metadata(meta)
 
   // Verify it encodes without error (JSON encoding doesn't fail)

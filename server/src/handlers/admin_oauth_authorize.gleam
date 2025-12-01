@@ -29,6 +29,7 @@ pub fn handle(
   redirect_uri: String,
   client_id: String,
   signing_key: Option(String),
+  oauth_supported_scopes: List(String),
 ) -> wisp.Response {
   case req.method {
     http.Post -> {
@@ -50,6 +51,7 @@ pub fn handle(
             redirect_uri,
             client_id,
             signing_key,
+            oauth_supported_scopes,
           )
       }
     }
@@ -64,6 +66,7 @@ fn process_authorize(
   redirect_uri: String,
   client_id: String,
   signing_key: Option(String),
+  oauth_supported_scopes: List(String),
 ) -> wisp.Response {
   // Resolve handle to DID if needed
   let did_result = case string.starts_with(login_hint, "did:") {
@@ -163,7 +166,10 @@ fn process_authorize(
                             <> "&state="
                             <> uri.percent_encode(atp_oauth_state)
                             <> "&scope="
-                            <> uri.percent_encode("atproto transition:generic")
+                            <> uri.percent_encode(string.join(
+                              oauth_supported_scopes,
+                              " ",
+                            ))
                             <> "&login_hint="
                             <> uri.percent_encode(did)
 

@@ -21,14 +21,17 @@ pub type ServerMetadata {
 }
 
 /// Generate server metadata for the given base URL
-pub fn generate_metadata(base_url: String) -> ServerMetadata {
+pub fn generate_metadata(
+  base_url: String,
+  scopes_supported: List(String),
+) -> ServerMetadata {
   ServerMetadata(
     issuer: base_url,
     authorization_endpoint: base_url <> "/oauth/authorize",
     token_endpoint: base_url <> "/oauth/token",
     jwks_uri: base_url <> "/.well-known/jwks.json",
     registration_endpoint: base_url <> "/oauth/register",
-    scopes_supported: ["atproto", "transition:generic"],
+    scopes_supported: scopes_supported,
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     token_endpoint_auth_methods_supported: [
@@ -79,8 +82,8 @@ pub fn encode_metadata(meta: ServerMetadata) -> json.Json {
 }
 
 /// Handle GET /.well-known/oauth-authorization-server
-pub fn handle(base_url: String) -> wisp.Response {
-  let meta = generate_metadata(base_url)
+pub fn handle(base_url: String, scopes_supported: List(String)) -> wisp.Response {
+  let meta = generate_metadata(base_url, scopes_supported)
   let json_response = encode_metadata(meta)
 
   wisp.response(200)

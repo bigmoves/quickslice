@@ -13,6 +13,8 @@ import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
+import lib/oauth/scopes/validator as scope_validator
+import lib/oauth/types/error
 import lib/oauth/validator
 import sqlight
 import wisp
@@ -88,6 +90,17 @@ fn parse_and_register(
   use _ <- result.try(case req.redirect_uris {
     [] -> Error(#(400, "invalid_request", "redirect_uris cannot be empty"))
     uris -> validate_redirect_uris(uris)
+  })
+
+  // Validate scope format if provided
+  use _ <- result.try(case req.scope {
+    Some(scope_str) ->
+      scope_validator.validate_scope_format(scope_str)
+      |> result.map(fn(_) { Nil })
+      |> result.map_error(fn(e) {
+        #(400, "invalid_scope", error.error_description(e))
+      })
+    None -> Ok(Nil)
   })
 
   // Parse grant_types or use defaults
