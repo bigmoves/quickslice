@@ -23,7 +23,6 @@ import zip_helper
 pub type Context {
   Context(
     db: sqlight.Connection,
-    admin_dids: List(String),
     config: process.Subject(config.Message),
     jetstream_consumer: option.Option(
       process.Subject(jetstream_consumer.ManagerMessage),
@@ -38,7 +37,7 @@ pub fn handle(req: wisp.Request, ctx: Context) -> wisp.Response {
     session.get_current_user(req, ctx.db, ctx.did_cache)
   {
     Ok(#(did, handle, _access_token)) -> {
-      let admin = is_admin(did, ctx.admin_dids)
+      let admin = config_repo.is_admin(ctx.db, did)
       #(option.Some(#(did, handle)), admin)
     }
     Error(_) -> #(option.None, False)
@@ -153,10 +152,6 @@ fn handle_admin_request(
       |> wisp.set_body(wisp.Text("<h1>Method Not Allowed</h1>"))
     }
   }
-}
-
-fn is_admin(did: String, admin_dids: List(String)) -> Bool {
-  list.contains(admin_dids, did)
 }
 
 fn handle_lexicons_upload(

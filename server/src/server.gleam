@@ -54,7 +54,6 @@ pub type Context {
     db: sqlight.Connection,
     external_base_url: String,
     plc_url: String,
-    admin_dids: List(String),
     backfill_state: process.Subject(backfill_state.Message),
     config: process.Subject(config.Message),
     jetstream_consumer: option.Option(
@@ -344,17 +343,6 @@ fn start_server(
     Error(_) -> "http://" <> host <> ":" <> int.to_string(port)
   }
 
-  // Parse ADMIN_DIDS from environment variable (comma-separated list)
-  let admin_dids = case envoy.get("ADMIN_DIDS") {
-    Ok(dids_str) -> {
-      dids_str
-      |> string.split(",")
-      |> list.map(string.trim)
-      |> list.filter(fn(did) { !string.is_empty(did) })
-    }
-    Error(_) -> []
-  }
-
   // Get PLC directory URL from environment variable or use default
   let plc_url = case envoy.get("PLC_DIRECTORY_URL") {
     Ok(url) -> url
@@ -440,7 +428,6 @@ fn start_server(
       db: db,
       external_base_url: external_base_url,
       plc_url: plc_url,
-      admin_dids: admin_dids,
       backfill_state: backfill_state_subject,
       config: config_subject,
       jetstream_consumer: jetstream_subject,
@@ -577,7 +564,6 @@ fn handle_request(
       client_graphql_handler.handle_client_graphql_request(
         req,
         ctx.db,
-        ctx.admin_dids,
         ctx.jetstream_consumer,
         ctx.did_cache,
         ctx.oauth_supported_scopes,

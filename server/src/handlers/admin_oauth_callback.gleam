@@ -1,6 +1,7 @@
 /// Admin OAuth callback handler
 /// GET /admin/oauth/callback - Handles ATP OAuth callback for admin login
 import database/repositories/admin_session
+import database/repositories/config as config_repo
 import database/repositories/oauth_access_tokens
 import database/repositories/oauth_atp_requests
 import database/repositories/oauth_atp_sessions
@@ -122,6 +123,17 @@ fn process_callback(
                   let did = case updated_session.did {
                     Some(d) -> d
                     None -> ""
+                  }
+
+                  // If no admins exist, register this user as the first admin
+                  case config_repo.has_admins(conn) {
+                    False -> {
+                      let _ = config_repo.add_admin_did(conn, did)
+                      wisp.log_info(
+                        "[onboarding] First admin registered: " <> did,
+                      )
+                    }
+                    True -> Nil
                   }
 
                   // Generate OAuth access token for GraphiQL/API use

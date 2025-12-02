@@ -7,15 +7,17 @@
 ///   settings {
 ///     id
 ///     domainAuthority
+///     adminDids
 ///   }
 /// }
 /// ```
 ///
 /// ```graphql
-/// mutation UpdateDomainAuthority($domainAuthority: String!) {
-///   updateDomainAuthority(domainAuthority: $domainAuthority) {
+/// mutation UpdateSettings($domainAuthority: String, $adminDids: [String!]) {
+///   updateSettings(domainAuthority: $domainAuthority, adminDids: $adminDids) {
 ///     id
 ///     domainAuthority
+///     adminDids
 ///   }
 /// }
 /// ```
@@ -117,6 +119,12 @@ pub type Msg {
   ConfirmDeleteClient(String)
   CancelDeleteClient
   SubmitDeleteClient
+  // Admin management messages
+  UpdateNewAdminDid(String)
+  SubmitAddAdmin
+  ConfirmRemoveAdmin(String)
+  CancelRemoveAdmin
+  SubmitRemoveAdmin
 }
 
 pub type Model {
@@ -138,6 +146,10 @@ pub type Model {
     visible_secrets: Set(String),
     delete_confirm_client_id: Option(String),
     oauth_alert: Option(#(String, String)),
+    // Admin management state
+    new_admin_did: String,
+    remove_confirm_did: Option(String),
+    admin_alert: Option(#(String, String)),
   )
 }
 
@@ -155,6 +167,14 @@ pub fn set_oauth_alert(model: Model, kind: String, message: String) -> Model {
 
 pub fn clear_oauth_alert(model: Model) -> Model {
   Model(..model, oauth_alert: None)
+}
+
+pub fn set_admin_alert(model: Model, kind: String, message: String) -> Model {
+  Model(..model, admin_alert: Some(#(kind, message)))
+}
+
+pub fn clear_admin_alert(model: Model) -> Model {
+  Model(..model, admin_alert: None)
 }
 
 pub fn init() -> Model {
@@ -175,6 +195,9 @@ pub fn init() -> Model {
     visible_secrets: set.new(),
     delete_confirm_client_id: None,
     oauth_alert: None,
+    new_admin_did: "",
+    remove_confirm_did: None,
+    admin_alert: None,
   )
 }
 
@@ -258,6 +281,7 @@ pub fn view(cache: Cache, model: Model, is_admin: Bool) -> Element(Msg) {
               domain_authority_section(data.settings, model, is_saving),
               lexicons_section(model),
               oauth_clients_section(cache, model),
+              admin_management_section(data.settings, model),
               danger_zone_section(model),
             ])
         },
@@ -835,4 +859,109 @@ fn delete_confirmation_dialog(client_id: String) -> Element(Msg) {
       ]),
     ],
   )
+}
+
+/// Admin management section showing current admins and add admin form
+fn admin_management_section(
+  settings: get_settings.Settings,
+  model: Model,
+) -> Element(Msg) {
+  html.div([attribute.class("bg-zinc-800/50 rounded p-6")], [
+    html.h2([attribute.class("text-xl font-semibold text-zinc-300 mb-4")], [
+      element.text("Admin Management"),
+    ]),
+    // Admin alert
+    case model.admin_alert {
+      Some(#(kind, message)) -> {
+        let alert_kind = case kind {
+          "success" -> alert.Success
+          "error" -> alert.Error
+          _ -> alert.Info
+        }
+        alert.alert(alert_kind, message)
+      }
+      None -> element.none()
+    },
+    // Current admins list
+    html.div([attribute.class("mb-6")], [
+      html.h3([attribute.class("text-sm font-medium text-zinc-400 mb-2")], [
+        element.text("Current Admins"),
+      ]),
+      html.ul([attribute.class("space-y-2")], {
+        list.map(settings.admin_dids, fn(did) {
+          html.li(
+            [
+              attribute.class(
+                "flex items-center justify-between bg-zinc-900/50 px-3 py-2 rounded border border-zinc-800",
+              ),
+            ],
+            [
+              html.span(
+                [attribute.class("font-mono text-sm text-zinc-300 truncate")],
+                [element.text(did)],
+              ),
+              case model.remove_confirm_did {
+                Some(confirm_did) if confirm_did == did ->
+                  html.div([attribute.class("flex gap-2")], [
+                    html.button(
+                      [
+                        attribute.class(
+                          "text-xs px-2 py-1 text-zinc-400 hover:text-zinc-300 cursor-pointer",
+                        ),
+                        event.on_click(CancelRemoveAdmin),
+                      ],
+                      [element.text("Cancel")],
+                    ),
+                    html.button(
+                      [
+                        attribute.class(
+                          "text-xs px-2 py-1 text-red-400 hover:bg-red-900/30 rounded cursor-pointer",
+                        ),
+                        event.on_click(SubmitRemoveAdmin),
+                      ],
+                      [element.text("Confirm Remove")],
+                    ),
+                  ])
+                _ ->
+                  html.button(
+                    [
+                      attribute.class(
+                        "text-xs px-2 py-1 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer",
+                      ),
+                      event.on_click(ConfirmRemoveAdmin(did)),
+                    ],
+                    [element.text("Remove")],
+                  )
+              },
+            ],
+          )
+        })
+      }),
+    ]),
+    // Add admin form
+    html.div([attribute.class("border-t border-zinc-800 pt-4")], [
+      html.h3([attribute.class("text-sm font-medium text-zinc-400 mb-2")], [
+        element.text("Add Admin"),
+      ]),
+      html.div([attribute.class("flex gap-2")], [
+        html.input([
+          attribute.type_("text"),
+          attribute.class(
+            "flex-1 font-mono px-4 py-2 text-sm text-zinc-300 bg-zinc-900 border border-zinc-800 rounded focus:outline-none focus:border-zinc-700",
+          ),
+          attribute.placeholder("did:plc:... or did:web:..."),
+          attribute.value(model.new_admin_did),
+          event.on_input(UpdateNewAdminDid),
+        ]),
+        button.button(
+          disabled: model.new_admin_did == "",
+          on_click: SubmitAddAdmin,
+          text: "Add Admin",
+        ),
+      ]),
+      html.p([attribute.class("text-xs text-zinc-500 mt-2")], [
+        element.text("Enter the DID of the user you want to make an admin."),
+      ]),
+    ]),
+  ])
 }

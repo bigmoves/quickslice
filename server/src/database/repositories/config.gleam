@@ -1,5 +1,7 @@
 import gleam/dynamic/decode
+import gleam/list
 import gleam/result
+import gleam/string
 import sqlight
 
 // ===== Config Functions =====
@@ -80,4 +82,90 @@ pub fn delete_domain_authority(
   conn: sqlight.Connection,
 ) -> Result(Nil, sqlight.Error) {
   delete(conn, "domain_authority")
+}
+
+// ===== Admin DID Functions =====
+
+/// Get admin DIDs from config
+pub fn get_admin_dids(conn: sqlight.Connection) -> List(String) {
+  case get(conn, "admin_dids") {
+    Ok(value) -> {
+      value
+      |> string.split(",")
+      |> list.map(string.trim)
+      |> list.filter(fn(did) { !string.is_empty(did) })
+    }
+    Error(_) -> []
+  }
+}
+
+/// Add an admin DID to the list
+pub fn add_admin_did(
+  conn: sqlight.Connection,
+  did: String,
+) -> Result(Nil, sqlight.Error) {
+  let current = get_admin_dids(conn)
+  case list.contains(current, did) {
+    True -> Ok(Nil)
+    // Already exists, idempotent
+    False -> {
+      let new_list = list.append(current, [did])
+      let value = string.join(new_list, ",")
+      set(conn, "admin_dids", value)
+    }
+  }
+}
+
+pub type RemoveAdminError {
+  LastAdminError
+  NotFoundError
+  DatabaseError(sqlight.Error)
+}
+
+/// Remove an admin DID from the list
+/// Returns error if trying to remove the last admin
+pub fn remove_admin_did(
+  conn: sqlight.Connection,
+  did: String,
+) -> Result(List(String), RemoveAdminError) {
+  let current = get_admin_dids(conn)
+  case list.contains(current, did) {
+    False -> Error(NotFoundError)
+    True -> {
+      let new_list = list.filter(current, fn(d) { d != did })
+      case new_list {
+        [] -> Error(LastAdminError)
+        _ -> {
+          let value = string.join(new_list, ",")
+          case set(conn, "admin_dids", value) {
+            Ok(_) -> Ok(new_list)
+            Error(err) -> Error(DatabaseError(err))
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Set the full admin DIDs list (replaces existing)
+pub fn set_admin_dids(
+  conn: sqlight.Connection,
+  dids: List(String),
+) -> Result(Nil, sqlight.Error) {
+  let value = string.join(dids, ",")
+  set(conn, "admin_dids", value)
+}
+
+/// Check if a DID is an admin
+pub fn is_admin(conn: sqlight.Connection, did: String) -> Bool {
+  let admins = get_admin_dids(conn)
+  list.contains(admins, did)
+}
+
+/// Check if any admins are configured
+pub fn has_admins(conn: sqlight.Connection) -> Bool {
+  case get_admin_dids(conn) {
+    [] -> False
+    _ -> True
+  }
 }

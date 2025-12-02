@@ -4,19 +4,25 @@ import gleam/json
 import squall
 
 pub type Settings {
-  Settings(id: String, domain_authority: String)
+  Settings(id: String, domain_authority: String, admin_dids: List(String))
 }
 
 pub fn settings_decoder() -> decode.Decoder(Settings) {
   use id <- decode.field("id", decode.string)
   use domain_authority <- decode.field("domainAuthority", decode.string)
-  decode.success(Settings(id: id, domain_authority: domain_authority))
+  use admin_dids <- decode.field("adminDids", decode.list(decode.string))
+  decode.success(Settings(
+    id: id,
+    domain_authority: domain_authority,
+    admin_dids: admin_dids,
+  ))
 }
 
 pub fn settings_to_json(input: Settings) -> json.Json {
   json.object([
     #("id", json.string(input.id)),
     #("domainAuthority", json.string(input.domain_authority)),
+    #("adminDids", json.array(from: input.admin_dids, of: json.string)),
   ])
 }
 
@@ -36,7 +42,7 @@ pub fn get_settings_response_to_json(input: GetSettingsResponse) -> json.Json {
 pub fn get_settings(client: squall.Client) -> Result(Request(String), String) {
   squall.prepare_request(
     client,
-    "query GetSettings {\n  settings {\n    id\n    domainAuthority\n  }\n}",
+    "query GetSettings {\n  settings {\n    id\n    domainAuthority\n    adminDids\n  }\n}",
     json.object([]),
   )
 }

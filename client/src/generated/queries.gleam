@@ -64,15 +64,15 @@ pub fn init_registry() -> unstable_registry.Registry {
     unstable_registry.register(
       reg,
       "GetSettings",
-      "query GetSettings {\n  settings {\n    __typename\n    id\n    domainAuthority\n  }\n}",
+      "query GetSettings {\n  settings {\n    __typename\n    id\n    domainAuthority\n    adminDids\n  }\n}",
       "generated/queries/get_settings",
     )
   let reg =
     unstable_registry.register(
       reg,
-      "UpdateDomainAuthority",
-      "mutation UpdateDomainAuthority($domainAuthority: String!) {\n  updateDomainAuthority(domainAuthority: $domainAuthority) {\n    __typename\n    id\n    domainAuthority\n  }\n}",
-      "generated/queries/update_domain_authority",
+      "UpdateSettings",
+      "mutation UpdateSettings($domainAuthority: String, $adminDids: [String!]) {\n  updateSettings(domainAuthority: $domainAuthority, adminDids: $adminDids) {\n    __typename\n    id\n    domainAuthority\n    adminDids\n  }\n}",
+      "generated/queries/update_settings",
     )
   let reg =
     unstable_registry.register(

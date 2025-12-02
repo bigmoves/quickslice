@@ -24,7 +24,6 @@ import wisp
 pub fn handle_client_graphql_request(
   req: wisp.Request,
   db: sqlight.Connection,
-  admin_dids: List(String),
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
@@ -35,7 +34,6 @@ pub fn handle_client_graphql_request(
       handle_post(
         req,
         db,
-        admin_dids,
         jetstream_subject,
         did_cache,
         oauth_supported_scopes,
@@ -45,7 +43,6 @@ pub fn handle_client_graphql_request(
       handle_get(
         req,
         db,
-        admin_dids,
         jetstream_subject,
         did_cache,
         oauth_supported_scopes,
@@ -58,7 +55,6 @@ pub fn handle_client_graphql_request(
 fn handle_post(
   req: wisp.Request,
   db: sqlight.Connection,
-  admin_dids: List(String),
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
@@ -73,7 +69,6 @@ fn handle_post(
               execute_query(
                 req,
                 db,
-                admin_dids,
                 jetstream_subject,
                 did_cache,
                 oauth_supported_scopes,
@@ -94,7 +89,6 @@ fn handle_post(
 fn handle_get(
   req: wisp.Request,
   db: sqlight.Connection,
-  admin_dids: List(String),
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
@@ -106,7 +100,6 @@ fn handle_get(
       execute_query(
         req,
         db,
-        admin_dids,
         jetstream_subject,
         did_cache,
         oauth_supported_scopes,
@@ -121,7 +114,6 @@ fn handle_get(
 fn execute_query(
   req: wisp.Request,
   db: sqlight.Connection,
-  admin_dids: List(String),
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
@@ -134,7 +126,6 @@ fn execute_query(
     client_schema.build_schema(
       db,
       req,
-      admin_dids,
       jetstream_subject,
       did_cache,
       oauth_supported_scopes,

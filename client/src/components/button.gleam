@@ -23,6 +23,18 @@ pub fn button(
   )
 }
 
+/// Render a submit button for forms with standard styling
+pub fn submit(disabled disabled: Bool, text text: String) -> Element(msg) {
+  html.button(
+    [
+      attribute.type_("submit"),
+      attribute.class(button_classes <> " w-full"),
+      attribute.disabled(disabled),
+    ],
+    [html.text(text)],
+  )
+}
+
 /// Render a link styled as a button (for SPA routes)
 pub fn link(href href: String, text text: String) -> Element(msg) {
   html.a([attribute.href(href), attribute.class(button_classes)], [

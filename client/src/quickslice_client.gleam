@@ -59,8 +59,8 @@ import generated/queries/get_statistics
 import generated/queries/is_backfilling
 import generated/queries/reset_all
 import generated/queries/trigger_backfill
-import generated/queries/update_domain_authority
 import generated/queries/update_o_auth_client
+import generated/queries/update_settings
 import generated/queries/upload_lexicons
 import gleam/dynamic/decode
 import gleam/io
@@ -80,6 +80,7 @@ import navigation
 import pages/backfill
 import pages/home
 import pages/lexicons
+import pages/onboarding
 import pages/settings
 import squall/unstable_registry as registry
 import squall_cache
@@ -127,6 +128,7 @@ pub type Route {
   Lexicons
   Upload
   Backfill
+  Onboarding
 }
 
 pub type AuthState {
@@ -359,11 +361,23 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         _ -> model.settings_page_model.domain_authority_input
       }
 
+      // Try to extract a friendly GraphQL error message from the response body
+      let friendly_error = case
+        string.split_once(error_message, "Response body: ")
+      {
+        Ok(#(_, response_body)) ->
+          case extract_graphql_error(response_body) {
+            option.Some(graphql_error) -> graphql_error
+            option.None -> error_message
+          }
+        Error(_) -> error_message
+      }
+
       let new_settings_model =
         settings.Model(
           ..model.settings_page_model,
           domain_authority_input: saved_domain_authority,
-          alert: option.Some(#("error", "Error: " <> error_message)),
+          alert: option.Some(#("error", friendly_error)),
         )
 
       #(
@@ -534,6 +548,23 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                 _ -> "Operation completed"
               }
               settings.set_oauth_alert(
+                model.settings_page_model,
+                "success",
+                message,
+              )
+            }
+          }
+        "AddAdmin" | "RemoveAdmin" ->
+          case extract_graphql_error(response_body) {
+            option.Some(err) ->
+              settings.set_admin_alert(model.settings_page_model, "error", err)
+            option.None -> {
+              let message = case query_name {
+                "AddAdmin" -> "Admin added successfully"
+                "RemoveAdmin" -> "Admin removed successfully"
+                _ -> "Operation completed"
+              }
+              settings.set_admin_alert(
                 model.settings_page_model,
                 "success",
                 message,
@@ -729,6 +760,20 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               modem.push("/", option.None, option.None),
             ]
             _, _ -> []
+          }
+        }
+        "GetSettings" -> {
+          // If no admins exist and not on onboarding page, redirect to onboarding
+          case get_settings.parse_get_settings_response(response_body) {
+            Ok(data) -> {
+              case list.is_empty(data.settings.admin_dids), model.route {
+                True, Onboarding -> []
+                True, _ -> [modem.push("/onboarding", option.None, option.None)]
+                False, Onboarding -> [modem.push("/", option.None, option.None)]
+                False, _ -> []
+              }
+            }
+            Error(_) -> []
           }
         }
         _ -> []
@@ -995,6 +1040,18 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             }
           }
         }
+        Onboarding -> {
+          // Onboarding route - just stay on page
+          #(
+            Model(
+              ..model,
+              route: Onboarding,
+              settings_page_model: cleared_settings_model,
+              mobile_menu_open: False,
+            ),
+            effect.none(),
+          )
+        }
         _ -> #(
           Model(
             ..model,
@@ -1111,51 +1168,81 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           let cleared_settings_model =
             settings.Model(..model.settings_page_model, alert: None)
 
-          // Execute optimistic mutation
-          let variables =
-            json.object([
-              #(
-                "domainAuthority",
-                json.string(model.settings_page_model.domain_authority_input),
-              ),
-            ])
-
-          let optimistic_entity =
-            json.object([
-              #("id", json.string("Settings:singleton")),
-              #(
-                "domainAuthority",
-                json.string(model.settings_page_model.domain_authority_input),
-              ),
-            ])
-
-          let #(updated_cache, _mutation_id, mutation_effect) =
-            squall_cache.execute_optimistic_mutation(
+          // Get current settings to preserve admin_dids
+          let settings_vars = json.object([])
+          let #(_cache, settings_result) =
+            squall_cache.lookup(
               model.cache,
-              model.registry,
-              "UpdateDomainAuthority",
-              variables,
-              "Settings:singleton",
-              fn(_current) { optimistic_entity },
-              update_domain_authority.parse_update_domain_authority_response,
-              fn(mutation_id, result, response_body) {
-                case result {
-                  Ok(_) ->
-                    HandleOptimisticMutationSuccess(mutation_id, response_body)
-                  Error(err) ->
-                    HandleOptimisticMutationFailure(mutation_id, err)
-                }
-              },
+              "GetSettings",
+              settings_vars,
+              get_settings.parse_get_settings_response,
             )
 
-          #(
-            Model(
-              ..model,
-              cache: updated_cache,
-              settings_page_model: cleared_settings_model,
-            ),
-            mutation_effect,
-          )
+          case settings_result {
+            squall_cache.Data(data) -> {
+              let new_domain_authority =
+                model.settings_page_model.domain_authority_input
+              let current_admin_dids = data.settings.admin_dids
+
+              // Execute optimistic mutation
+              let variables =
+                json.object([
+                  #("domainAuthority", json.string(new_domain_authority)),
+                  #(
+                    "adminDids",
+                    json.array(from: current_admin_dids, of: json.string),
+                  ),
+                ])
+
+              let optimistic_entity =
+                json.object([
+                  #("id", json.string("Settings:singleton")),
+                  #("domainAuthority", json.string(new_domain_authority)),
+                  #(
+                    "adminDids",
+                    json.array(from: current_admin_dids, of: json.string),
+                  ),
+                ])
+
+              let #(updated_cache, _mutation_id, mutation_effect) =
+                squall_cache.execute_optimistic_mutation(
+                  model.cache,
+                  model.registry,
+                  "UpdateSettings",
+                  variables,
+                  "Settings:singleton",
+                  fn(_current) { optimistic_entity },
+                  update_settings.parse_update_settings_response,
+                  fn(mutation_id, result, response_body) {
+                    case result {
+                      Ok(_) ->
+                        HandleOptimisticMutationSuccess(
+                          mutation_id,
+                          response_body,
+                        )
+                      Error(err) ->
+                        HandleOptimisticMutationFailure(mutation_id, err)
+                    }
+                  },
+                )
+
+              #(
+                Model(
+                  ..model,
+                  cache: updated_cache,
+                  settings_page_model: cleared_settings_model,
+                ),
+                mutation_effect,
+              )
+            }
+            _ -> {
+              // Settings not loaded yet, can't update
+              #(
+                Model(..model, settings_page_model: cleared_settings_model),
+                effect.none(),
+              )
+            }
+          }
         }
 
         settings.SelectLexiconFile -> {
@@ -1642,6 +1729,225 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             None -> #(model, effect.none())
           }
         }
+
+        // Admin management messages
+        settings.UpdateNewAdminDid(value) -> {
+          let new_settings_model =
+            settings.Model(..model.settings_page_model, new_admin_did: value)
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.SubmitAddAdmin -> {
+          // Get current settings to build updated admin_dids list
+          let settings_vars = json.object([])
+          let #(_cache, settings_result) =
+            squall_cache.lookup(
+              model.cache,
+              "GetSettings",
+              settings_vars,
+              get_settings.parse_get_settings_response,
+            )
+
+          case settings_result {
+            squall_cache.Data(data) -> {
+              let new_did = model.settings_page_model.new_admin_did
+              let current_admin_dids = data.settings.admin_dids
+              let current_domain_authority = data.settings.domain_authority
+
+              // Add new DID to list (if not already present)
+              let updated_admin_dids = case
+                list.contains(current_admin_dids, new_did)
+              {
+                True -> current_admin_dids
+                False -> list.append(current_admin_dids, [new_did])
+              }
+
+              // Execute optimistic mutation
+              let variables =
+                json.object([
+                  #("domainAuthority", json.string(current_domain_authority)),
+                  #(
+                    "adminDids",
+                    json.array(from: updated_admin_dids, of: json.string),
+                  ),
+                ])
+
+              let optimistic_entity =
+                json.object([
+                  #("id", json.string("Settings:singleton")),
+                  #("domainAuthority", json.string(current_domain_authority)),
+                  #(
+                    "adminDids",
+                    json.array(from: updated_admin_dids, of: json.string),
+                  ),
+                ])
+
+              let #(updated_cache, _mutation_id, mutation_effect) =
+                squall_cache.execute_optimistic_mutation(
+                  model.cache,
+                  model.registry,
+                  "UpdateSettings",
+                  variables,
+                  "Settings:singleton",
+                  fn(_current) { optimistic_entity },
+                  update_settings.parse_update_settings_response,
+                  fn(mutation_id, result, response_body) {
+                    case result {
+                      Ok(_) ->
+                        HandleOptimisticMutationSuccess(
+                          mutation_id,
+                          response_body,
+                        )
+                      Error(err) ->
+                        HandleOptimisticMutationFailure(mutation_id, err)
+                    }
+                  },
+                )
+
+              // Clear input
+              let new_settings_model =
+                settings.Model(..model.settings_page_model, new_admin_did: "")
+
+              #(
+                Model(
+                  ..model,
+                  cache: updated_cache,
+                  settings_page_model: new_settings_model,
+                ),
+                mutation_effect,
+              )
+            }
+            _ -> {
+              // Settings not loaded yet, can't update
+              #(model, effect.none())
+            }
+          }
+        }
+
+        settings.ConfirmRemoveAdmin(did) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              remove_confirm_did: option.Some(did),
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.CancelRemoveAdmin -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              remove_confirm_did: option.None,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.SubmitRemoveAdmin -> {
+          // Get current settings and remove the confirmed DID
+          case model.settings_page_model.remove_confirm_did {
+            option.Some(did_to_remove) -> {
+              let settings_vars = json.object([])
+              let #(_cache, settings_result) =
+                squall_cache.lookup(
+                  model.cache,
+                  "GetSettings",
+                  settings_vars,
+                  get_settings.parse_get_settings_response,
+                )
+
+              case settings_result {
+                squall_cache.Data(data) -> {
+                  let current_admin_dids = data.settings.admin_dids
+                  let current_domain_authority = data.settings.domain_authority
+
+                  // Remove DID from list
+                  let updated_admin_dids =
+                    list.filter(current_admin_dids, fn(did) {
+                      did != did_to_remove
+                    })
+
+                  // Execute optimistic mutation
+                  let variables =
+                    json.object([
+                      #(
+                        "domainAuthority",
+                        json.string(current_domain_authority),
+                      ),
+                      #(
+                        "adminDids",
+                        json.array(from: updated_admin_dids, of: json.string),
+                      ),
+                    ])
+
+                  let optimistic_entity =
+                    json.object([
+                      #("id", json.string("Settings:singleton")),
+                      #(
+                        "domainAuthority",
+                        json.string(current_domain_authority),
+                      ),
+                      #(
+                        "adminDids",
+                        json.array(from: updated_admin_dids, of: json.string),
+                      ),
+                    ])
+
+                  let #(updated_cache, _mutation_id, mutation_effect) =
+                    squall_cache.execute_optimistic_mutation(
+                      model.cache,
+                      model.registry,
+                      "UpdateSettings",
+                      variables,
+                      "Settings:singleton",
+                      fn(_current) { optimistic_entity },
+                      update_settings.parse_update_settings_response,
+                      fn(mutation_id, result, response_body) {
+                        case result {
+                          Ok(_) ->
+                            HandleOptimisticMutationSuccess(
+                              mutation_id,
+                              response_body,
+                            )
+                          Error(err) ->
+                            HandleOptimisticMutationFailure(mutation_id, err)
+                        }
+                      },
+                    )
+
+                  // Clear confirm state
+                  let new_settings_model =
+                    settings.Model(
+                      ..model.settings_page_model,
+                      remove_confirm_did: option.None,
+                    )
+
+                  #(
+                    Model(
+                      ..model,
+                      cache: updated_cache,
+                      settings_page_model: new_settings_model,
+                    ),
+                    mutation_effect,
+                  )
+                }
+                _ -> {
+                  // Settings not loaded yet, can't update
+                  #(model, effect.none())
+                }
+              }
+            }
+            option.None -> #(model, effect.none())
+          }
+        }
       }
     }
 
@@ -1893,24 +2199,30 @@ fn view(model: Model) -> Element(Msg) {
       html.div(
         [attribute.class("max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-12")],
         [
-          layout.header(
-            auth_info,
-            backfill_polling.should_poll(model.backfill_status),
-            model.mobile_menu_open,
-            ToggleMobileMenu,
-            model.login_autocomplete,
-            LoginAutocompleteInput,
-            LoginAutocompleteSelect,
-            LoginAutocompleteKeydown,
-            fn() { LoginAutocompleteBlur },
-            fn() { LoginAutocompleteFocus },
-          ),
+          // Hide header on onboarding page
+          case model.route {
+            Onboarding -> element.none()
+            _ ->
+              layout.header(
+                auth_info,
+                backfill_polling.should_poll(model.backfill_status),
+                model.mobile_menu_open,
+                ToggleMobileMenu,
+                model.login_autocomplete,
+                LoginAutocompleteInput,
+                LoginAutocompleteSelect,
+                LoginAutocompleteKeydown,
+                fn() { LoginAutocompleteBlur },
+                fn() { LoginAutocompleteFocus },
+              )
+          },
           case model.route {
             Home -> view_home(model)
             Settings -> view_settings(model)
             Lexicons -> view_lexicons(model)
             Upload -> view_upload(model)
             Backfill -> view_backfill(model)
+            Onboarding -> view_onboarding(model)
           },
         ],
       ),
@@ -1967,6 +2279,17 @@ fn view_backfill(model: Model) -> Element(Msg) {
   element.map(backfill.view(model.backfill_page_model), BackfillPageMsg)
 }
 
+fn view_onboarding(model: Model) -> Element(Msg) {
+  onboarding.view(
+    model.login_autocomplete,
+    LoginAutocompleteInput,
+    LoginAutocompleteSelect,
+    LoginAutocompleteKeydown,
+    fn() { LoginAutocompleteBlur },
+    fn() { LoginAutocompleteFocus },
+  )
+}
+
 // ROUTING
 
 fn on_url_change(uri: uri.Uri) -> Msg {
@@ -1980,6 +2303,7 @@ fn parse_route(uri: uri.Uri) -> Route {
     "/lexicons" -> Lexicons
     "/upload" -> Upload
     "/backfill" -> Backfill
+    "/onboarding" -> Onboarding
     _ -> Home
   }
 }

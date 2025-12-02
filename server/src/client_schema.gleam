@@ -29,11 +29,29 @@ import swell/schema
 import swell/value
 import wisp
 
+/// Validate that a string is a valid DID format
+/// Valid format: did:<method>:<identifier>
+fn is_valid_did(s: String) -> Bool {
+  case string.starts_with(s, "did:") {
+    False -> False
+    True -> {
+      // Split into parts: should be at least 3 parts (did, method, identifier)
+      let parts = string.split(s, ":")
+      case parts {
+        ["did", method, identifier, ..] ->
+          // Method must be non-empty and identifier must be non-empty
+          method != "" && identifier != ""
+        _ -> False
+      }
+    }
+  }
+}
+
 // ===== Helper Functions =====
 
 /// Check if a DID is in the admin list
-fn is_admin(did: String, admin_dids: List(String)) -> Bool {
-  list.contains(admin_dids, did)
+fn is_admin(conn: sqlight.Connection, did: String) -> Bool {
+  config_repo.is_admin(conn, did)
 }
 
 /// Validate that all requested scopes are in the supported list
@@ -366,6 +384,22 @@ pub fn settings_type() -> schema.Type {
         }
       },
     ),
+    schema.field(
+      "adminDids",
+      schema.non_null(schema.list_type(schema.non_null(schema.string_type()))),
+      "List of admin DIDs",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "adminDids") {
+              Ok(dids) -> Ok(dids)
+              Error(_) -> Ok(value.List([]))
+            }
+          }
+          _ -> Ok(value.List([]))
+        }
+      },
+    ),
   ])
 }
 
@@ -649,10 +683,14 @@ fn activity_entry_to_value(entry: ActivityEntry) -> value.Value {
   ])
 }
 
-fn settings_to_value(domain_authority: String) -> value.Value {
+fn settings_to_value(
+  domain_authority: String,
+  admin_dids: List(String),
+) -> value.Value {
   value.Object([
     #("id", value.String("Settings:singleton")),
     #("domainAuthority", value.String(domain_authority)),
+    #("adminDids", value.List(list.map(admin_dids, value.String))),
   ])
 }
 
@@ -692,7 +730,6 @@ fn lexicon_to_value(lexicon: Lexicon) -> value.Value {
 pub fn query_type(
   conn: sqlight.Connection,
   req: wisp.Request,
-  admin_dids: List(String),
   did_cache: Subject(did_cache.Message),
   backfill_state_subject: Subject(backfill_state.Message),
 ) -> schema.Type {
@@ -705,7 +742,7 @@ pub fn query_type(
       fn(_ctx) {
         case session.get_current_session(req, conn, did_cache) {
           Ok(sess) -> {
-            let user_is_admin = is_admin(sess.did, admin_dids)
+            let user_is_admin = is_admin(conn, sess.did)
             Ok(current_session_to_value(sess.did, sess.handle, user_is_admin))
           }
           Error(_) -> Ok(value.Null)
@@ -740,8 +777,9 @@ pub fn query_type(
           Ok(authority) -> authority
           Error(_) -> ""
         }
+        let admin_dids = config_repo.get_admin_dids(conn)
 
-        Ok(settings_to_value(domain_authority))
+        Ok(settings_to_value(domain_authority, admin_dids))
       },
     ),
     // isBackfilling query
@@ -780,7 +818,7 @@ pub fn query_type(
       fn(_ctx) {
         case session.get_current_session(req, conn, did_cache) {
           Ok(sess) -> {
-            case is_admin(sess.did, admin_dids) {
+            case is_admin(conn, sess.did) {
               True -> {
                 case oauth_clients.get_all(conn) {
                   Ok(clients) ->
@@ -882,50 +920,132 @@ pub fn query_type(
 pub fn mutation_type(
   conn: sqlight.Connection,
   req: wisp.Request,
-  admin_dids: List(String),
   jetstream_subject: Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
   backfill_state_subject: Subject(backfill_state.Message),
 ) -> schema.Type {
   schema.object_type("Mutation", "Root mutation type", [
-    // updateDomainAuthority mutation
+    // updateSettings mutation - consolidated settings update
     schema.field_with_args(
-      "updateDomainAuthority",
+      "updateSettings",
       schema.non_null(settings_type()),
-      "Update domain authority configuration",
+      "Update system settings (domain authority and/or admin DIDs)",
       [
         schema.argument(
           "domainAuthority",
-          schema.non_null(schema.string_type()),
-          "New domain authority value",
+          schema.string_type(),
+          "New domain authority value (optional)",
+          None,
+        ),
+        schema.argument(
+          "adminDids",
+          schema.list_type(schema.non_null(schema.string_type())),
+          "New admin DIDs list (optional)",
           None,
         ),
       ],
       fn(ctx) {
-        case schema.get_argument(ctx, "domainAuthority") {
-          Some(value.String(authority)) -> {
-            case config_repo.set(conn, "domain_authority", authority) {
-              Ok(_) -> {
-                // Restart Jetstream consumer to pick up new domain authority
-                case jetstream_subject {
-                  Some(consumer) -> {
-                    logging.log(
-                      logging.Info,
-                      "[updateDomainAuthority] Restarting Jetstream consumer with new domain authority...",
-                    )
-                    let _ = jetstream_consumer.restart(consumer)
-                    Nil
+        // Check admin privileges
+        case session.get_current_session(req, conn, did_cache) {
+          Error(_) -> Error("Authentication required")
+          Ok(sess) -> {
+            case is_admin(conn, sess.did) {
+              False -> Error("Admin privileges required")
+              True -> {
+                // Update domain authority if provided
+                let domain_authority_result = case
+                  schema.get_argument(ctx, "domainAuthority")
+                {
+                  Some(value.String(authority)) -> {
+                    case config_repo.set(conn, "domain_authority", authority) {
+                      Ok(_) -> {
+                        // Restart Jetstream consumer
+                        case jetstream_subject {
+                          Some(consumer) -> {
+                            logging.log(
+                              logging.Info,
+                              "[updateSettings] Restarting Jetstream consumer...",
+                            )
+                            let _ = jetstream_consumer.restart(consumer)
+                            Nil
+                          }
+                          None -> Nil
+                        }
+                        Ok(Nil)
+                      }
+                      Error(_) -> Error("Failed to update domain authority")
+                    }
                   }
-                  None -> Nil
+                  _ -> Ok(Nil)
                 }
 
-                Ok(settings_to_value(authority))
+                case domain_authority_result {
+                  Error(err) -> Error(err)
+                  Ok(_) -> {
+                    // Update admin DIDs if provided
+                    let admin_dids_result = case
+                      schema.get_argument(ctx, "adminDids")
+                    {
+                      Some(value.List(dids)) -> {
+                        let did_strings =
+                          list.filter_map(dids, fn(d) {
+                            case d {
+                              value.String(s) -> Ok(s)
+                              _ -> Error(Nil)
+                            }
+                          })
+                        // Validate at least one admin
+                        case did_strings {
+                          [] -> Error("Cannot have zero admins")
+                          _ -> {
+                            // Validate all DIDs have correct format
+                            let invalid_dids =
+                              list.filter(did_strings, fn(d) {
+                                !is_valid_did(d)
+                              })
+                            case invalid_dids {
+                              [first_invalid, ..] ->
+                                Error(
+                                  "Invalid DID format: "
+                                  <> first_invalid
+                                  <> ". DIDs must start with 'did:' followed by method and identifier (e.g., did:plc:abc123)",
+                                )
+                              [] -> {
+                                case
+                                  config_repo.set_admin_dids(conn, did_strings)
+                                {
+                                  Ok(_) -> Ok(Nil)
+                                  Error(_) ->
+                                    Error("Failed to update admin DIDs")
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      _ -> Ok(Nil)
+                    }
+
+                    case admin_dids_result {
+                      Error(err) -> Error(err)
+                      Ok(_) -> {
+                        // Return updated settings
+                        let final_authority = case
+                          config_repo.get(conn, "domain_authority")
+                        {
+                          Ok(a) -> a
+                          Error(_) -> ""
+                        }
+                        let final_admin_dids = config_repo.get_admin_dids(conn)
+                        Ok(settings_to_value(final_authority, final_admin_dids))
+                      }
+                    }
+                  }
+                }
               }
-              Error(_) -> Error("Failed to update domain authority")
             }
           }
-          _ -> Error("Invalid domain authority argument")
         }
       },
     ),
@@ -1009,7 +1129,7 @@ pub fn mutation_type(
         // Check if user is authenticated and admin
         case session.get_current_session(req, conn, did_cache) {
           Ok(sess) -> {
-            case is_admin(sess.did, admin_dids) {
+            case is_admin(conn, sess.did) {
               True -> {
                 case schema.get_argument(ctx, "confirm") {
                   Some(value.String("RESET")) -> {
@@ -1055,7 +1175,7 @@ pub fn mutation_type(
         // Check if user is authenticated and admin
         case session.get_current_session(req, conn, did_cache) {
           Ok(sess) -> {
-            case is_admin(sess.did, admin_dids) {
+            case is_admin(conn, sess.did) {
               True -> {
                 // Mark backfill as started
                 process.send(
@@ -1255,7 +1375,7 @@ pub fn mutation_type(
       fn(ctx) {
         case session.get_current_session(req, conn, did_cache) {
           Ok(sess) -> {
-            case is_admin(sess.did, admin_dids) {
+            case is_admin(conn, sess.did) {
               True -> {
                 case
                   schema.get_argument(ctx, "clientName"),
@@ -1420,7 +1540,7 @@ pub fn mutation_type(
       fn(ctx) {
         case session.get_current_session(req, conn, did_cache) {
           Ok(sess) -> {
-            case is_admin(sess.did, admin_dids) {
+            case is_admin(conn, sess.did) {
               True -> {
                 case
                   schema.get_argument(ctx, "clientId"),
@@ -1541,7 +1661,7 @@ pub fn mutation_type(
       fn(ctx) {
         case session.get_current_session(req, conn, did_cache) {
           Ok(sess) -> {
-            case is_admin(sess.did, admin_dids) {
+            case is_admin(conn, sess.did) {
               True -> {
                 case schema.get_argument(ctx, "clientId") {
                   Some(value.String(client_id)) -> {
@@ -1572,18 +1692,16 @@ pub fn mutation_type(
 pub fn build_schema(
   conn: sqlight.Connection,
   req: wisp.Request,
-  admin_dids: List(String),
   jetstream_subject: Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
   backfill_state_subject: Subject(backfill_state.Message),
 ) -> schema.Schema {
   schema.schema(
-    query_type(conn, req, admin_dids, did_cache, backfill_state_subject),
+    query_type(conn, req, did_cache, backfill_state_subject),
     Some(mutation_type(
       conn,
       req,
-      admin_dids,
       jetstream_subject,
       did_cache,
       oauth_supported_scopes,
