@@ -24,6 +24,7 @@ import handlers/graphql_ws as graphql_ws_handler
 import handlers/health as health_handler
 import handlers/index as index_handler
 import handlers/logout as logout_handler
+import handlers/mcp as mcp_handler
 import handlers/oauth/atp_callback as oauth_atp_callback_handler
 import handlers/oauth/atp_session as oauth_atp_session_handler
 import handlers/oauth/authorize as oauth_authorize_handler
@@ -594,6 +595,19 @@ fn handle_request(
       graphiql_handler.handle_graphiql_request(req, ctx.db, ctx.did_cache)
     ["upload"] ->
       upload_handler.handle_upload_request(req, ctx.db, ctx.did_cache)
+    // MCP endpoint for AI assistant introspection
+    ["mcp"] -> {
+      let mcp_ctx =
+        mcp_handler.McpContext(
+          db: ctx.db,
+          external_base_url: ctx.external_base_url,
+          did_cache: ctx.did_cache,
+          signing_key: ctx.oauth_signing_key,
+          plc_url: ctx.plc_url,
+          supported_scopes: ctx.oauth_supported_scopes,
+        )
+      mcp_handler.handle(req, mcp_ctx)
+    }
     // New OAuth 2.0 endpoints
     [".well-known", "oauth-authorization-server"] ->
       oauth_metadata_handler.handle(

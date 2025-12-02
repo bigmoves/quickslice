@@ -1,0 +1,63 @@
+# MCP Server
+
+Quickslice provides an MCP (Model Context Protocol) server that lets AI assistants query your ATProto data directly.
+
+## Endpoint
+
+```
+POST http://localhost:8080/mcp
+```
+
+## Setup
+
+1. Start the quickslice server:
+   ```bash
+   cd server && gleam run
+   ```
+
+2. Connect your MCP client to `http://localhost:8080/mcp`
+
+### Claude Code
+
+```bash
+claude mcp add --transport http --scope user quickslice http://localhost:8080/mcp
+```
+
+### Claude Desktop
+
+Add to your `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "quickslice": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+### Other MCP Clients
+
+Point any MCP-compatible client at the `/mcp` endpoint using HTTP transport.
+
+## Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_lexicons` | List all registered lexicons |
+| `get_lexicon` | Get full lexicon definition by NSID |
+| `list_queries` | List available GraphQL queries |
+| `get_oauth_info` | Get OAuth flows, scopes, and endpoints |
+| `get_server_capabilities` | Get server version and features |
+| `introspect_schema` | Get full GraphQL schema |
+| `execute_query` | Execute a GraphQL query |
+
+## Example Prompts
+
+Once connected, you can ask things like:
+
+- "What lexicons are registered?"
+- "Show me the schema for xyz.statusphere.status"
+- "Query the latest 10 statusphere statuses"
+- "What GraphQL queries are available?"
+- "What OAuth scopes does this server support?"
