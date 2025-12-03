@@ -30,7 +30,7 @@ pub fn authorize_missing_query_returns_400_test() {
   response.status |> should.equal(400)
 }
 
-pub fn authorize_invalid_scope_returns_400_test() {
+pub fn authorize_invalid_scope_redirects_with_error_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(conn) = sqlight.open(":memory:")
   let assert Ok(_) = tables.create_oauth_client_table(conn)
@@ -76,6 +76,7 @@ pub fn authorize_invalid_scope_returns_400_test() {
       None,
     )
 
-  // Should return 400 due to invalid scope format
-  response.status |> should.equal(400)
+  // Per OAuth 2.0 spec (RFC 6749 Section 4.1.2.1), once redirect_uri is validated,
+  // errors should be redirected to the client, not returned as 400
+  response.status |> should.equal(303)
 }
