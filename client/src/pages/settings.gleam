@@ -170,6 +170,7 @@ pub type Model {
     new_admin_did: String,
     remove_confirm_did: Option(String),
     admin_alert: Option(#(String, String)),
+    danger_zone_alert: Option(#(String, String)),
   )
 }
 
@@ -195,6 +196,18 @@ pub fn set_admin_alert(model: Model, kind: String, message: String) -> Model {
 
 pub fn clear_admin_alert(model: Model) -> Model {
   Model(..model, admin_alert: None)
+}
+
+pub fn set_danger_zone_alert(
+  model: Model,
+  kind: String,
+  message: String,
+) -> Model {
+  Model(..model, danger_zone_alert: Some(#(kind, message)))
+}
+
+pub fn clear_danger_zone_alert(model: Model) -> Model {
+  Model(..model, danger_zone_alert: None)
 }
 
 pub fn set_lexicons_alert(model: Model, kind: String, message: String) -> Model {
@@ -231,6 +244,7 @@ pub fn init() -> Model {
     new_admin_did: "",
     remove_confirm_did: None,
     admin_alert: None,
+    danger_zone_alert: None,
   )
 }
 
@@ -501,6 +515,17 @@ fn danger_zone_section(model: Model) -> Element(Msg) {
     html.h2([attribute.class("text-xl font-semibold text-zinc-300 mb-4")], [
       element.text("Danger Zone"),
     ]),
+    case model.danger_zone_alert {
+      Some(#(kind, message)) -> {
+        let alert_kind = case kind {
+          "success" -> alert.Success
+          "error" -> alert.Error
+          _ -> alert.Info
+        }
+        alert.alert(alert_kind, message)
+      }
+      None -> element.none()
+    },
     html.p([attribute.class("text-sm text-zinc-400 mb-4")], [
       element.text("This will clear all indexed data:"),
     ]),

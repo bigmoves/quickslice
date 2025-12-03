@@ -607,7 +607,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               ..model.settings_page_model,
               domain_authority_input: "",
             )
-          settings.set_alert(
+          settings.set_danger_zone_alert(
             cleared_model,
             "success",
             "All data has been reset",
@@ -896,8 +896,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     HandleQueryResponse(query_name, _variables, Error(err)) -> {
       // Show error message for mutations
       let new_settings_model = case query_name {
-        "UpdateSettings" | "ResetAll" | "TriggerBackfill" ->
+        "UpdateSettings" | "TriggerBackfill" ->
           settings.set_alert(
+            model.settings_page_model,
+            "error",
+            "Error: " <> err,
+          )
+        "ResetAll" ->
+          settings.set_danger_zone_alert(
             model.settings_page_model,
             "error",
             "Error: " <> err,
