@@ -10,20 +10,15 @@ This guide covers deploying quickslice on Fly.io and Railway. Both platforms sup
 | `HOST` | No | `127.0.0.1` | Server bind address. Set to `0.0.0.0` for containers |
 | `PORT` | No | `8080` | Server port |
 | `SECRET_KEY_BASE` | Recommended | Auto-generated | Session encryption key (64+ chars). **Must persist across restarts** |
-| `ADMIN_DIDS` | Optional | - | Comma-separated DIDs for admin access (e.g., `did:plc:abc,did:plc:xyz`) |
 | `EXTERNAL_BASE_URL` | Optional | `http://localhost:8080` | Base URL of your application (used for OAuth redirect URIs and client metadata). Use `http://127.0.0.1:8080` for loopback mode |
 | `OAUTH_LOOPBACK_MODE` | Optional | `false` | Set to `true` for local development without ngrok. Uses loopback client IDs instead of client metadata URLs |
-| `OAUTH_SUPPORTED_SCOPES` | Optional | `atproto transition:generic` | Space-separated OAuth scopes to request (used in loopback client IDs and client metadata) |
-| `JETSTREAM_URL` | No | `wss://jetstream2.us-west.bsky.network/subscribe` | Jetstream WebSocket endpoint |
-| `RELAY_URL` | No | `https://relay1.us-west.bsky.network` | AT Protocol relay URL |
-| `PLC_DIRECTORY_URL` | No | `https://plc.directory` | PLC directory URL |
+| `PLC_DIRECTORY_URL` | Optional | `https://plc.directory` | PLC directory URL override (useful for self-hosted PLC directories) |
 
 ### Critical Environment Variables
 
 - **DATABASE_URL**: Must point to a persistent volume location
 - **SECRET_KEY_BASE**: Generate with `openssl rand -base64 48`. Store as a secret and keep persistent
 - **HOST**: Set to `0.0.0.0` in container environments
-- **ADMIN_DIDS**: Required for backfill and settings page access
 
 ## SQLite Volume Setup
 
@@ -79,9 +74,6 @@ primary_region = 'sjc'
 
 ```bash
 fly secrets set SECRET_KEY_BASE=$(openssl rand -base64 48)
-
-# Optional: Admin access
-fly secrets set ADMIN_DIDS=did:plc:your_did
 ```
 
 ### 4. Deploy
@@ -112,11 +104,6 @@ DATABASE_URL=/data/quickslice.db
 HOST=0.0.0.0
 PORT=8080
 SECRET_KEY_BASE=<generate-with-openssl-rand>
-```
-
-Optional variables:
-```
-ADMIN_DIDS=did:plc:your_did
 ```
 
 ### 3. Add a volume
@@ -176,7 +163,6 @@ services:
       - PORT=8080
       - DATABASE_URL=/data/quickslice.db
       - SECRET_KEY_BASE=${SECRET_KEY_BASE}
-      - ADMIN_DIDS=${ADMIN_DIDS}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
@@ -192,7 +178,6 @@ Create a `.env` file for secrets:
 
 ```bash
 SECRET_KEY_BASE=<generate-with-openssl-rand>
-ADMIN_DIDS=did:plc:your_did
 ```
 
 Start the service:
@@ -218,7 +203,7 @@ Expected response:
 
 ### Access GraphiQL
 
-Navigate to `/graphiql` (requires `ADMIN_DIDS` configuration).
+Navigate to `/graphiql` (requires authentication).
 
 ### Database access
 
@@ -296,10 +281,3 @@ BACKFILL_MAX_HTTP_CONCURRENT=100
 - Scale memory for high-traffic deployments
 - Use SSD-backed volumes for SQLite performance
 - Monitor database size and scale volume as needed
-
-## Security
-
-1. **Always set SECRET_KEY_BASE** - Generate a strong random key and keep it persistent
-2. **Use HTTPS in production** - Both Fly.io and Railway handle this automatically
-3. **Restrict admin access** - Set `ADMIN_DIDS` to limit who can access GraphiQL and backfill endpoints
-4. **Store secrets securely** - Use platform secret management, never commit secrets to git
