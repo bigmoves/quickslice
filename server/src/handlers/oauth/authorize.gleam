@@ -54,31 +54,17 @@ pub fn handle(
     http.Get | http.Post -> {
       case req.query {
         Some(query) -> {
-          case
-            handle_authorize(
-              query,
-              conn,
-              did_cache,
-              redirect_uri,
-              client_id,
-              signing_key,
-            )
-          {
-            Ok(response) -> build_redirect_response(response)
-            Error(err) -> {
-              wisp.log_error("Authorization error: " <> err)
-              wisp.response(400)
-              |> wisp.set_header("content-type", "application/json")
-              |> wisp.set_body(wisp.Text("{\"error\": \"" <> err <> "\"}"))
-            }
-          }
+          handle_authorize_with_error_redirect(
+            query,
+            conn,
+            did_cache,
+            redirect_uri,
+            client_id,
+            signing_key,
+          )
         }
         None -> {
-          wisp.response(400)
-          |> wisp.set_header("content-type", "application/json")
-          |> wisp.set_body(wisp.Text(
-            "{\"error\": \"Missing query parameters\"}",
-          ))
+          json_error_response("Missing query parameters")
         }
       }
     }
@@ -86,37 +72,91 @@ pub fn handle(
   }
 }
 
-/// Main authorization handler
-fn handle_authorize(
+fn json_error_response(message: String) -> wisp.Response {
+  wisp.log_error("Authorization error: " <> message)
+  wisp.response(400)
+  |> wisp.set_header("content-type", "application/json")
+  |> wisp.set_body(wisp.Text("{\"error\": \"" <> message <> "\"}"))
+}
+
+/// Handle authorization with proper error redirects after validation
+fn handle_authorize_with_error_redirect(
   query: String,
   conn: sqlight.Connection,
   did_cache: Subject(did_cache.Message),
   server_redirect_uri: String,
   server_client_id: String,
   signing_key: Option(String),
-) -> Result(AuthorizeResponse, String) {
+) -> wisp.Response {
   // Parse query parameters
-  use params <- result.try(
-    uri.parse_query(query)
-    |> result.map_error(fn(_) { "Failed to parse query string" }),
-  )
+  case uri.parse_query(query) {
+    Error(_) -> json_error_response("Failed to parse query string")
+    Ok(params) -> {
+      // Check for PAR request_uri
+      case get_param(params, "request_uri") {
+        Some(_) -> json_error_response("PAR flow not yet implemented")
+        None -> {
+          // Parse minimal request to get redirect_uri and state
+          let client_redirect_uri = get_param(params, "redirect_uri")
+          let state = get_param(params, "state")
+          let client_id_param = get_param(params, "client_id")
 
-  // Check for PAR request_uri
-  case get_param(params, "request_uri") {
-    Some(_request_uri) -> {
-      // PAR flow - not implemented yet
-      Error("PAR flow not yet implemented")
-    }
-    None -> {
-      // Standard flow
-      handle_standard_flow(
-        params,
-        conn,
-        did_cache,
-        server_redirect_uri,
-        server_client_id,
-        signing_key,
-      )
+          // Before we have validated redirect_uri, use JSON errors
+          case client_redirect_uri, client_id_param {
+            None, _ -> json_error_response("redirect_uri is required")
+            _, None -> json_error_response("client_id is required")
+            Some(ruri), Some(cid) -> {
+              // Get and validate client
+              case oauth_clients.get(conn, cid) {
+                Error(_) -> json_error_response("Failed to retrieve client")
+                Ok(None) -> json_error_response("Client not found")
+                Ok(Some(client)) -> {
+                  // Validate redirect_uri format
+                  case validator.validate_redirect_uri(ruri) {
+                    Error(e) -> json_error_response(error.error_description(e))
+                    Ok(_) -> {
+                      // Validate redirect_uri matches client
+                      case
+                        validator.validate_redirect_uri_match(
+                          ruri,
+                          client.redirect_uris,
+                          client.require_redirect_exact,
+                        )
+                      {
+                        Error(e) ->
+                          json_error_response(error.error_description(e))
+                        Ok(_) -> {
+                          // redirect_uri is now validated - use redirects for subsequent errors
+                          case
+                            handle_standard_flow(
+                              params,
+                              conn,
+                              did_cache,
+                              server_redirect_uri,
+                              server_client_id,
+                              signing_key,
+                            )
+                          {
+                            Ok(response) -> build_redirect_response(response)
+                            Error(err) -> {
+                              build_redirect_response(RedirectWithError(
+                                redirect_uri: ruri,
+                                error: "server_error",
+                                error_description: err,
+                                state: state,
+                              ))
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

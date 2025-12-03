@@ -14,7 +14,9 @@ import gleam/http/response
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
+import gleam/uri
 import lib/oauth/atproto/bridge
 import lib/oauth/did_cache
 import lib/oauth/token_generator
@@ -33,23 +35,49 @@ pub fn handle(
   // Parse query parameters
   let query = wisp.get_query(req)
 
-  let code_result = list.key_find(query, "code")
-  let state_result = list.key_find(query, "state")
+  // Check for OAuth error FIRST (user denied, etc.)
+  case list.key_find(query, "error") {
+    Ok(error) -> {
+      let error_description =
+        list.key_find(query, "error_description")
+        |> result.unwrap("")
 
-  case code_result, state_result {
-    Error(_), _ -> error_response(400, "Missing 'code' parameter")
-    _, Error(_) -> error_response(400, "Missing 'state' parameter")
-    Ok(code), Ok(state) -> {
-      process_callback(
-        req,
-        conn,
-        did_cache,
-        code,
-        state,
-        redirect_uri,
-        client_id,
-        signing_key,
-      )
+      // Redirect to / or /onboarding based on admin existence
+      let redirect_path = case config_repo.has_admins(conn) {
+        True -> "/"
+        False -> "/onboarding"
+      }
+
+      let redirect_url =
+        redirect_path
+        <> "?error="
+        <> uri.percent_encode(error)
+        <> "&error_description="
+        <> uri.percent_encode(error_description)
+
+      wisp.redirect(redirect_url)
+    }
+    Error(_) -> {
+      // Normal flow: check for code and state
+      let code_result = list.key_find(query, "code")
+      let state_result = list.key_find(query, "state")
+
+      case code_result, state_result {
+        Error(_), _ -> error_response(400, "Missing 'code' parameter")
+        _, Error(_) -> error_response(400, "Missing 'state' parameter")
+        Ok(code), Ok(state) -> {
+          process_callback(
+            req,
+            conn,
+            did_cache,
+            code,
+            state,
+            redirect_uri,
+            client_id,
+            signing_key,
+          )
+        }
+      }
     }
   }
 }

@@ -1,5 +1,6 @@
 /// Admin OAuth authorize handler
 /// POST /admin/oauth/authorize - Initiates ATProtocol OAuth for admin login
+import database/repositories/config as config_repo
 import database/repositories/oauth_atp_requests
 import database/repositories/oauth_atp_sessions
 import database/types.{OAuthAtpRequest, OAuthAtpSession}
@@ -42,7 +43,12 @@ pub fn handle(
       }
 
       case login_hint == "" {
-        True -> error_response(400, "login_hint is required")
+        True ->
+          error_redirect(
+            conn,
+            "invalid_request",
+            "Please enter a handle to login",
+          )
         False ->
           process_authorize(
             conn,
@@ -75,7 +81,8 @@ fn process_authorize(
   }
 
   case did_result {
-    Error(_) -> error_response(400, "Failed to resolve handle to DID")
+    Error(_) ->
+      error_redirect(conn, "invalid_request", "Could not find that handle")
     Ok(did) -> {
       // Generate session_id
       let session_id = token_generator.generate_session_id()
@@ -112,7 +119,8 @@ fn process_authorize(
         )
 
       case oauth_atp_requests.insert(conn, oauth_req) {
-        Error(_) -> error_response(500, "Failed to store OAuth request")
+        Error(_) ->
+          error_redirect(conn, "server_error", "Failed to start login")
         Ok(_) -> {
           // Create ATP session
           let atp_session =
@@ -134,22 +142,33 @@ fn process_authorize(
             )
 
           case oauth_atp_sessions.insert(conn, atp_session) {
-            Error(_) -> error_response(500, "Failed to store ATP session")
+            Error(_) ->
+              error_redirect(conn, "server_error", "Failed to start login")
             Ok(_) -> {
               // Resolve DID to get PDS endpoint
               case did_resolver.resolve_did_with_cache(did_cache, did, True) {
-                Error(_) -> error_response(400, "Failed to resolve DID")
+                Error(_) ->
+                  error_redirect(
+                    conn,
+                    "invalid_request",
+                    "Could not resolve account",
+                  )
                 Ok(did_doc) -> {
                   case did_resolver.get_pds_endpoint(did_doc) {
                     None ->
-                      error_response(400, "No PDS endpoint in DID document")
+                      error_redirect(
+                        conn,
+                        "invalid_request",
+                        "Account has no PDS configured",
+                      )
                     Some(pds_endpoint) -> {
                       // Get authorization server metadata
                       case fetch_auth_server_metadata(pds_endpoint) {
-                        Error(err) ->
-                          error_response(
-                            500,
-                            "Failed to get auth server: " <> err,
+                        Error(_) ->
+                          error_redirect(
+                            conn,
+                            "server_error",
+                            "Could not connect to login server",
                           )
                         Ok(auth_endpoint) -> {
                           // Build authorization URL
@@ -244,9 +263,24 @@ fn fetch_auth_server_metadata(pds_endpoint: String) -> Result(String, String) {
   }
 }
 
-fn error_response(status: Int, message: String) -> wisp.Response {
-  wisp.log_error("Admin OAuth error: " <> message)
-  wisp.response(status)
-  |> wisp.set_header("content-type", "application/json")
-  |> wisp.set_body(wisp.Text("{\"error\": \"" <> message <> "\"}"))
+fn error_redirect(
+  conn: sqlight.Connection,
+  error: String,
+  description: String,
+) -> wisp.Response {
+  wisp.log_error("Admin OAuth error: " <> description)
+
+  let redirect_path = case config_repo.has_admins(conn) {
+    True -> "/"
+    False -> "/onboarding"
+  }
+
+  let redirect_url =
+    redirect_path
+    <> "?error="
+    <> uri.percent_encode(error)
+    <> "&error_description="
+    <> uri.percent_encode(description)
+
+  wisp.redirect(redirect_url)
 }

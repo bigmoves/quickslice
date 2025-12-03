@@ -43,6 +43,7 @@
 /// ```
 import backfill_polling
 import components/actor_autocomplete
+import components/alert
 import components/layout
 import file_upload
 import generated/queries
@@ -67,6 +68,7 @@ import gleam/io
 import gleam/json.{type Json}
 import gleam/list
 import gleam/option.{None}
+import gleam/result
 import gleam/set
 import gleam/string
 import gleam/uri
@@ -148,7 +150,29 @@ pub type Model {
     auth_state: AuthState,
     mobile_menu_open: Bool,
     login_autocomplete: actor_autocomplete.Model,
+    oauth_error: option.Option(String),
   )
+}
+
+fn parse_oauth_error(uri_val: uri.Uri) -> option.Option(String) {
+  case uri_val.query {
+    option.Some(query_string) -> {
+      let params = uri.parse_query(query_string) |> result.unwrap([])
+      case list.key_find(params, "error") {
+        Ok("access_denied") -> option.Some("Login was cancelled")
+        Ok(error) -> {
+          let description =
+            list.key_find(params, "error_description")
+            |> result.unwrap(error)
+            |> uri.percent_decode
+            |> result.unwrap(error)
+          option.Some("Login failed: " <> description)
+        }
+        Error(_) -> option.None
+      }
+    }
+    option.None -> option.None
+  }
 }
 
 fn init(_flags) -> #(Model, Effect(Msg)) {
@@ -158,10 +182,10 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
   // Initialize registry with all extracted queries
   let reg = queries.init_registry()
 
-  // Parse the initial route from the current URL
-  let initial_route = case modem.initial_uri() {
-    Ok(uri) -> parse_route(uri)
-    Error(_) -> Home
+  // Parse the initial route and OAuth error from the current URL
+  let #(initial_route, oauth_error) = case modem.initial_uri() {
+    Ok(uri_val) -> #(parse_route(uri_val), parse_oauth_error(uri_val))
+    Error(_) -> #(Home, option.None)
   }
 
   // Fetch current session first (needed for all routes)
@@ -290,6 +314,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       auth_state: NotAuthenticated,
       mobile_menu_open: False,
       login_autocomplete: actor_autocomplete.init(),
+      oauth_error: oauth_error,
     ),
     combined_effects,
   )
@@ -319,6 +344,7 @@ pub type Msg {
   LoginAutocompleteFocus
   LoginAutocompleteSearchResult(Result(List(actor_autocomplete.Actor), String))
   LoginAutocompleteDoClose
+  DismissOAuthError
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
@@ -2400,6 +2426,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         )
       #(Model(..model, login_autocomplete: new_autocomplete), effect.none())
     }
+
+    DismissOAuthError -> {
+      #(Model(..model, oauth_error: option.None), effect.none())
+    }
   }
 }
 
@@ -2434,6 +2464,11 @@ fn view(model: Model) -> Element(Msg) {
                 fn() { LoginAutocompleteBlur },
                 fn() { LoginAutocompleteFocus },
               )
+          },
+          // OAuth error alert
+          case model.oauth_error {
+            option.Some(error_msg) -> alert.alert(alert.Error, error_msg)
+            option.None -> element.none()
           },
           case model.route {
             Home -> view_home(model)

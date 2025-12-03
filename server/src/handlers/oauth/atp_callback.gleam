@@ -9,6 +9,7 @@ import gleam/erlang/process
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
 import gleam/uri
 import lib/oauth/atproto/bridge
@@ -29,26 +30,79 @@ pub fn handle(
   // Parse query parameters from request path
   let query = wisp.get_query(req)
 
-  // Extract required parameters
-  let code_result = list.key_find(query, "code")
-  let state_result = list.key_find(query, "state")
-
-  case code_result, state_result {
-    Error(_), _ ->
-      error_response(400, "missing_parameter", "Missing 'code' parameter")
-    _, Error(_) ->
-      error_response(400, "missing_parameter", "Missing 'state' parameter")
-    Ok(code), Ok(state) -> {
-      handle_callback(
-        conn,
-        did_cache,
-        code,
-        state,
-        redirect_uri,
-        client_id,
-        signing_key,
-      )
+  // Check for OAuth error FIRST (user denied, etc.)
+  case list.key_find(query, "error") {
+    Ok(error) -> {
+      handle_oauth_error(conn, query, error)
     }
+    Error(_) -> {
+      // Normal flow: check for code and state
+      let code_result = list.key_find(query, "code")
+      let state_result = list.key_find(query, "state")
+
+      case code_result, state_result {
+        Error(_), _ ->
+          error_response(400, "missing_parameter", "Missing 'code' parameter")
+        _, Error(_) ->
+          error_response(400, "missing_parameter", "Missing 'state' parameter")
+        Ok(code), Ok(state) -> {
+          handle_callback(
+            conn,
+            did_cache,
+            code,
+            state,
+            redirect_uri,
+            client_id,
+            signing_key,
+          )
+        }
+      }
+    }
+  }
+}
+
+fn handle_oauth_error(
+  conn: sqlight.Connection,
+  query: List(#(String, String)),
+  error: String,
+) -> wisp.Response {
+  let error_description =
+    list.key_find(query, "error_description")
+    |> result.unwrap("")
+  let state =
+    list.key_find(query, "state")
+    |> result.unwrap("")
+
+  // Look up client's redirect_uri via: state -> atp_session -> session_id -> auth_request
+  case oauth_atp_sessions.get_by_state(conn, state) {
+    Ok(Some(atp_session)) -> {
+      case oauth_auth_requests.get(conn, atp_session.session_id) {
+        Ok(Some(auth_request)) -> {
+          // Build redirect URL with error params
+          let separator = case string.contains(auth_request.redirect_uri, "?") {
+            True -> "&"
+            False -> "?"
+          }
+
+          let redirect_url =
+            auth_request.redirect_uri
+            <> separator
+            <> "error="
+            <> uri.percent_encode(error)
+            <> "&error_description="
+            <> uri.percent_encode(error_description)
+            <> case auth_request.state {
+              Some(client_state) ->
+                "&state=" <> uri.percent_encode(client_state)
+              None -> ""
+            }
+
+          wisp.redirect(redirect_url)
+        }
+        _ -> error_response(400, "missing_parameter", "OAuth session not found")
+      }
+    }
+    _ -> error_response(400, "missing_parameter", "Invalid state parameter")
   }
 }
 
