@@ -422,6 +422,31 @@ pub fn nsid_matches_domain_authority(
   string.starts_with(nsid, domain_authority <> ".")
 }
 
+/// Get local and external collection IDs from configured lexicons
+/// Returns #(local_collection_ids, external_collection_ids)
+pub fn get_collection_ids(
+  conn: sqlight.Connection,
+) -> #(List(String), List(String)) {
+  let domain_authority = case config_repo.get(conn, "domain_authority") {
+    Ok(authority) -> authority
+    Error(_) -> ""
+  }
+
+  case lexicons.get_record_types(conn) {
+    Ok(lexicon_list) -> {
+      let #(local, external) =
+        list.partition(lexicon_list, fn(lex) {
+          nsid_matches_domain_authority(lex.id, domain_authority)
+        })
+      #(
+        list.map(local, fn(lex) { lex.id }),
+        list.map(external, fn(lex) { lex.id }),
+      )
+    }
+    Error(_) -> #([], [])
+  }
+}
+
 /// Resolve a DID to get ATP data (PDS endpoint and handle)
 pub fn resolve_did(did: String, plc_url: String) -> Result(AtprotoData, String) {
   // Check if this is a did:web DID

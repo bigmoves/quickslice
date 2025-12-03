@@ -1,5 +1,8 @@
 /// ATP OAuth callback endpoint
 /// Handles OAuth callback from ATProtocol PDS after user authorization
+import actor_validator
+import backfill
+import database/repositories/config as config_repo
 import database/repositories/oauth_atp_requests
 import database/repositories/oauth_atp_sessions
 import database/repositories/oauth_auth_requests
@@ -15,6 +18,7 @@ import gleam/uri
 import lib/oauth/atproto/bridge
 import lib/oauth/did_cache
 import lib/oauth/token_generator
+import logging
 import sqlight
 import wisp
 
@@ -165,6 +169,47 @@ fn handle_callback(
               )
             }
             Ok(updated_session) -> {
+              // Sync actor on first login (blocking)
+              case updated_session.did {
+                Some(did) -> {
+                  let plc_url = config_repo.get_plc_directory_url(conn)
+                  let #(collection_ids, external_collection_ids) =
+                    backfill.get_collection_ids(conn)
+
+                  case actor_validator.ensure_actor_exists(conn, did, plc_url) {
+                    Ok(True) -> {
+                      // New actor - backfill collections synchronously
+                      logging.log(
+                        logging.Info,
+                        "[oauth] Syncing new actor: " <> did,
+                      )
+                      let _ =
+                        backfill.backfill_collections_for_actor(
+                          conn,
+                          did,
+                          collection_ids,
+                          external_collection_ids,
+                          plc_url,
+                        )
+                      Nil
+                    }
+                    Ok(False) -> Nil
+                    // Existing actor, already synced
+                    Error(e) -> {
+                      logging.log(
+                        logging.Warning,
+                        "[oauth] Actor sync failed for "
+                          <> did
+                          <> ": "
+                          <> string.inspect(e),
+                      )
+                      Nil
+                    }
+                  }
+                }
+                None -> Nil
+              }
+
               // Clean up one-time-use oauth request
               let _ = oauth_atp_requests.delete(conn, state)
 
