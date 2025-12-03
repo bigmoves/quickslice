@@ -1,5 +1,4 @@
 import admin_session as session
-import config
 import database/repositories/actors
 import database/repositories/config as config_repo
 import database/repositories/lexicons
@@ -23,7 +22,6 @@ import zip_helper
 pub type Context {
   Context(
     db: sqlight.Connection,
-    config: process.Subject(config.Message),
     jetstream_consumer: option.Option(
       process.Subject(jetstream_consumer.ManagerMessage),
     ),
@@ -93,11 +91,11 @@ fn handle_admin_request(
                   // Validate domain authority format
                   case validate_domain_authority(domain_authority) {
                     Ok(_) -> {
-                      // Save domain_authority to database and update cache
+                      // Save domain_authority to database
                       case
-                        config.set_domain_authority(
-                          ctx.config,
+                        config_repo.set(
                           ctx.db,
+                          "domain_authority",
                           domain_authority,
                         )
                       {
@@ -363,9 +361,6 @@ fn handle_reset(
 
       case domain_result, lexicons_result, records_result, actors_result {
         Ok(_), Ok(_), Ok(_), Ok(_) -> {
-          // Reload config cache
-          let _ = config.reload(ctx.config, ctx.db)
-
           // Restart Jetstream consumer if it exists
           let restart_message = case ctx.jetstream_consumer {
             option.Some(consumer) -> {

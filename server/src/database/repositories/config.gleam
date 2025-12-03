@@ -1,8 +1,19 @@
+import gleam/dict.{type Dict}
 import gleam/dynamic/decode
 import gleam/list
 import gleam/result
 import gleam/string
 import sqlight
+
+// ===== Default Values =====
+
+pub const default_relay_url = "https://relay1.us-west.bsky.network"
+
+pub const default_plc_directory_url = "https://plc.directory"
+
+pub const default_jetstream_url = "wss://jetstream2.us-west.bsky.network/subscribe"
+
+pub const default_oauth_supported_scopes = "atproto transition:generic"
 
 // ===== Config Functions =====
 
@@ -34,6 +45,22 @@ pub fn get(
         -1,
       ))
     Error(err) -> Error(err)
+  }
+}
+
+/// Get all config values as a dictionary
+pub fn get_all(conn: sqlight.Connection) -> Dict(String, String) {
+  let sql = "SELECT key, value FROM config"
+
+  let decoder = {
+    use key <- decode.field(0, decode.string)
+    use value <- decode.field(1, decode.string)
+    decode.success(#(key, value))
+  }
+
+  case sqlight.query(sql, on: conn, with: [], expecting: decoder) {
+    Ok(rows) -> dict.from_list(rows)
+    Error(_) -> dict.new()
   }
 }
 
@@ -168,4 +195,127 @@ pub fn has_admins(conn: sqlight.Connection) -> Bool {
     [] -> False
     _ -> True
   }
+}
+
+// ===== External Services Configuration =====
+
+/// Get relay URL from config, with default fallback
+pub fn get_relay_url(conn: sqlight.Connection) -> String {
+  case get(conn, "relay_url") {
+    Ok(url) -> url
+    Error(_) -> default_relay_url
+  }
+}
+
+/// Get PLC directory URL from config, with default fallback
+pub fn get_plc_directory_url(conn: sqlight.Connection) -> String {
+  case get(conn, "plc_directory_url") {
+    Ok(url) -> url
+    Error(_) -> default_plc_directory_url
+  }
+}
+
+/// Get Jetstream URL from config, with default fallback
+pub fn get_jetstream_url(conn: sqlight.Connection) -> String {
+  case get(conn, "jetstream_url") {
+    Ok(url) -> url
+    Error(_) -> default_jetstream_url
+  }
+}
+
+/// Get OAuth supported scopes from config, with default fallback
+/// Returns space-separated string
+pub fn get_oauth_supported_scopes(conn: sqlight.Connection) -> String {
+  case get(conn, "oauth_supported_scopes") {
+    Ok(scopes) -> scopes
+    Error(_) -> default_oauth_supported_scopes
+  }
+}
+
+/// Parse OAuth supported scopes into List(String)
+pub fn get_oauth_supported_scopes_list(conn: sqlight.Connection) -> List(String) {
+  let scopes_str = get_oauth_supported_scopes(conn)
+  scopes_str
+  |> string.split(" ")
+  |> list.map(string.trim)
+  |> list.filter(fn(s) { !string.is_empty(s) })
+}
+
+/// Set relay URL
+pub fn set_relay_url(
+  conn: sqlight.Connection,
+  url: String,
+) -> Result(Nil, sqlight.Error) {
+  set(conn, "relay_url", url)
+}
+
+/// Set PLC directory URL
+pub fn set_plc_directory_url(
+  conn: sqlight.Connection,
+  url: String,
+) -> Result(Nil, sqlight.Error) {
+  set(conn, "plc_directory_url", url)
+}
+
+/// Set Jetstream URL
+pub fn set_jetstream_url(
+  conn: sqlight.Connection,
+  url: String,
+) -> Result(Nil, sqlight.Error) {
+  set(conn, "jetstream_url", url)
+}
+
+/// Set OAuth supported scopes (space-separated string)
+pub fn set_oauth_supported_scopes(
+  conn: sqlight.Connection,
+  scopes: String,
+) -> Result(Nil, sqlight.Error) {
+  set(conn, "oauth_supported_scopes", scopes)
+}
+
+/// Initialize config with defaults if not already set
+/// Should be called once during server startup
+pub fn initialize_config_defaults(
+  conn: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
+  // Only set if the key doesn't exist (don't overwrite user settings)
+
+  // Relay URL
+  case get(conn, "relay_url") {
+    Error(_) -> {
+      let _ = set(conn, "relay_url", default_relay_url)
+      Nil
+    }
+    Ok(_) -> Nil
+  }
+
+  // PLC Directory URL
+  case get(conn, "plc_directory_url") {
+    Error(_) -> {
+      let _ = set(conn, "plc_directory_url", default_plc_directory_url)
+      Nil
+    }
+    Ok(_) -> Nil
+  }
+
+  // Jetstream URL
+  case get(conn, "jetstream_url") {
+    Error(_) -> {
+      let _ = set(conn, "jetstream_url", default_jetstream_url)
+      Nil
+    }
+    Ok(_) -> Nil
+  }
+
+  // OAuth Supported Scopes
+  case get(conn, "oauth_supported_scopes") {
+    Error(_) -> {
+      let _ =
+        set(conn, "oauth_supported_scopes", default_oauth_supported_scopes)
+      Nil
+    }
+    Ok(_) -> Nil
+  }
+
+  Ok(Nil)
 }

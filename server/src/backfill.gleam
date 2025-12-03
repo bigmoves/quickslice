@@ -1,6 +1,7 @@
 import car/car
 import car/cid
 import database/repositories/actors
+import database/repositories/config as config_repo
 import database/repositories/lexicons
 import database/repositories/records
 import database/types.{type Record, Record}
@@ -58,12 +59,9 @@ pub type BackfillConfig {
 }
 
 /// Creates a default backfill configuration
-pub fn default_config() -> BackfillConfig {
-  // Get PLC directory URL from environment variable or use default
-  let plc_url = case envoy.get("PLC_DIRECTORY_URL") {
-    Ok(url) -> url
-    Error(_) -> "https://plc.directory"
-  }
+pub fn default_config(db: sqlight.Connection) -> BackfillConfig {
+  // Get PLC directory URL from database config
+  let plc_url = config_repo.get_plc_directory_url(db)
 
   // Get max concurrent per PDS from environment or use default of 4
   let max_pds_concurrent = case envoy.get("BACKFILL_PDS_CONCURRENCY") {
@@ -124,8 +122,11 @@ pub fn default_config() -> BackfillConfig {
 }
 
 /// Creates a backfill configuration with a DID cache
-pub fn config_with_cache(cache: Subject(did_cache.Message)) -> BackfillConfig {
-  let config = default_config()
+pub fn config_with_cache(
+  cache: Subject(did_cache.Message),
+  db: sqlight.Connection,
+) -> BackfillConfig {
+  let config = default_config(db)
   BackfillConfig(..config, did_cache: Some(cache))
 }
 
@@ -1175,8 +1176,9 @@ pub fn backfill_collections_for_actor(
 /// Fetch repos that have records for a specific collection from the relay with pagination
 fn fetch_repos_for_collection(
   collection: String,
+  db: sqlight.Connection,
 ) -> Result(List(String), String) {
-  fetch_repos_paginated(collection, None, [])
+  fetch_repos_paginated(collection, None, [], db)
 }
 
 /// Helper function for paginated repo fetching
@@ -1184,12 +1186,10 @@ fn fetch_repos_paginated(
   collection: String,
   cursor: Option(String),
   acc: List(String),
+  db: sqlight.Connection,
 ) -> Result(List(String), String) {
-  // Get relay URL from environment variable or use default
-  let relay_url = case envoy.get("RELAY_URL") {
-    Ok(url) -> url
-    Error(_) -> "https://relay1.us-west.bsky.network"
-  }
+  // Get relay URL from database config
+  let relay_url = config_repo.get_relay_url(db)
 
   // Build URL with large limit and cursor
   let base_url =
@@ -1217,7 +1217,7 @@ fn fetch_repos_paginated(
                   let new_acc = list.append(acc, repos)
                   case next_cursor {
                     Some(c) ->
-                      fetch_repos_paginated(collection, Some(c), new_acc)
+                      fetch_repos_paginated(collection, Some(c), new_acc, db)
                     None -> {
                       logging.log(
                         logging.Info,
@@ -1347,7 +1347,7 @@ fn run_backfill(
       let fetched_repos =
         collections
         |> list.filter_map(fn(collection) {
-          case fetch_repos_for_collection(collection) {
+          case fetch_repos_for_collection(collection, conn) {
             Ok(repos) -> Ok(repos)
             Error(err) -> {
               logging.log(logging.Error, "[backfill] " <> err)

@@ -3,11 +3,11 @@
 /// This module provides GraphQL schema building and query execution
 import atproto_auth
 import backfill
-import config
 import cursor
 import database/queries/aggregates
 import database/queries/pagination
 import database/repositories/actors
+import database/repositories/config as config_repo
 import database/repositories/lexicons
 import database/repositories/records
 import database/types
@@ -492,11 +492,10 @@ pub fn execute_query_with_db(
   signing_key: option.Option(String),
   plc_url: String,
 ) -> Result(String, String) {
-  // Start config cache actor to get domain authority
-  let assert Ok(config_subject) = config.start(db)
-  let domain_authority = case config.get_domain_authority(config_subject) {
-    option.Some(authority) -> authority
-    option.None -> ""
+  // Get domain authority from database
+  let domain_authority = case config_repo.get(db, "domain_authority") {
+    Ok(authority) -> authority
+    Error(_) -> ""
   }
 
   // Build the schema

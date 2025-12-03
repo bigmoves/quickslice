@@ -64,14 +64,14 @@ pub fn init_registry() -> unstable_registry.Registry {
     unstable_registry.register(
       reg,
       "GetSettings",
-      "query GetSettings {\n  settings {\n    __typename\n    id\n    domainAuthority\n    adminDids\n  }\n}",
+      "query GetSettings {\n  settings {\n    __typename\n    id\n    domainAuthority\n    adminDids\n    relayUrl\n    plcDirectoryUrl\n    jetstreamUrl\n    oauthSupportedScopes\n  }\n}",
       "generated/queries/get_settings",
     )
   let reg =
     unstable_registry.register(
       reg,
       "UpdateSettings",
-      "mutation UpdateSettings($domainAuthority: String, $adminDids: [String!]) {\n  updateSettings(domainAuthority: $domainAuthority, adminDids: $adminDids) {\n    __typename\n    id\n    domainAuthority\n    adminDids\n  }\n}",
+      "mutation UpdateSettings($domainAuthority: String, $adminDids: [String!], $relayUrl: String, $plcDirectoryUrl: String, $jetstreamUrl: String, $oauthSupportedScopes: String) {\n  updateSettings(domainAuthority: $domainAuthority, adminDids: $adminDids, relayUrl: $relayUrl, plcDirectoryUrl: $plcDirectoryUrl, jetstreamUrl: $jetstreamUrl, oauthSupportedScopes: $oauthSupportedScopes) {\n    __typename\n    id\n    domainAuthority\n    adminDids\n    relayUrl\n    plcDirectoryUrl\n    jetstreamUrl\n    oauthSupportedScopes\n  }\n}",
       "generated/queries/update_settings",
     )
   let reg =

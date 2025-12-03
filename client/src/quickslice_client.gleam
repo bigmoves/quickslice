@@ -301,6 +301,8 @@ pub type Msg {
   HandleQueryResponse(String, Json, Result(String, String))
   HandleOptimisticMutationSuccess(String, String)
   HandleOptimisticMutationFailure(String, String)
+  HandleAdminMutationSuccess(String, String)
+  HandleAdminMutationFailure(String, String)
   OnRouteChange(Route)
   HomePageMsg(home.Msg)
   SettingsPageMsg(settings.Msg)
@@ -330,7 +332,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         settings.set_alert(
           model.settings_page_model,
           "success",
-          "Domain authority updated successfully",
+          "Settings updated successfully",
         )
 
       #(
@@ -378,6 +380,62 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           ..model.settings_page_model,
           domain_authority_input: saved_domain_authority,
           alert: option.Some(#("error", friendly_error)),
+        )
+
+      #(
+        Model(
+          ..model,
+          cache: cache_after_rollback,
+          settings_page_model: new_settings_model,
+        ),
+        effect.none(),
+      )
+    }
+
+    HandleAdminMutationSuccess(mutation_id, response_body) -> {
+      // Admin mutation succeeded - commit the optimistic update
+      let cache_after_commit =
+        squall_cache.commit_optimistic(model.cache, mutation_id, response_body)
+
+      let new_settings_model =
+        settings.set_admin_alert(
+          model.settings_page_model,
+          "success",
+          "Admin updated successfully",
+        )
+
+      #(
+        Model(
+          ..model,
+          cache: cache_after_commit,
+          settings_page_model: new_settings_model,
+        ),
+        effect.none(),
+      )
+    }
+
+    HandleAdminMutationFailure(mutation_id, error_message) -> {
+      // Admin mutation failed - rollback the optimistic update
+      let cache_after_rollback =
+        squall_cache.rollback_optimistic(model.cache, mutation_id)
+
+      // Try to extract a friendly GraphQL error message
+      let friendly_error = case
+        string.split_once(error_message, "Response body: ")
+      {
+        Ok(#(_, response_body)) ->
+          case extract_graphql_error(response_body) {
+            option.Some(graphql_error) -> graphql_error
+            option.None -> error_message
+          }
+        Error(_) -> error_message
+      }
+
+      let new_settings_model =
+        settings.set_admin_alert(
+          model.settings_page_model,
+          "error",
+          friendly_error,
         )
 
       #(
@@ -492,20 +550,24 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
       // Show success message for mutations and populate settings data
       let new_settings_model = case query_name {
-        "UpdateDomainAuthority" ->
+        "UpdateSettings" ->
           settings.set_alert(
             model.settings_page_model,
             "success",
-            "Domain authority updated successfully",
+            "Settings updated successfully",
           )
         "UploadLexicons" -> {
           // Clear the file input so the same file can be uploaded again
           file_upload.clear_file_input("lexicon-file-input")
           case extract_graphql_error(response_body) {
             option.Some(err) ->
-              settings.set_alert(model.settings_page_model, "error", err)
+              settings.set_lexicons_alert(
+                model.settings_page_model,
+                "error",
+                err,
+              )
             option.None ->
-              settings.set_alert(
+              settings.set_lexicons_alert(
                 model.settings_page_model,
                 "success",
                 "Lexicons uploaded successfully",
@@ -526,12 +588,16 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
         "GetSettings" -> {
-          // Populate the input field with the loaded domain authority
+          // Populate all input fields with loaded settings
           case get_settings.parse_get_settings_response(response_body) {
             Ok(data) ->
               settings.Model(
                 ..model.settings_page_model,
                 domain_authority_input: data.settings.domain_authority,
+                relay_url_input: data.settings.relay_url,
+                plc_directory_url_input: data.settings.plc_directory_url,
+                jetstream_url_input: data.settings.jetstream_url,
+                oauth_supported_scopes_input: data.settings.oauth_supported_scopes,
               )
             Error(_) -> model.settings_page_model
           }
@@ -804,11 +870,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     HandleQueryResponse(query_name, _variables, Error(err)) -> {
       // Show error message for mutations
       let new_settings_model = case query_name {
-        "UpdateDomainAuthority"
-        | "UploadLexicons"
-        | "ResetAll"
-        | "TriggerBackfill" ->
+        "UpdateSettings" | "ResetAll" | "TriggerBackfill" ->
           settings.set_alert(
+            model.settings_page_model,
+            "error",
+            "Error: " <> err,
+          )
+        "UploadLexicons" ->
+          settings.set_lexicons_alert(
             model.settings_page_model,
             "error",
             "Error: " <> err,
@@ -1163,7 +1232,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.SubmitDomainAuthority -> {
+        settings.SubmitBasicSettings -> {
           // Clear any existing alert
           let cleared_settings_model =
             settings.Model(..model.settings_page_model, alert: None)
@@ -1180,60 +1249,161 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
           case settings_result {
             squall_cache.Data(data) -> {
-              let new_domain_authority =
-                model.settings_page_model.domain_authority_input
               let current_admin_dids = data.settings.admin_dids
 
-              // Execute optimistic mutation
-              let variables =
-                json.object([
-                  #("domainAuthority", json.string(new_domain_authority)),
-                  #(
-                    "adminDids",
-                    json.array(from: current_admin_dids, of: json.string),
-                  ),
-                ])
+              // Build variables from all 5 fields (only non-empty)
+              let mut_vars = []
 
-              let optimistic_entity =
-                json.object([
-                  #("id", json.string("Settings:singleton")),
-                  #("domainAuthority", json.string(new_domain_authority)),
-                  #(
-                    "adminDids",
-                    json.array(from: current_admin_dids, of: json.string),
-                  ),
-                ])
+              // Add domain_authority if non-empty
+              let mut_vars = case
+                model.settings_page_model.domain_authority_input
+              {
+                "" -> mut_vars
+                da -> [#("domainAuthority", json.string(da)), ..mut_vars]
+              }
 
-              let #(updated_cache, _mutation_id, mutation_effect) =
-                squall_cache.execute_optimistic_mutation(
-                  model.cache,
-                  model.registry,
-                  "UpdateSettings",
-                  variables,
-                  "Settings:singleton",
-                  fn(_current) { optimistic_entity },
-                  update_settings.parse_update_settings_response,
-                  fn(mutation_id, result, response_body) {
-                    case result {
-                      Ok(_) ->
-                        HandleOptimisticMutationSuccess(
-                          mutation_id,
-                          response_body,
-                        )
-                      Error(err) ->
-                        HandleOptimisticMutationFailure(mutation_id, err)
-                    }
-                  },
-                )
+              // Add relay_url if non-empty
+              let mut_vars = case model.settings_page_model.relay_url_input {
+                "" -> mut_vars
+                url -> [#("relayUrl", json.string(url)), ..mut_vars]
+              }
 
-              #(
-                Model(
-                  ..model,
-                  cache: updated_cache,
-                  settings_page_model: cleared_settings_model,
+              // Add plc_directory_url if non-empty
+              let mut_vars = case
+                model.settings_page_model.plc_directory_url_input
+              {
+                "" -> mut_vars
+                url -> [#("plcDirectoryUrl", json.string(url)), ..mut_vars]
+              }
+
+              // Add jetstream_url if non-empty
+              let mut_vars = case
+                model.settings_page_model.jetstream_url_input
+              {
+                "" -> mut_vars
+                url -> [#("jetstreamUrl", json.string(url)), ..mut_vars]
+              }
+
+              // Add oauth_supported_scopes if non-empty
+              let mut_vars = case
+                model.settings_page_model.oauth_supported_scopes_input
+              {
+                "" -> mut_vars
+                scopes -> [
+                  #("oauthSupportedScopes", json.string(scopes)),
+                  ..mut_vars
+                ]
+              }
+
+              // Always preserve admin_dids
+              let mut_vars = [
+                #(
+                  "adminDids",
+                  json.array(from: current_admin_dids, of: json.string),
                 ),
-                mutation_effect,
-              )
+                ..mut_vars
+              ]
+
+              // Only proceed if at least one field (other than admin_dids) has a value
+              case mut_vars {
+                [_] -> {
+                  // Only admin_dids in list, no fields to update
+                  #(
+                    Model(..model, settings_page_model: cleared_settings_model),
+                    effect.none(),
+                  )
+                }
+                _ -> {
+                  let variables = json.object(mut_vars)
+
+                  // Build optimistic entity
+                  let opt_fields = [#("id", json.string("Settings:singleton"))]
+
+                  let opt_fields = case
+                    model.settings_page_model.domain_authority_input
+                  {
+                    "" -> opt_fields
+                    da -> [#("domainAuthority", json.string(da)), ..opt_fields]
+                  }
+
+                  let opt_fields = case
+                    model.settings_page_model.relay_url_input
+                  {
+                    "" -> opt_fields
+                    url -> [#("relayUrl", json.string(url)), ..opt_fields]
+                  }
+
+                  let opt_fields = case
+                    model.settings_page_model.plc_directory_url_input
+                  {
+                    "" -> opt_fields
+                    url -> [
+                      #("plcDirectoryUrl", json.string(url)),
+                      ..opt_fields
+                    ]
+                  }
+
+                  let opt_fields = case
+                    model.settings_page_model.jetstream_url_input
+                  {
+                    "" -> opt_fields
+                    url -> [#("jetstreamUrl", json.string(url)), ..opt_fields]
+                  }
+
+                  let opt_fields = case
+                    model.settings_page_model.oauth_supported_scopes_input
+                  {
+                    "" -> opt_fields
+                    scopes -> [
+                      #("oauthSupportedScopes", json.string(scopes)),
+                      ..opt_fields
+                    ]
+                  }
+
+                  let opt_fields = [
+                    #(
+                      "adminDids",
+                      json.array(from: current_admin_dids, of: json.string),
+                    ),
+                    ..opt_fields
+                  ]
+
+                  let optimistic_entity = json.object(opt_fields)
+
+                  // Execute optimistic mutation
+                  let #(updated_cache, _mutation_id, mutation_effect) =
+                    squall_cache.execute_optimistic_mutation(
+                      model.cache,
+                      model.registry,
+                      "UpdateSettings",
+                      variables,
+                      "Settings:singleton",
+                      fn(_current) { optimistic_entity },
+                      update_settings.parse_update_settings_response,
+                      fn(mutation_id, result, response_body) {
+                        case result {
+                          Ok(_) ->
+                            HandleOptimisticMutationSuccess(
+                              mutation_id,
+                              response_body,
+                            )
+                          Error(err) ->
+                            HandleOptimisticMutationFailure(mutation_id, err)
+                        }
+                      },
+                    )
+
+                  // Keep input fields populated with submitted values
+                  #(
+                    Model(
+                      ..model,
+                      cache: updated_cache,
+                      settings_page_model: cleared_settings_model,
+                    ),
+                    mutation_effect,
+                  )
+                }
+              }
             }
             _ -> {
               // Settings not loaded yet, can't update
@@ -1325,6 +1495,59 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               settings_page_model: new_settings_model,
             ),
             effect.batch(effects),
+          )
+        }
+
+        // External Services Message Handlers
+        settings.UpdateRelayUrlInput(value) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              relay_url_input: value,
+              alert: None,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.UpdatePlcDirectoryUrlInput(value) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              plc_directory_url_input: value,
+              alert: None,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.UpdateJetstreamUrlInput(value) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              jetstream_url_input: value,
+              alert: None,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings.UpdateOAuthSupportedScopesInput(value) -> {
+          let new_settings_model =
+            settings.Model(
+              ..model.settings_page_model,
+              oauth_supported_scopes_input: value,
+              alert: None,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
           )
         }
 
@@ -1797,12 +2020,8 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                   fn(mutation_id, result, response_body) {
                     case result {
                       Ok(_) ->
-                        HandleOptimisticMutationSuccess(
-                          mutation_id,
-                          response_body,
-                        )
-                      Error(err) ->
-                        HandleOptimisticMutationFailure(mutation_id, err)
+                        HandleAdminMutationSuccess(mutation_id, response_body)
+                      Error(err) -> HandleAdminMutationFailure(mutation_id, err)
                     }
                   },
                 )
@@ -1913,12 +2132,12 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                       fn(mutation_id, result, response_body) {
                         case result {
                           Ok(_) ->
-                            HandleOptimisticMutationSuccess(
+                            HandleAdminMutationSuccess(
                               mutation_id,
                               response_body,
                             )
                           Error(err) ->
-                            HandleOptimisticMutationFailure(mutation_id, err)
+                            HandleAdminMutationFailure(mutation_id, err)
                         }
                       },
                     )
@@ -2053,7 +2272,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       // Handle file read error
       io.println("[FileRead] Error reading file: " <> err)
       let new_settings_model =
-        settings.set_alert(model.settings_page_model, "error", err)
+        settings.set_lexicons_alert(model.settings_page_model, "error", err)
       #(Model(..model, settings_page_model: new_settings_model), effect.none())
     }
 

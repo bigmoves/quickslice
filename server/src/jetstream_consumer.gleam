@@ -1,6 +1,6 @@
 import backfill
-import config
 import database/jetstream
+import database/repositories/config as config_repo
 import database/repositories/lexicons
 import envoy
 import event_handler
@@ -559,19 +559,13 @@ fn start_consumer_process(
   logging.log(logging.Info, "")
   logging.log(logging.Info, "[jetstream] Starting Jetstream consumer...")
 
-  // Get PLC directory URL from environment variable or use default
-  let plc_url = case envoy.get("PLC_DIRECTORY_URL") {
-    Ok(url) -> url
-    Error(_) -> "https://plc.directory"
-  }
+  // Get PLC directory URL from database config
+  let plc_url = config_repo.get_plc_directory_url(db)
 
-  // Start config cache actor to get domain authority
-  let assert Ok(config_subject) = config.start(db)
-
-  // Get domain authority from config
-  let domain_authority = case config.get_domain_authority(config_subject) {
-    option.Some(authority) -> authority
-    option.None -> ""
+  // Get domain authority from database
+  let domain_authority = case config_repo.get(db, "domain_authority") {
+    Ok(authority) -> authority
+    Error(_) -> ""
   }
 
   // Get all record-type lexicons from the database
@@ -629,11 +623,8 @@ fn start_consumer_process(
             }
           }
 
-          // Get Jetstream URL from environment variable or use default
-          let jetstream_url = case envoy.get("JETSTREAM_URL") {
-            Ok(url) -> url
-            Error(_) -> "wss://jetstream2.us-west.bsky.network/subscribe"
-          }
+          // Get Jetstream URL from database config
+          let jetstream_url = config_repo.get_jetstream_url(db)
 
           // Check if cursor tracking is disabled via environment variable
           let disable_cursor = case envoy.get("JETSTREAM_DISABLE_CURSOR") {

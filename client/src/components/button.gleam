@@ -28,7 +28,7 @@ pub fn submit(disabled disabled: Bool, text text: String) -> Element(msg) {
   html.button(
     [
       attribute.type_("submit"),
-      attribute.class(button_classes <> " w-full"),
+      attribute.class(button_classes),
       attribute.disabled(disabled),
     ],
     [html.text(text)],

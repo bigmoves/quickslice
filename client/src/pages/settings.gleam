@@ -8,16 +8,24 @@
 ///     id
 ///     domainAuthority
 ///     adminDids
+///     relayUrl
+///     plcDirectoryUrl
+///     jetstreamUrl
+///     oauthSupportedScopes
 ///   }
 /// }
 /// ```
 ///
 /// ```graphql
-/// mutation UpdateSettings($domainAuthority: String, $adminDids: [String!]) {
-///   updateSettings(domainAuthority: $domainAuthority, adminDids: $adminDids) {
+/// mutation UpdateSettings($domainAuthority: String, $adminDids: [String!], $relayUrl: String, $plcDirectoryUrl: String, $jetstreamUrl: String, $oauthSupportedScopes: String) {
+///   updateSettings(domainAuthority: $domainAuthority, adminDids: $adminDids, relayUrl: $relayUrl, plcDirectoryUrl: $plcDirectoryUrl, jetstreamUrl: $jetstreamUrl, oauthSupportedScopes: $oauthSupportedScopes) {
 ///     id
 ///     domainAuthority
 ///     adminDids
+///     relayUrl
+///     plcDirectoryUrl
+///     jetstreamUrl
+///     oauthSupportedScopes
 ///   }
 /// }
 /// ```
@@ -97,11 +105,16 @@ import squall_cache.{type Cache}
 
 pub type Msg {
   UpdateDomainAuthorityInput(String)
-  SubmitDomainAuthority
   SelectLexiconFile
   UploadLexicons
   UpdateResetConfirmation(String)
   SubmitReset
+  // Basic settings messages (domain authority + external services)
+  UpdateRelayUrlInput(String)
+  UpdatePlcDirectoryUrlInput(String)
+  UpdateJetstreamUrlInput(String)
+  UpdateOAuthSupportedScopesInput(String)
+  SubmitBasicSettings
   // OAuth client messages
   ToggleNewClientForm
   UpdateNewClientName(String)
@@ -133,6 +146,13 @@ pub type Model {
     reset_confirmation: String,
     selected_file: Option(String),
     alert: Option(#(String, String)),
+    // External services state
+    relay_url_input: String,
+    plc_directory_url_input: String,
+    jetstream_url_input: String,
+    oauth_supported_scopes_input: String,
+    // Lexicon upload state
+    lexicons_alert: Option(#(String, String)),
     // OAuth client state
     show_new_client_form: Bool,
     new_client_name: String,
@@ -177,12 +197,25 @@ pub fn clear_admin_alert(model: Model) -> Model {
   Model(..model, admin_alert: None)
 }
 
+pub fn set_lexicons_alert(model: Model, kind: String, message: String) -> Model {
+  Model(..model, lexicons_alert: Some(#(kind, message)))
+}
+
+pub fn clear_lexicons_alert(model: Model) -> Model {
+  Model(..model, lexicons_alert: None)
+}
+
 pub fn init() -> Model {
   Model(
     domain_authority_input: "",
     reset_confirmation: "",
     selected_file: None,
     alert: None,
+    relay_url_input: "",
+    plc_directory_url_input: "",
+    jetstream_url_input: "",
+    oauth_supported_scopes_input: "",
+    lexicons_alert: None,
     show_new_client_form: False,
     new_client_name: "",
     new_client_type: "PUBLIC",
@@ -246,18 +279,6 @@ pub fn view(cache: Cache, model: Model, is_admin: Bool) -> Element(Msg) {
         html.h1([attribute.class("text-2xl font-semibold text-zinc-300 mb-8")], [
           element.text("Settings"),
         ]),
-        // Alert message
-        case model.alert {
-          Some(#(kind, message)) -> {
-            let alert_kind = case kind {
-              "success" -> alert.Success
-              "error" -> alert.Error
-              _ -> alert.Info
-            }
-            alert.alert(alert_kind, message)
-          }
-          None -> element.none()
-        },
         // Settings sections
         case result {
           squall_cache.Loading ->
@@ -278,7 +299,7 @@ pub fn view(cache: Cache, model: Model, is_admin: Bool) -> Element(Msg) {
 
           squall_cache.Data(data) ->
             html.div([attribute.class("space-y-6")], [
-              domain_authority_section(data.settings, model, is_saving),
+              basic_settings_section(data.settings, model, is_saving),
               lexicons_section(model),
               oauth_clients_section(cache, model),
               admin_management_section(data.settings, model),
@@ -295,54 +316,161 @@ fn has_pending_mutations(cache: Cache) -> Bool {
   squall_cache.has_pending_mutations(cache)
 }
 
-fn domain_authority_section(
-  _settings: get_settings.Settings,
+fn basic_settings_section(
+  settings: get_settings.Settings,
   model: Model,
   is_saving: Bool,
 ) -> Element(Msg) {
   html.div([attribute.class("bg-zinc-800/50 rounded p-6")], [
     html.h2([attribute.class("text-xl font-semibold text-zinc-300 mb-4")], [
-      element.text("Domain Authority"),
+      element.text("Basic Settings"),
     ]),
-    html.div([attribute.class("space-y-4")], [
-      html.div([attribute.class("mb-4")], [
-        html.label([attribute.class("block text-sm text-zinc-400 mb-2")], [
-          element.text("Domain Authority"),
+    // Alert message
+    case model.alert {
+      Some(#(kind, message)) -> {
+        let alert_kind = case kind {
+          "success" -> alert.Success
+          "error" -> alert.Error
+          _ -> alert.Info
+        }
+        alert.alert(alert_kind, message)
+      }
+      None -> element.none()
+    },
+    html.form(
+      [
+        attribute.class("space-y-6"),
+        event.on_submit(fn(_) { SubmitBasicSettings }),
+      ],
+      [
+        // Domain Authority
+        html.div([attribute.class("space-y-2")], [
+          html.label([attribute.class("block text-sm text-zinc-400 mb-2")], [
+            element.text("Domain Authority"),
+          ]),
+          html.input([
+            attribute.type_("text"),
+            attribute.class(
+              "font-mono px-4 py-2 text-sm text-zinc-300 bg-zinc-900 border border-zinc-800 rounded focus:outline-none focus:border-zinc-700 w-full",
+            ),
+            attribute.placeholder("e.g. com.example"),
+            attribute.value(model.domain_authority_input),
+            attribute.required(True),
+            event.on_input(UpdateDomainAuthorityInput),
+          ]),
+          html.p([attribute.class("text-xs text-zinc-500")], [
+            element.text(
+              "Determines which collections are considered \"primary\" vs \"external\" when backfilling records.",
+            ),
+          ]),
         ]),
-        html.input([
-          attribute.type_("text"),
-          attribute.class(
-            "font-mono px-4 py-2 text-sm text-zinc-300 bg-zinc-900 border border-zinc-800 rounded focus:outline-none focus:border-zinc-700 w-full",
-          ),
-          attribute.placeholder("e.g. com.example"),
-          attribute.value(model.domain_authority_input),
-          event.on_input(UpdateDomainAuthorityInput),
+        // Relay URL
+        html.div([attribute.class("space-y-2")], [
+          html.label([attribute.class("block text-sm text-zinc-400 mb-2")], [
+            element.text("Relay URL"),
+          ]),
+          html.input([
+            attribute.type_("text"),
+            attribute.class(
+              "font-mono px-4 py-2 text-sm text-zinc-300 bg-zinc-900 border border-zinc-800 rounded focus:outline-none focus:border-zinc-700 w-full",
+            ),
+            attribute.placeholder(settings.relay_url),
+            attribute.value(model.relay_url_input),
+            attribute.required(True),
+            event.on_input(UpdateRelayUrlInput),
+          ]),
+          html.p([attribute.class("text-xs text-zinc-500")], [
+            element.text("AT Protocol relay URL for backfill operations."),
+          ]),
         ]),
-      ]),
-      html.p([attribute.class("text-sm text-zinc-500 mb-4")], [
-        element.text(
-          "The domain authority is used to determine which collections are considered \"primary\" vs \"external\" when backfilling records. For example, if the authority is \"xyz.statusphere\", then \"xyz.statusphere.status\" is treated as primary and \"app.bsky.actor.profile\" is external.",
-        ),
-      ]),
-      html.div([attribute.class("flex gap-3")], [
-        button.button(
-          disabled: is_saving,
-          on_click: SubmitDomainAuthority,
-          text: case is_saving {
+        // PLC Directory URL
+        html.div([attribute.class("space-y-2")], [
+          html.label([attribute.class("block text-sm text-zinc-400 mb-2")], [
+            element.text("PLC Directory URL"),
+          ]),
+          html.input([
+            attribute.type_("text"),
+            attribute.class(
+              "font-mono px-4 py-2 text-sm text-zinc-300 bg-zinc-900 border border-zinc-800 rounded focus:outline-none focus:border-zinc-700 w-full",
+            ),
+            attribute.placeholder(settings.plc_directory_url),
+            attribute.value(model.plc_directory_url_input),
+            attribute.required(True),
+            event.on_input(UpdatePlcDirectoryUrlInput),
+          ]),
+          html.p([attribute.class("text-xs text-zinc-500")], [
+            element.text("PLC directory URL for DID resolution."),
+          ]),
+        ]),
+        // Jetstream URL
+        html.div([attribute.class("space-y-2")], [
+          html.label([attribute.class("block text-sm text-zinc-400 mb-2")], [
+            element.text("Jetstream URL"),
+          ]),
+          html.input([
+            attribute.type_("text"),
+            attribute.class(
+              "font-mono px-4 py-2 text-sm text-zinc-300 bg-zinc-900 border border-zinc-800 rounded focus:outline-none focus:border-zinc-700 w-full",
+            ),
+            attribute.placeholder(settings.jetstream_url),
+            attribute.value(model.jetstream_url_input),
+            attribute.required(True),
+            event.on_input(UpdateJetstreamUrlInput),
+          ]),
+          html.p([attribute.class("text-xs text-zinc-500")], [
+            element.text("Jetstream WebSocket endpoint for real-time indexing."),
+          ]),
+        ]),
+        // OAuth Supported Scopes
+        html.div([attribute.class("space-y-2")], [
+          html.label([attribute.class("block text-sm text-zinc-400 mb-2")], [
+            element.text("OAuth Supported Scopes"),
+          ]),
+          html.input([
+            attribute.type_("text"),
+            attribute.class(
+              "font-mono px-4 py-2 text-sm text-zinc-300 bg-zinc-900 border border-zinc-800 rounded focus:outline-none focus:border-zinc-700 w-full",
+            ),
+            attribute.placeholder(settings.oauth_supported_scopes),
+            attribute.value(model.oauth_supported_scopes_input),
+            attribute.required(True),
+            event.on_input(UpdateOAuthSupportedScopesInput),
+          ]),
+          html.p([attribute.class("text-xs text-zinc-500")], [
+            element.text(
+              "Space-separated OAuth scopes supported by this server.",
+            ),
+          ]),
+        ]),
+        // Save button for all basic settings
+        html.div([attribute.class("flex gap-3 pt-4")], [
+          button.submit(disabled: is_saving, text: case is_saving {
             True -> "Saving..."
             False -> "Save"
-          },
-        ),
-      ]),
-    ]),
+          }),
+        ]),
+      ],
+    ),
   ])
 }
 
-fn lexicons_section(_model: Model) -> Element(Msg) {
+fn lexicons_section(model: Model) -> Element(Msg) {
   html.div([attribute.class("bg-zinc-800/50 rounded p-6")], [
     html.h2([attribute.class("text-xl font-semibold text-zinc-300 mb-4")], [
       element.text("Lexicons"),
     ]),
+    // Alert message
+    case model.lexicons_alert {
+      Some(#(kind, message)) -> {
+        let alert_kind = case kind {
+          "success" -> alert.Success
+          "error" -> alert.Error
+          _ -> alert.Info
+        }
+        alert.alert(alert_kind, message)
+      }
+      None -> element.none()
+    },
     html.div([attribute.class("space-y-4")], [
       html.div([attribute.class("mb-4")], [
         html.label([attribute.class("block text-sm text-zinc-400 mb-2")], [

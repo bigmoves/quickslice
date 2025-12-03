@@ -2,8 +2,8 @@ import activity_cleanup
 import argv
 import backfill
 import backfill_state
-import config
 import database/connection
+import database/repositories/config as config_repo
 import database/repositories/lexicons
 import dotenv_gleam
 import envoy
@@ -39,8 +39,6 @@ import handlers/upload as upload_handler
 import importer
 import jetstream_consumer
 import lib/oauth/did_cache
-import lib/oauth/scopes/validator as scope_validator
-import lib/oauth/types/error
 import logging
 import mist
 import pubsub
@@ -53,15 +51,12 @@ pub type Context {
   Context(
     db: sqlight.Connection,
     external_base_url: String,
-    plc_url: String,
     backfill_state: process.Subject(backfill_state.Message),
-    config: process.Subject(config.Message),
     jetstream_consumer: option.Option(
       process.Subject(jetstream_consumer.ManagerMessage),
     ),
     did_cache: process.Subject(did_cache.Message),
     oauth_signing_key: option.Option(String),
-    oauth_supported_scopes: List(String),
     oauth_loopback_mode: Bool,
   )
 }
@@ -135,13 +130,10 @@ fn run_backfill_command() {
   // Initialize the database
   let assert Ok(db) = connection.initialize(database_url)
 
-  // Start config cache actor
-  let assert Ok(config_subject) = config.start(db)
-
-  // Get domain authority from config
-  let domain_authority = case config.get_domain_authority(config_subject) {
-    option.Some(authority) -> authority
-    option.None -> {
+  // Get domain authority from database
+  let domain_authority = case config_repo.get(db, "domain_authority") {
+    Ok(authority) -> authority
+    Error(_) -> {
       logging.log(
         logging.Warning,
         "No domain_authority configured. All collections will be treated as external.",
@@ -204,7 +196,7 @@ fn run_backfill_command() {
           }
 
           logging.log(logging.Info, "")
-          let config = backfill.default_config()
+          let config = backfill.default_config(db)
           backfill.backfill_collections(
             [],
             collections,
@@ -238,8 +230,11 @@ fn start_server_normally() {
   // Initialize the database
   let assert Ok(db) = connection.initialize(database_url)
 
-  // Note: Lexicon import has been moved to the settings page (ZIP upload)
-  // Use the /settings page to upload a ZIP file containing lexicon JSON files
+  // Initialize config defaults
+  let _ = config_repo.initialize_config_defaults(db)
+
+  // Initialize HTTP connection pool for backfill/DID resolution
+  backfill.configure_hackney_pool(150)
 
   // Initialize PubSub registry for subscriptions
   pubsub.start()
@@ -343,12 +338,6 @@ fn start_server(
     Error(_) -> "http://" <> host <> ":" <> int.to_string(port)
   }
 
-  // Get PLC directory URL from environment variable or use default
-  let plc_url = case envoy.get("PLC_DIRECTORY_URL") {
-    Ok(url) -> url
-    Error(_) -> "https://plc.directory"
-  }
-
   // Get OAuth signing key from environment variable (multibase format)
   let oauth_signing_key = case envoy.get("OAUTH_SIGNING_KEY") {
     Ok(key) if key != "" -> {
@@ -365,36 +354,6 @@ fn start_server(
       )
       option.None
     }
-  }
-
-  // Get OAuth supported scopes from environment variable (space-separated)
-  // Validate format at startup - panic on invalid configuration
-  let oauth_supported_scopes = case envoy.get("OAUTH_SUPPORTED_SCOPES") {
-    Ok(scopes_str) -> {
-      // Strip surrounding quotes if present (dotenv doesn't strip them)
-      let scopes_str = case string.starts_with(scopes_str, "\"") {
-        True ->
-          scopes_str
-          |> string.drop_start(1)
-          |> string.drop_end(1)
-        False -> scopes_str
-      }
-      case scope_validator.validate_scope_format(scopes_str) {
-        Ok(_) -> {
-          scopes_str
-          |> string.split(" ")
-          |> list.map(string.trim)
-          |> list.filter(fn(s) { !string.is_empty(s) })
-        }
-        Error(e) -> {
-          let msg =
-            "Invalid OAUTH_SUPPORTED_SCOPES: " <> error.error_description(e)
-          logging.log(logging.Error, msg)
-          panic as msg
-        }
-      }
-    }
-    Error(_) -> ["atproto", "transition:generic"]
   }
 
   // Get OAuth loopback mode from environment variable
@@ -415,10 +374,6 @@ fn start_server(
   let assert Ok(backfill_state_subject) = backfill_state.start()
   logging.log(logging.Info, "[server] Backfill state actor initialized")
 
-  // Start config cache actor
-  let assert Ok(config_subject) = config.start(db)
-  logging.log(logging.Info, "[server] Config cache actor initialized")
-
   // Start DID cache actor
   let assert Ok(did_cache_subject) = did_cache.start()
   logging.log(logging.Info, "[server] DID cache actor initialized")
@@ -427,13 +382,10 @@ fn start_server(
     Context(
       db: db,
       external_base_url: external_base_url,
-      plc_url: plc_url,
       backfill_state: backfill_state_subject,
-      config: config_subject,
       jetstream_consumer: jetstream_subject,
       did_cache: did_cache_subject,
       oauth_signing_key: oauth_signing_key,
-      oauth_supported_scopes: oauth_supported_scopes,
       oauth_loopback_mode: oauth_loopback_mode,
     )
 
@@ -464,17 +416,17 @@ fn start_server(
                   "[server] Handling WebSocket upgrade for /graphql",
                 )
                 let domain_authority = case
-                  config.get_domain_authority(ctx.config)
+                  config_repo.get(ctx.db, "domain_authority")
                 {
-                  option.Some(authority) -> authority
-                  option.None -> ""
+                  Ok(authority) -> authority
+                  Error(_) -> ""
                 }
                 graphql_ws_handler.handle_websocket(
                   req,
                   ctx.db,
                   ctx.did_cache,
                   ctx.oauth_signing_key,
-                  ctx.plc_url,
+                  config_repo.get_plc_directory_url(ctx.db),
                   domain_authority,
                 )
               }
@@ -527,7 +479,7 @@ fn handle_request(
         True ->
           build_loopback_client_id(
             redirect_uri,
-            string.join(ctx.oauth_supported_scopes, " "),
+            config_repo.get_oauth_supported_scopes(ctx.db),
           )
         False -> ctx.external_base_url <> "/oauth-client-metadata.json"
       }
@@ -538,7 +490,7 @@ fn handle_request(
         redirect_uri,
         client_id,
         ctx.oauth_signing_key,
-        ctx.oauth_supported_scopes,
+        config_repo.get_oauth_supported_scopes_list(ctx.db),
       )
     }
     ["admin", "oauth", "callback"] -> {
@@ -547,7 +499,7 @@ fn handle_request(
         True ->
           build_loopback_client_id(
             redirect_uri,
-            string.join(ctx.oauth_supported_scopes, " "),
+            config_repo.get_oauth_supported_scopes(ctx.db),
           )
         False -> ctx.external_base_url <> "/oauth-client-metadata.json"
       }
@@ -566,7 +518,7 @@ fn handle_request(
         ctx.db,
         ctx.jetstream_consumer,
         ctx.did_cache,
-        ctx.oauth_supported_scopes,
+        config_repo.get_oauth_supported_scopes_list(ctx.db),
         ctx.backfill_state,
       )
     ["graphql"] ->
@@ -575,7 +527,7 @@ fn handle_request(
         ctx.db,
         ctx.did_cache,
         ctx.oauth_signing_key,
-        ctx.plc_url,
+        config_repo.get_plc_directory_url(ctx.db),
       )
     ["graphiql"] ->
       graphiql_handler.handle_graphiql_request(req, ctx.db, ctx.did_cache)
@@ -589,8 +541,8 @@ fn handle_request(
           external_base_url: ctx.external_base_url,
           did_cache: ctx.did_cache,
           signing_key: ctx.oauth_signing_key,
-          plc_url: ctx.plc_url,
-          supported_scopes: ctx.oauth_supported_scopes,
+          plc_url: config_repo.get_plc_directory_url(ctx.db),
+          supported_scopes: config_repo.get_oauth_supported_scopes_list(ctx.db),
         )
       mcp_handler.handle(req, mcp_ctx)
     }
@@ -598,7 +550,7 @@ fn handle_request(
     [".well-known", "oauth-authorization-server"] ->
       oauth_metadata_handler.handle(
         ctx.external_base_url,
-        ctx.oauth_supported_scopes,
+        config_repo.get_oauth_supported_scopes_list(ctx.db),
       )
     [".well-known", "jwks.json"] ->
       oauth_jwks_handler.handle(ctx.oauth_signing_key)
@@ -610,7 +562,7 @@ fn handle_request(
           ctx.external_base_url <> "/admin/oauth/callback",
           ctx.external_base_url <> "/oauth/atp/callback",
         ],
-        string.join(ctx.oauth_supported_scopes, " "),
+        config_repo.get_oauth_supported_scopes(ctx.db),
         option.None,
         option.Some(ctx.external_base_url <> "/.well-known/jwks.json"),
       )
@@ -623,7 +575,7 @@ fn handle_request(
         True ->
           build_loopback_client_id(
             redirect_uri,
-            string.join(ctx.oauth_supported_scopes, " "),
+            config_repo.get_oauth_supported_scopes(ctx.db),
           )
         False -> ctx.external_base_url <> "/oauth-client-metadata.json"
       }
@@ -644,7 +596,7 @@ fn handle_request(
         True ->
           build_loopback_client_id(
             redirect_uri,
-            string.join(ctx.oauth_supported_scopes, " "),
+            config_repo.get_oauth_supported_scopes(ctx.db),
           )
         False -> ctx.external_base_url <> "/oauth-client-metadata.json"
       }

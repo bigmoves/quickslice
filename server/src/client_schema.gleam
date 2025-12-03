@@ -12,7 +12,6 @@ import database/repositories/lexicons
 import database/repositories/oauth_clients
 import database/repositories/records
 import database/types.{type ActivityBucket, type ActivityEntry, type Lexicon}
-import envoy
 import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -21,6 +20,7 @@ import gleam/string
 import importer
 import jetstream_consumer
 import lib/oauth/did_cache
+import lib/oauth/scopes/validator as scope_validator
 import lib/oauth/token_generator
 import lib/oauth/validator
 import logging
@@ -400,6 +400,70 @@ pub fn settings_type() -> schema.Type {
         }
       },
     ),
+    schema.field(
+      "relayUrl",
+      schema.non_null(schema.string_type()),
+      "AT Protocol relay URL for backfill operations",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "relayUrl") {
+              Ok(url) -> Ok(url)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
+    schema.field(
+      "plcDirectoryUrl",
+      schema.non_null(schema.string_type()),
+      "PLC directory URL for DID resolution",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "plcDirectoryUrl") {
+              Ok(url) -> Ok(url)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
+    schema.field(
+      "jetstreamUrl",
+      schema.non_null(schema.string_type()),
+      "Jetstream WebSocket endpoint for real-time indexing",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "jetstreamUrl") {
+              Ok(url) -> Ok(url)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
+    schema.field(
+      "oauthSupportedScopes",
+      schema.non_null(schema.string_type()),
+      "Space-separated OAuth scopes supported by this server",
+      fn(ctx) {
+        case ctx.data {
+          Some(value.Object(fields)) -> {
+            case list.key_find(fields, "oauthSupportedScopes") {
+              Ok(scopes) -> Ok(scopes)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    ),
   ])
 }
 
@@ -686,11 +750,19 @@ fn activity_entry_to_value(entry: ActivityEntry) -> value.Value {
 fn settings_to_value(
   domain_authority: String,
   admin_dids: List(String),
+  relay_url: String,
+  plc_directory_url: String,
+  jetstream_url: String,
+  oauth_supported_scopes: String,
 ) -> value.Value {
   value.Object([
     #("id", value.String("Settings:singleton")),
     #("domainAuthority", value.String(domain_authority)),
     #("adminDids", value.List(list.map(admin_dids, value.String))),
+    #("relayUrl", value.String(relay_url)),
+    #("plcDirectoryUrl", value.String(plc_directory_url)),
+    #("jetstreamUrl", value.String(jetstream_url)),
+    #("oauthSupportedScopes", value.String(oauth_supported_scopes)),
   ])
 }
 
@@ -778,8 +850,20 @@ pub fn query_type(
           Error(_) -> ""
         }
         let admin_dids = config_repo.get_admin_dids(conn)
+        let relay_url = config_repo.get_relay_url(conn)
+        let plc_directory_url = config_repo.get_plc_directory_url(conn)
+        let jetstream_url = config_repo.get_jetstream_url(conn)
+        let oauth_supported_scopes =
+          config_repo.get_oauth_supported_scopes(conn)
 
-        Ok(settings_to_value(domain_authority, admin_dids))
+        Ok(settings_to_value(
+          domain_authority,
+          admin_dids,
+          relay_url,
+          plc_directory_url,
+          jetstream_url,
+          oauth_supported_scopes,
+        ))
       },
     ),
     // isBackfilling query
@@ -944,6 +1028,30 @@ pub fn mutation_type(
           "New admin DIDs list (optional)",
           None,
         ),
+        schema.argument(
+          "relayUrl",
+          schema.string_type(),
+          "New relay URL (optional)",
+          None,
+        ),
+        schema.argument(
+          "plcDirectoryUrl",
+          schema.string_type(),
+          "New PLC directory URL (optional)",
+          None,
+        ),
+        schema.argument(
+          "jetstreamUrl",
+          schema.string_type(),
+          "New Jetstream URL (optional)",
+          None,
+        ),
+        schema.argument(
+          "oauthSupportedScopes",
+          schema.string_type(),
+          "New OAuth supported scopes space-separated (optional)",
+          None,
+        ),
       ],
       fn(ctx) {
         // Check admin privileges
@@ -958,23 +1066,35 @@ pub fn mutation_type(
                   schema.get_argument(ctx, "domainAuthority")
                 {
                   Some(value.String(authority)) -> {
-                    case config_repo.set(conn, "domain_authority", authority) {
-                      Ok(_) -> {
-                        // Restart Jetstream consumer
-                        case jetstream_subject {
-                          Some(consumer) -> {
-                            logging.log(
-                              logging.Info,
-                              "[updateSettings] Restarting Jetstream consumer...",
-                            )
-                            let _ = jetstream_consumer.restart(consumer)
-                            Nil
+                    // Validate not empty
+                    case string.trim(authority) {
+                      "" -> Error("Domain authority cannot be empty")
+                      trimmed_authority -> {
+                        case
+                          config_repo.set(
+                            conn,
+                            "domain_authority",
+                            trimmed_authority,
+                          )
+                        {
+                          Ok(_) -> {
+                            // Restart Jetstream consumer
+                            case jetstream_subject {
+                              Some(consumer) -> {
+                                logging.log(
+                                  logging.Info,
+                                  "[updateSettings] Restarting Jetstream consumer...",
+                                )
+                                let _ = jetstream_consumer.restart(consumer)
+                                Nil
+                              }
+                              None -> Nil
+                            }
+                            Ok(Nil)
                           }
-                          None -> Nil
+                          Error(_) -> Error("Failed to update domain authority")
                         }
-                        Ok(Nil)
                       }
-                      Error(_) -> Error("Failed to update domain authority")
                     }
                   }
                   _ -> Ok(Nil)
@@ -1030,15 +1150,247 @@ pub fn mutation_type(
                     case admin_dids_result {
                       Error(err) -> Error(err)
                       Ok(_) -> {
-                        // Return updated settings
-                        let final_authority = case
-                          config_repo.get(conn, "domain_authority")
+                        // Update relay URL if provided
+                        let relay_url_result = case
+                          schema.get_argument(ctx, "relayUrl")
                         {
-                          Ok(a) -> a
-                          Error(_) -> ""
+                          Some(value.String(url)) -> {
+                            case string.trim(url) {
+                              "" -> Error("Relay URL cannot be empty")
+                              trimmed_url -> {
+                                case
+                                  config_repo.set_relay_url(conn, trimmed_url)
+                                {
+                                  Ok(_) -> Ok(Nil)
+                                  Error(_) ->
+                                    Error("Failed to update relay URL")
+                                }
+                              }
+                            }
+                          }
+                          _ -> Ok(Nil)
                         }
-                        let final_admin_dids = config_repo.get_admin_dids(conn)
-                        Ok(settings_to_value(final_authority, final_admin_dids))
+
+                        case relay_url_result {
+                          Error(err) -> Error(err)
+                          Ok(_) -> {
+                            // Update PLC directory URL if provided
+                            let plc_url_result = case
+                              schema.get_argument(ctx, "plcDirectoryUrl")
+                            {
+                              Some(value.String(url)) -> {
+                                case string.trim(url) {
+                                  "" ->
+                                    Error("PLC directory URL cannot be empty")
+                                  trimmed_url -> {
+                                    case
+                                      config_repo.set_plc_directory_url(
+                                        conn,
+                                        trimmed_url,
+                                      )
+                                    {
+                                      Ok(_) -> Ok(True)
+                                      Error(_) ->
+                                        Error(
+                                          "Failed to update PLC directory URL",
+                                        )
+                                    }
+                                  }
+                                }
+                              }
+                              _ -> Ok(False)
+                            }
+
+                            case plc_url_result {
+                              Error(err) -> Error(err)
+                              Ok(plc_changed) -> {
+                                // Restart Jetstream if PLC URL changed
+                                case plc_changed {
+                                  True -> {
+                                    case jetstream_subject {
+                                      Some(consumer) -> {
+                                        logging.log(
+                                          logging.Info,
+                                          "[updateSettings] Restarting Jetstream consumer due to PLC URL change",
+                                        )
+                                        case
+                                          jetstream_consumer.restart(consumer)
+                                        {
+                                          Ok(_) ->
+                                            logging.log(
+                                              logging.Info,
+                                              "[updateSettings] Jetstream consumer restarted",
+                                            )
+                                          Error(err) ->
+                                            logging.log(
+                                              logging.Error,
+                                              "[updateSettings] Failed to restart Jetstream: "
+                                                <> err,
+                                            )
+                                        }
+                                      }
+                                      None -> Nil
+                                    }
+                                  }
+                                  False -> Nil
+                                }
+                                // Update Jetstream URL if provided and restart consumer
+                                let jetstream_url_result = case
+                                  schema.get_argument(ctx, "jetstreamUrl")
+                                {
+                                  Some(value.String(url)) -> {
+                                    case string.trim(url) {
+                                      "" ->
+                                        Error("Jetstream URL cannot be empty")
+                                      trimmed_url -> {
+                                        case
+                                          config_repo.set_jetstream_url(
+                                            conn,
+                                            trimmed_url,
+                                          )
+                                        {
+                                          Ok(_) -> Ok(True)
+                                          Error(_) ->
+                                            Error(
+                                              "Failed to update Jetstream URL",
+                                            )
+                                        }
+                                      }
+                                    }
+                                  }
+                                  _ -> Ok(False)
+                                }
+
+                                case jetstream_url_result {
+                                  Error(err) -> Error(err)
+                                  Ok(jetstream_url_changed) -> {
+                                    // If Jetstream URL changed, restart consumer
+                                    case jetstream_url_changed {
+                                      True -> {
+                                        case jetstream_subject {
+                                          Some(consumer) -> {
+                                            logging.log(
+                                              logging.Info,
+                                              "[updateSettings] Restarting Jetstream consumer due to URL change",
+                                            )
+                                            case
+                                              jetstream_consumer.restart(
+                                                consumer,
+                                              )
+                                            {
+                                              Ok(_) ->
+                                                logging.log(
+                                                  logging.Info,
+                                                  "[updateSettings] Jetstream consumer restarted",
+                                                )
+                                              Error(err) ->
+                                                logging.log(
+                                                  logging.Error,
+                                                  "[updateSettings] Failed to restart Jetstream: "
+                                                    <> err,
+                                                )
+                                            }
+                                          }
+                                          None -> Nil
+                                        }
+                                      }
+                                      False -> Nil
+                                    }
+
+                                    // Update OAuth supported scopes if provided (with validation)
+                                    let oauth_scopes_result = case
+                                      schema.get_argument(
+                                        ctx,
+                                        "oauthSupportedScopes",
+                                      )
+                                    {
+                                      Some(value.String(scopes)) -> {
+                                        case string.trim(scopes) {
+                                          "" ->
+                                            Error(
+                                              "OAuth supported scopes cannot be empty",
+                                            )
+                                          trimmed_scopes -> {
+                                            // Validate scope format (accepts any valid ATProto scope)
+                                            case
+                                              scope_validator.validate_scope_format(
+                                                trimmed_scopes,
+                                              )
+                                            {
+                                              Ok(_) -> {
+                                                // Validation passed, save to database
+                                                case
+                                                  config_repo.set_oauth_supported_scopes(
+                                                    conn,
+                                                    trimmed_scopes,
+                                                  )
+                                                {
+                                                  Ok(_) -> Ok(Nil)
+                                                  Error(_) ->
+                                                    Error(
+                                                      "Failed to save OAuth scopes",
+                                                    )
+                                                }
+                                              }
+                                              Error(err) -> {
+                                                logging.log(
+                                                  logging.Error,
+                                                  "[updateSettings] Invalid OAuth scope: "
+                                                    <> string.inspect(err),
+                                                )
+                                                Error("Invalid OAuth scope")
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                      _ -> Ok(Nil)
+                                    }
+
+                                    case oauth_scopes_result {
+                                      Error(err) -> Error(err)
+                                      Ok(_) -> {
+                                        // Return updated settings
+                                        let final_authority = case
+                                          config_repo.get(
+                                            conn,
+                                            "domain_authority",
+                                          )
+                                        {
+                                          Ok(a) -> a
+                                          Error(_) -> ""
+                                        }
+                                        let final_admin_dids =
+                                          config_repo.get_admin_dids(conn)
+                                        let final_relay_url =
+                                          config_repo.get_relay_url(conn)
+                                        let final_plc_directory_url =
+                                          config_repo.get_plc_directory_url(
+                                            conn,
+                                          )
+                                        let final_jetstream_url =
+                                          config_repo.get_jetstream_url(conn)
+                                        let final_oauth_scopes =
+                                          config_repo.get_oauth_supported_scopes(
+                                            conn,
+                                          )
+
+                                        Ok(settings_to_value(
+                                          final_authority,
+                                          final_admin_dids,
+                                          final_relay_url,
+                                          final_plc_directory_url,
+                                          final_jetstream_url,
+                                          final_oauth_scopes,
+                                        ))
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -1215,7 +1567,7 @@ pub fn mutation_type(
                     })
 
                   // Run backfill with default config and empty repo list (fetches from relay)
-                  let config = backfill.default_config()
+                  let config = backfill.default_config(conn)
                   backfill.backfill_collections(
                     [],
                     primary_collections,
@@ -1288,11 +1640,8 @@ pub fn mutation_type(
                     )
                   })
 
-                // Get PLC URL from environment
-                let plc_url = case envoy.get("PLC_DIRECTORY_URL") {
-                  Ok(url) -> url
-                  Error(_) -> "https://plc.directory"
-                }
+                // Get PLC URL from database config
+                let plc_url = config_repo.get_plc_directory_url(conn)
 
                 // Spawn background process to run backfill for this actor
                 process.spawn_unlinked(fn() {
