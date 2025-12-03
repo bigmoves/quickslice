@@ -1,4 +1,4 @@
-import gleam/dict.{type Dict}
+import envoy
 import gleam/dynamic/decode
 import gleam/list
 import gleam/result
@@ -45,22 +45,6 @@ pub fn get(
         -1,
       ))
     Error(err) -> Error(err)
-  }
-}
-
-/// Get all config values as a dictionary
-pub fn get_all(conn: sqlight.Connection) -> Dict(String, String) {
-  let sql = "SELECT key, value FROM config"
-
-  let decoder = {
-    use key <- decode.field(0, decode.string)
-    use value <- decode.field(1, decode.string)
-    decode.success(#(key, value))
-  }
-
-  case sqlight.query(sql, on: conn, with: [], expecting: decoder) {
-    Ok(rows) -> dict.from_list(rows)
-    Error(_) -> dict.new()
   }
 }
 
@@ -207,11 +191,16 @@ pub fn get_relay_url(conn: sqlight.Connection) -> String {
   }
 }
 
-/// Get PLC directory URL from config, with default fallback
+/// Get PLC directory URL with precedence: env var → database → default
 pub fn get_plc_directory_url(conn: sqlight.Connection) -> String {
-  case get(conn, "plc_directory_url") {
+  case envoy.get("PLC_DIRECTORY_URL") {
     Ok(url) -> url
-    Error(_) -> default_plc_directory_url
+    Error(_) -> {
+      case get(conn, "plc_directory_url") {
+        Ok(url) -> url
+        Error(_) -> default_plc_directory_url
+      }
+    }
   }
 }
 

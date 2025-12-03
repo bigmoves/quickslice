@@ -1,12 +1,9 @@
 import database/repositories/config
 import database/repositories/lexicons
 import database/repositories/records
-import gleam/dict
 import gleam/json
-import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
-import gleam/string
 import sqlight
 
 /// Get server capabilities
@@ -21,30 +18,13 @@ pub fn get_server_capabilities(
     records.get_count(db)
     |> result.unwrap(0)
 
-  // Get all config values in a single query
-  let cfg = config.get_all(db)
-
-  let relay_url =
-    dict.get(cfg, "relay_url")
-    |> result.unwrap(config.default_relay_url)
-  let jetstream_url =
-    dict.get(cfg, "jetstream_url")
-    |> result.unwrap(config.default_jetstream_url)
-  let plc_directory_url =
-    dict.get(cfg, "plc_directory_url")
-    |> result.unwrap(config.default_plc_directory_url)
-  let oauth_supported_scopes =
-    dict.get(cfg, "oauth_supported_scopes")
-    |> result.unwrap(config.default_oauth_supported_scopes)
-  let admin_dids = case dict.get(cfg, "admin_dids") {
-    Ok(value) ->
-      value
-      |> string.split(",")
-      |> list.map(string.trim)
-      |> list.filter(fn(did) { !string.is_empty(did) })
-    Error(_) -> []
-  }
-  let domain_authority = case dict.get(cfg, "domain_authority") {
+  // Get config values using individual getters (handles env var precedence)
+  let relay_url = config.get_relay_url(db)
+  let jetstream_url = config.get_jetstream_url(db)
+  let plc_directory_url = config.get_plc_directory_url(db)
+  let oauth_supported_scopes = config.get_oauth_supported_scopes(db)
+  let admin_dids = config.get_admin_dids(db)
+  let domain_authority = case config.get(db, "domain_authority") {
     Ok(value) -> Some(value)
     Error(_) -> None
   }
