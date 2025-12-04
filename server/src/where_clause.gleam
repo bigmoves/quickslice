@@ -15,6 +15,7 @@ pub type WhereCondition {
     gte: Option(sqlight.Value),
     lt: Option(sqlight.Value),
     lte: Option(sqlight.Value),
+    is_null: Option(Bool),
     /// Whether the comparison values are numeric (affects JSON field casting)
     is_numeric: Bool,
   )
@@ -42,6 +43,7 @@ pub fn empty_condition() -> WhereCondition {
     gte: None,
     lt: None,
     lte: None,
+    is_null: None,
     is_numeric: False,
   )
 }
@@ -62,6 +64,7 @@ pub fn is_condition_empty(condition: WhereCondition) -> Bool {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: _,
     ) -> True
     _ -> False
@@ -165,6 +168,10 @@ fn build_single_condition(
 
   let field_ref =
     build_field_ref_with_cast(field, use_table_prefix, has_numeric_comparison)
+
+  // For isNull, we need the field ref without numeric cast
+  let field_ref_no_cast = build_field_ref(field, use_table_prefix)
+
   let mut_sql_parts = []
   let mut_params = []
 
@@ -243,6 +250,21 @@ fn build_single_condition(
     Some(search_text) -> {
       let sql = field_ref <> " LIKE '%' || ? || '%' COLLATE NOCASE"
       #([sql, ..mut_sql_parts], [sqlight.text(search_text), ..mut_params])
+    }
+    None -> #(mut_sql_parts, mut_params)
+  }
+  let mut_sql_parts = sql_parts
+  let mut_params = params
+
+  // isNull operator (no parameters needed)
+  let #(sql_parts, params) = case condition.is_null {
+    Some(True) -> {
+      let sql = field_ref_no_cast <> " IS NULL"
+      #([sql, ..mut_sql_parts], mut_params)
+    }
+    Some(False) -> {
+      let sql = field_ref_no_cast <> " IS NOT NULL"
+      #([sql, ..mut_sql_parts], mut_params)
     }
     None -> #(mut_sql_parts, mut_params)
   }

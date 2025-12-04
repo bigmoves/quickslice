@@ -77,6 +77,7 @@ pub fn filter_by_did_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -126,6 +127,7 @@ pub fn filter_by_json_contains_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -175,6 +177,7 @@ pub fn filter_by_json_comparison_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -221,6 +224,7 @@ pub fn filter_range_query_test() {
             gte: Some(sqlight.int(50)),
             lt: Some(sqlight.int(150)),
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -267,6 +271,7 @@ pub fn filter_nested_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -288,6 +293,7 @@ pub fn filter_nested_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -348,6 +354,7 @@ pub fn filter_nested_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -369,6 +376,7 @@ pub fn filter_nested_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -449,6 +457,7 @@ pub fn filter_with_pagination_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -499,6 +508,7 @@ pub fn filter_numeric_with_cast_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: True,
           ),
         ),
@@ -575,6 +585,7 @@ pub fn filter_datetime_string_comparison_test() {
             gte: Some(sqlight.text("2024-06-01T00:00:00Z")),
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -601,6 +612,195 @@ pub fn filter_datetime_string_comparison_test() {
       list.length(records) |> should.equal(1)
       case list.first(records) {
         Ok(record) -> should.be_true(string.contains(record.json, "New post"))
+        Error(_) -> should.fail()
+      }
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+// ===== isNull End-to-End Tests =====
+
+/// Test isNull: true end-to-end from GraphQL parsing through SQL execution
+pub fn is_null_true_end_to_end_test() {
+  let assert Ok(conn) = sqlight.open(":memory:")
+  let assert Ok(_) = tables.create_record_table(conn)
+
+  // Insert records - some with replyParent, some without
+  let assert Ok(_) =
+    sqlight.query(
+      "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
+       VALUES (?, 'cid1', 'did:plc:1', 'app.bsky.feed.post', ?, datetime('now'))",
+      on: conn,
+      with: [
+        sqlight.text("at://did:plc:1/app.bsky.feed.post/1"),
+        sqlight.text("{\"text\":\"Root post\"}"),
+      ],
+      expecting: decode.string,
+    )
+
+  let assert Ok(_) =
+    sqlight.query(
+      "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
+       VALUES (?, 'cid2', 'did:plc:2', 'app.bsky.feed.post', ?, datetime('now'))",
+      on: conn,
+      with: [
+        sqlight.text("at://did:plc:2/app.bsky.feed.post/2"),
+        sqlight.text(
+          "{\"text\":\"Reply post\",\"replyParent\":\"at://did:plc:1/app.bsky.feed.post/1\"}",
+        ),
+      ],
+      expecting: decode.string,
+    )
+
+  let assert Ok(_) =
+    sqlight.query(
+      "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
+       VALUES (?, 'cid3', 'did:plc:3', 'app.bsky.feed.post', ?, datetime('now'))",
+      on: conn,
+      with: [
+        sqlight.text("at://did:plc:3/app.bsky.feed.post/3"),
+        sqlight.text("{\"text\":\"Another root post\"}"),
+      ],
+      expecting: decode.string,
+    )
+
+  // Filter for records where replyParent IS NULL (root posts only)
+  let where_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "replyParent",
+          where_clause.WhereCondition(
+            eq: None,
+            in_values: None,
+            contains: None,
+            gt: None,
+            gte: None,
+            lt: None,
+            lte: None,
+            is_null: Some(True),
+            is_numeric: False,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
+
+  let result =
+    records.get_by_collection_paginated_with_where(
+      conn,
+      "app.bsky.feed.post",
+      Some(10),
+      None,
+      None,
+      None,
+      None,
+      Some(where_clause),
+    )
+
+  case result {
+    Ok(#(records_list, _, _, _)) -> {
+      // Should only match the 2 root posts (without replyParent)
+      list.length(records_list) |> should.equal(2)
+      // Verify none of them are replies
+      list.all(records_list, fn(record) {
+        !string.contains(record.json, "replyParent")
+      })
+      |> should.be_true
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+/// Test isNull: false end-to-end from GraphQL parsing through SQL execution
+pub fn is_null_false_end_to_end_test() {
+  let assert Ok(conn) = sqlight.open(":memory:")
+  let assert Ok(_) = tables.create_record_table(conn)
+
+  // Insert records - some with replyParent, some without
+  let assert Ok(_) =
+    sqlight.query(
+      "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
+       VALUES (?, 'cid1', 'did:plc:1', 'app.bsky.feed.post', ?, datetime('now'))",
+      on: conn,
+      with: [
+        sqlight.text("at://did:plc:1/app.bsky.feed.post/1"),
+        sqlight.text("{\"text\":\"Root post\"}"),
+      ],
+      expecting: decode.string,
+    )
+
+  let assert Ok(_) =
+    sqlight.query(
+      "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
+       VALUES (?, 'cid2', 'did:plc:2', 'app.bsky.feed.post', ?, datetime('now'))",
+      on: conn,
+      with: [
+        sqlight.text("at://did:plc:2/app.bsky.feed.post/2"),
+        sqlight.text(
+          "{\"text\":\"Reply post\",\"replyParent\":\"at://did:plc:1/app.bsky.feed.post/1\"}",
+        ),
+      ],
+      expecting: decode.string,
+    )
+
+  let assert Ok(_) =
+    sqlight.query(
+      "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
+       VALUES (?, 'cid3', 'did:plc:3', 'app.bsky.feed.post', ?, datetime('now'))",
+      on: conn,
+      with: [
+        sqlight.text("at://did:plc:3/app.bsky.feed.post/3"),
+        sqlight.text("{\"text\":\"Another root post\"}"),
+      ],
+      expecting: decode.string,
+    )
+
+  // Filter for records where replyParent IS NOT NULL (replies only)
+  let where_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "replyParent",
+          where_clause.WhereCondition(
+            eq: None,
+            in_values: None,
+            contains: None,
+            gt: None,
+            gte: None,
+            lt: None,
+            lte: None,
+            is_null: Some(False),
+            is_numeric: False,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
+
+  let result =
+    records.get_by_collection_paginated_with_where(
+      conn,
+      "app.bsky.feed.post",
+      Some(10),
+      None,
+      None,
+      None,
+      None,
+      Some(where_clause),
+    )
+
+  case result {
+    Ok(#(records_list, _, _, _)) -> {
+      // Should only match the 1 reply post (with replyParent)
+      list.length(records_list) |> should.equal(1)
+      // Verify it's a reply
+      case list.first(records_list) {
+        Ok(record) ->
+          should.be_true(string.contains(record.json, "replyParent"))
         Error(_) -> should.fail()
       }
     }

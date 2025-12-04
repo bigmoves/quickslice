@@ -25,6 +25,7 @@ pub type WhereCondition {
     gte: Option(WhereValue),
     lt: Option(WhereValue),
     lte: Option(WhereValue),
+    is_null: Option(Bool),
   )
 }
 
@@ -98,6 +99,11 @@ pub fn parse_condition(filter_value: value.Value) -> WhereCondition {
         _ -> None
       }
 
+      let is_null = case list.key_find(fields, "isNull") {
+        Ok(value.Boolean(b)) -> Some(b)
+        _ -> None
+      }
+
       WhereCondition(
         eq: eq,
         in_values: in_values,
@@ -106,6 +112,7 @@ pub fn parse_condition(filter_value: value.Value) -> WhereCondition {
         gte: gte,
         lt: lt,
         lte: lte,
+        is_null: is_null,
       )
     }
     _ ->
@@ -117,6 +124,7 @@ pub fn parse_condition(filter_value: value.Value) -> WhereCondition {
         gte: None,
         lt: None,
         lte: None,
+        is_null: None,
       )
   }
 }

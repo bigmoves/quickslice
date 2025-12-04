@@ -49,6 +49,7 @@ pub fn is_condition_empty_false_with_eq_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   where_clause.is_condition_empty(condition) |> should.be_false
@@ -65,6 +66,7 @@ pub fn is_condition_empty_false_with_contains_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   where_clause.is_condition_empty(condition) |> should.be_false
@@ -87,6 +89,7 @@ pub fn is_clause_empty_false_with_conditions_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -133,6 +136,7 @@ pub fn condition_with_multiple_operators_test() {
       gte: None,
       lt: Some(sqlight.int(100)),
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
 
@@ -156,6 +160,7 @@ pub fn clause_with_nested_and_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -182,4 +187,21 @@ pub fn clause_with_nested_and_or_test() {
     Some(and_list) -> list.length(and_list) |> should.equal(1)
     None -> should.fail()
   }
+}
+
+// Test is_condition_empty with is_null operator set
+pub fn is_condition_empty_false_with_is_null_test() {
+  let condition =
+    where_clause.WhereCondition(
+      eq: None,
+      in_values: None,
+      contains: None,
+      gt: None,
+      gte: None,
+      lt: None,
+      lte: None,
+      is_null: Some(True),
+      is_numeric: False,
+    )
+  where_clause.is_condition_empty(condition) |> should.be_false
 }

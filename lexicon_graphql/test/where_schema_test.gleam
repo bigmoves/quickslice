@@ -211,7 +211,7 @@ pub fn recursive_and_or_fields_snapshot_test() {
 // ===== Integration Tests with db_schema_builder =====
 
 // Test: WHERE input only includes primitive types (string, integer, boolean, number)
-pub fn where_input_excludes_blob_and_ref_types_test() {
+pub fn where_input_excludes_blob_includes_ref_types_test() {
   let lexicon =
     types.Lexicon(
       "app.bsky.test.record",
@@ -335,9 +335,11 @@ pub fn where_input_excludes_blob_and_ref_types_test() {
       should.be_true(list.contains(field_names, "and"))
       should.be_true(list.contains(field_names, "or"))
 
-      // Should NOT include blob or ref fields
+      // Should NOT include blob fields
       should.be_false(list.contains(field_names, "blobField"))
-      should.be_false(list.contains(field_names, "refField"))
+
+      // Should include ref fields (with limited operators - isNull only)
+      should.be_true(list.contains(field_names, "refField"))
     }
     Error(_) -> should.fail()
   }

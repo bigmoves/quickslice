@@ -485,3 +485,41 @@ pub fn parse_complex_user_filter_test() {
     None -> should.fail()
   }
 }
+
+// ===== isNull Operator Tests =====
+
+pub fn parse_is_null_true_test() {
+  // { field: { isNull: true } }
+  let condition_value = value.Object([#("isNull", value.Boolean(True))])
+  let where_value = value.Object([#("field", condition_value)])
+
+  let result = where_input.parse_where_clause(where_value)
+
+  case dict.get(result.conditions, "field") {
+    Ok(condition) -> {
+      case condition.is_null {
+        Some(True) -> should.be_true(True)
+        _ -> should.fail()
+      }
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+pub fn parse_is_null_false_test() {
+  // { field: { isNull: false } }
+  let condition_value = value.Object([#("isNull", value.Boolean(False))])
+  let where_value = value.Object([#("field", condition_value)])
+
+  let result = where_input.parse_where_clause(where_value)
+
+  case dict.get(result.conditions, "field") {
+    Ok(condition) -> {
+      case condition.is_null {
+        Some(False) -> should.be_true(True)
+        _ -> should.fail()
+      }
+    }
+    Error(_) -> should.fail()
+  }
+}

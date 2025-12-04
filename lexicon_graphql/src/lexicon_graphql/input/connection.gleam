@@ -82,7 +82,7 @@ pub fn sort_field_input_type_with_enum(
 }
 
 /// Builds a WhereConditionInput type for filtering a specific field type
-/// Supports: eq, in, contains, gt, gte, lt, lte operators
+/// Supports: eq, in, contains, gt, gte, lt, lte, isNull operators
 pub fn build_where_condition_input_type(
   type_name: String,
   field_type: schema.Type,
@@ -110,7 +110,92 @@ pub fn build_where_condition_input_type(
       schema.input_field("gte", field_type, "Greater than or equal to", None),
       schema.input_field("lt", field_type, "Less than", None),
       schema.input_field("lte", field_type, "Less than or equal to", None),
+      schema.input_field(
+        "isNull",
+        schema.boolean_type(),
+        "Filter for null or missing values (true) or non-null values (false)",
+        None,
+      ),
     ],
+  )
+}
+
+/// Builds a WhereConditionInput type for ref fields (objects)
+/// Only supports isNull operator - ref fields can only check for presence/absence
+pub fn build_ref_where_condition_input_type(type_name: String) -> schema.Type {
+  let condition_type_name = type_name <> "RefFieldCondition"
+
+  schema.input_object_type(
+    condition_type_name,
+    "Filter for " <> type_name <> " reference fields (presence check only)",
+    [
+      schema.input_field(
+        "isNull",
+        schema.boolean_type(),
+        "Filter for null (true) or non-null (false) values",
+        None,
+      ),
+    ],
+  )
+}
+
+/// Builds a WhereInput type with support for different field types
+/// field_info is a list of (field_name, is_ref_field) tuples
+pub fn build_where_input_type_with_field_types(
+  type_name: String,
+  field_info: List(#(String, Bool)),
+) -> schema.Type {
+  let where_input_name = type_name <> "WhereInput"
+
+  // Build the condition types
+  let string_condition_type =
+    build_where_condition_input_type(type_name, schema.string_type())
+  let ref_condition_type = build_ref_where_condition_input_type(type_name)
+
+  // Build input fields - use ref condition for ref fields, string condition otherwise
+  let field_input_fields =
+    list.map(field_info, fn(info) {
+      let #(field_name, is_ref) = info
+      let condition_type = case is_ref {
+        True -> ref_condition_type
+        False -> string_condition_type
+      }
+      schema.input_field(
+        field_name,
+        condition_type,
+        "Filter by " <> field_name,
+        None,
+      )
+    })
+
+  // Create placeholder type for recursive reference
+  let where_input_type =
+    schema.input_object_type(
+      where_input_name,
+      "Filter conditions for " <> type_name,
+      field_input_fields,
+    )
+
+  // Add AND/OR fields
+  let logic_fields = [
+    schema.input_field(
+      "and",
+      schema.list_type(schema.non_null(where_input_type)),
+      "All conditions must match (AND logic)",
+      None,
+    ),
+    schema.input_field(
+      "or",
+      schema.list_type(schema.non_null(where_input_type)),
+      "Any condition must match (OR logic)",
+      None,
+    ),
+  ]
+
+  schema.input_object_type(
+    where_input_name,
+    "Filter conditions for " <> type_name <> " with nested AND/OR support",
+    list.append(field_input_fields, logic_fields),
   )
 }
 

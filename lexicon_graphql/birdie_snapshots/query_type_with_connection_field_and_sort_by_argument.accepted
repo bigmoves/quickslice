@@ -1,6 +1,8 @@
 ---
 version: 1.4.1
 title: Query type with connection field and sortBy argument
+file: ./test/sorting_test.gleam
+test_name: single_lexicon_with_sorting_snapshot_test
 ---
 """Root query type"""
 type Query {

@@ -1327,6 +1327,17 @@ fn is_groupable_property(property: types.Property) -> Bool {
   }
 }
 
+/// Check if a lexicon property is filterable based on its type
+/// Filterable types: string, integer, boolean, number, ref (primitives + refs for isNull)
+/// Non-filterable types: blob, array (complex types)
+fn is_filterable_property(property: types.Property) -> Bool {
+  case property_to_field_type(property) {
+    StringField | IntField | BoolField | NumberField | DateTimeField | RefField ->
+      True
+    BlobField | ArrayField -> False
+  }
+}
+
 /// Get all sortable field names for sort enums
 /// Returns only database-sortable fields (excludes computed fields like actorHandle)
 fn get_sortable_field_names_for_sorting(record_type: RecordType) -> List(String) {
@@ -1353,31 +1364,34 @@ fn get_sortable_field_names_for_sorting(record_type: RecordType) -> List(String)
   list.append(standard_sortable_fields, sortable_property_names)
 }
 
-/// Get all filterable field names for WHERE inputs
-/// Returns all primitive fields including computed fields like actorHandle
-fn get_filterable_field_names(record_type: RecordType) -> List(String) {
-  // Filter properties to only sortable types, then get their field names
-  let filterable_property_names =
+/// Get all filterable field names for WHERE inputs with their type info
+/// Returns list of (field_name, is_ref_field) tuples
+/// Includes primitive fields, ref fields, and computed fields like actorHandle
+fn get_filterable_field_names(record_type: RecordType) -> List(#(String, Bool)) {
+  // Filter properties to only filterable types, return with is_ref flag
+  let filterable_property_info =
     list.filter_map(record_type.properties, fn(prop) {
       let #(field_name, property) = prop
-      case is_sortable_property(property) {
-        True -> Ok(field_name)
+      case is_filterable_property(property) {
+        True -> {
+          let is_ref = property_to_field_type(property) == RefField
+          Ok(#(field_name, is_ref))
+        }
         False -> Error(Nil)
       }
     })
 
-  // Add standard filterable fields from AT Protocol
+  // Add standard filterable fields from AT Protocol (all are non-ref)
   // Note: actorHandle IS included because WHERE clauses support filtering by it
-  // via a join with the actor table
   let standard_filterable_fields = [
-    "uri",
-    "cid",
-    "did",
-    "collection",
-    "indexedAt",
-    "actorHandle",
+    #("uri", False),
+    #("cid", False),
+    #("did", False),
+    #("collection", False),
+    #("indexedAt", False),
+    #("actorHandle", False),
   ]
-  list.append(standard_filterable_fields, filterable_property_names)
+  list.append(standard_filterable_fields, filterable_property_info)
 }
 
 /// Get all groupable field names for aggregation GROUP BY
@@ -1478,14 +1492,17 @@ fn build_groupable_field_enum(record_type: RecordType) -> schema.Type {
 }
 
 /// Build a WhereInput type for a record type with all its filterable fields
-/// Only includes primitive fields (string, integer, boolean, number) from the original lexicon
-/// Excludes complex types (blob, ref) and join fields, but includes computed fields like actorHandle
+/// Includes primitive fields (string, integer, boolean, number) and ref fields
+/// Excludes complex types (blob, array) but includes computed fields like actorHandle
 fn build_where_input_type(record_type: RecordType) -> schema.Type {
-  // Get filterable field names (includes actorHandle and other filterable computed fields)
-  let field_names = get_filterable_field_names(record_type)
+  // Get filterable field info (includes type info for ref vs primitive)
+  let field_info = get_filterable_field_names(record_type)
 
-  // Use the connection module to build the where input type
-  lexicon_connection.build_where_input_type(record_type.type_name, field_names)
+  // Use the connection module to build the where input type with field types
+  lexicon_connection.build_where_input_type_with_field_types(
+    record_type.type_name,
+    field_info,
+  )
 }
 
 /// Build the root Query type with fields for each record type

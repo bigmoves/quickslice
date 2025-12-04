@@ -20,4 +20,6 @@ input AppBskyFeedPostFieldCondition {
   lt: String
   """Less than or equal to"""
   lte: String
+  """Filter for null or missing values (true) or non-null values (false)"""
+  isNull: Boolean
 }

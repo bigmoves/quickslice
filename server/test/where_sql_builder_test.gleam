@@ -31,6 +31,7 @@ pub fn build_where_eq_on_table_column_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -61,6 +62,7 @@ pub fn build_where_in_operator_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -87,6 +89,7 @@ pub fn build_where_gt_operator_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -113,6 +116,7 @@ pub fn build_where_gte_operator_test() {
       gte: Some(sqlight.int(2000)),
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: True,
     )
   let clause =
@@ -140,6 +144,7 @@ pub fn build_where_lt_operator_test() {
       gte: None,
       lt: Some(sqlight.text("2024-12-31T23:59:59Z")),
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -166,6 +171,7 @@ pub fn build_where_lte_operator_test() {
       gte: None,
       lt: None,
       lte: Some(sqlight.int(100)),
+      is_null: None,
       is_numeric: True,
     )
   let clause =
@@ -193,6 +199,7 @@ pub fn build_where_range_query_test() {
       gte: None,
       lt: Some(sqlight.text("2024-02-01T00:00:00Z")),
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -220,6 +227,7 @@ pub fn build_where_multiple_fields_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let cond2 =
@@ -231,6 +239,7 @@ pub fn build_where_multiple_fields_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -265,6 +274,7 @@ pub fn build_where_json_field_eq_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -291,6 +301,7 @@ pub fn build_where_nested_json_path_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -317,6 +328,7 @@ pub fn build_where_deeply_nested_json_path_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -343,6 +355,7 @@ pub fn build_where_json_field_comparison_test() {
       gte: None,
       lt: Some(sqlight.int(1000)),
       lte: None,
+      is_null: None,
       is_numeric: True,
     )
   let clause =
@@ -373,6 +386,7 @@ pub fn build_where_mixed_table_and_json_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let cond2 =
@@ -384,6 +398,7 @@ pub fn build_where_mixed_table_and_json_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: True,
     )
   let clause =
@@ -421,6 +436,7 @@ pub fn build_where_contains_json_field_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -450,6 +466,7 @@ pub fn build_where_contains_table_column_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -476,6 +493,7 @@ pub fn build_where_contains_special_chars_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -503,6 +521,7 @@ pub fn build_where_multiple_contains_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let cond2 =
@@ -514,6 +533,7 @@ pub fn build_where_multiple_contains_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -545,6 +565,7 @@ pub fn build_where_contains_with_other_operators_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -580,6 +601,7 @@ pub fn build_where_nested_and_simple_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -601,6 +623,7 @@ pub fn build_where_nested_and_simple_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -640,6 +663,7 @@ pub fn build_where_and_with_root_conditions_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -661,6 +685,7 @@ pub fn build_where_and_with_root_conditions_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -694,6 +719,7 @@ pub fn build_where_complex_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -715,6 +741,7 @@ pub fn build_where_complex_and_test() {
             gte: Some(sqlight.int(2000)),
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -756,6 +783,7 @@ pub fn build_where_deeply_nested_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -777,6 +805,7 @@ pub fn build_where_deeply_nested_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -798,6 +827,7 @@ pub fn build_where_deeply_nested_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -833,6 +863,7 @@ pub fn build_where_simple_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -854,6 +885,7 @@ pub fn build_where_simple_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -896,6 +928,7 @@ pub fn build_where_combined_and_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -917,6 +950,7 @@ pub fn build_where_combined_and_or_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -945,6 +979,7 @@ pub fn build_where_combined_and_or_test() {
             gte: Some(sqlight.int(2000)),
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -987,6 +1022,7 @@ pub fn build_where_complex_nested_or_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -1008,6 +1044,7 @@ pub fn build_where_complex_nested_or_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -1036,6 +1073,7 @@ pub fn build_where_complex_nested_or_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -1057,6 +1095,7 @@ pub fn build_where_complex_nested_or_and_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -1085,6 +1124,7 @@ pub fn build_where_complex_nested_or_and_test() {
             gte: Some(sqlight.int(2000)),
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -1127,6 +1167,7 @@ pub fn build_where_multiple_or_at_root_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -1148,6 +1189,7 @@ pub fn build_where_multiple_or_at_root_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -1169,6 +1211,7 @@ pub fn build_where_multiple_or_at_root_test() {
             gte: None,
             lt: None,
             lte: None,
+            is_null: None,
             is_numeric: False,
           ),
         ),
@@ -1190,4 +1233,202 @@ pub fn build_where_multiple_or_at_root_test() {
   should.be_true(string.contains(sql, "OR"))
   should.be_true(string.contains(sql, "did"))
   list.length(params) |> should.equal(3)
+}
+
+// ===== isNull Operator Tests =====
+
+// Test: isNull true on JSON field
+pub fn build_where_is_null_true_json_field_test() {
+  let condition =
+    where_clause.WhereCondition(
+      eq: None,
+      in_values: None,
+      contains: None,
+      gt: None,
+      gte: None,
+      lt: None,
+      lte: None,
+      is_null: Some(True),
+      is_numeric: False,
+    )
+  let clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([#("replyParent", condition)]),
+      and: None,
+      or: None,
+    )
+
+  let #(sql, params) = where_clause.build_where_sql(clause, False)
+
+  sql |> should.equal("json_extract(json, '$.replyParent') IS NULL")
+  list.length(params) |> should.equal(0)
+}
+
+// Test: isNull false on JSON field
+pub fn build_where_is_null_false_json_field_test() {
+  let condition =
+    where_clause.WhereCondition(
+      eq: None,
+      in_values: None,
+      contains: None,
+      gt: None,
+      gte: None,
+      lt: None,
+      lte: None,
+      is_null: Some(False),
+      is_numeric: False,
+    )
+  let clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([#("replyParent", condition)]),
+      and: None,
+      or: None,
+    )
+
+  let #(sql, params) = where_clause.build_where_sql(clause, False)
+
+  sql |> should.equal("json_extract(json, '$.replyParent') IS NOT NULL")
+  list.length(params) |> should.equal(0)
+}
+
+// Test: isNull true on table column
+pub fn build_where_is_null_true_table_column_test() {
+  let condition =
+    where_clause.WhereCondition(
+      eq: None,
+      in_values: None,
+      contains: None,
+      gt: None,
+      gte: None,
+      lt: None,
+      lte: None,
+      is_null: Some(True),
+      is_numeric: False,
+    )
+  let clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([#("cid", condition)]),
+      and: None,
+      or: None,
+    )
+
+  let #(sql, params) = where_clause.build_where_sql(clause, False)
+
+  sql |> should.equal("cid IS NULL")
+  list.length(params) |> should.equal(0)
+}
+
+// Test: isNull false on table column
+pub fn build_where_is_null_false_table_column_test() {
+  let condition =
+    where_clause.WhereCondition(
+      eq: None,
+      in_values: None,
+      contains: None,
+      gt: None,
+      gte: None,
+      lt: None,
+      lte: None,
+      is_null: Some(False),
+      is_numeric: False,
+    )
+  let clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([#("uri", condition)]),
+      and: None,
+      or: None,
+    )
+
+  let #(sql, params) = where_clause.build_where_sql(clause, False)
+
+  sql |> should.equal("uri IS NOT NULL")
+  list.length(params) |> should.equal(0)
+}
+
+// Test: isNull with table prefix (for joins)
+pub fn build_where_is_null_with_table_prefix_test() {
+  let condition =
+    where_clause.WhereCondition(
+      eq: None,
+      in_values: None,
+      contains: None,
+      gt: None,
+      gte: None,
+      lt: None,
+      lte: None,
+      is_null: Some(True),
+      is_numeric: False,
+    )
+  let clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([#("text", condition)]),
+      and: None,
+      or: None,
+    )
+
+  let #(sql, params) = where_clause.build_where_sql(clause, True)
+
+  sql |> should.equal("json_extract(record.json, '$.text') IS NULL")
+  list.length(params) |> should.equal(0)
+}
+
+// Test: isNull in nested AND clause
+pub fn build_where_is_null_in_and_clause_test() {
+  let is_null_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "replyParent",
+          where_clause.WhereCondition(
+            eq: None,
+            in_values: None,
+            contains: None,
+            gt: None,
+            gte: None,
+            lt: None,
+            lte: None,
+            is_null: Some(True),
+            is_numeric: False,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
+
+  let text_clause =
+    where_clause.WhereClause(
+      conditions: dict.from_list([
+        #(
+          "text",
+          where_clause.WhereCondition(
+            eq: None,
+            in_values: None,
+            contains: Some("hello"),
+            gt: None,
+            gte: None,
+            lt: None,
+            lte: None,
+            is_null: None,
+            is_numeric: False,
+          ),
+        ),
+      ]),
+      and: None,
+      or: None,
+    )
+
+  let root_clause =
+    where_clause.WhereClause(
+      conditions: dict.new(),
+      and: Some([is_null_clause, text_clause]),
+      or: None,
+    )
+
+  let #(sql, params) = where_clause.build_where_sql(root_clause, False)
+
+  should.be_true(string.contains(sql, "IS NULL"))
+  should.be_true(string.contains(sql, "LIKE"))
+  should.be_true(string.contains(sql, "AND"))
+  list.length(params) |> should.equal(1)
 }

@@ -53,6 +53,7 @@ fn convert_condition(cond: where.WhereCondition) -> where_clause.WhereCondition 
     gte: option.map(cond.gte, convert_value),
     lt: option.map(cond.lt, convert_value),
     lte: option.map(cond.lte, convert_value),
+    is_null: cond.is_null,
     is_numeric: has_numeric_comparison(cond),
   )
 }

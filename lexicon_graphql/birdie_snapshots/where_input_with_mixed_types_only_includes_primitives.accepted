@@ -30,6 +30,8 @@ input AppBskyTestRecordWhereInput {
   datetimeField: AppBskyTestRecordFieldCondition
   """Filter by uriField"""
   uriField: AppBskyTestRecordFieldCondition
+  """Filter by refField"""
+  refField: AppBskyTestRecordRefFieldCondition
   """All conditions must match (AND logic)"""
   and: [AppBskyTestRecordWhereInput!]
   """Any condition must match (OR logic)"""

@@ -1,6 +1,8 @@
 ---
 version: 1.4.1
 title: Query type with multiple connection fields and distinct sort enums
+file: ./test/sorting_test.gleam
+test_name: multiple_lexicons_with_distinct_sort_enums_snapshot_test
 ---
 """Root query type"""
 type Query {

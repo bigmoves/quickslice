@@ -38,6 +38,7 @@ pub fn all_conditions_none_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -64,6 +65,7 @@ pub fn empty_in_list_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -122,6 +124,7 @@ pub fn sql_injection_in_string_value_test() {
         gte: None,
         lt: None,
         lte: None,
+        is_null: None,
         is_numeric: False,
       )
     let clause =
@@ -157,6 +160,7 @@ pub fn sql_injection_in_contains_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -192,6 +196,7 @@ pub fn integer_boundary_values_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
 
@@ -204,6 +209,7 @@ pub fn integer_boundary_values_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
 
@@ -244,6 +250,7 @@ pub fn empty_string_value_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -280,6 +287,7 @@ pub fn unicode_string_value_test() {
         gte: None,
         lt: None,
         lte: None,
+        is_null: None,
         is_numeric: False,
       )
     let clause =
@@ -309,6 +317,7 @@ pub fn deeply_nested_and_clauses_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
 
@@ -362,6 +371,7 @@ pub fn mixed_empty_and_non_empty_conditions_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
 
@@ -374,6 +384,7 @@ pub fn mixed_empty_and_non_empty_conditions_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
 
@@ -386,6 +397,7 @@ pub fn mixed_empty_and_non_empty_conditions_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
 
@@ -534,6 +546,7 @@ pub fn multiple_operators_same_field_test() {
       gte: None,
       lt: Some(sqlight.int(100)),
       lte: None,
+      is_null: None,
       is_numeric: True,
     )
   let clause =
@@ -564,6 +577,7 @@ pub fn conflicting_operators_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -602,6 +616,7 @@ pub fn large_in_list_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -641,6 +656,7 @@ pub fn field_name_with_json_path_test() {
       gte: None,
       lt: None,
       lte: None,
+      is_null: None,
       is_numeric: False,
     )
   let clause =
@@ -677,6 +693,7 @@ pub fn field_name_with_special_chars_test() {
         gte: None,
         lt: None,
         lte: None,
+        is_null: None,
         is_numeric: False,
       )
     let clause =
