@@ -91,13 +91,16 @@ fn build_object_fields(
           name,
         )
       }
-      _ ->
+      _ -> {
+        // Expand local refs (e.g., "#byteSlice" -> "app.bsky.richtext.facet#byteSlice")
+        let expanded_ref = option.map(ref, fn(r) { expand_ref(r, lexicon_id) })
         type_mapper.map_type_with_registry(
           type_,
           format,
-          ref,
+          expanded_ref,
           object_types_dict,
         )
+      }
     }
 
     // Make required fields non-null

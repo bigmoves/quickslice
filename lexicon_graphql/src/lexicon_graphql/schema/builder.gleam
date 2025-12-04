@@ -5,6 +5,7 @@
 import gleam/dict
 import gleam/list
 import gleam/option
+import gleam/string
 import lexicon_graphql/internal/graphql/type_mapper
 import lexicon_graphql/internal/lexicon/nsid
 import lexicon_graphql/mutation/builder as mutation_builder
@@ -180,52 +181,114 @@ fn build_object_types_dict(
 
 /// Extract object types from lexicon "others" defs (e.g., #artist, #aspectRatio)
 /// Returns a dict keyed by full ref like "fm.teal.alpha.feed.track#artist"
+///
+/// Builds types in two passes:
+/// 1. First pass: build types that have no ref dependencies (leaf types)
+/// 2. Second pass: build types that reference other types (can now resolve refs)
 fn extract_ref_object_types(
   lexicons: List(Lexicon),
 ) -> dict.Dict(String, schema.Type) {
-  list.fold(lexicons, dict.new(), fn(acc, lexicon) {
-    let types.Lexicon(id, types.Defs(_, others)) = lexicon
-    dict.fold(others, acc, fn(inner_acc, def_name, def) {
-      case def {
-        types.Object(types.ObjectDef(_, _, properties)) -> {
-          // Build full ref: "fm.teal.alpha.feed.track#artist"
-          let full_ref = id <> "#" <> def_name
-          let type_name = nsid.to_type_name(id <> "." <> def_name)
-
-          // Build fields for the object type
-          let lexicon_fields =
-            list.map(properties, fn(prop) {
-              let #(name, property) = prop
-              let graphql_type = type_mapper.map_type(property.type_)
-              schema.field(
-                name,
-                graphql_type,
-                "Field from object def",
-                fn(_ctx) { Ok(value.Null) },
-              )
-            })
-
-          // GraphQL requires at least one field - add placeholder for empty objects
-          let fields = case lexicon_fields {
-            [] -> [
-              schema.field(
-                "_",
-                schema.boolean_type(),
-                "Placeholder field for empty object type",
-                fn(_ctx) { Ok(value.Boolean(True)) },
-              ),
-            ]
-            _ -> lexicon_fields
+  // Collect all object defs with their metadata
+  let all_defs =
+    list.flat_map(lexicons, fn(lexicon) {
+      let types.Lexicon(id, types.Defs(_, others)) = lexicon
+      dict.to_list(others)
+      |> list.filter_map(fn(entry) {
+        let #(def_name, def) = entry
+        case def {
+          types.Object(obj_def) -> {
+            let full_ref = id <> "#" <> def_name
+            Ok(#(full_ref, id, obj_def))
           }
-
-          let object_type =
-            schema.object_type(type_name, "Object type: " <> full_ref, fields)
-          dict.insert(inner_acc, full_ref, object_type)
+          types.Record(_) -> Error(Nil)
         }
-        types.Record(_) -> inner_acc
-      }
+      })
     })
+
+  // Partition into types with refs and types without refs
+  let #(with_refs, without_refs) =
+    list.partition(all_defs, fn(entry) {
+      let #(_, _, obj_def) = entry
+      has_ref_properties(obj_def)
+    })
+
+  // First pass: build leaf types (no ref dependencies)
+  let leaf_types =
+    list.fold(without_refs, dict.new(), fn(acc, entry) {
+      let #(full_ref, lexicon_id, obj_def) = entry
+      let object_type =
+        build_others_object_type(full_ref, lexicon_id, obj_def, acc)
+      dict.insert(acc, full_ref, object_type)
+    })
+
+  // Second pass: build types that have refs (can now resolve to leaf types)
+  list.fold(with_refs, leaf_types, fn(acc, entry) {
+    let #(full_ref, lexicon_id, obj_def) = entry
+    let object_type =
+      build_others_object_type(full_ref, lexicon_id, obj_def, acc)
+    dict.insert(acc, full_ref, object_type)
   })
+}
+
+/// Check if an ObjectDef has any ref properties
+fn has_ref_properties(obj_def: types.ObjectDef) -> Bool {
+  list.any(obj_def.properties, fn(prop) {
+    let #(_, property) = prop
+    property.type_ == "ref"
+    || property.type_ == "union"
+    || case property.items {
+      option.Some(items) -> items.type_ == "ref" || option.is_some(items.refs)
+      option.None -> False
+    }
+  })
+}
+
+/// Build a single object type from an ObjectDef in "others"
+fn build_others_object_type(
+  full_ref: String,
+  lexicon_id: String,
+  obj_def: types.ObjectDef,
+  existing_types: dict.Dict(String, schema.Type),
+) -> schema.Type {
+  let type_name = nsid.to_type_name(string.replace(full_ref, "#", "."))
+
+  let lexicon_fields =
+    list.map(obj_def.properties, fn(prop) {
+      let #(name, property) = prop
+      let graphql_type =
+        type_mapper.map_property_type_with_context(
+          property,
+          existing_types,
+          type_name,
+          name,
+          lexicon_id,
+        )
+
+      // Apply required/non-null wrapper
+      let field_type = case list.contains(obj_def.required_fields, name) {
+        True -> schema.non_null(graphql_type)
+        False -> graphql_type
+      }
+
+      schema.field(name, field_type, "Field from object def", fn(_ctx) {
+        Ok(value.Null)
+      })
+    })
+
+  // GraphQL requires at least one field - add placeholder for empty objects
+  let fields = case lexicon_fields {
+    [] -> [
+      schema.field(
+        "_",
+        schema.boolean_type(),
+        "Placeholder field for empty object type",
+        fn(_ctx) { Ok(value.Boolean(True)) },
+      ),
+    ]
+    _ -> lexicon_fields
+  }
+
+  schema.object_type(type_name, "Object type: " <> full_ref, fields)
 }
 
 /// Build the root Query type with fields for each record type
