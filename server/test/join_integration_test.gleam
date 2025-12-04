@@ -1268,3 +1268,265 @@ pub fn did_join_batches_queries_test() {
   // Note: To truly verify batching, we'd need to instrument the database
   // layer to count queries. For now, this test ensures correctness.
 }
+
+// Helper to create a post lexicon with nested reply object containing strongRef fields
+fn create_post_lexicon_with_nested_reply() -> String {
+  json.object([
+    #("lexicon", json.int(1)),
+    #("id", json.string("app.bsky.feed.post")),
+    #(
+      "defs",
+      json.object([
+        #(
+          "main",
+          json.object([
+            #("type", json.string("record")),
+            #("key", json.string("tid")),
+            #(
+              "record",
+              json.object([
+                #("type", json.string("object")),
+                #(
+                  "required",
+                  json.array([json.string("text")], of: fn(x) { x }),
+                ),
+                #(
+                  "properties",
+                  json.object([
+                    #(
+                      "text",
+                      json.object([
+                        #("type", json.string("string")),
+                        #("maxLength", json.int(300)),
+                      ]),
+                    ),
+                    #(
+                      "reply",
+                      json.object([
+                        #("type", json.string("ref")),
+                        #("ref", json.string("#replyRef")),
+                      ]),
+                    ),
+                  ]),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+        #(
+          "replyRef",
+          json.object([
+            #("type", json.string("object")),
+            #(
+              "required",
+              json.array(
+                [json.string("parent"), json.string("root")],
+                of: fn(x) { x },
+              ),
+            ),
+            #(
+              "properties",
+              json.object([
+                #(
+                  "parent",
+                  json.object([
+                    #("type", json.string("ref")),
+                    #("ref", json.string("com.atproto.repo.strongRef")),
+                  ]),
+                ),
+                #(
+                  "root",
+                  json.object([
+                    #("type", json.string("ref")),
+                    #("ref", json.string("com.atproto.repo.strongRef")),
+                  ]),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+      ]),
+    ),
+  ])
+  |> json.to_string
+}
+
+// Test: Nested forward join resolution through reply.parentResolved
+pub fn nested_forward_join_resolves_reply_parent_test() {
+  // Setup database
+  let assert Ok(db) = sqlight.open(":memory:")
+  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(_) = tables.create_actor_table(db)
+
+  // Insert lexicon with nested reply object
+  let post_lexicon = create_post_lexicon_with_nested_reply()
+  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+
+  // Insert root post
+  let root_uri = "at://did:plc:root123/app.bsky.feed.post/root1"
+  let root_json =
+    json.object([#("text", json.string("This is the root post"))])
+    |> json.to_string
+
+  let assert Ok(_) =
+    records.insert(
+      db,
+      root_uri,
+      "cid_root",
+      "did:plc:root123",
+      "app.bsky.feed.post",
+      root_json,
+    )
+
+  // Insert parent post (reply to root)
+  let parent_uri = "at://did:plc:parent456/app.bsky.feed.post/parent1"
+  let parent_json =
+    json.object([
+      #("text", json.string("This is a reply to the root")),
+      #(
+        "reply",
+        json.object([
+          #(
+            "parent",
+            json.object([
+              #("uri", json.string(root_uri)),
+              #("cid", json.string("cid_root")),
+            ]),
+          ),
+          #(
+            "root",
+            json.object([
+              #("uri", json.string(root_uri)),
+              #("cid", json.string("cid_root")),
+            ]),
+          ),
+        ]),
+      ),
+    ])
+    |> json.to_string
+
+  let assert Ok(_) =
+    records.insert(
+      db,
+      parent_uri,
+      "cid_parent",
+      "did:plc:parent456",
+      "app.bsky.feed.post",
+      parent_json,
+    )
+
+  // Insert reply post (reply to parent)
+  let reply_uri = "at://did:plc:user789/app.bsky.feed.post/reply1"
+  let reply_json =
+    json.object([
+      #("text", json.string("This is a reply to the parent")),
+      #(
+        "reply",
+        json.object([
+          #(
+            "parent",
+            json.object([
+              #("uri", json.string(parent_uri)),
+              #("cid", json.string("cid_parent")),
+            ]),
+          ),
+          #(
+            "root",
+            json.object([
+              #("uri", json.string(root_uri)),
+              #("cid", json.string("cid_root")),
+            ]),
+          ),
+        ]),
+      ),
+    ])
+    |> json.to_string
+
+  let assert Ok(_) =
+    records.insert(
+      db,
+      reply_uri,
+      "cid_reply",
+      "did:plc:user789",
+      "app.bsky.feed.post",
+      reply_json,
+    )
+
+  // Execute GraphQL query that uses nested forward join: reply.parentResolved
+  let query =
+    "
+    {
+      appBskyFeedPost {
+        edges {
+          node {
+            uri
+            text
+            reply {
+              parent {
+                uri
+                cid
+              }
+              parentResolved {
+                ... on AppBskyFeedPost {
+                  uri
+                  text
+                }
+              }
+              root {
+                uri
+                cid
+              }
+              rootResolved {
+                ... on AppBskyFeedPost {
+                  uri
+                  text
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  "
+
+  let assert Ok(cache) = did_cache.start()
+  let assert Ok(response_json) =
+    graphql_gleam.execute_query_with_db(
+      db,
+      query,
+      "{}",
+      Error(Nil),
+      cache,
+      option.None,
+      "https://plc.directory",
+    )
+
+  // Verify the nested forward joins work correctly
+  // The reply post should have its parent resolved
+  string.contains(response_json, reply_uri)
+  |> should.be_true
+
+  string.contains(response_json, "This is a reply to the parent")
+  |> should.be_true
+
+  // The parentResolved field should contain the parent post
+  string.contains(response_json, "parentResolved")
+  |> should.be_true
+
+  string.contains(response_json, parent_uri)
+  |> should.be_true
+
+  string.contains(response_json, "This is a reply to the root")
+  |> should.be_true
+
+  // The rootResolved field should contain the root post
+  string.contains(response_json, "rootResolved")
+  |> should.be_true
+
+  string.contains(response_json, root_uri)
+  |> should.be_true
+
+  string.contains(response_json, "This is the root post")
+  |> should.be_true
+}

@@ -267,14 +267,20 @@ fn extract_record_types_and_object_types(
   dict.Dict(String, dict.Dict(String, FieldType)),
 ) {
   // =============================================================================
-  // PASS 0: Build object types from lexicon defs
+  // PASS 0: Build object types from lexicon defs (without forward joins)
   // =============================================================================
 
   // Create a registry from all lexicons
   let registry = lexicon_registry.from_lexicons(lexicons)
 
-  // Build all object types from defs (e.g., social.grain.defs#aspectRatio)
-  let ref_object_types = object_type_builder.build_all_object_types(registry)
+  // Build all object types from defs WITHOUT forward joins first
+  // This is needed to build record types and determine the Record union
+  let ref_object_types_initial =
+    object_type_builder.build_all_object_types(
+      registry,
+      option.None,
+      option.None,
+    )
 
   // =============================================================================
   // PASS 1: Extract metadata and build basic types
@@ -301,7 +307,47 @@ fn extract_record_types_and_object_types(
   // Build DID join map: source_nsid -> List(#(target_nsid, target_meta))
   let did_join_map = build_did_join_map(metadata_list)
 
-  // Parse lexicons to create basic RecordTypes (base fields only, no joins yet)
+  // Parse lexicons to create TEMPORARY RecordTypes (just to build Record union)
+  let temp_record_types =
+    lexicons
+    |> list.filter_map(fn(lex) {
+      parse_lexicon_with_reverse_joins(
+        lex,
+        [],
+        batch_fetcher,
+        ref_object_types_initial,
+      )
+    })
+
+  // Build temporary object types to create Record union
+  let temp_object_types =
+    list.fold(temp_record_types, dict.new(), fn(acc, record_type) {
+      let object_type =
+        schema.object_type(
+          record_type.type_name,
+          "Record type: " <> record_type.nsid,
+          record_type.fields,
+        )
+      dict.insert(acc, record_type.nsid, object_type)
+    })
+
+  // Build Record union from temporary object types
+  let temp_possible_types = dict.values(temp_object_types)
+  let temp_record_union = build_record_union(temp_possible_types)
+
+  // =============================================================================
+  // PASS 0b: Rebuild object types WITH forward joins using the Record union
+  // =============================================================================
+  // Now that we have the Record union, rebuild ref_object_types WITH
+  // nested forward join fields (parentResolved, rootResolved, etc.)
+  let ref_object_types =
+    object_type_builder.build_all_object_types(
+      registry,
+      batch_fetcher,
+      option.Some(temp_record_union),
+    )
+
+  // Now parse lexicons AGAIN with the ref_object_types that have forward join fields
   let basic_record_types_without_forward_joins =
     lexicons
     |> list.filter_map(fn(lex) {
@@ -544,8 +590,8 @@ fn extract_record_types_and_object_types(
       final_record_union,
     )
 
-  // Merge ref_object_types (from lexicon defs) into final_object_types
-  // This makes object types like "social.grain.defs#aspectRatio" available for ref resolution
+  // Merge ref_object_types (from lexicon defs, already has forward joins from PASS 0b)
+  // into final_object_types to make them available for ref resolution
   let final_object_types_with_refs =
     dict.fold(ref_object_types, final_object_types, fn(acc, ref, obj_type) {
       dict.insert(acc, ref, obj_type)

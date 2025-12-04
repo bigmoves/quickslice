@@ -85,7 +85,7 @@ pub fn union_type_resolver_works_test() {
 
   // Build registry and object types
   let reg = registry.from_lexicons([lexicon])
-  let object_types = object_builder.build_all_object_types(reg)
+  let object_types = object_builder.build_all_object_types(reg, None, None)
 
   // Get the main facet type
   let assert Ok(main_type) = dict.get(object_types, "app.bsky.richtext.facet")

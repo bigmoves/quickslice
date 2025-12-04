@@ -4,6 +4,7 @@
 /// Used for nested object types like aspectRatio that are defined
 /// as refs in lexicons (e.g., "social.grain.defs#aspectRatio")
 import gleam/dict.{type Dict}
+import gleam/dynamic.{type Dynamic}
 import gleam/list
 import gleam/option
 import gleam/order
@@ -11,9 +12,121 @@ import gleam/string
 import lexicon_graphql/internal/graphql/type_mapper
 import lexicon_graphql/internal/lexicon/nsid
 import lexicon_graphql/internal/lexicon/registry as lexicon_registry
+import lexicon_graphql/internal/lexicon/uri_extractor
+import lexicon_graphql/query/dataloader
 import lexicon_graphql/types
 import swell/schema
 import swell/value
+
+/// Batch fetcher type alias for convenience
+pub type BatchFetcher =
+  dataloader.BatchFetcher
+
+/// Type of forward join field found in an object
+pub type NestedForwardJoinField {
+  NestedStrongRefField(name: String)
+  NestedAtUriField(name: String)
+}
+
+/// Identify forward join fields in object properties
+/// Returns list of fields that can be resolved to other records
+pub fn identify_forward_join_fields(
+  properties: List(#(String, types.Property)),
+) -> List(NestedForwardJoinField) {
+  list.filter_map(properties, fn(prop) {
+    let #(name, property) = prop
+    case property.type_, property.ref, property.format {
+      // strongRef field
+      "ref", option.Some(ref), _ if ref == "com.atproto.repo.strongRef" ->
+        Ok(NestedStrongRefField(name))
+      // at-uri string field
+      "string", _, option.Some(fmt) if fmt == "at-uri" ->
+        Ok(NestedAtUriField(name))
+      _, _, _ -> Error(Nil)
+    }
+  })
+}
+
+/// Build *Resolved fields for nested forward joins
+fn build_nested_forward_join_fields(
+  join_fields: List(NestedForwardJoinField),
+  generic_record_type: schema.Type,
+  batch_fetcher: option.Option(BatchFetcher),
+) -> List(schema.Field) {
+  list.map(join_fields, fn(join_field) {
+    let field_name = case join_field {
+      NestedStrongRefField(name) -> name
+      NestedAtUriField(name) -> name
+    }
+
+    schema.field(
+      field_name <> "Resolved",
+      generic_record_type,
+      "Forward join to referenced record",
+      fn(ctx) {
+        // Extract the field value from the parent object
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, field_name) {
+              Ok(field_value) -> {
+                // Extract URI using uri_extractor
+                case uri_extractor.extract_uri(value_to_dynamic(field_value)) {
+                  option.Some(uri) -> {
+                    // Use batch fetcher to resolve the record
+                    case batch_fetcher {
+                      option.Some(fetcher) -> {
+                        case dataloader.batch_fetch_by_uri([uri], fetcher) {
+                          Ok(results) -> {
+                            case dict.get(results, uri) {
+                              Ok(record) -> Ok(record)
+                              Error(_) -> Ok(value.Null)
+                            }
+                          }
+                          Error(_) -> Ok(value.Null)
+                        }
+                      }
+                      option.None -> Ok(value.String(uri))
+                    }
+                  }
+                  option.None -> Ok(value.Null)
+                }
+              }
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      },
+    )
+  })
+}
+
+/// Convert a GraphQL Value to Dynamic for uri_extractor
+fn value_to_dynamic(val: value.Value) -> Dynamic {
+  case val {
+    value.String(s) -> unsafe_coerce_to_dynamic(s)
+    value.Int(i) -> unsafe_coerce_to_dynamic(i)
+    value.Float(f) -> unsafe_coerce_to_dynamic(f)
+    value.Boolean(b) -> unsafe_coerce_to_dynamic(b)
+    value.Null -> unsafe_coerce_to_dynamic(option.None)
+    value.Object(fields) -> {
+      let field_map =
+        list.fold(fields, dict.new(), fn(acc, field) {
+          let #(key, field_val) = field
+          dict.insert(acc, key, value_to_dynamic(field_val))
+        })
+      unsafe_coerce_to_dynamic(field_map)
+    }
+    value.List(items) -> {
+      let converted = list.map(items, value_to_dynamic)
+      unsafe_coerce_to_dynamic(converted)
+    }
+    value.Enum(name) -> unsafe_coerce_to_dynamic(name)
+  }
+}
+
+@external(erlang, "object_builder_ffi", "identity")
+fn unsafe_coerce_to_dynamic(value: a) -> Dynamic
 
 /// Sort refs so that #fragment refs come before main refs
 /// This ensures dependencies are built first
@@ -35,11 +148,14 @@ fn sort_refs_dependencies_first(refs: List(String)) -> List(String) {
 
 /// Build a GraphQL object type from an ObjectDef
 /// object_types_dict is used to resolve refs to other object types
+/// batch_fetcher and generic_record_type are optional - when provided, *Resolved fields are added
 pub fn build_object_type(
   obj_def: types.ObjectDef,
   type_name: String,
   lexicon_id: String,
   object_types_dict: Dict(String, schema.Type),
+  batch_fetcher: option.Option(BatchFetcher),
+  generic_record_type: option.Option(schema.Type),
 ) -> schema.Type {
   let lexicon_fields =
     build_object_fields(
@@ -49,8 +165,20 @@ pub fn build_object_type(
       type_name,
     )
 
+  // Build forward join fields if we have the necessary dependencies
+  let forward_join_fields = case batch_fetcher, generic_record_type {
+    option.Some(_fetcher), option.Some(record_type) -> {
+      let join_fields = identify_forward_join_fields(obj_def.properties)
+      build_nested_forward_join_fields(join_fields, record_type, batch_fetcher)
+    }
+    _, _ -> []
+  }
+
+  // Combine regular fields with forward join fields
+  let all_fields = list.append(lexicon_fields, forward_join_fields)
+
   // GraphQL requires at least one field - add placeholder for empty objects
-  let fields = case lexicon_fields {
+  let fields = case all_fields {
     [] -> [
       schema.field(
         "_",
@@ -59,7 +187,7 @@ pub fn build_object_type(
         fn(_ctx) { Ok(value.Boolean(True)) },
       ),
     ]
-    _ -> lexicon_fields
+    _ -> all_fields
   }
 
   schema.object_type(type_name, "Object type from lexicon definition", fields)
@@ -145,8 +273,11 @@ fn build_object_fields(
 ///
 /// Note: This builds types recursively. Object types that reference other object types
 /// will have those refs resolved using the same dict (which gets built incrementally).
+/// When batch_fetcher and generic_record_type are provided, nested forward joins are enabled
 pub fn build_all_object_types(
   registry: lexicon_registry.Registry,
+  batch_fetcher: option.Option(BatchFetcher),
+  generic_record_type: option.Option(schema.Type),
 ) -> Dict(String, schema.Type) {
   let object_refs = lexicon_registry.get_all_object_refs(registry)
 
@@ -163,7 +294,15 @@ pub fn build_all_object_types(
         let type_name = ref_to_type_name(ref)
         let lexicon_id = lexicon_registry.lexicon_id_from_ref(ref)
         // Pass acc as the object_types_dict so we can resolve refs to previously built types
-        let object_type = build_object_type(obj_def, type_name, lexicon_id, acc)
+        let object_type =
+          build_object_type(
+            obj_def,
+            type_name,
+            lexicon_id,
+            acc,
+            batch_fetcher,
+            generic_record_type,
+          )
         dict.insert(acc, ref, object_type)
       }
       option.None -> acc
