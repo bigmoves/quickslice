@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src http://localhost:8080; img-src 'self' https: data:;">
-  <title>Statusphere</title>
+  <title>Following Feed</title>
   <style>
 /* CSS Reset */
 *, *::before, *::after {
@@ -183,111 +183,132 @@ header h1 {
   color: var(--gray-500);
 }
 
-/* Emoji Picker */
-.emoji-grid {
-  display: grid;
-  grid-template-columns: repeat(9, 1fr);
-  gap: 0.5rem;
+a.user-info {
+  text-decoration: none;
+  color: inherit;
 }
 
-.emoji-btn {
-  width: 100%;
-  aspect-ratio: 1;
-  font-size: 1.5rem;
-  border: 2px solid var(--border-color);
-  border-radius: 50%;
+a.user-info:hover .user-name {
+  color: var(--primary-500);
+}
+
+/* Post Cards */
+.posts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.post-card {
   background: white;
-  cursor: pointer;
-  transition: all 0.15s;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.post-header {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
-.emoji-btn:hover {
-  background: rgba(0, 120, 255, 0.1);
-  border-color: var(--primary-400);
+.post-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--gray-200);
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
-.emoji-btn.selected {
-  border-color: var(--primary-500);
-  box-shadow: 0 0 0 3px rgba(0, 120, 255, 0.2);
+.post-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.emoji-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.post-author-info {
+  flex: 1;
+  min-width: 0;
 }
 
-.emoji-btn:disabled:hover {
-  background: white;
-  border-color: var(--border-color);
-}
-
-/* Status Feed */
-.feed-title {
-  font-size: 1.125rem;
+.post-author-name {
   font-weight: 600;
-  margin-bottom: 1rem;
-  color: var(--gray-700);
+  color: var(--gray-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.status-list {
-  list-style: none;
-  padding: 0;
-}
-
-.status-item {
-  position: relative;
-  padding-left: 2rem;
-  padding-bottom: 1.5rem;
-}
-
-.status-item::before {
-  content: "";
-  position: absolute;
-  left: 0.75rem;
-  top: 1.5rem;
-  bottom: 0;
-  width: 2px;
-  background: var(--border-color);
-}
-
-.status-item:last-child::before {
-  display: none;
-}
-
-.status-item:last-child {
-  padding-bottom: 0;
-}
-
-.status-emoji {
-  position: absolute;
-  left: 0;
-  top: 0;
-  font-size: 1.5rem;
-}
-
-.status-content {
-  padding-top: 0.25rem;
-}
-
-.status-author {
-  color: var(--primary-500);
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.status-author:hover {
-  text-decoration: underline;
-}
-
-.status-text {
-  color: var(--gray-700);
-}
-
-.status-date {
+.post-author-handle {
   font-size: 0.875rem;
+  color: var(--gray-500);
+}
+
+.post-text {
+  color: var(--gray-700);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.post-images {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.post-images.single {
+  grid-template-columns: 1fr;
+}
+
+.post-images.multiple {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.post-images img {
+  width: 100%;
+  border-radius: 0.5rem;
+  max-height: 300px;
+  object-fit: cover;
+}
+
+.post-date {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  margin-top: 0.75rem;
+}
+
+/* Profile Header */
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.profile-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--gray-200);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-name {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.profile-handle {
   color: var(--gray-500);
 }
 
@@ -349,13 +370,12 @@ header h1 {
 <body>
   <div id="app">
     <header>
-      <h1>Statusphere</h1>
-      <p class="tagline">Set your status on the Atmosphere</p>
+      <h1>Following Feed</h1>
+      <p class="tagline">View posts on the Atmosphere</p>
     </header>
     <main>
       <div id="auth-section"></div>
-      <div id="emoji-picker"></div>
-      <div id="status-feed"></div>
+      <div id="posts-feed"></div>
     </main>
     <div id="error-banner" class="hidden"></div>
   </div>
@@ -367,12 +387,6 @@ header h1 {
 const GRAPHQL_URL = 'http://localhost:8080/graphql';
 const OAUTH_AUTHORIZE_URL = 'http://localhost:8080/oauth/authorize';
 const OAUTH_TOKEN_URL = 'http://localhost:8080/oauth/token';
-
-const EMOJIS = [
-  '👍', '👎', '💙', '😧', '😤', '🙃', '😉', '😎', '🤩',
-  '🥳', '😭', '😱', '🥺', '😡', '💀', '🤖', '👻', '👽',
-  '🎃', '🤡', '💩', '🔥', '⭐', '🌈', '🍕', '🎉', '💯'
-];
 
 const STORAGE_KEYS = {
   accessToken: 'qs_access_token',
@@ -401,6 +415,33 @@ const storage = {
     Object.values(STORAGE_KEYS).forEach(key => sessionStorage.removeItem(key));
   }
 };
+
+// =============================================================================
+// ROUTING
+// =============================================================================
+
+const router = {
+  getPath() {
+    return window.location.pathname;
+  },
+
+  getProfileHandle() {
+    const match = this.getPath().match(/^\/profile\/(.+)$/);
+    return match ? decodeURIComponent(match[1]) : null;
+  },
+
+  navigateTo(path) {
+    window.history.pushState({}, '', path);
+    renderApp();
+  },
+
+  isProfilePage() {
+    return this.getPath().startsWith('/profile/');
+  }
+};
+
+// Handle browser back/forward
+window.addEventListener('popstate', () => renderApp());
 
 // =============================================================================
 // PKCE UTILITIES
@@ -451,8 +492,8 @@ async function initiateLogin(clientId, handle) {
   storage.set(STORAGE_KEYS.oauthState, state);
   storage.set(STORAGE_KEYS.clientId, clientId);
 
-  // Build redirect URI (current page without query params)
-  const redirectUri = window.location.origin + window.location.pathname;
+  // Build redirect URI (always use origin root for SPA compatibility)
+  const redirectUri = window.location.origin + '/';
 
   // Build authorization URL
   const params = new URLSearchParams({
@@ -491,7 +532,7 @@ async function handleOAuthCallback() {
   // Get stored values
   const codeVerifier = storage.get(STORAGE_KEYS.codeVerifier);
   const clientId = storage.get(STORAGE_KEYS.clientId);
-  const redirectUri = window.location.origin + window.location.pathname;
+  const redirectUri = window.location.origin + '/';
 
   if (!codeVerifier || !clientId) {
     throw new Error('Missing OAuth session data');
@@ -597,33 +638,6 @@ async function graphqlQuery(query, variables = {}, requireAuth = false) {
 // DATA FETCHING
 // =============================================================================
 
-async function fetchStatuses() {
-  const query = `
-    query GetStatuses {
-      xyzStatusphereStatus(
-        first: 20
-        sortBy: [{ field: "createdAt", direction: DESC }]
-      ) {
-        edges {
-          node {
-            uri
-            did
-            status
-            createdAt
-            appBskyActorProfileByDid {
-              actorHandle
-              displayName
-            }
-          }
-        }
-      }
-    }
-  `;
-
-  const data = await graphqlQuery(query);
-  return data.xyzStatusphereStatus?.edges?.map(e => e.node) || [];
-}
-
 async function fetchViewer() {
   const query = `
     query {
@@ -642,26 +656,73 @@ async function fetchViewer() {
   return data?.viewer;
 }
 
-async function postStatus(emoji) {
-  const mutation = `
-    mutation CreateStatus($status: String!, $createdAt: DateTime!) {
-      createXyzStatusphereStatus(
-        input: { status: $status, createdAt: $createdAt }
+async function fetchPosts(handle) {
+  const query = `
+    query GetPosts($handle: String!) {
+      appBskyFeedPost(
+        sortBy: [{direction: DESC, field: createdAt}]
+        where: {
+          and: [
+            {actorHandle: {eq: $handle}},
+            {reply: {isNull: true}}
+          ]
+        }
       ) {
-        uri
-        status
-        createdAt
+        edges {
+          node {
+            uri
+            text
+            createdAt
+            appBskyActorProfileByDid {
+              displayName
+              actorHandle
+              avatar {
+                url
+              }
+            }
+            embed {
+              ... on AppBskyEmbedImages {
+                images {
+                  image {
+                    url
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   `;
 
-  const variables = {
-    status: emoji,
-    createdAt: new Date().toISOString()
-  };
+  const data = await graphqlQuery(query, { handle }, true);
+  return data.appBskyFeedPost?.edges?.map(e => e.node) || [];
+}
 
-  const data = await graphqlQuery(mutation, variables, true);
-  return data.createXyzStatusphereStatus;
+async function fetchProfile(handle) {
+  const query = `
+    query GetProfile($handle: String!) {
+      appBskyActorProfile(
+        where: {actorHandle: {eq: $handle}}
+        first: 1
+      ) {
+        edges {
+          node {
+            did
+            actorHandle
+            displayName
+            avatar {
+              url
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await graphqlQuery(query, { handle }, true);
+  const edges = data.appBskyActorProfile?.edges || [];
+  return edges.length > 0 ? edges[0].node : null;
 }
 
 // =============================================================================
@@ -703,12 +764,130 @@ function formatDate(dateString) {
   });
 }
 
+function renderPostsFeed(posts) {
+  const container = document.getElementById('posts-feed');
+
+  if (posts.length === 0) {
+    container.innerHTML = `
+      <div class="card">
+        <p class="loading">No posts found.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="posts-list">
+      ${posts.map(post => {
+        const profile = post.appBskyActorProfileByDid;
+        const displayName = profile?.displayName || profile?.actorHandle || 'Unknown';
+        const handle = profile?.actorHandle || '';
+        const avatarUrl = profile?.avatar?.url;
+        const images = post.embed?.images || [];
+
+        return `
+          <div class="post-card">
+            <div class="post-header">
+              <div class="post-avatar">
+                ${avatarUrl ? `<img src="${escapeHtml(avatarUrl)}" alt="">` : ''}
+              </div>
+              <div class="post-author-info">
+                <div class="post-author-name">${escapeHtml(displayName)}</div>
+                <div class="post-author-handle">@${escapeHtml(handle)}</div>
+              </div>
+            </div>
+            <div class="post-text">${escapeHtml(post.text || '')}</div>
+            ${images.length > 0 ? `
+              <div class="post-images ${images.length === 1 ? 'single' : 'multiple'}">
+                ${images.map(img => `
+                  <img src="${escapeHtml(img.image?.url || '')}" alt="" loading="lazy">
+                `).join('')}
+              </div>
+            ` : ''}
+            <div class="post-date">${formatDate(post.createdAt)}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderProfileHeader(profile) {
+  const displayName = profile?.displayName || profile?.actorHandle || 'Unknown';
+  const handle = profile?.actorHandle || '';
+  const avatarUrl = profile?.avatar?.url;
+
+  return `
+    <div class="profile-header">
+      <div class="profile-avatar">
+        ${avatarUrl ? `<img src="${escapeHtml(avatarUrl)}" alt="">` : ''}
+      </div>
+      <div>
+        <div class="profile-name">${escapeHtml(displayName)}</div>
+        <div class="profile-handle">@${escapeHtml(handle)}</div>
+      </div>
+    </div>
+  `;
+}
+
+async function renderProfilePage(handle) {
+  const container = document.getElementById('posts-feed');
+
+  // Show loading state
+  container.innerHTML = `
+    <div class="card">
+      <p class="loading">Loading profile...</p>
+    </div>
+  `;
+
+  try {
+    // Fetch profile and posts in parallel
+    const [profile, posts] = await Promise.all([
+      fetchProfile(handle),
+      fetchPosts(handle)
+    ]);
+
+    if (!profile) {
+      container.innerHTML = `
+        <div class="card">
+          <p class="loading" style="color: var(--error-text);">Profile not found: @${escapeHtml(handle)}</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Render profile header + posts
+    container.innerHTML = `
+      <div class="card">
+        ${renderProfileHeader(profile)}
+      </div>
+    `;
+
+    renderPostsFeed(posts);
+  } catch (error) {
+    console.error('Failed to load profile:', error);
+    container.innerHTML = `
+      <div class="card">
+        <p class="loading" style="color: var(--error-text);">
+          Failed to load profile. ${error.message}
+        </p>
+      </div>
+    `;
+  }
+}
+
 function renderLoginForm() {
   const container = document.getElementById('auth-section');
   const savedClientId = storage.get(STORAGE_KEYS.clientId) || '';
+  const profileHandle = router.getProfileHandle();
+
+  const message = profileHandle
+    ? `<p style="margin-bottom: 1rem; color: var(--gray-700);">Login to view @${escapeHtml(profileHandle)}'s posts</p>`
+    : '';
 
   container.innerHTML = `
     <div class="card">
+      ${message}
       <form class="login-form" onsubmit="handleLogin(event)">
         <div class="form-group">
           <label for="client-id">OAuth Client ID</label>
@@ -738,88 +917,26 @@ function renderLoginForm() {
   `;
 }
 
-function renderUserCard(profile) {
+function renderUserCard(viewer) {
   const container = document.getElementById('auth-section');
-  const displayName = profile?.displayName || 'User';
-  const handle = profile?.actorHandle || 'unknown';
-  const avatarUrl = profile?.avatar?.url;
+  const displayName = viewer?.appBskyActorProfileByDid?.displayName || 'User';
+  const handle = viewer?.handle || 'unknown';
+  const avatarUrl = viewer?.appBskyActorProfileByDid?.avatar?.url;
 
   container.innerHTML = `
     <div class="card user-card">
-      <div class="user-info">
+      <a href="/profile/${escapeHtml(handle)}" class="user-info" onclick="event.preventDefault(); router.navigateTo('/profile/${escapeHtml(handle)}')">
         <div class="user-avatar">
           ${avatarUrl
             ? `<img src="${escapeHtml(avatarUrl)}" alt="Avatar">`
             : '👤'}
         </div>
         <div>
-          <div class="user-name">Hi, ${escapeHtml(displayName)}!</div>
+          <div class="user-name">${escapeHtml(displayName)}</div>
           <div class="user-handle">@${escapeHtml(handle)}</div>
         </div>
-      </div>
+      </a>
       <button class="btn btn-secondary" onclick="logout()">Logout</button>
-    </div>
-  `;
-}
-
-function renderEmojiPicker(currentStatus, enabled = true) {
-  const container = document.getElementById('emoji-picker');
-
-  container.innerHTML = `
-    <div class="card">
-      <div class="emoji-grid">
-        ${EMOJIS.map(emoji => `
-          <button
-            class="emoji-btn ${emoji === currentStatus ? 'selected' : ''}"
-            onclick="selectStatus('${emoji}')"
-            ${!enabled ? 'disabled' : ''}
-            title="${enabled ? 'Set status' : 'Login to set status'}"
-          >
-            ${emoji}
-          </button>
-        `).join('')}
-      </div>
-    </div>
-  `;
-}
-
-function renderStatusFeed(statuses) {
-  const container = document.getElementById('status-feed');
-
-  if (statuses.length === 0) {
-    container.innerHTML = `
-      <div class="card">
-        <p class="loading">No statuses yet. Be the first to post!</p>
-      </div>
-    `;
-    return;
-  }
-
-  container.innerHTML = `
-    <div class="card">
-      <h2 class="feed-title">Recent Statuses</h2>
-      <ul class="status-list">
-        ${statuses.map(status => {
-          const handle = status.appBskyActorProfileByDid?.actorHandle || status.did;
-          const displayHandle = handle.startsWith('did:') ? handle.substring(0, 20) + '...' : handle;
-          const profileUrl = handle.startsWith('did:')
-            ? `https://bsky.app/profile/${status.did}`
-            : `https://bsky.app/profile/${handle}`;
-
-          return `
-            <li class="status-item">
-              <span class="status-emoji">${status.status}</span>
-              <div class="status-content">
-                <span class="status-text">
-                  <a href="${profileUrl}" target="_blank" class="status-author">@${escapeHtml(displayHandle)}</a>
-                  is feeling ${status.status}
-                </span>
-                <div class="status-date">${formatDate(status.createdAt)}</div>
-              </div>
-            </li>
-          `;
-        }).join('')}
-      </ul>
     </div>
   `;
 }
@@ -854,58 +971,22 @@ async function handleLogin(event) {
   }
 }
 
-async function selectStatus(emoji) {
-  if (!isLoggedIn()) {
-    showError('Please login to set your status');
-    return;
-  }
-
-  try {
-    // Disable buttons while posting
-    document.querySelectorAll('.emoji-btn').forEach(btn => btn.disabled = true);
-
-    await postStatus(emoji);
-
-    // Refresh the page to show new status
-    window.location.reload();
-  } catch (error) {
-    showError(`Failed to post status: ${error.message}`);
-    // Re-enable buttons
-    document.querySelectorAll('.emoji-btn').forEach(btn => btn.disabled = false);
-  }
-}
-
 // =============================================================================
-// MAIN INITIALIZATION
+// MAIN APPLICATION
 // =============================================================================
 
-async function main() {
-  try {
-    // Check if this is an OAuth callback
-    const isCallback = await handleOAuthCallback();
-    if (isCallback) {
-      console.log('OAuth callback handled successfully');
-    }
-  } catch (error) {
-    showError(`Authentication failed: ${error.message}`);
-    storage.clear();
-  }
+let currentViewer = null;
 
-  // Render auth section
+async function renderApp() {
+  const profileHandle = router.getProfileHandle();
+
+  // Always render auth section first
   if (isLoggedIn()) {
     try {
-      const viewer = await fetchViewer();
-      if (viewer) {
-        const profile = {
-          did: viewer.did,
-          actorHandle: viewer.handle,
-          displayName: viewer.appBskyActorProfileByDid?.displayName,
-          avatar: viewer.appBskyActorProfileByDid?.avatar,
-        };
-        renderUserCard(profile);
-      } else {
-        renderUserCard(null);
+      if (!currentViewer) {
+        currentViewer = await fetchViewer();
       }
+      renderUserCard(currentViewer);
     } catch (error) {
       console.error('Failed to fetch viewer:', error);
       renderUserCard(null);
@@ -914,28 +995,55 @@ async function main() {
     renderLoginForm();
   }
 
-  // Render emoji picker (enabled only if logged in)
-  renderEmojiPicker(null, isLoggedIn());
+  // Clear posts feed
+  document.getElementById('posts-feed').innerHTML = '';
 
-  // Fetch and render statuses
-  renderLoading('status-feed');
-  try {
-    const statuses = await fetchStatuses();
-    renderStatusFeed(statuses);
-  } catch (error) {
-    console.error('Failed to fetch statuses:', error);
-    document.getElementById('status-feed').innerHTML = `
-      <div class="card">
-        <p class="loading" style="color: var(--error-text);">
-          Failed to load statuses. Is the quickslice server running at localhost:8080?
-        </p>
-      </div>
-    `;
+  // Route handling
+  if (profileHandle) {
+    // Profile page
+    if (!isLoggedIn()) {
+      document.getElementById('posts-feed').innerHTML = `
+        <div class="card">
+          <p class="loading">Please login to view profiles.</p>
+        </div>
+      `;
+      return;
+    }
+    await renderProfilePage(profileHandle);
+  } else {
+    // Home page
+    if (isLoggedIn() && currentViewer?.handle) {
+      // Redirect logged-in users to their profile
+      router.navigateTo(`/profile/${currentViewer.handle}`);
+    }
   }
 }
 
+async function init() {
+  try {
+    // Check if this is an OAuth callback
+    const isCallback = await handleOAuthCallback();
+    if (isCallback) {
+      console.log('OAuth callback handled successfully');
+      // Fetch viewer and redirect to profile
+      const viewer = await fetchViewer();
+      currentViewer = viewer;
+      if (viewer?.handle) {
+        router.navigateTo(`/profile/${viewer.handle}`);
+        return;
+      }
+    }
+  } catch (error) {
+    showError(`Authentication failed: ${error.message}`);
+    storage.clear();
+  }
+
+  // Render the app
+  await renderApp();
+}
+
 // Run on page load
-main();
+init();
   </script>
 </body>
 </html>
