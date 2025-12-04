@@ -8,9 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add isNull filter support for ref fields in where clauses (5d9f426)
+- Improve GraphQL type generation for lexicons (926d449)
 - Add statusphere HTML example and viewer query (d94e41a)
-- Add comprehensive OAuth scope validation and client type support (dc1930a)
-- Add Model Context Protocol (MCP) server (5a575a8)
+- Add OAuth scope validation and client type support (dc1930a)
+- Add Model Context Protocol (MCP) server (98e54d5)
 - Refactor admin DID handling and add Settings.adminDids field (2484ea1)
 - Migrate environment variables to database config table (cbb7b25)
 - Add PLC_DIRECTORY_URL env var override for bootstrap (32aec91)
@@ -18,15 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sync actor records on first login (47f2d32)
 
 ### Fixed
+- Resolve strongRef refs in nested object types (434a89f)
+- Resolve nested refs within others object types (70d972d)
+- Show reset alert in danger zone section of settings (7bedfb3)
 - Correct test expectation for invalid scope error handling (66d69e8)
 
 ### Changed
+- Implement nested forward join resolution for strongRef fields (3304ad9)
 - Remove /example folder, move docker-compose to root (2a67762)
 - Move docs/plans to dev-docs/plans (a9d7648)
 - Update settings (ef37374)
 
 ### Documentation
-- Add authentication guide for app developers (234bf75)
-- Add OAuth scopes implementation plan (6fd8716)
-- Add admin onboarding implementation plan (5a575a8)
 - Remove deprecated env vars from deployment guide (7da5864)
