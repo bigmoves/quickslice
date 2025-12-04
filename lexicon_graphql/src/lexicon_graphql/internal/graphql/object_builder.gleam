@@ -271,8 +271,13 @@ fn build_object_fields(
 /// Build a dict of all object types from the registry
 /// Keys are the fully-qualified refs (e.g., "social.grain.defs#aspectRatio")
 ///
-/// Note: This builds types recursively. Object types that reference other object types
-/// will have those refs resolved using the same dict (which gets built incrementally).
+/// Note: This builds types in three phases:
+/// 1. First: Main-level object types that have NO local #fragment refs in properties
+///    (like com.atproto.repo.strongRef - pure dependency types)
+/// 2. Second: All #fragment refs, which may reference main-level types from phase 1
+/// 3. Third: Main-level types that DO reference their own #fragment refs
+///    (like app.bsky.richtext.facet which refs #mention, #link)
+///
 /// When batch_fetcher and generic_record_type are provided, nested forward joins are enabled
 pub fn build_all_object_types(
   registry: lexicon_registry.Registry,
@@ -281,33 +286,118 @@ pub fn build_all_object_types(
 ) -> Dict(String, schema.Type) {
   let object_refs = lexicon_registry.get_all_object_refs(registry)
 
-  // Sort refs so #fragment refs are built before main refs
-  // This ensures union member types exist when main types reference them
-  let sorted_refs = sort_refs_dependencies_first(object_refs)
+  // Partition refs into main-level (without #) and fragment refs (with #)
+  let #(fragment_refs, main_refs) =
+    list.partition(object_refs, fn(ref) { string.contains(ref, "#") })
 
-  // Build all object types in dependency order
-  list.fold(sorted_refs, dict.new(), fn(acc, ref) {
-    case lexicon_registry.get_object_def(registry, ref) {
-      option.Some(obj_def) -> {
-        // Generate a GraphQL type name from the ref
-        // e.g., "social.grain.defs#aspectRatio" -> "SocialGrainDefsAspectRatio"
-        let type_name = ref_to_type_name(ref)
-        let lexicon_id = lexicon_registry.lexicon_id_from_ref(ref)
-        // Pass acc as the object_types_dict so we can resolve refs to previously built types
-        let object_type =
-          build_object_type(
-            obj_def,
-            type_name,
-            lexicon_id,
-            acc,
-            batch_fetcher,
-            generic_record_type,
-          )
-        dict.insert(acc, ref, object_type)
-      }
-      option.None -> acc
-    }
+  // Further partition main refs into those with/without local #fragment refs
+  let #(main_with_fragments, main_without_fragments) =
+    list.partition(main_refs, fn(ref) { has_local_fragment_refs(registry, ref) })
+
+  // PHASE 1: Build main-level types that have NO local #fragment refs
+  // These are pure dependency types like com.atproto.repo.strongRef
+  let phase1_types =
+    list.fold(main_without_fragments, dict.new(), fn(acc, ref) {
+      build_single_object_type(
+        registry,
+        ref,
+        acc,
+        batch_fetcher,
+        generic_record_type,
+      )
+    })
+
+  // PHASE 2: Build all #fragment refs with main-level types available
+  // Sort so nested fragments are built before parent fragments if needed
+  let sorted_fragments = sort_refs_dependencies_first(fragment_refs)
+  let phase2_types =
+    list.fold(sorted_fragments, phase1_types, fn(acc, ref) {
+      build_single_object_type(
+        registry,
+        ref,
+        acc,
+        batch_fetcher,
+        generic_record_type,
+      )
+    })
+
+  // PHASE 3: Build main-level types that reference their own #fragments
+  // Now their #fragment refs can be resolved
+  list.fold(main_with_fragments, phase2_types, fn(acc, ref) {
+    build_single_object_type(
+      registry,
+      ref,
+      acc,
+      batch_fetcher,
+      generic_record_type,
+    )
   })
+}
+
+/// Check if a main-level ref has any local #fragment refs in its properties
+fn has_local_fragment_refs(
+  registry: lexicon_registry.Registry,
+  ref: String,
+) -> Bool {
+  case lexicon_registry.get_object_def(registry, ref) {
+    option.Some(obj_def) -> {
+      list.any(obj_def.properties, fn(prop) {
+        let #(_, property) = prop
+        // Check for refs that start with # (local fragment refs)
+        let has_direct_fragment_ref = case property.ref {
+          option.Some(r) -> string.starts_with(r, "#")
+          option.None -> False
+        }
+        let has_items_fragment_ref = case property.items {
+          option.Some(items) -> {
+            let has_item_ref = case items.ref {
+              option.Some(r) -> string.starts_with(r, "#")
+              option.None -> False
+            }
+            let has_refs = case items.refs {
+              option.Some(refs) ->
+                list.any(refs, fn(r) { string.starts_with(r, "#") })
+              option.None -> False
+            }
+            has_item_ref || has_refs
+          }
+          option.None -> False
+        }
+        has_direct_fragment_ref || has_items_fragment_ref
+      })
+    }
+    option.None -> False
+  }
+}
+
+/// Build a single object type and add it to the accumulator dict
+fn build_single_object_type(
+  registry: lexicon_registry.Registry,
+  ref: String,
+  acc: Dict(String, schema.Type),
+  batch_fetcher: option.Option(BatchFetcher),
+  generic_record_type: option.Option(schema.Type),
+) -> Dict(String, schema.Type) {
+  case lexicon_registry.get_object_def(registry, ref) {
+    option.Some(obj_def) -> {
+      // Generate a GraphQL type name from the ref
+      // e.g., "social.grain.defs#aspectRatio" -> "SocialGrainDefsAspectRatio"
+      let type_name = ref_to_type_name(ref)
+      let lexicon_id = lexicon_registry.lexicon_id_from_ref(ref)
+      // Pass acc as the object_types_dict so we can resolve refs to previously built types
+      let object_type =
+        build_object_type(
+          obj_def,
+          type_name,
+          lexicon_id,
+          acc,
+          batch_fetcher,
+          generic_record_type,
+        )
+      dict.insert(acc, ref, object_type)
+    }
+    option.None -> acc
+  }
 }
 
 /// Convert a ref to a GraphQL type name
