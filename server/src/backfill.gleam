@@ -353,7 +353,18 @@ fn backfill_repo_car_with_context(
                   case validate_record(ctx, r.collection, db_record.json) {
                     Valid -> #([db_record, ..records], invalids)
                     ParseError(_) -> #([db_record, ..records], invalids)
-                    Invalid(_) -> #(records, invalids + 1)
+                    Invalid(msg) -> {
+                      logging.log(
+                        logging.Debug,
+                        "[backfill] Invalid record "
+                          <> r.collection
+                          <> "/"
+                          <> r.rkey
+                          <> ": "
+                          <> msg,
+                      )
+                      #(records, invalids + 1)
+                    }
                   }
                 }
               }

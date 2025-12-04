@@ -35,6 +35,14 @@ sanitize_term(Tuple) when is_tuple(Tuple) ->
     %% Convert tuples to lists for JSON
     list_to_tuple([sanitize_term(E) || E <- tuple_to_list(Tuple)]);
 
+sanitize_term(Bin) when is_binary(Bin) ->
+    %% Check if binary is valid UTF-8 (text string) or raw bytes
+    %% ATProto spec: bytes must be encoded as {"$bytes": "<base64>"}
+    case unicode:characters_to_binary(Bin) of
+        Bin -> Bin;  % Valid UTF-8, pass through as string
+        _ -> #{<<"$bytes">> => base64:encode(Bin)}  % Invalid UTF-8, encode as $bytes
+    end;
+
 sanitize_term(Other) ->
-    %% Atoms, numbers, binaries, etc - pass through
+    %% Atoms, numbers, etc - pass through
     Other.
