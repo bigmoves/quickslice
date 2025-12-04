@@ -49,25 +49,10 @@ pub fn view(cache: Cache, hours: Int) -> Element(msg) {
     ]),
     html.div([attribute.class("bg-zinc-800/50 rounded p-4")], [
       // Header
-      html.div([attribute.class("flex items-center justify-between mb-3")], [
+      html.div([attribute.class("mb-3")], [
         html.div([attribute.class("text-sm text-zinc-500")], [
-          element.text("Jetstream Activity"),
+          element.text("Recent Jetstream Activity"),
         ]),
-        case result {
-          squall_cache.Data(data) ->
-            html.span([attribute.class("text-xs text-zinc-600")], [
-              element.text(
-                int.to_string(list.length(data.recent_activity))
-                <> " events ("
-                <> int.to_string(hours)
-                <> "h)",
-              ),
-            ])
-          _ ->
-            html.span([attribute.class("text-xs text-zinc-600")], [
-              element.text("(" <> int.to_string(hours) <> "h)"),
-            ])
-        },
       ]),
       // Activity list - scrollable
       html.div([attribute.class("max-h-80 overflow-y-auto")], [
