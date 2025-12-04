@@ -78,7 +78,13 @@ pub fn map_default_fallback_test() {
 pub fn map_array_of_strings_test() {
   let items =
     types.ArrayItems(type_: "string", ref: option.None, refs: option.None)
-  let result = type_mapper.map_array_type(option.Some(items), dict.new())
+  let result =
+    type_mapper.map_array_type(
+      option.Some(items),
+      dict.new(),
+      "TestType",
+      "testField",
+    )
 
   // Should be [String!] - list of non-null strings
   schema.type_name(result)
@@ -88,14 +94,21 @@ pub fn map_array_of_strings_test() {
 pub fn map_array_of_integers_test() {
   let items =
     types.ArrayItems(type_: "integer", ref: option.None, refs: option.None)
-  let result = type_mapper.map_array_type(option.Some(items), dict.new())
+  let result =
+    type_mapper.map_array_type(
+      option.Some(items),
+      dict.new(),
+      "TestType",
+      "testField",
+    )
 
   schema.type_name(result)
   |> should.equal("[Int!]")
 }
 
 pub fn map_array_without_items_test() {
-  let result = type_mapper.map_array_type(option.None, dict.new())
+  let result =
+    type_mapper.map_array_type(option.None, dict.new(), "TestType", "testField")
 
   // Should fallback to [String!]
   schema.type_name(result)
@@ -123,6 +136,7 @@ pub fn map_property_type_array_test() {
       required: True,
       format: option.None,
       ref: option.None,
+      refs: option.None,
       items: option.Some(items),
     )
 
@@ -139,6 +153,7 @@ pub fn map_property_type_string_test() {
       required: True,
       format: option.None,
       ref: option.None,
+      refs: option.None,
       items: option.None,
     )
 
@@ -146,4 +161,41 @@ pub fn map_property_type_string_test() {
 
   result
   |> should.equal(schema.string_type())
+}
+
+pub fn map_property_union_type_test() {
+  // Create object types that the union will reference
+  let images_type = schema.object_type("AppBskyEmbedImages", "Images embed", [])
+  let video_type = schema.object_type("AppBskyEmbedVideo", "Video embed", [])
+
+  let object_types =
+    dict.new()
+    |> dict.insert("app.bsky.embed.images", images_type)
+    |> dict.insert("app.bsky.embed.video", video_type)
+
+  let property =
+    types.Property(
+      type_: "union",
+      required: False,
+      format: option.None,
+      ref: option.None,
+      refs: option.Some([
+        "app.bsky.embed.images",
+        "app.bsky.embed.video",
+      ]),
+      items: option.None,
+    )
+
+  let result =
+    type_mapper.map_property_type_with_context(
+      property,
+      object_types,
+      "AppBskyFeedPost",
+      "embed",
+      "app.bsky.feed.post",
+    )
+
+  // Should be a union type, not String
+  schema.type_name(result)
+  |> should.equal("AppBskyFeedPostEmbed")
 }

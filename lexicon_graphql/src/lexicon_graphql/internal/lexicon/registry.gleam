@@ -28,7 +28,10 @@ pub fn from_lexicons(lexicons: List(types.Lexicon)) -> Registry {
     |> dict.from_list
 
   // Build object defs dict by extracting all object definitions from all lexicons
-  let object_defs_dict =
+  // This includes both:
+  // 1. Object definitions in "others" (e.g., defs#aspectRatio)
+  // 2. Main-level object types (e.g., app.bsky.embed.images where main.type == "object")
+  let others_object_defs =
     lexicons
     |> list.flat_map(fn(lex) {
       // Extract all object definitions from this lexicon's "others" dict
@@ -46,6 +49,30 @@ pub fn from_lexicons(lexicons: List(types.Lexicon)) -> Registry {
         }
       })
     })
+
+  // Extract main-level object types (like app.bsky.embed.images)
+  let main_object_defs =
+    lexicons
+    |> list.filter_map(fn(lex) {
+      case lex.defs.main {
+        option.Some(types.RecordDef(type_: "object", key: _, properties: props)) -> {
+          // Convert RecordDef to ObjectDef for main-level object types
+          let obj_def =
+            types.ObjectDef(
+              type_: "object",
+              required_fields: [],
+              properties: props,
+            )
+          // Use lexicon id as key (no # fragment for main-level types)
+          Ok(#(lex.id, obj_def))
+        }
+        _ -> Error(Nil)
+      }
+    })
+
+  // Merge both sources of object definitions
+  let object_defs_dict =
+    list.append(others_object_defs, main_object_defs)
     |> dict.from_list
 
   Registry(lexicons: lexicons_dict, object_defs: object_defs_dict)
@@ -72,6 +99,16 @@ pub fn parse_ref(ref: String) -> Option(#(String, String)) {
   case string.split(ref, "#") {
     [lexicon_id, def_name] -> option.Some(#(lexicon_id, def_name))
     _ -> option.None
+  }
+}
+
+/// Extract lexicon ID from a fully-qualified ref
+/// "app.bsky.embed.images#image" -> "app.bsky.embed.images"
+/// "app.bsky.embed.images" -> "app.bsky.embed.images"
+pub fn lexicon_id_from_ref(ref: String) -> String {
+  case string.split(ref, "#") {
+    [lexicon_id, _] -> lexicon_id
+    _ -> ref
   }
 }
 

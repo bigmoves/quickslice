@@ -28,7 +28,7 @@ fn decode_defs() -> decode.Decoder(types.Defs) {
   use main <- decode.optional_field(
     "main",
     None,
-    decode.optional(decode_record_def()),
+    decode.optional(decode_main_def()),
   )
   use defs_dict <- decode.then(decode.dict(decode.string, decode.dynamic))
 
@@ -90,11 +90,11 @@ fn decode_object_def_inner(
         let #(name, prop_dyn) = entry
         let is_required = list.contains(required_fields, name)
 
-        let #(prop_type, prop_format, prop_ref, prop_items) = case
+        let #(prop_type, prop_format, prop_ref, prop_refs, prop_items) = case
           decode_property(prop_dyn)
         {
-          Ok(#(t, f, r, i)) -> #(t, f, r, i)
-          Error(_) -> #("string", None, None, None)
+          Ok(#(t, f, r, rs, i)) -> #(t, f, r, rs, i)
+          Error(_) -> #("string", None, None, None, None)
         }
 
         #(
@@ -104,6 +104,7 @@ fn decode_object_def_inner(
             is_required,
             prop_format,
             prop_ref,
+            prop_refs,
             prop_items,
           ),
         )
@@ -114,12 +115,64 @@ fn decode_object_def_inner(
   decode.run(dyn, decoder)
 }
 
-/// Create a decoder for a record definition
+/// Decoder for main definition - tries record first, then object type
+fn decode_main_def() -> decode.Decoder(types.RecordDef) {
+  // Try record type first (has "record" wrapper)
+  // If that fails, try object type (flat structure with properties directly)
+  decode.one_of(decode_record_def(), [decode_object_main_def()])
+}
+
+/// Create a decoder for a record definition (type: "record" with "record" wrapper)
 fn decode_record_def() -> decode.Decoder(types.RecordDef) {
   use type_ <- decode.field("type", decode.string)
   use key <- decode.optional_field("key", None, decode.optional(decode.string))
   use record <- decode.field("record", decode_record_object())
   decode.success(types.RecordDef(type_:, key:, properties: record))
+}
+
+/// Create a decoder for object-type main definitions (type: "object" without wrapper)
+/// These lexicons have properties directly in main, not wrapped in a "record" field
+fn decode_object_main_def() -> decode.Decoder(types.RecordDef) {
+  use type_ <- decode.field("type", decode.string)
+  use required_fields <- decode.optional_field(
+    "required",
+    [],
+    decode.list(decode.string),
+  )
+  use properties_dict <- decode.field(
+    "properties",
+    decode.dict(decode.string, decode.dynamic),
+  )
+
+  // Convert dict to list of properties
+  let properties =
+    properties_dict
+    |> dict.to_list
+    |> list.map(fn(entry) {
+      let #(name, prop_dyn) = entry
+      let is_required = list.contains(required_fields, name)
+
+      let #(prop_type, prop_format, prop_ref, prop_refs, prop_items) = case
+        decode_property(prop_dyn)
+      {
+        Ok(#(t, f, r, rs, i)) -> #(t, f, r, rs, i)
+        Error(_) -> #("string", None, None, None, None)
+      }
+
+      #(
+        name,
+        types.Property(
+          prop_type,
+          is_required,
+          prop_format,
+          prop_ref,
+          prop_refs,
+          prop_items,
+        ),
+      )
+    })
+
+  decode.success(types.RecordDef(type_:, key: None, properties:))
 }
 
 /// Create a decoder for the record object which contains properties
@@ -143,12 +196,12 @@ fn decode_record_object() -> decode.Decoder(List(#(String, types.Property))) {
       let #(name, prop_dyn) = entry
       let is_required = list.contains(required_list, name)
 
-      // Extract type, format, ref, and items from the property
-      let #(prop_type, prop_format, prop_ref, prop_items) = case
+      // Extract type, format, ref, refs, and items from the property
+      let #(prop_type, prop_format, prop_ref, prop_refs, prop_items) = case
         decode_property(prop_dyn)
       {
-        Ok(#(t, f, r, i)) -> #(t, f, r, i)
-        Error(_) -> #("string", None, None, None)
+        Ok(#(t, f, r, rs, i)) -> #(t, f, r, rs, i)
+        Error(_) -> #("string", None, None, None, None)
         // Default fallback
       }
 
@@ -159,6 +212,7 @@ fn decode_record_object() -> decode.Decoder(List(#(String, types.Property))) {
           is_required,
           prop_format,
           prop_ref,
+          prop_refs,
           prop_items,
         ),
       )
@@ -167,7 +221,7 @@ fn decode_record_object() -> decode.Decoder(List(#(String, types.Property))) {
   decode.success(properties)
 }
 
-/// Decode a property's type, format, ref, and items fields
+/// Decode a property's type, format, ref, refs, and items fields
 fn decode_property(
   dyn: decode.Dynamic,
 ) -> Result(
@@ -175,6 +229,7 @@ fn decode_property(
     String,
     option.Option(String),
     option.Option(String),
+    option.Option(List(String)),
     option.Option(types.ArrayItems),
   ),
   List(decode.DecodeError),
@@ -190,6 +245,11 @@ fn decode_property(
       "ref",
       None,
       decode.optional(decode.string),
+    )
+    use refs <- decode.optional_field(
+      "refs",
+      None,
+      decode.optional(decode.list(decode.string)),
     )
     use items_dyn <- decode.optional_field(
       "items",
@@ -207,7 +267,7 @@ fn decode_property(
       None -> None
     }
 
-    decode.success(#(type_, format, ref, items))
+    decode.success(#(type_, format, ref, refs, items))
   }
   decode.run(dyn, property_decoder)
 }

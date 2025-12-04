@@ -48,6 +48,7 @@ pub type Property {
     required: Bool,
     format: Option(String),
     ref: Option(String),
+    refs: Option(List(String)),
     items: Option(ArrayItems),
   )
 }

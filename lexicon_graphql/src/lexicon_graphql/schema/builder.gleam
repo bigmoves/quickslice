@@ -46,13 +46,21 @@ pub fn build_schema(lexicons: List(Lexicon)) -> Result(schema.Schema, String) {
       // First extract ref object types from lexicon "others" (e.g., #artist, #aspectRatio)
       let ref_object_types = extract_ref_object_types(lexicons)
 
-      // Extract record types from lexicons, passing ref_object_types for field resolution
-      let record_types = extract_record_types(lexicons, ref_object_types)
+      // Extract object-type lexicons (like embed types)
+      let object_type_lexicons =
+        extract_object_type_lexicons(lexicons, ref_object_types)
 
-      // Build object types dict for sharing between queries and mutations
-      let object_types = build_object_types_dict(record_types)
+      // Merge ref_object_types with object_type_lexicons
+      let all_object_types = dict.merge(ref_object_types, object_type_lexicons)
 
-      // Build the query type with fields for each record
+      // Extract record types from lexicons, passing all object types for field resolution
+      let record_types = extract_record_types(lexicons, all_object_types)
+
+      // Build object types dict including record types
+      let record_object_types = build_object_types_dict(record_types)
+      let object_types = dict.merge(all_object_types, record_object_types)
+
+      // Build the query type with fields for each record (not object types)
       let query_type = build_query_type(record_types, object_types)
 
       // Build the mutation type with stub resolvers, using shared object types
@@ -93,7 +101,8 @@ fn parse_lexicon(
     ) -> {
       let type_name = nsid.to_type_name(id)
       let field_name = nsid.to_field_name(id)
-      let fields = build_fields(properties, ref_object_types)
+      let fields =
+        build_fields_with_context(properties, ref_object_types, type_name, id)
 
       Ok(RecordType(
         nsid: id,
@@ -106,10 +115,12 @@ fn parse_lexicon(
   }
 }
 
-/// Build GraphQL fields from lexicon properties
-fn build_fields(
+/// Build GraphQL fields from lexicon properties with parent type context
+fn build_fields_with_context(
   properties: List(#(String, Property)),
   ref_object_types: dict.Dict(String, schema.Type),
+  parent_type_name: String,
+  lexicon_id: String,
 ) -> List(schema.Field) {
   // Add standard AT Proto fields
   let standard_fields = [
@@ -130,12 +141,18 @@ fn build_fields(
     ),
   ]
 
-  // Build fields from lexicon properties
+  // Build fields from lexicon properties with context
   let lexicon_fields =
     list.map(properties, fn(prop) {
       let #(name, property) = prop
       let graphql_type =
-        type_mapper.map_property_type(property, ref_object_types)
+        type_mapper.map_property_type_with_context(
+          property,
+          ref_object_types,
+          parent_type_name,
+          name,
+          lexicon_id,
+        )
 
       schema.field(name, graphql_type, "Field from lexicon", fn(_ctx) {
         Ok(value.Null)
@@ -176,7 +193,7 @@ fn extract_ref_object_types(
           let type_name = nsid.to_type_name(id <> "." <> def_name)
 
           // Build fields for the object type
-          let fields =
+          let lexicon_fields =
             list.map(properties, fn(prop) {
               let #(name, property) = prop
               let graphql_type = type_mapper.map_type(property.type_)
@@ -187,6 +204,19 @@ fn extract_ref_object_types(
                 fn(_ctx) { Ok(value.Null) },
               )
             })
+
+          // GraphQL requires at least one field - add placeholder for empty objects
+          let fields = case lexicon_fields {
+            [] -> [
+              schema.field(
+                "_",
+                schema.boolean_type(),
+                "Placeholder field for empty object type",
+                fn(_ctx) { Ok(value.Boolean(True)) },
+              ),
+            ]
+            _ -> lexicon_fields
+          }
 
           let object_type =
             schema.object_type(type_name, "Object type: " <> full_ref, fields)
@@ -224,4 +254,49 @@ fn build_query_type(
     })
 
   schema.object_type("Query", "Root query type", query_fields)
+}
+
+/// Extract object types from object-type lexicons (type: "object" at main level)
+/// These are NOT record types - they don't get query fields, just exist as types
+fn extract_object_type_lexicons(
+  lexicons: List(Lexicon),
+  ref_object_types: dict.Dict(String, schema.Type),
+) -> dict.Dict(String, schema.Type) {
+  list.fold(lexicons, dict.new(), fn(acc, lexicon) {
+    case lexicon {
+      types.Lexicon(
+        id,
+        types.Defs(option.Some(types.RecordDef("object", _, properties)), _),
+      ) -> {
+        let type_name = nsid.to_type_name(id)
+        let fields = build_object_type_fields(properties, ref_object_types, id)
+        let object_type =
+          schema.object_type(type_name, "Object type: " <> id, fields)
+        dict.insert(acc, id, object_type)
+      }
+      _ -> acc
+    }
+  })
+}
+
+/// Build fields for object types (simplified - no standard AT Proto fields)
+fn build_object_type_fields(
+  properties: List(#(String, Property)),
+  ref_object_types: dict.Dict(String, schema.Type),
+  lexicon_id: String,
+) -> List(schema.Field) {
+  list.map(properties, fn(prop) {
+    let #(name, property) = prop
+    let graphql_type =
+      type_mapper.map_property_type_with_context(
+        property,
+        ref_object_types,
+        "",
+        name,
+        lexicon_id,
+      )
+    schema.field(name, graphql_type, "Field from lexicon", fn(_ctx) {
+      Ok(value.Null)
+    })
+  })
 }

@@ -5,6 +5,7 @@
 import birdie
 import gleam/dict
 import gleam/option.{None, Some}
+import gleam/string as gleam_string
 import gleeunit/should
 import lexicon_graphql/schema/builder as schema_builder
 import lexicon_graphql/types
@@ -28,6 +29,7 @@ pub fn simple_schema_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                refs: None,
                 items: None,
               ),
             ),
@@ -38,6 +40,7 @@ pub fn simple_schema_snapshot_test() {
                 required: True,
                 format: None,
                 ref: None,
+                refs: None,
                 items: None,
               ),
             ),
@@ -72,6 +75,7 @@ pub fn multiple_lexicons_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                refs: None,
                 items: None,
               ),
             ),
@@ -94,6 +98,7 @@ pub fn multiple_lexicons_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                refs: None,
                 items: None,
               ),
             ),
@@ -131,6 +136,7 @@ pub fn correct_type_names_snapshot_test() {
                 required: True,
                 format: None,
                 ref: None,
+                refs: None,
                 items: None,
               ),
             ),
@@ -141,6 +147,7 @@ pub fn correct_type_names_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                refs: None,
                 items: None,
               ),
             ),
@@ -171,6 +178,89 @@ pub fn build_schema_with_empty_list_test() {
   should.be_error(result)
 }
 
+// Test that union properties generate proper union types
+pub fn union_property_generates_union_type_test() {
+  // Create embed object type lexicon
+  let embed_images_lexicon =
+    types.Lexicon(
+      id: "app.bsky.embed.images",
+      defs: types.Defs(
+        main: Some(
+          types.RecordDef(type_: "object", key: None, properties: [
+            #(
+              "images",
+              types.Property(
+                type_: "array",
+                required: True,
+                format: None,
+                ref: None,
+                refs: None,
+                items: Some(types.ArrayItems(
+                  type_: "string",
+                  ref: None,
+                  refs: None,
+                )),
+              ),
+            ),
+          ]),
+        ),
+        others: dict.new(),
+      ),
+    )
+
+  // Create record with union property
+  let post_lexicon =
+    types.Lexicon(
+      id: "app.bsky.feed.post",
+      defs: types.Defs(
+        main: Some(
+          types.RecordDef(type_: "record", key: Some("tid"), properties: [
+            #(
+              "text",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: None,
+                ref: None,
+                refs: None,
+                items: None,
+              ),
+            ),
+            #(
+              "embed",
+              types.Property(
+                type_: "union",
+                required: False,
+                format: None,
+                ref: None,
+                refs: Some(["app.bsky.embed.images"]),
+                items: None,
+              ),
+            ),
+          ]),
+        ),
+        others: dict.new(),
+      ),
+    )
+
+  let result = schema_builder.build_schema([embed_images_lexicon, post_lexicon])
+  should.be_ok(result)
+
+  case result {
+    Ok(schema_val) -> {
+      // The union type should exist
+      let all_types = introspection.get_all_schema_types(schema_val)
+      let serialized = sdl.print_types(all_types)
+
+      // Union type should be in the schema
+      serialized
+      |> gleam_string.contains("union AppBskyFeedPostEmbed")
+      |> should.be_true
+    }
+    Error(_) -> should.fail()
+  }
+}
+
 // Comprehensive test showing ALL generated types
 pub fn simple_schema_all_types_snapshot_test() {
   let lexicon =
@@ -186,6 +276,7 @@ pub fn simple_schema_all_types_snapshot_test() {
                 required: False,
                 format: None,
                 ref: None,
+                refs: None,
                 items: None,
               ),
             ),
@@ -196,6 +287,7 @@ pub fn simple_schema_all_types_snapshot_test() {
                 required: True,
                 format: None,
                 ref: None,
+                refs: None,
                 items: None,
               ),
             ),

@@ -650,6 +650,8 @@ fn parse_lexicon_with_reverse_joins(
           meta,
           batch_fetcher,
           ref_object_types,
+          type_name,
+          id,
         )
 
       // Note: Reverse join fields are NOT built here - they will be added later
@@ -679,8 +681,11 @@ fn build_fields_with_meta(
   _meta: collection_meta.CollectionMeta,
   _batch_fetcher: option.Option(dataloader.BatchFetcher),
   ref_object_types: Dict(String, schema.Type),
+  parent_type_name: String,
+  lexicon_id: String,
 ) -> List(schema.Field) {
-  let regular_fields = build_fields(properties, ref_object_types)
+  let regular_fields =
+    build_fields(properties, ref_object_types, parent_type_name, lexicon_id)
   // Note: Forward join fields are NOT built here - they need object types first
 
   regular_fields
@@ -1189,6 +1194,8 @@ fn build_record_union(possible_types: List(schema.Type)) -> schema.Type {
 fn build_fields(
   properties: List(#(String, types.Property)),
   ref_object_types: Dict(String, schema.Type),
+  parent_type_name: String,
+  lexicon_id: String,
 ) -> List(schema.Field) {
   // Add standard AT Proto fields
   let standard_fields = [
@@ -1246,14 +1253,21 @@ fn build_fields(
     ),
   ]
 
-  // Build fields from lexicon properties
+  // Build fields from lexicon properties with context for union naming
   let lexicon_fields =
     list.map(properties, fn(prop) {
       let #(name, property) = prop
-      let types.Property(type_, _required, _format, _ref, _items) = property
-      // Use map_property_type to handle arrays, refs, and primitives
+      let types.Property(type_, _required, _format, _ref, _refs, _items) =
+        property
+      // Use map_property_type_with_context to handle arrays, refs, unions, and primitives
       let graphql_type =
-        type_mapper.map_property_type(property, ref_object_types)
+        type_mapper.map_property_type_with_context(
+          property,
+          ref_object_types,
+          parent_type_name,
+          name,
+          lexicon_id,
+        )
 
       schema.field(name, graphql_type, "Field from lexicon", fn(ctx) {
         // Special handling for blob fields
@@ -1269,7 +1283,14 @@ fn build_fields(
             // Try to extract field from the value object in context
             // Use the type-safe version that preserves Int, Float, Boolean types
             case get_nested_field_value_from_context(ctx, "value", name) {
-              Ok(val) -> Ok(val)
+              Ok(val) -> {
+                // Inject did into nested objects for blob URL resolution
+                let did = case get_field_from_context(ctx, "did") {
+                  Ok(d) -> d
+                  Error(_) -> ""
+                }
+                Ok(inject_did_into_value(val, did))
+              }
               Error(_) -> Ok(value.Null)
             }
           }
@@ -2080,6 +2101,26 @@ fn extract_blob_data(
       }
     }
     _ -> Error(Nil)
+  }
+}
+
+/// Inject DID into a value for nested blob resolution
+/// Recursively adds "did" field to objects that might contain blobs
+fn inject_did_into_value(val: value.Value, did: String) -> value.Value {
+  case val {
+    value.Object(fields) -> {
+      // Add did if not already present
+      let has_did = list.any(fields, fn(f) { f.0 == "did" })
+      case has_did {
+        True -> val
+        False ->
+          value.Object(list.append(fields, [#("did", value.String(did))]))
+      }
+    }
+    value.List(items) -> {
+      value.List(list.map(items, fn(item) { inject_did_into_value(item, did) }))
+    }
+    _ -> val
   }
 }
 

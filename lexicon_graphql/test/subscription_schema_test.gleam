@@ -35,6 +35,7 @@ pub fn subscription_type_generated_test() {
                 required: True,
                 format: None,
                 ref: None,
+                refs: None,
                 items: None,
               ),
             ),
@@ -88,6 +89,7 @@ pub fn subscription_fields_generated_test() {
                 required: True,
                 format: None,
                 ref: None,
+                refs: None,
                 items: None,
               ),
             ),
@@ -162,6 +164,7 @@ pub fn deleted_subscription_returns_string_test() {
                 required: True,
                 format: None,
                 ref: None,
+                refs: None,
                 items: None,
               ),
             ),
@@ -229,6 +232,7 @@ pub fn created_updated_return_record_type_test() {
                 required: True,
                 format: None,
                 ref: None,
+                refs: None,
                 items: None,
               ),
             ),
@@ -306,7 +310,7 @@ pub fn multiple_records_generate_subscriptions_test() {
       defs: types.Defs(
         main: Some(
           types.RecordDef(type_: "record", key: None, properties: [
-            #("text", types.Property("string", True, None, None, None)),
+            #("text", types.Property("string", True, None, None, None, None)),
           ]),
         ),
         others: dict.new(),
@@ -319,7 +323,7 @@ pub fn multiple_records_generate_subscriptions_test() {
       defs: types.Defs(
         main: Some(
           types.RecordDef(type_: "record", key: None, properties: [
-            #("subject", types.Property("string", True, None, None, None)),
+            #("subject", types.Property("string", True, None, None, None, None)),
           ]),
         ),
         others: dict.new(),

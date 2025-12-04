@@ -22,6 +22,7 @@ pub fn array_field_generates_list_type_test() {
                 required: False,
                 format: option.None,
                 ref: option.None,
+                refs: option.None,
                 items: option.Some(types.ArrayItems(
                   type_: "string",
                   ref: option.None,
@@ -64,6 +65,7 @@ pub fn array_of_refs_generates_object_list_type_test() {
                 required: False,
                 format: option.None,
                 ref: option.None,
+                refs: option.None,
                 items: option.Some(types.ArrayItems(
                   type_: "ref",
                   ref: option.Some("fm.teal.alpha.feed.track#artist"),
@@ -88,6 +90,7 @@ pub fn array_of_refs_generates_object_list_type_test() {
                       required: True,
                       format: option.None,
                       ref: option.None,
+                      refs: option.None,
                       items: option.None,
                     ),
                   ),
