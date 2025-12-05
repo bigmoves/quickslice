@@ -235,3 +235,17 @@ if [ -n "$REMOTE_FILES" ]; then
 fi
 
 echo ""
+
+# Step 3: Purge CDN cache
+purge_cache
+
+# Summary
+echo ""
+echo "============================================"
+echo -e "${GREEN}Deploy complete!${NC}"
+echo "  Uploaded: ${UPLOADED} files"
+echo "  Deleted:  ${DELETED} files"
+if [ "$DRY_RUN" = true ]; then
+    echo -e "${YELLOW}  (DRY RUN - no actual changes made)${NC}"
+fi
+echo "============================================"
