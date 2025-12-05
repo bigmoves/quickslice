@@ -37,6 +37,7 @@ pub fn wrap(
       ]),
       script([attribute("src", "/highlight.js")], ""),
       script([attribute("src", "/mobile-nav.js")], ""),
+      script([attribute("src", "/minimap.js")], ""),
     ]),
   ])
 }

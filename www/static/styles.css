@@ -133,9 +133,11 @@ body {
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   transition: color 0.15s ease;
+  outline: none;
 }
 
-.sidebar a:hover {
+.sidebar a:hover,
+.sidebar a:focus-visible {
   color: var(--text-hover);
 }
 
@@ -158,6 +160,7 @@ body {
   overflow-y: auto;
   display: flex;
   justify-content: center;
+  gap: var(--space-8);
 }
 
 .content > div {
@@ -251,14 +254,14 @@ body {
 
 .content blockquote p { margin: 0; }
 
-.content a {
+.content > div a {
   color: var(--accent-cyan);
   text-decoration: underline;
   text-underline-offset: 2px;
   transition: color 0.15s ease;
 }
 
-.content a:hover {
+.content > div a:hover {
   color: var(--accent-cyan-hover);
 }
 
@@ -390,3 +393,62 @@ body {
 .hl-directive { color: var(--accent-blue); font-style: italic; }
 .hl-comment { color: var(--text-comment); font-style: italic; }
 .hl-punctuation { color: var(--text-dim); }
+
+/* Minimap - right side navigation inside content */
+.minimap {
+  width: 180px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  position: sticky;
+  top: var(--space-10);
+  align-self: flex-start;
+  max-height: calc(100vh - var(--space-16));
+  overflow-y: auto;
+}
+
+.minimap-header {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-muted);
+  padding: var(--space-1) var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.minimap-item {
+  display: block;
+  padding: var(--space-1) var(--space-3);
+  color: var(--text-dim);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  transition: color 0.15s ease;
+  outline: none;
+}
+
+.minimap-item:hover,
+.minimap-item:focus-visible {
+  color: var(--text-hover);
+}
+
+.minimap-item-sub {
+  padding-left: var(--space-5);
+  font-size: var(--text-xs);
+}
+
+.minimap-item-active {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-cyan);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 4px;
+}
+
+/* Hide minimap on tablet and mobile */
+@media (max-width: 1024px) {
+  .minimap {
+    display: none;
+  }
+}
