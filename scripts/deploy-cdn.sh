@@ -55,3 +55,22 @@ if [ "$DRY_RUN" = true ]; then
     echo -e "${YELLOW}DRY RUN MODE - No changes will be made${NC}"
 fi
 echo ""
+
+# Get content-type based on file extension
+get_content_type() {
+    local file="$1"
+    case "${file##*.}" in
+        html) echo "text/html" ;;
+        css)  echo "text/css" ;;
+        js)   echo "application/javascript" ;;
+        json) echo "application/json" ;;
+        png)  echo "image/png" ;;
+        jpg|jpeg) echo "image/jpeg" ;;
+        gif)  echo "image/gif" ;;
+        svg)  echo "image/svg+xml" ;;
+        ico)  echo "image/x-icon" ;;
+        woff) echo "font/woff" ;;
+        woff2) echo "font/woff2" ;;
+        *)    echo "application/octet-stream" ;;
+    esac
+}
