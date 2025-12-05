@@ -30,3 +30,4 @@ gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
 lustre_ssg = { version = ">= 0.11.0 and < 1.0.0" }
 mork = { version = ">= 1.8.0 and < 2.0.0" }
 simplifile = { version = ">= 2.3.1 and < 3.0.0" }
+lustre = { version = ">= 5.4.0 and < 6.0.0" }
