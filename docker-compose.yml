@@ -11,13 +11,12 @@ services:
       - JETSTREAM_URL=wss://jetstream2.us-west.bsky.network/subscribe
       # NOTE: Do NOT use in production - generate your own secure key
       - SECRET_KEY_BASE=Xdb/9oovpIzYRKPjfTm45QSWYyYJi35GY3n4475SBVmcyxHS9tMoFJcOwPGfA0xW
-      - ADMIN_DIDS=did:plc:bcgltzqazw5tb6k2g3ttenbj
       - JETSTREAM_DISABLE_CURSOR=true
       - EXTERNAL_BASE_URL=http://127.0.0.1:8080
       # NOTE: Do NOT use in production - generate your own secure key
       - OAUTH_SIGNING_KEY=z42tsNCXT8jZHj37qRd1D1vBE4qns8rp43DZsm1uez3cr8h6
       - OAUTH_LOOPBACK_MODE=true
-      - OAUTH_SUPPORTED_SCOPES="atproto repo:xyz.statusphere.status"
+      - OAUTH_SUPPORTED_SCOPES="atproto transition:generic"
       - BACKFILL_REPO_TIMEOUT=30
       - BACKFILL_MAX_PDS_WORKERS=20
       - BACKFILL_PDS_CONCURRENCY=6
