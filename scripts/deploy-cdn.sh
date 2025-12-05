@@ -194,3 +194,27 @@ purge_cache() {
         return 1
     fi
 }
+
+# ============================================
+# MAIN EXECUTION
+# ============================================
+
+# Check local directory exists
+if [ ! -d "$LOCAL_DIR" ]; then
+    echo -e "${RED}Error: Local directory ${LOCAL_DIR} does not exist${NC}"
+    echo "Run 'make docs' first to generate documentation"
+    exit 1
+fi
+
+# Step 1: Upload all local files
+echo "Uploading files..."
+declare -A LOCAL_FILES
+
+while IFS= read -r -d '' file; do
+    # Get path relative to LOCAL_DIR
+    relative_path="${file#${LOCAL_DIR}/}"
+    LOCAL_FILES["$relative_path"]=1
+    upload_file "$file" "$relative_path"
+done < <(find "$LOCAL_DIR" -type f -print0)
+
+echo ""
