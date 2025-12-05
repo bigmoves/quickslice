@@ -218,3 +218,20 @@ while IFS= read -r -d '' file; do
 done < <(find "$LOCAL_DIR" -type f -print0)
 
 echo ""
+
+# Step 2: Delete orphaned remote files (full sync)
+echo "Checking for orphaned files..."
+REMOTE_FILES=$(list_remote_files)
+
+if [ -n "$REMOTE_FILES" ]; then
+    while IFS= read -r remote_file; do
+        if [ -z "$remote_file" ]; then
+            continue
+        fi
+        if [ -z "${LOCAL_FILES[$remote_file]+x}" ]; then
+            delete_file "$remote_file"
+        fi
+    done <<< "$REMOTE_FILES"
+fi
+
+echo ""
