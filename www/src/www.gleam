@@ -1,5 +1,4 @@
 /// Docs site static site generator
-
 import gleam/io
 import lustre/ssg
 import www/config.{type DocPage}

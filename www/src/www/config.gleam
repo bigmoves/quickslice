@@ -1,5 +1,4 @@
 /// Configuration for the docs site
-
 /// Represents a documentation page
 pub type DocPage {
   DocPage(

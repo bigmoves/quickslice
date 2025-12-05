@@ -1,8 +1,7 @@
 /// Loads documentation markdown files from disk
-
-import www/config.{type DocPage, DocPage, docs_dir, page_order}
 import gleam/list
 import simplifile
+import www/config.{type DocPage, DocPage, docs_dir, page_order}
 
 /// Load all doc pages in configured order
 pub fn load_all() -> Result(List(DocPage), String) {
@@ -18,7 +17,13 @@ pub fn load_all() -> Result(List(DocPage), String) {
         }
         Ok(DocPage(slug: slug, path: path, title: title, content: content))
       }
-      Error(err) -> Error("Failed to read " <> filename <> ": " <> simplifile.describe_error(err))
+      Error(err) ->
+        Error(
+          "Failed to read "
+          <> filename
+          <> ": "
+          <> simplifile.describe_error(err),
+        )
     }
   })
 }

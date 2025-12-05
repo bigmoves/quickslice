@@ -1,5 +1,4 @@
 /// Docs site layout with sidebar navigation
-
 import gleam/list
 import lustre/attribute.{attribute, class, href, id, rel}
 import lustre/element.{type Element}

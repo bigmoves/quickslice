@@ -1,4 +1,4 @@
-.PHONY: help test build clean run css format-examples
+.PHONY: help test build clean run css format-examples docs
 
 help:
 	@echo "quickslice - Makefile Commands"
@@ -34,3 +34,7 @@ clean:
 # Format example HTML files
 format-examples:
 	@prettier --write "examples/**/*.html"
+
+# Generate documentation
+docs:
+	@cd www && gleam run
