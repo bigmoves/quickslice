@@ -18,6 +18,7 @@ pub fn main() -> Nil {
       // Add first route to get HasStaticRoutes type, then add remaining
       let cfg =
         ssg.new(config.out_dir)
+        |> ssg.add_static_dir(config.static_dir)
         |> ssg.add_static_route(first.path, page.render(first, [first, ..rest]))
         |> add_routes(rest, [first, ..rest])
         |> ssg.use_index_routes

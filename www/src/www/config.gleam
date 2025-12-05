@@ -35,3 +35,6 @@ pub const docs_dir: String = "../docs"
 
 /// Output directory for generated site
 pub const out_dir: String = "./priv"
+
+/// Static assets directory
+pub const static_dir: String = "./static"
