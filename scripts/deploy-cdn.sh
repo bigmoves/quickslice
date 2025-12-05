@@ -74,3 +74,40 @@ get_content_type() {
         *)    echo "application/octet-stream" ;;
     esac
 }
+
+# Upload a single file
+upload_file() {
+    local local_path="$1"
+    local remote_path="$2"
+    local content_type
+    content_type=$(get_content_type "$local_path")
+
+    if [ "$VERBOSE" = true ]; then
+        echo "  Uploading: ${remote_path} (${content_type})"
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        ((UPLOADED++))
+        return 0
+    fi
+
+    local response
+    local http_code
+
+    response=$(curl -s -w "\n%{http_code}" -X PUT \
+        "${STORAGE_URL}/${remote_path}" \
+        -H "AccessKey: ${BUNNY_API_KEY}" \
+        -H "Content-Type: ${content_type}" \
+        --data-binary "@${local_path}")
+
+    http_code=$(echo "$response" | tail -n1)
+
+    if [[ "$http_code" =~ ^2 ]]; then
+        ((UPLOADED++))
+        return 0
+    else
+        echo -e "${RED}Failed to upload ${remote_path}: HTTP ${http_code}${NC}"
+        echo "$response" | head -n -1
+        return 1
+    fi
+}
