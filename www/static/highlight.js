@@ -1,26 +1,42 @@
-// Lightweight GraphQL syntax highlighter
+// Lightweight syntax highlighter for GraphQL, JSON, and JavaScript
 (function() {
-  const tokens = [
-    // Comments
+  const graphqlTokens = [
     [/#.*$/gm, 'comment'],
-    // Strings
     [/"(?:[^"\\]|\\.)*"/g, 'string'],
-    // Keywords
     [/\b(query|mutation|subscription|fragment|on|type|interface|union|enum|scalar|input|extend|directive|schema|implements)\b/g, 'keyword'],
-    // Built-in types
     [/\b(String|Int|Float|Boolean|ID)\b/g, 'type'],
-    // Directives
     [/@\w+/g, 'directive'],
-    // Variables
     [/\$\w+/g, 'variable'],
-    // Field arguments / input fields
     [/\b(\w+)(?=\s*:)/g, 'property'],
-    // Type names (capitalized words not caught above)
     [/\b([A-Z]\w*)\b/g, 'type'],
-    // Numbers
     [/\b\d+\.?\d*\b/g, 'number'],
-    // Punctuation
     [/[{}()\[\]:,!=|&]/g, 'punctuation'],
+  ];
+
+  const jsonTokens = [
+    [/"(?:[^"\\]|\\.)*"(?=\s*:)/g, 'property'],
+    [/"(?:[^"\\]|\\.)*"/g, 'string'],
+    [/\b(true|false|null)\b/g, 'keyword'],
+    [/-?\b\d+\.?\d*(?:[eE][+-]?\d+)?\b/g, 'number'],
+    [/[{}()\[\]:,]/g, 'punctuation'],
+  ];
+
+  const jsTokens = [
+    // Strings MUST come first to prevent // inside URLs from being matched as comments
+    // Regular strings
+    [/"(?:[^"\\]|\\.)*"/g, 'string'],
+    [/'(?:[^'\\]|\\.)*'/g, 'string'],
+    // Template literals with interpolation support
+    [/`(?:[^`\\]|\\.|\$\{[^}]*\})*`/g, 'string'],
+    // Comments (after strings)
+    [/\/\/.*$/gm, 'comment'],
+    [/\/\*[\s\S]*?\*\//g, 'comment'],
+    [/\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|new|delete|typeof|instanceof|in|of|class|extends|super|import|export|default|from|as|async|await|yield|this|static|get|set)\b/g, 'keyword'],
+    [/\b(true|false|null|undefined|NaN|Infinity)\b/g, 'keyword'],
+    [/\b(Array|Object|String|Number|Boolean|Function|Symbol|Map|Set|WeakMap|WeakSet|Promise|Date|RegExp|Error|JSON|Math|console|window|document|location)\b/g, 'type'],
+    [/\b(\w+)(?=\s*\()/g, 'function'],
+    [/-?\b\d+\.?\d*(?:[eE][+-]?\d+)?\b/g, 'number'],
+    [/[{}()\[\]:;,=+\-*/%<>!&|?\.]/g, 'punctuation'],
   ];
 
   function escapeHtml(text) {
@@ -30,8 +46,7 @@
       .replace(/>/g, '&gt;');
   }
 
-  function highlight(code) {
-    // Track which character positions are already highlighted
+  function highlight(code, tokens) {
     const highlighted = new Array(code.length).fill(false);
     const spans = [];
 
@@ -42,28 +57,28 @@
         const start = match.index;
         const end = start + match[0].length;
 
-        // Check if any part of this match is already highlighted
-        let alreadyHighlighted = false;
+        // Check if ANY position in this match is already highlighted
+        // This prevents patterns from matching inside already-highlighted regions
+        let overlap = false;
         for (let i = start; i < end; i++) {
           if (highlighted[i]) {
-            alreadyHighlighted = true;
+            overlap = true;
             break;
           }
         }
+        if (overlap) {
+          continue;
+        }
 
-        if (!alreadyHighlighted) {
-          spans.push({ start, end, className, text: match[0] });
-          for (let i = start; i < end; i++) {
-            highlighted[i] = true;
-          }
+        spans.push({ start, end, className, text: match[0] });
+        for (let i = start; i < end; i++) {
+          highlighted[i] = true;
         }
       }
     }
 
-    // Sort spans by start position
     spans.sort((a, b) => a.start - b.start);
 
-    // Build result
     let result = '';
     let pos = 0;
     for (const span of spans) {
@@ -81,9 +96,22 @@
   }
 
   function init() {
-    const blocks = document.querySelectorAll('pre code.language-graphql');
-    for (const block of blocks) {
-      block.innerHTML = highlight(block.textContent);
+    // GraphQL
+    const graphqlBlocks = document.querySelectorAll('pre code.language-graphql');
+    for (const block of graphqlBlocks) {
+      block.innerHTML = highlight(block.textContent, graphqlTokens);
+    }
+
+    // JSON
+    const jsonBlocks = document.querySelectorAll('pre code.language-json');
+    for (const block of jsonBlocks) {
+      block.innerHTML = highlight(block.textContent, jsonTokens);
+    }
+
+    // JavaScript / JS
+    const jsBlocks = document.querySelectorAll('pre code.language-javascript, pre code.language-js');
+    for (const block of jsBlocks) {
+      block.innerHTML = highlight(block.textContent, jsTokens);
     }
   }
 
