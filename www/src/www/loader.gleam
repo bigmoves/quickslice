@@ -1,6 +1,6 @@
 /// Loads documentation markdown files from disk
 
-import docs/config.{type DocPage, DocPage, docs_dir, page_order}
+import www/config.{type DocPage, DocPage, docs_dir, page_order}
 import gleam/list
 import simplifile
 
