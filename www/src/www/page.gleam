@@ -1,10 +1,11 @@
 /// Renders a doc page by converting markdown to HTML and wrapping in layout
-import gleam/option.{Some}
+import gleam/list
+import gleam/option.{None, Some}
 import gleam/regexp
 import lustre/element.{type Element}
 import mork
 import www/config.{type DocPage}
-import www/layout
+import www/layout.{type Heading}
 
 /// Render a doc page to a full HTML element
 pub fn render(page: DocPage, all_pages: List(DocPage)) -> Element(Nil) {
@@ -16,7 +17,37 @@ pub fn render(page: DocPage, all_pages: List(DocPage)) -> Element(Nil) {
     |> mork.to_html
     |> transform_links
 
-  layout.wrap(page, all_pages, html_content)
+  let headings = extract_headings(html_content)
+
+  layout.wrap(page, all_pages, html_content, headings)
+}
+
+/// Extract h2 and h3 headings with their IDs from HTML
+fn extract_headings(html: String) -> List(Heading) {
+  let assert Ok(re) =
+    regexp.from_string("<h([23]) id=\"([^\"]+)\">([^<]+)</h[23]>")
+
+  regexp.scan(re, html)
+  |> list.map(fn(match) {
+    case match.submatches {
+      [Some(level), Some(id), Some(text)] ->
+        Some(layout.Heading(
+          level: case level {
+            "2" -> 2
+            _ -> 3
+          },
+          id: id,
+          text: text,
+        ))
+      _ -> None
+    }
+  })
+  |> list.filter_map(fn(x) {
+    case x {
+      Some(h) -> Ok(h)
+      None -> Error(Nil)
+    }
+  })
 }
 
 /// Transform ./filename.md links to /filename paths

@@ -10,11 +10,17 @@ import lustre/element/html.{
 import lustre/element/svg
 import www/config.{type DocPage}
 
+/// Heading extracted from page content
+pub type Heading {
+  Heading(level: Int, id: String, text: String)
+}
+
 /// Wrap content in the docs layout
 pub fn wrap(
   page: DocPage,
   all_pages: List(DocPage),
   content_html: String,
+  headings: List(Heading),
 ) -> Element(Nil) {
   html([], [
     head([], [
@@ -33,6 +39,7 @@ pub fn wrap(
         sidebar(page.path, all_pages),
         main([class("content")], [
           element.unsafe_raw_html("", "div", [], content_html),
+          minimap(headings),
         ]),
       ]),
       script([attribute("src", "/highlight.js")], ""),
@@ -40,6 +47,31 @@ pub fn wrap(
       script([attribute("src", "/minimap.js")], ""),
     ]),
   ])
+}
+
+/// Render the minimap navigation
+fn minimap(headings: List(Heading)) -> Element(Nil) {
+  case headings {
+    [] -> element.none()
+    _ ->
+      nav([class("minimap"), attribute("aria-label", "Page sections")], [
+        div([class("minimap-header")], [html.text("On this page")]),
+        ..list.map(headings, fn(h) {
+          let classes = case h.level {
+            3 -> "minimap-item minimap-item-sub"
+            _ -> "minimap-item"
+          }
+          a(
+            [
+              href("#" <> h.id),
+              class(classes),
+              attribute("data-target-id", h.id),
+            ],
+            [html.text(h.text)],
+          )
+        })
+      ])
+  }
 }
 
 /// Hamburger menu button for mobile

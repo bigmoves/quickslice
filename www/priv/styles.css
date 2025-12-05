@@ -274,6 +274,8 @@ body {
   border-collapse: collapse;
   margin: var(--space-6) 0;
   width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
   font-size: var(--text-sm);
 }
 
@@ -281,6 +283,8 @@ body {
   border: 1px solid var(--border);
   padding: var(--space-3) var(--space-4);
   text-align: left;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .content th {
@@ -406,6 +410,7 @@ body {
   align-self: flex-start;
   max-height: calc(100vh - var(--space-16));
   overflow-y: auto;
+  padding-bottom: 30vh;
 }
 
 .minimap-header {
