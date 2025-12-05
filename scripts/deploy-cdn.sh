@@ -143,3 +143,30 @@ list_remote_files() {
         fi
     done
 }
+
+# Delete a single file from remote
+delete_file() {
+    local remote_path="$1"
+
+    if [ "$VERBOSE" = true ]; then
+        echo "  Deleting: ${remote_path}"
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        ((DELETED++))
+        return 0
+    fi
+
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+        "${STORAGE_URL}/${remote_path}" \
+        -H "AccessKey: ${BUNNY_API_KEY}")
+
+    if [[ "$http_code" =~ ^2 ]]; then
+        ((DELETED++))
+        return 0
+    else
+        echo -e "${RED}Failed to delete ${remote_path}: HTTP ${http_code}${NC}"
+        return 1
+    fi
+}
