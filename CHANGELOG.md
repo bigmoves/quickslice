@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## v0.15.0
 
 ### Added
 - Add isNull filter support for ref fields in where clauses (5d9f426)
@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sync actor records on first login (47f2d32)
 
 ### Fixed
+- Encode non-UTF-8 binary data as $bytes in JSON (d5bd2c4)
 - Resolve strongRef refs in nested object types (434a89f)
 - Resolve nested refs within others object types (70d972d)
 - Show reset alert in danger zone section of settings (7bedfb3)
