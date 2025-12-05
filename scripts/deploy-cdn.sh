@@ -111,3 +111,35 @@ upload_file() {
         return 1
     fi
 }
+
+# List all files in remote storage (recursively)
+list_remote_files() {
+    local path="${1:-}"
+    local url="${STORAGE_URL}/${path}"
+
+    local response
+    response=$(curl -s -X GET "$url" \
+        -H "AccessKey: ${BUNNY_API_KEY}" \
+        -H "Accept: application/json")
+
+    # Parse JSON response - each item has ObjectName and IsDirectory
+    echo "$response" | jq -r '.[] |
+        if .IsDirectory then
+            .ObjectName + "/"
+        else
+            .ObjectName
+        end' 2>/dev/null | while read -r item; do
+        if [[ "$item" == */ ]]; then
+            # It's a directory, recurse
+            local subdir="${item%/}"
+            if [ -n "$path" ]; then
+                list_remote_files "${path}${subdir}/"
+            else
+                list_remote_files "${subdir}/"
+            fi
+        else
+            # It's a file, print full path
+            echo "${path}${item}"
+        fi
+    done
+}
