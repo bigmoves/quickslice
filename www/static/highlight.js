@@ -21,6 +21,28 @@
     [/[{}()\[\]:,]/g, 'punctuation'],
   ];
 
+  const bashTokens = [
+    // Comments - but not shebang
+    [/(^|[^"{\\$])#.*/gm, 'comment'],
+    // Strings
+    [/"(?:[^"\\]|\\.)*"/g, 'string'],
+    [/'[^']*'/g, 'string'],
+    [/\$'(?:[^'\\]|\\.)*'/g, 'string'],
+    // Variables
+    [/\$\(\([\s\S]+?\)\)/g, 'variable'],
+    [/\$\([^)]+\)/g, 'variable'],
+    [/\$\{[^}]+\}/g, 'variable'],
+    [/\$(?:\w+|[#?*!@$])/g, 'variable'],
+    // Keywords
+    [/\b(case|do|done|elif|else|esac|fi|for|function|if|in|select|then|until|while|return|exit|break|continue|local|export|readonly|declare|unset|shift|source)\b/g, 'keyword'],
+    // Common commands/builtins
+    [/\b(echo|printf|cd|pwd|ls|cat|cp|mv|rm|mkdir|rmdir|touch|chmod|chown|grep|sed|awk|find|xargs|sort|uniq|head|tail|wc|curl|wget|git|npm|npx|yarn|pnpm|node|python|pip|docker|kubectl|sudo|apt|brew|make|test)\b/g, 'function'],
+    // Numbers - only standalone, not in URLs/paths
+    [/(?<![:/\w])\b\d+\b(?![:/\w])/g, 'number'],
+    // Operators and punctuation
+    [/[|&;><(){}[\]]/g, 'punctuation'],
+  ];
+
   const jsTokens = [
     // Strings MUST come first to prevent // inside URLs from being matched as comments
     // Regular strings
@@ -112,6 +134,12 @@
     const jsBlocks = document.querySelectorAll('pre code.language-javascript, pre code.language-js');
     for (const block of jsBlocks) {
       block.innerHTML = highlight(block.textContent, jsTokens);
+    }
+
+    // Bash / Shell
+    const bashBlocks = document.querySelectorAll('pre code.language-bash, pre code.language-shell, pre code.language-sh');
+    for (const block of bashBlocks) {
+      block.innerHTML = highlight(block.textContent, bashTokens);
     }
   }
 

@@ -10,12 +10,13 @@ POST http://localhost:8080/mcp
 
 ## Setup
 
-1. Start the quickslice server:
-   ```bash
-   cd server && gleam run
-   ```
+Start the quickslice server:
 
-2. Connect your MCP client to `http://localhost:8080/mcp`
+```bash
+cd server && gleam run
+```
+
+Connect your MCP client to `http://localhost:8080/mcp`
 
 ### Claude Code
 

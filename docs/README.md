@@ -1,4 +1,4 @@
-# quickslice GraphQL API
+# quickslice
 
 quickslice provides a GraphQL API for AT Protocol records, automatically generated from lexicon schemas.
 

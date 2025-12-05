@@ -4,8 +4,8 @@ import gleam/list
 import lustre/attribute.{attribute, class, href, id, rel}
 import lustre/element.{type Element}
 import lustre/element/html.{
-  a, aside, body, div, head, html, li, link, main, meta, nav, script, span,
-  title, ul,
+  a, aside, body, button, div, head, html, li, link, main, meta, nav, script,
+  span, title, ul,
 }
 import lustre/element/svg
 import www/config.{type DocPage}
@@ -27,6 +27,8 @@ pub fn wrap(
       link([rel("stylesheet"), href("/styles.css")]),
     ]),
     body([], [
+      menu_toggle(),
+      div([class("sidebar-backdrop")], []),
       div([class("container")], [
         sidebar(page.path, all_pages),
         main([class("content")], [
@@ -34,7 +36,42 @@ pub fn wrap(
         ]),
       ]),
       script([attribute("src", "/highlight.js")], ""),
+      script([attribute("src", "/mobile-nav.js")], ""),
     ]),
+  ])
+}
+
+/// Hamburger menu button for mobile
+fn menu_toggle() -> Element(Nil) {
+  button([class("menu-toggle"), attribute("aria-label", "Toggle menu")], [
+    svg.svg(
+      [
+        attribute("viewBox", "0 0 24 24"),
+        attribute("fill", "none"),
+        attribute("stroke", "currentColor"),
+        attribute("stroke-width", "2"),
+      ],
+      [
+        svg.line([
+          attribute("x1", "3"),
+          attribute("y1", "6"),
+          attribute("x2", "21"),
+          attribute("y2", "6"),
+        ]),
+        svg.line([
+          attribute("x1", "3"),
+          attribute("y1", "12"),
+          attribute("x2", "21"),
+          attribute("y2", "12"),
+        ]),
+        svg.line([
+          attribute("x1", "3"),
+          attribute("y1", "18"),
+          attribute("x2", "21"),
+          attribute("y2", "18"),
+        ]),
+      ],
+    ),
   ])
 }
 
