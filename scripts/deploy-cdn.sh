@@ -170,3 +170,27 @@ delete_file() {
         return 1
     fi
 }
+
+# Purge pull zone cache
+purge_cache() {
+    echo "Purging CDN cache..."
+
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${YELLOW}  Would purge pull zone ${BUNNY_PULLZONE_ID}${NC}"
+        return 0
+    fi
+
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+        "https://api.bunny.net/pullzone/${BUNNY_PULLZONE_ID}/purgeCache" \
+        -H "AccessKey: ${BUNNY_API_KEY}" \
+        -H "Content-Type: application/json")
+
+    if [[ "$http_code" =~ ^2 ]]; then
+        echo -e "${GREEN}  Cache purged successfully${NC}"
+        return 0
+    else
+        echo -e "${RED}  Failed to purge cache: HTTP ${http_code}${NC}"
+        return 1
+    fi
+}
