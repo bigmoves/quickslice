@@ -1,4 +1,4 @@
-.PHONY: help test build clean run css format-examples docs
+.PHONY: help test build clean run css format-examples docs deploy-www
 
 help:
 	@echo "quickslice - Makefile Commands"
@@ -8,6 +8,7 @@ help:
 	@echo "  make build    - Build all projects"
 	@echo "  make clean    - Clean build artifacts"
 	@echo "  make format-examples - Format example HTML files"
+	@echo "  make deploy-www - Deploy www/priv to Bunny CDN"
 	@echo ""
 
 # Run all tests
@@ -38,3 +39,7 @@ format-examples:
 # Generate documentation
 docs:
 	@cd www && gleam run
+
+# Deploy www to Bunny CDN
+deploy-www: docs
+	@scripts/deploy-cdn.sh
