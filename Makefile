@@ -1,4 +1,4 @@
-.PHONY: help test build clean run css
+.PHONY: help test build clean run css format-examples
 
 help:
 	@echo "quickslice - Makefile Commands"
@@ -7,6 +7,7 @@ help:
 	@echo "  make test     - Run all tests"
 	@echo "  make build    - Build all projects"
 	@echo "  make clean    - Clean build artifacts"
+	@echo "  make format-examples - Format example HTML files"
 	@echo ""
 
 # Run all tests
@@ -29,3 +30,7 @@ clean:
 	@cd lexicon_graphql && gleam clean
 	@cd server && gleam clean
 	@echo "Clean complete"
+
+# Format example HTML files
+format-examples:
+	@prettier --write "examples/**/*.html"
