@@ -1,0 +1,319 @@
+<!doctype html>
+<html><head><meta charset="UTF-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><title>quickslice - Aggregations</title><style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.6;
+  color: #1a1a1a;
+}
+.container { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 260px;
+  padding: 2rem 1rem;
+  background: #f5f5f5;
+  border-right: 1px solid #e0e0e0;
+  position: fixed;
+  height: 100vh;
+  overflow-y: auto;
+}
+.sidebar h1 { font-size: 1.25rem; margin-bottom: 1.5rem; padding: 0 0.5rem; }
+.sidebar ul { list-style: none; }
+.sidebar li { margin: 0.25rem 0; }
+.sidebar a {
+  display: block;
+  padding: 0.5rem;
+  color: #444;
+  text-decoration: none;
+  border-radius: 4px;
+}
+.sidebar a:hover { background: #e8e8e8; }
+.sidebar a.active { background: #007acc; color: white; }
+.content {
+  flex: 1;
+  margin-left: 260px;
+  padding: 2rem 3rem;
+  max-width: 900px;
+}
+.content h1 { font-size: 2rem; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; }
+.content h2 { font-size: 1.5rem; margin: 2rem 0 1rem; }
+.content h3 { font-size: 1.25rem; margin: 1.5rem 0 0.75rem; }
+.content p { margin: 1rem 0; }
+.content pre {
+  background: #f5f5f5;
+  padding: 1rem;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+.content code {
+  background: #f0f0f0;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.content pre code { background: none; padding: 0; }
+.content ul, .content ol { margin: 1rem 0; padding-left: 2rem; }
+.content li { margin: 0.5rem 0; }
+.content blockquote {
+  border-left: 4px solid #007acc;
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  background: #f8f8f8;
+}
+.content a { color: #007acc; }
+.content table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+.content th, .content td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+.content th { background: #f5f5f5; }
+</style></head><body><div class="container"><aside class="sidebar"><h1>quickslice</h1><nav><ul><li><a href="/">Getting Started</a></li><li><a href="/authentication">Authentication</a></li><li><a href="/queries">Queries</a></li><li><a href="/mutations">Mutations</a></li><li><a href="/joins">Joins</a></li><li><a class="active" href="/aggregations">Aggregations</a></li><li><a href="/subscriptions">Subscriptions</a></li><li><a href="/blobs">Blobs</a></li><li><a href="/variables">Variables</a></li><li><a href="/deployment">Deployment</a></li><li><a href="/mcp">MCP</a></li></ul></nav></aside><main class="content"><div><h1 id="Aggregations">Aggregations</h1>
+<blockquote>
+<p><strong>Note:</strong> Aggregation queries are public and do not require authentication.</p>
+</blockquote>
+<h2 id="Basic-Aggregation">Basic Aggregation</h2>
+<p>Group records by a single field and count occurrences:</p>
+<pre><code class="language-graphql">query {
+  xyzStatusphereStatusAggregated(groupBy: [{field: status}]) {
+    status
+    count
+  }
+}
+</code></pre>
+<p>Returns groups with their counts:</p>
+<pre><code class="language-json">{
+  &quot;data&quot;: {
+    &quot;xyzStatusphereStatusAggregated&quot;: [
+      { &quot;status&quot;: &quot;👍&quot;, &quot;count&quot;: 42 },
+      { &quot;status&quot;: &quot;👎&quot;, &quot;count&quot;: 18 }
+    ]
+  }
+}
+</code></pre>
+<h2 id="Field-Selection">Field Selection</h2>
+<p>Each collection has a type-safe <code>GroupByField</code> enum for available fields:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPostAggregated(groupBy: [{field: lang}]) {
+    lang
+    count
+  }
+}
+</code></pre>
+<h2 id="Multiple-Fields">Multiple Fields</h2>
+<p>Group by multiple fields simultaneously:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPostAggregated(
+    groupBy: [
+      {field: author}
+      {field: lang}
+    ]
+  ) {
+    author
+    lang
+    count
+  }
+}
+</code></pre>
+<h2 id="Date-Truncation">Date Truncation</h2>
+<p>Group datetime fields by time intervals using the <code>interval</code> parameter:</p>
+<h3 id="Available-Intervals">Available Intervals</h3>
+<ul>
+<li><code>HOUR</code> - Truncate to hour</li>
+<li><code>DAY</code> - Truncate to day</li>
+<li><code>WEEK</code> - Truncate to week</li>
+<li><code>MONTH</code> - Truncate to month</li>
+</ul>
+<h3 id="Group-by-Day">Group by Day</h3>
+<pre><code class="language-graphql">query {
+  appBskyFeedPostAggregated(
+    groupBy: [{field: createdAt, interval: DAY}]
+  ) {
+    createdAt
+    count
+  }
+}
+</code></pre>
+<h3 id="Group-by-Month">Group by Month</h3>
+<pre><code class="language-graphql">query {
+  xyzStatusphereStatusAggregated(
+    groupBy: [{field: indexedAt, interval: MONTH}]
+  ) {
+    indexedAt
+    count
+  }
+}
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> Date intervals can only be applied to datetime fields. Applying intervals to other field types will return an error.</p>
+</blockquote>
+<h2 id="Filtering-with-WHERE">Filtering with WHERE</h2>
+<p>Filter records before aggregation using the <code>where</code> argument:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPostAggregated(
+    groupBy: [{field: lang}]
+    where: {
+      likes: { gte: 50 }
+    }
+  ) {
+    lang
+    count
+  }
+}
+</code></pre>
+<h3 id="Complex-Filters">Complex Filters</h3>
+<p>Combine multiple conditions with <code>and</code> and <code>or</code>:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPostAggregated(
+    groupBy: [{field: author}]
+    where: {
+      and: [
+        { likes: { gte: 100 } }
+        { lang: { eq: &quot;en&quot; } }
+      ]
+    }
+  ) {
+    author
+    count
+  }
+}
+</code></pre>
+<h2 id="Sorting-Results">Sorting Results</h2>
+<p>Sort aggregated results by count using the <code>orderBy</code> argument:</p>
+<h3 id="Descending-Order-Most-Common-First">Descending Order (Most Common First)</h3>
+<pre><code class="language-graphql">query {
+  appBskyFeedPostAggregated(
+    groupBy: [{field: lang}]
+    orderBy: {count: DESC}
+  ) {
+    lang
+    count
+  }
+}
+</code></pre>
+<h3 id="Ascending-Order-Least-Common-First">Ascending Order (Least Common First)</h3>
+<pre><code class="language-graphql">query {
+  appBskyFeedPostAggregated(
+    groupBy: [{field: lang}]
+    orderBy: {count: ASC}
+  ) {
+    lang
+    count
+  }
+}
+</code></pre>
+<h2 id="Limiting-Results">Limiting Results</h2>
+<p>Limit the number of groups returned using the <code>limit</code> parameter:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPostAggregated(
+    groupBy: [{field: author}]
+    orderBy: {count: DESC}
+    limit: 10
+  ) {
+    author
+    count
+  }
+}
+</code></pre>
+<h2 id="Table-Columns">Table Columns</h2>
+<p>Group by database table columns in addition to JSON fields:</p>
+<h3 id="Group-by-DID">Group by DID</h3>
+<pre><code class="language-graphql">query {
+  appBskyFeedPostAggregated(groupBy: [{field: did}]) {
+    did
+    count
+  }
+}
+</code></pre>
+<h3 id="Group-by-Indexed-Date">Group by Indexed Date</h3>
+<pre><code class="language-graphql">query {
+  xyzStatusphereStatusAggregated(
+    groupBy: [{field: indexedAt, interval: DAY}]
+  ) {
+    indexedAt
+    count
+  }
+}
+</code></pre>
+<p>Available table columns: <code>uri</code>, <code>cid</code>, <code>did</code>, <code>collection</code>, <code>indexedAt</code></p>
+<h2 id="Array-Fields">Array Fields</h2>
+<p>Array fields can be grouped by in aggregations:</p>
+<pre><code class="language-graphql">query {
+  fmTealAlphaFeedPlayAggregated(
+    groupBy: [{field: artists}]
+  ) {
+    artists
+    count
+  }
+}
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> Array fields return JSON objects in the response, not strings.</p>
+</blockquote>
+<h2 id="Complete-Example">Complete Example</h2>
+<p>Combining all features - filtering, multiple groupBy fields, date truncation, ordering, and limiting:</p>
+<pre><code class="language-graphql">query GetTopLanguagesByDay($minLikes: Int!, $limit: Int!) {
+  appBskyFeedPostAggregated(
+    groupBy: [
+      {field: createdAt, interval: DAY}
+      {field: lang}
+    ]
+    where: {
+      likes: { gte: $minLikes }
+    }
+    orderBy: {count: DESC}
+    limit: $limit
+  ) {
+    createdAt
+    lang
+    count
+  }
+}
+</code></pre>
+<p>Variables:</p>
+<pre><code class="language-json">{
+  &quot;minLikes&quot;: 50,
+  &quot;limit&quot;: 20
+}
+</code></pre>
+<p>Response:</p>
+<pre><code class="language-json">{
+  &quot;data&quot;: {
+    &quot;appBskyFeedPostAggregated&quot;: [
+      {
+        &quot;createdAt&quot;: &quot;2024-01-15&quot;,
+        &quot;lang&quot;: &quot;en&quot;,
+        &quot;count&quot;: 342
+      },
+      {
+        &quot;createdAt&quot;: &quot;2024-01-15&quot;,
+        &quot;lang&quot;: &quot;fr&quot;,
+        &quot;count&quot;: 127
+      },
+      {
+        &quot;createdAt&quot;: &quot;2024-01-14&quot;,
+        &quot;lang&quot;: &quot;en&quot;,
+        &quot;count&quot;: 298
+      }
+    ]
+  }
+}
+</code></pre>
+<h2 id="Query-Structure">Query Structure</h2>
+<p>Aggregated query fields follow this naming pattern:</p>
+<ul>
+<li><code>{collection}Aggregated</code> - Returns aggregated results</li>
+<li>Parameters:
+<ul>
+<li><code>groupBy</code> (required): Array of fields to group by with optional intervals</li>
+<li><code>where</code> (optional): Filter conditions</li>
+<li><code>orderBy</code> (optional): Sort by count (ASC or DESC)</li>
+<li><code>limit</code> (optional): Maximum number of groups to return (default: 100)</li>
+</ul>
+</li>
+<li>Returns: Array of objects with group field values and <code>count</code></li>
+</ul>
+<h2 id="Validation">Validation</h2>
+<p>The server validates aggregation queries:</p>
+<ul>
+<li><strong>Date intervals</strong>: Can only be applied to datetime fields</li>
+<li><strong>Query complexity</strong>: Maximum 5 groupBy fields allowed per query</li>
+<li><strong>Field existence</strong>: All groupBy fields must exist in the collection schema</li>
+</ul>
+</div></main></div></body></html>

@@ -1,0 +1,146 @@
+<!doctype html>
+<html><head><meta charset="UTF-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><title>quickslice - MCP</title><style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.6;
+  color: #1a1a1a;
+}
+.container { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 260px;
+  padding: 2rem 1rem;
+  background: #f5f5f5;
+  border-right: 1px solid #e0e0e0;
+  position: fixed;
+  height: 100vh;
+  overflow-y: auto;
+}
+.sidebar h1 { font-size: 1.25rem; margin-bottom: 1.5rem; padding: 0 0.5rem; }
+.sidebar ul { list-style: none; }
+.sidebar li { margin: 0.25rem 0; }
+.sidebar a {
+  display: block;
+  padding: 0.5rem;
+  color: #444;
+  text-decoration: none;
+  border-radius: 4px;
+}
+.sidebar a:hover { background: #e8e8e8; }
+.sidebar a.active { background: #007acc; color: white; }
+.content {
+  flex: 1;
+  margin-left: 260px;
+  padding: 2rem 3rem;
+  max-width: 900px;
+}
+.content h1 { font-size: 2rem; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; }
+.content h2 { font-size: 1.5rem; margin: 2rem 0 1rem; }
+.content h3 { font-size: 1.25rem; margin: 1.5rem 0 0.75rem; }
+.content p { margin: 1rem 0; }
+.content pre {
+  background: #f5f5f5;
+  padding: 1rem;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+.content code {
+  background: #f0f0f0;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.content pre code { background: none; padding: 0; }
+.content ul, .content ol { margin: 1rem 0; padding-left: 2rem; }
+.content li { margin: 0.5rem 0; }
+.content blockquote {
+  border-left: 4px solid #007acc;
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  background: #f8f8f8;
+}
+.content a { color: #007acc; }
+.content table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+.content th, .content td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+.content th { background: #f5f5f5; }
+</style></head><body><div class="container"><aside class="sidebar"><h1>quickslice</h1><nav><ul><li><a href="/">Getting Started</a></li><li><a href="/authentication">Authentication</a></li><li><a href="/queries">Queries</a></li><li><a href="/mutations">Mutations</a></li><li><a href="/joins">Joins</a></li><li><a href="/aggregations">Aggregations</a></li><li><a href="/subscriptions">Subscriptions</a></li><li><a href="/blobs">Blobs</a></li><li><a href="/variables">Variables</a></li><li><a href="/deployment">Deployment</a></li><li><a class="active" href="/mcp">MCP</a></li></ul></nav></aside><main class="content"><div><h1 id="MCP-Server">MCP Server</h1>
+<p>Quickslice provides an MCP (Model Context Protocol) server that lets AI assistants query your ATProto data directly.</p>
+<h2 id="Endpoint">Endpoint</h2>
+<pre><code>POST http://localhost:8080/mcp
+</code></pre>
+<h2 id="Setup">Setup</h2>
+<ol>
+<li>
+<p>Start the quickslice server:</p>
+<pre><code class="language-bash">cd server &amp;&amp; gleam run
+</code></pre>
+</li>
+<li>
+<p>Connect your MCP client to <code>http://localhost:8080/mcp</code></p>
+</li>
+</ol>
+<h3 id="Claude-Code">Claude Code</h3>
+<pre><code class="language-bash">claude mcp add --transport http --scope user quickslice http://localhost:8080/mcp
+</code></pre>
+<h3 id="Claude-Desktop">Claude Desktop</h3>
+<p>Add to your <code>claude_desktop_config.json</code>:</p>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;quickslice&quot;: {
+      &quot;url&quot;: &quot;http://localhost:8080/mcp&quot;
+    }
+  }
+}
+</code></pre>
+<h3 id="Other-MCP-Clients">Other MCP Clients</h3>
+<p>Point any MCP-compatible client at the <code>/mcp</code> endpoint using HTTP transport.</p>
+<h2 id="Available-Tools">Available Tools</h2>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>list_lexicons</code></td>
+<td>List all registered lexicons</td>
+</tr>
+<tr>
+<td><code>get_lexicon</code></td>
+<td>Get full lexicon definition by NSID</td>
+</tr>
+<tr>
+<td><code>list_queries</code></td>
+<td>List available GraphQL queries</td>
+</tr>
+<tr>
+<td><code>get_oauth_info</code></td>
+<td>Get OAuth flows, scopes, and endpoints</td>
+</tr>
+<tr>
+<td><code>get_server_capabilities</code></td>
+<td>Get server version and features</td>
+</tr>
+<tr>
+<td><code>introspect_schema</code></td>
+<td>Get full GraphQL schema</td>
+</tr>
+<tr>
+<td><code>execute_query</code></td>
+<td>Execute a GraphQL query</td>
+</tr>
+</tbody>
+</table>
+<h2 id="Example-Prompts">Example Prompts</h2>
+<p>Once connected, you can ask things like:</p>
+<ul>
+<li>&quot;What lexicons are registered?&quot;</li>
+<li>&quot;Show me the schema for xyz.statusphere.status&quot;</li>
+<li>&quot;Query the latest 10 statusphere statuses&quot;</li>
+<li>&quot;What GraphQL queries are available?&quot;</li>
+<li>&quot;What OAuth scopes does this server support?&quot;</li>
+</ul>
+</div></main></div></body></html>

@@ -1,0 +1,241 @@
+<!doctype html>
+<html><head><meta charset="UTF-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><title>quickslice - Variables</title><style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.6;
+  color: #1a1a1a;
+}
+.container { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 260px;
+  padding: 2rem 1rem;
+  background: #f5f5f5;
+  border-right: 1px solid #e0e0e0;
+  position: fixed;
+  height: 100vh;
+  overflow-y: auto;
+}
+.sidebar h1 { font-size: 1.25rem; margin-bottom: 1.5rem; padding: 0 0.5rem; }
+.sidebar ul { list-style: none; }
+.sidebar li { margin: 0.25rem 0; }
+.sidebar a {
+  display: block;
+  padding: 0.5rem;
+  color: #444;
+  text-decoration: none;
+  border-radius: 4px;
+}
+.sidebar a:hover { background: #e8e8e8; }
+.sidebar a.active { background: #007acc; color: white; }
+.content {
+  flex: 1;
+  margin-left: 260px;
+  padding: 2rem 3rem;
+  max-width: 900px;
+}
+.content h1 { font-size: 2rem; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; }
+.content h2 { font-size: 1.5rem; margin: 2rem 0 1rem; }
+.content h3 { font-size: 1.25rem; margin: 1.5rem 0 0.75rem; }
+.content p { margin: 1rem 0; }
+.content pre {
+  background: #f5f5f5;
+  padding: 1rem;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+.content code {
+  background: #f0f0f0;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.content pre code { background: none; padding: 0; }
+.content ul, .content ol { margin: 1rem 0; padding-left: 2rem; }
+.content li { margin: 0.5rem 0; }
+.content blockquote {
+  border-left: 4px solid #007acc;
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  background: #f8f8f8;
+}
+.content a { color: #007acc; }
+.content table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+.content th, .content td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+.content th { background: #f5f5f5; }
+</style></head><body><div class="container"><aside class="sidebar"><h1>quickslice</h1><nav><ul><li><a href="/">Getting Started</a></li><li><a href="/authentication">Authentication</a></li><li><a href="/queries">Queries</a></li><li><a href="/mutations">Mutations</a></li><li><a href="/joins">Joins</a></li><li><a href="/aggregations">Aggregations</a></li><li><a href="/subscriptions">Subscriptions</a></li><li><a href="/blobs">Blobs</a></li><li><a class="active" href="/variables">Variables</a></li><li><a href="/deployment">Deployment</a></li><li><a href="/mcp">MCP</a></li></ul></nav></aside><main class="content"><div><h1 id="Variables">Variables</h1>
+<p>GraphQL variables allow you to parameterize your queries and mutations for reusability and security.</p>
+<h2 id="Basic-Variables">Basic Variables</h2>
+<h3 id="Query-with-Variables">Query with Variables</h3>
+<pre><code class="language-graphql">query GetStatusByEmoji($emoji: String!) {
+  xyzStatusphereStatus(where: {
+    status: { eq: $emoji }
+  }) {
+    edges {
+      node {
+        uri
+        status
+        createdAt
+      }
+    }
+  }
+}
+</code></pre>
+<p>Variables:</p>
+<pre><code class="language-json">{
+  &quot;emoji&quot;: &quot;🎉&quot;
+}
+</code></pre>
+<h3 id="Mutation-with-Variables">Mutation with Variables</h3>
+<pre><code class="language-graphql">mutation CreateStatus($statusEmoji: String!, $timestamp: String!) {
+  createXyzStatusphereStatus(
+    input: {
+      status: $statusEmoji
+      createdAt: $timestamp
+    }
+  ) {
+    uri
+    status
+    createdAt
+  }
+}
+</code></pre>
+<p>Variables:</p>
+<pre><code class="language-json">{
+  &quot;statusEmoji&quot;: &quot;🚀&quot;,
+  &quot;timestamp&quot;: &quot;2025-01-30T12:00:00Z&quot;
+}
+</code></pre>
+<h2 id="Multiple-Variables">Multiple Variables</h2>
+<pre><code class="language-graphql">query GetFilteredStatuses(
+  $emoji: String!
+  $pageSize: Int!
+  $cursor: String
+) {
+  xyzStatusphereStatus(
+    where: { status: { eq: $emoji } }
+    first: $pageSize
+    after: $cursor
+    sortBy: [{ field: &quot;createdAt&quot;, direction: DESC }]
+  ) {
+    edges {
+      node {
+        uri
+        status
+        createdAt
+      }
+      cursor
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    totalCount
+  }
+}
+</code></pre>
+<p>Variables:</p>
+<pre><code class="language-json">{
+  &quot;emoji&quot;: &quot;✨&quot;,
+  &quot;pageSize&quot;: 10,
+  &quot;cursor&quot;: null
+}
+</code></pre>
+<h2 id="Optional-Variables">Optional Variables</h2>
+<p>Use default values for optional variables:</p>
+<pre><code class="language-graphql">query GetProfiles(
+  $name: String = &quot;&quot;
+  $pageSize: Int = 20
+) {
+  appBskyActorProfile(
+    where: { displayName: { contains: $name } }
+    first: $pageSize
+  ) {
+    edges {
+      node {
+        displayName
+        description
+      }
+    }
+  }
+}
+</code></pre>
+<p>Variables:</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;alice&quot;
+}
+</code></pre>
+<p>Or omit variables to use defaults:</p>
+<pre><code class="language-json">{}
+</code></pre>
+<h2 id="Blob-Upload-with-Variables">Blob Upload with Variables</h2>
+<pre><code class="language-graphql">mutation UploadImage($imageData: String!, $type: String!) {
+  uploadBlob(
+    data: $imageData
+    mimeType: $type
+  ) {
+    ref
+    mimeType
+    size
+  }
+}
+</code></pre>
+<p>Variables:</p>
+<pre><code class="language-json">{
+  &quot;imageData&quot;: &quot;base64EncodedImageData...&quot;,
+  &quot;type&quot;: &quot;image/jpeg&quot;
+}
+</code></pre>
+<h2 id="Update-Profile-with-Variables">Update Profile with Variables</h2>
+<pre><code class="language-graphql">mutation UpdateProfile(
+  $name: String!
+  $bio: String!
+  $avatarRef: String!
+  $avatarType: String!
+  $avatarSize: Int!
+) {
+  updateAppBskyActorProfile(
+    rkey: &quot;self&quot;
+    input: {
+      displayName: $name
+      description: $bio
+      avatar: {
+        ref: $avatarRef
+        mimeType: $avatarType
+        size: $avatarSize
+      }
+    }
+  ) {
+    uri
+    displayName
+    description
+    avatar {
+      ref
+      url(preset: &quot;avatar&quot;)
+    }
+  }
+}
+</code></pre>
+<p>Variables:</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;Alice Smith&quot;,
+  &quot;bio&quot;: &quot;Software engineer &amp; designer&quot;,
+  &quot;avatarRef&quot;: &quot;bafkreiabc123...&quot;,
+  &quot;avatarType&quot;: &quot;image/jpeg&quot;,
+  &quot;avatarSize&quot;: 125000
+}
+</code></pre>
+<h2 id="Using-in-HTTP-Requests">Using in HTTP Requests</h2>
+<p>When making HTTP requests, send variables in the request body:</p>
+<pre><code class="language-bash">curl -X POST http://localhost:8080/graphql \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Authorization: Bearer &lt;token&gt;&quot; \
+  -d '{
+    &quot;query&quot;: &quot;query GetStatus($emoji: String!) { xyzStatusphereStatus(where: { status: { eq: $emoji } }) { edges { node { status } } } }&quot;,
+    &quot;variables&quot;: {
+      &quot;emoji&quot;: &quot;🎉&quot;
+    }
+  }'
+</code></pre>
+</div></main></div></body></html>

@@ -1,0 +1,361 @@
+<!doctype html>
+<html><head><meta charset="UTF-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><title>quickslice - Blobs</title><style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.6;
+  color: #1a1a1a;
+}
+.container { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 260px;
+  padding: 2rem 1rem;
+  background: #f5f5f5;
+  border-right: 1px solid #e0e0e0;
+  position: fixed;
+  height: 100vh;
+  overflow-y: auto;
+}
+.sidebar h1 { font-size: 1.25rem; margin-bottom: 1.5rem; padding: 0 0.5rem; }
+.sidebar ul { list-style: none; }
+.sidebar li { margin: 0.25rem 0; }
+.sidebar a {
+  display: block;
+  padding: 0.5rem;
+  color: #444;
+  text-decoration: none;
+  border-radius: 4px;
+}
+.sidebar a:hover { background: #e8e8e8; }
+.sidebar a.active { background: #007acc; color: white; }
+.content {
+  flex: 1;
+  margin-left: 260px;
+  padding: 2rem 3rem;
+  max-width: 900px;
+}
+.content h1 { font-size: 2rem; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; }
+.content h2 { font-size: 1.5rem; margin: 2rem 0 1rem; }
+.content h3 { font-size: 1.25rem; margin: 1.5rem 0 0.75rem; }
+.content p { margin: 1rem 0; }
+.content pre {
+  background: #f5f5f5;
+  padding: 1rem;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+.content code {
+  background: #f0f0f0;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.content pre code { background: none; padding: 0; }
+.content ul, .content ol { margin: 1rem 0; padding-left: 2rem; }
+.content li { margin: 0.5rem 0; }
+.content blockquote {
+  border-left: 4px solid #007acc;
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  background: #f8f8f8;
+}
+.content a { color: #007acc; }
+.content table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+.content th, .content td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+.content th { background: #f5f5f5; }
+</style></head><body><div class="container"><aside class="sidebar"><h1>quickslice</h1><nav><ul><li><a href="/">Getting Started</a></li><li><a href="/authentication">Authentication</a></li><li><a href="/queries">Queries</a></li><li><a href="/mutations">Mutations</a></li><li><a href="/joins">Joins</a></li><li><a href="/aggregations">Aggregations</a></li><li><a href="/subscriptions">Subscriptions</a></li><li><a class="active" href="/blobs">Blobs</a></li><li><a href="/variables">Variables</a></li><li><a href="/deployment">Deployment</a></li><li><a href="/mcp">MCP</a></li></ul></nav></aside><main class="content"><div><h1 id="Working-with-Blobs">Working with Blobs</h1>
+<p>Blobs are used for binary data like images, videos, and files. They are uploaded separately and referenced by their CID (Content Identifier).</p>
+<h2 id="Upload-Blob">Upload Blob</h2>
+<p>Upload binary data encoded as base64:</p>
+<pre><code class="language-graphql">mutation {
+  uploadBlob(
+    data: &quot;iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAY...&quot;
+    mimeType: &quot;image/png&quot;
+  ) {
+    ref
+    mimeType
+    size
+  }
+}
+</code></pre>
+<p>Response:</p>
+<pre><code class="language-json">{
+  &quot;data&quot;: {
+    &quot;uploadBlob&quot;: {
+      &quot;ref&quot;: &quot;bafkreiabc123xyz...&quot;,
+      &quot;mimeType&quot;: &quot;image/png&quot;,
+      &quot;size&quot;: 1024
+    }
+  }
+}
+</code></pre>
+<h2 id="Blob-Reference">Blob Reference</h2>
+<p>A blob reference contains:</p>
+<ul>
+<li><code>ref</code>: CID of the blob content</li>
+<li><code>mimeType</code>: MIME type (e.g., <code>image/jpeg</code>, <code>image/png</code>)</li>
+<li><code>size</code>: Size in bytes</li>
+</ul>
+<h2 id="Using-Blobs-in-Records">Using Blobs in Records</h2>
+<h3 id="Profile-Avatar">Profile Avatar</h3>
+<pre><code class="language-graphql">mutation {
+  updateAppBskyActorProfile(
+    rkey: &quot;self&quot;
+    input: {
+      displayName: &quot;Alice&quot;
+      avatar: {
+        ref: &quot;bafkreiabc123...&quot;
+        mimeType: &quot;image/jpeg&quot;
+        size: 125000
+      }
+    }
+  ) {
+    displayName
+    avatar {
+      ref
+      mimeType
+      size
+      url
+    }
+  }
+}
+</code></pre>
+<h3 id="Profile-Banner">Profile Banner</h3>
+<pre><code class="language-graphql">mutation {
+  updateAppBskyActorProfile(
+    rkey: &quot;self&quot;
+    input: {
+      displayName: &quot;Alice&quot;
+      banner: {
+        ref: &quot;bafkreixyz789...&quot;
+        mimeType: &quot;image/jpeg&quot;
+        size: 450000
+      }
+    }
+  ) {
+    displayName
+    banner {
+      ref
+      mimeType
+      size
+      url
+    }
+  }
+}
+</code></pre>
+<h2 id="Blob-URLs">Blob URLs</h2>
+<p>Blobs automatically generate CDN URLs for serving. Use the <code>url</code> field with optional presets:</p>
+<h3 id="Default-URL">Default URL</h3>
+<pre><code class="language-graphql">query {
+  appBskyActorProfile {
+    edges {
+      node {
+        avatar {
+          ref
+          url
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<p>Returns: <code>https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:.../bafkreiabc123@jpeg</code></p>
+<h3 id="Avatar-Preset">Avatar Preset</h3>
+<pre><code class="language-graphql">query {
+  appBskyActorProfile {
+    edges {
+      node {
+        avatar {
+          ref
+          url(preset: &quot;avatar&quot;)
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<p>Returns: <code>https://cdn.bsky.app/img/avatar/plain/did:plc:.../bafkreiabc123@jpeg</code></p>
+<h3 id="Banner-Preset">Banner Preset</h3>
+<pre><code class="language-graphql">query {
+  appBskyActorProfile {
+    edges {
+      node {
+        banner {
+          url(preset: &quot;banner&quot;)
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<p>Returns: <code>https://cdn.bsky.app/img/banner/plain/did:plc:.../bafkreixyz789@jpeg</code></p>
+<h2 id="Available-Presets">Available Presets</h2>
+<ul>
+<li><code>avatar</code> - Optimized for profile avatars (square, small)</li>
+<li><code>banner</code> - Optimized for profile banners (wide, medium)</li>
+<li><code>feed_thumbnail</code> - Thumbnails in feed view</li>
+<li><code>feed_fullsize</code> - Full size images in feed (default)</li>
+</ul>
+<h2 id="Complete-Example-Update-Profile-with-Images">Complete Example: Update Profile with Images</h2>
+<h3 id="Step-1-Upload-Avatar">Step 1: Upload Avatar</h3>
+<pre><code class="language-graphql">mutation UploadAvatar($avatarData: String!) {
+  uploadBlob(data: $avatarData, mimeType: &quot;image/jpeg&quot;) {
+    ref
+    mimeType
+    size
+  }
+}
+</code></pre>
+<p>Variables:</p>
+<pre><code class="language-json">{
+  &quot;avatarData&quot;: &quot;base64EncodedJpegData...&quot;
+}
+</code></pre>
+<p>Response:</p>
+<pre><code class="language-json">{
+  &quot;data&quot;: {
+    &quot;uploadBlob&quot;: {
+      &quot;ref&quot;: &quot;bafkreiabc123avatar&quot;,
+      &quot;mimeType&quot;: &quot;image/jpeg&quot;,
+      &quot;size&quot;: 125000
+    }
+  }
+}
+</code></pre>
+<h3 id="Step-2-Upload-Banner">Step 2: Upload Banner</h3>
+<pre><code class="language-graphql">mutation UploadBanner($bannerData: String!) {
+  uploadBlob(data: $bannerData, mimeType: &quot;image/jpeg&quot;) {
+    ref
+    mimeType
+    size
+  }
+}
+</code></pre>
+<p>Variables:</p>
+<pre><code class="language-json">{
+  &quot;bannerData&quot;: &quot;base64EncodedJpegData...&quot;
+}
+</code></pre>
+<p>Response:</p>
+<pre><code class="language-json">{
+  &quot;data&quot;: {
+    &quot;uploadBlob&quot;: {
+      &quot;ref&quot;: &quot;bafkreixyz789banner&quot;,
+      &quot;mimeType&quot;: &quot;image/jpeg&quot;,
+      &quot;size&quot;: 450000
+    }
+  }
+}
+</code></pre>
+<h3 id="Step-3-Update-Profile">Step 3: Update Profile</h3>
+<pre><code class="language-graphql">mutation UpdateProfileWithImages {
+  updateAppBskyActorProfile(
+    rkey: &quot;self&quot;
+    input: {
+      displayName: &quot;Alice Smith&quot;
+      description: &quot;Software engineer &amp; designer&quot;
+      avatar: {
+        ref: &quot;bafkreiabc123avatar&quot;
+        mimeType: &quot;image/jpeg&quot;
+        size: 125000
+      }
+      banner: {
+        ref: &quot;bafkreixyz789banner&quot;
+        mimeType: &quot;image/jpeg&quot;
+        size: 450000
+      }
+    }
+  ) {
+    uri
+    displayName
+    description
+    avatar {
+      ref
+      mimeType
+      size
+      url(preset: &quot;avatar&quot;)
+    }
+    banner {
+      ref
+      mimeType
+      size
+      url(preset: &quot;banner&quot;)
+    }
+  }
+}
+</code></pre>
+<p>Response:</p>
+<pre><code class="language-json">{
+  &quot;data&quot;: {
+    &quot;updateAppBskyActorProfile&quot;: {
+      &quot;uri&quot;: &quot;at://did:plc:xyz/app.bsky.actor.profile/self&quot;,
+      &quot;displayName&quot;: &quot;Alice Smith&quot;,
+      &quot;description&quot;: &quot;Software engineer &amp; designer&quot;,
+      &quot;avatar&quot;: {
+        &quot;ref&quot;: &quot;bafkreiabc123avatar&quot;,
+        &quot;mimeType&quot;: &quot;image/jpeg&quot;,
+        &quot;size&quot;: 125000,
+        &quot;url&quot;: &quot;https://cdn.bsky.app/img/avatar/plain/did:plc:xyz/bafkreiabc123avatar@jpeg&quot;
+      },
+      &quot;banner&quot;: {
+        &quot;ref&quot;: &quot;bafkreixyz789banner&quot;,
+        &quot;mimeType&quot;: &quot;image/jpeg&quot;,
+        &quot;size&quot;: 450000,
+        &quot;url&quot;: &quot;https://cdn.bsky.app/img/banner/plain/did:plc:xyz/bafkreixyz789banner@jpeg&quot;
+      }
+    }
+  }
+}
+</code></pre>
+<h2 id="JavaScript-Example">JavaScript Example</h2>
+<pre><code class="language-javascript">// Convert file to base64
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) =&gt; {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () =&gt; {
+      const base64 = reader.result.split(',')[1]; // Remove data:image/jpeg;base64, prefix
+      resolve(base64);
+    };
+    reader.onerror = reject;
+  });
+}
+
+// Upload blob
+async function uploadBlob(file, token) {
+  const base64Data = await fileToBase64(file);
+
+  const response = await fetch('/graphql', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      query: `
+        mutation UploadBlob($data: String!, $mimeType: String!) {
+          uploadBlob(data: $data, mimeType: $mimeType) {
+            ref
+            mimeType
+            size
+          }
+        }
+      `,
+      variables: {
+        data: base64Data,
+        mimeType: file.type
+      }
+    })
+  });
+
+  const result = await response.json();
+  return result.data.uploadBlob;
+}
+
+// Usage
+const avatarFile = document.getElementById('avatar-input').files[0];
+const blob = await uploadBlob(avatarFile, 'your-token');
+console.log('Uploaded blob:', blob.ref);
+</code></pre>
+</div></main></div></body></html>

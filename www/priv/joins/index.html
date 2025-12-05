@@ -1,0 +1,812 @@
+<!doctype html>
+<html><head><meta charset="UTF-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><title>quickslice - Joins</title><style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.6;
+  color: #1a1a1a;
+}
+.container { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 260px;
+  padding: 2rem 1rem;
+  background: #f5f5f5;
+  border-right: 1px solid #e0e0e0;
+  position: fixed;
+  height: 100vh;
+  overflow-y: auto;
+}
+.sidebar h1 { font-size: 1.25rem; margin-bottom: 1.5rem; padding: 0 0.5rem; }
+.sidebar ul { list-style: none; }
+.sidebar li { margin: 0.25rem 0; }
+.sidebar a {
+  display: block;
+  padding: 0.5rem;
+  color: #444;
+  text-decoration: none;
+  border-radius: 4px;
+}
+.sidebar a:hover { background: #e8e8e8; }
+.sidebar a.active { background: #007acc; color: white; }
+.content {
+  flex: 1;
+  margin-left: 260px;
+  padding: 2rem 3rem;
+  max-width: 900px;
+}
+.content h1 { font-size: 2rem; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; }
+.content h2 { font-size: 1.5rem; margin: 2rem 0 1rem; }
+.content h3 { font-size: 1.25rem; margin: 1.5rem 0 0.75rem; }
+.content p { margin: 1rem 0; }
+.content pre {
+  background: #f5f5f5;
+  padding: 1rem;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+.content code {
+  background: #f0f0f0;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.content pre code { background: none; padding: 0; }
+.content ul, .content ol { margin: 1rem 0; padding-left: 2rem; }
+.content li { margin: 0.5rem 0; }
+.content blockquote {
+  border-left: 4px solid #007acc;
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  background: #f8f8f8;
+}
+.content a { color: #007acc; }
+.content table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+.content th, .content td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+.content th { background: #f5f5f5; }
+</style></head><body><div class="container"><aside class="sidebar"><h1>quickslice</h1><nav><ul><li><a href="/">Getting Started</a></li><li><a href="/authentication">Authentication</a></li><li><a href="/queries">Queries</a></li><li><a href="/mutations">Mutations</a></li><li><a class="active" href="/joins">Joins</a></li><li><a href="/aggregations">Aggregations</a></li><li><a href="/subscriptions">Subscriptions</a></li><li><a href="/blobs">Blobs</a></li><li><a href="/variables">Variables</a></li><li><a href="/deployment">Deployment</a></li><li><a href="/mcp">MCP</a></li></ul></nav></aside><main class="content"><div><h1 id="Joins">Joins</h1>
+<p>quickslice automatically generates <strong>forward joins</strong>, <strong>reverse joins</strong>, and <strong>DID joins</strong> based on AT Protocol lexicon schemas, allowing you to traverse relationships between records.</p>
+<h2 id="Overview">Overview</h2>
+<ul>
+<li>
+<p><strong>Forward Joins</strong>: Follow references from one record to another (e.g., post → parent post)</p>
+<ul>
+<li>Returns: Single object or <code>Record</code> union</li>
+<li>Naming: <code>{fieldName}Resolved</code></li>
+</ul>
+</li>
+<li>
+<p><strong>Reverse Joins</strong>: Discover records that reference a given record (e.g., post → all likes on that post)</p>
+<ul>
+<li>Returns: <strong>Paginated Connection</strong> with sorting, filtering, and pagination</li>
+<li>Naming: <code>{SourceType}Via{FieldName}</code></li>
+</ul>
+</li>
+<li>
+<p><strong>DID Joins</strong>: Find records that share the same author (DID)</p>
+<ul>
+<li>Returns: Single object (unique DID) or <strong>Paginated Connection</strong> (non-unique DID)</li>
+<li>Naming: <code>{CollectionName}ByDid</code></li>
+</ul>
+</li>
+<li>
+<p><strong>Union Types</strong>: Forward joins return a <code>Record</code> union, allowing type-specific field access via inline fragments</p>
+</li>
+</ul>
+<h2 id="Forward-Joins">Forward Joins</h2>
+<p>Forward joins are generated for fields that reference other records via:</p>
+<ul>
+<li><code>at-uri</code> format strings</li>
+<li><code>strongRef</code> objects</li>
+</ul>
+<h3 id="Basic-Forward-Join">Basic Forward Join</h3>
+<p>When a field references another record, quickslice creates a <code>*Resolved</code> field:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPost {
+    edges {
+      node {
+        uri
+        text
+        replyTo              # The at-uri string
+        replyToResolved {    # The resolved record
+          uri
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="Union-Types--Inline-Fragments">Union Types &amp; Inline Fragments</h3>
+<p>Forward join fields return a <code>Record</code> union type because the referenced record could be any type. Use inline fragments to access type-specific fields:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPost {
+    edges {
+      node {
+        uri
+        text
+        replyToResolved {
+          # Access fields based on the actual type
+          ... on AppBskyFeedPost {
+            uri
+            text
+            createdAt
+          }
+          ... on AppBskyFeedLike {
+            uri
+            subject
+            createdAt
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="StrongRef-Forward-Joins">StrongRef Forward Joins</h3>
+<p>StrongRef fields (containing <code>uri</code> and <code>cid</code>) are resolved automatically:</p>
+<pre><code class="language-graphql">query {
+  appBskyActorProfile {
+    edges {
+      node {
+        displayName
+        pinnedPost {
+          uri    # Original strongRef uri
+          cid    # Original strongRef cid
+        }
+        pinnedPostResolved {
+          ... on AppBskyFeedPost {
+            uri
+            text
+            likeCount
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h2 id="Reverse-Joins">Reverse Joins</h2>
+<p>Reverse joins are automatically discovered by analyzing all lexicons. They allow you to find all records that reference a given record. <strong>Reverse joins return paginated connections</strong> with support for sorting, filtering, and cursor-based pagination.</p>
+<h3 id="Basic-Reverse-Join">Basic Reverse Join</h3>
+<p>Reverse join fields are named: <code>{SourceType}Via{FieldName}</code> and return a Connection type:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPost {
+    edges {
+      node {
+        uri
+        text
+        # Find all likes that reference this post via their 'subject' field
+        appBskyFeedLikeViaSubject(first: 20) {
+          totalCount  # Total number of likes
+          edges {
+            node {
+              uri
+              createdAt
+            }
+            cursor
+          }
+          pageInfo {
+            hasNextPage
+            hasPreviousPage
+            startCursor
+            endCursor
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="Multiple-Reverse-Joins">Multiple Reverse Joins</h3>
+<p>A record type can have multiple reverse join fields. You can request different page sizes for each:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPost {
+    edges {
+      node {
+        uri
+        text
+        # Get first 10 replies
+        appBskyFeedPostViaReplyTo(first: 10) {
+          totalCount
+          edges {
+            node {
+              uri
+              text
+            }
+          }
+        }
+        # Get first 20 likes
+        appBskyFeedLikeViaSubject(first: 20) {
+          totalCount
+          edges {
+            node {
+              uri
+              createdAt
+            }
+          }
+        }
+        # Get first 20 reposts
+        appBskyFeedRepostViaSubject(first: 20) {
+          totalCount
+          edges {
+            node {
+              uri
+              createdAt
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="Reverse-Joins-with-StrongRef">Reverse Joins with StrongRef</h3>
+<p>Reverse joins work with strongRef fields too. You can also use sorting and filtering:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPost {
+    edges {
+      node {
+        uri
+        text
+        # Find all profiles that pinned this post
+        appBskyActorProfileViaPinnedPost(
+          sortBy: [{field: &quot;indexedAt&quot;, direction: DESC}]
+        ) {
+          totalCount
+          edges {
+            node {
+              uri
+              displayName
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="Sorting-Reverse-Joins">Sorting Reverse Joins</h3>
+<p>You can sort reverse join results by any field in the joined collection:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPost {
+    edges {
+      node {
+        uri
+        # Get most recent likes first
+        appBskyFeedLikeViaSubject(
+          first: 10
+          sortBy: [{field: &quot;createdAt&quot;, direction: DESC}]
+        ) {
+          edges {
+            node {
+              uri
+              createdAt
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="Filtering-Reverse-Joins">Filtering Reverse Joins</h3>
+<p>Use <code>where</code> filters to narrow down nested join results:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPost {
+    edges {
+      node {
+        uri
+        text
+        # Only get likes from a specific user
+        appBskyFeedLikeViaSubject(
+          where: { did: { eq: &quot;did:plc:abc123&quot; } }
+        ) {
+          totalCount  # Likes from this specific user
+          edges {
+            node {
+              uri
+              createdAt
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h2 id="DID-Joins">DID Joins</h2>
+<p>DID joins allow you to traverse relationships between records that share the same author (DID). These are automatically generated for all collection pairs and are named: <code>{CollectionName}ByDid</code></p>
+<h3 id="Two-Types-of-DID-Joins">Two Types of DID Joins</h3>
+<h4 id="1-Unique-DID-Joins-literalself-key">1. Unique DID Joins (literal:self key)</h4>
+<p>Collections with a <code>literal:self</code> key (like profiles) have only one record per DID. These return a <strong>single nullable object</strong> (no pagination needed):</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPost {
+    edges {
+      node {
+        uri
+        text
+        # Get the author's profile (single object, not paginated)
+        appBskyActorProfileByDid {
+          uri
+          displayName
+          bio
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h4 id="2-Non-Unique-DID-Joins">2. Non-Unique DID Joins</h4>
+<p>Most collections can have multiple records per DID. These return <strong>paginated connections</strong> with full support for sorting, filtering, and pagination:</p>
+<pre><code class="language-graphql">query {
+  appBskyActorProfile {
+    edges {
+      node {
+        displayName
+        # Get all posts by this user (paginated)
+        appBskyFeedPostByDid(
+          first: 10
+          sortBy: [{field: &quot;indexedAt&quot;, direction: DESC}]
+        ) {
+          totalCount  # Total posts by this user
+          edges {
+            node {
+              uri
+              text
+              indexedAt
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="DID-Join-with-Filtering">DID Join with Filtering</h3>
+<p>Combine DID joins with filters to find specific records:</p>
+<pre><code class="language-graphql">query {
+  appBskyActorProfile(where: { did: { eq: &quot;did:plc:abc123&quot; } }) {
+    edges {
+      node {
+        displayName
+        # Get only posts containing &quot;gleam&quot;
+        appBskyFeedPostByDid(
+          where: { text: { contains: &quot;gleam&quot; } }
+          sortBy: [{field: &quot;indexedAt&quot;, direction: DESC}]
+        ) {
+          totalCount  # Posts mentioning &quot;gleam&quot;
+          edges {
+            node {
+              text
+              indexedAt
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="Cross-Collection-DID-Queries">Cross-Collection DID Queries</h3>
+<p>DID joins work across all collection pairs, enabling powerful cross-collection queries:</p>
+<pre><code class="language-graphql">query {
+  appBskyActorProfile {
+    edges {
+      node {
+        displayName
+        # All their posts
+        appBskyFeedPostByDid(first: 10) {
+          totalCount
+          edges {
+            node {
+              text
+            }
+          }
+        }
+        # All their likes
+        appBskyFeedLikeByDid(first: 10) {
+          totalCount
+          edges {
+            node {
+              subject
+            }
+          }
+        }
+        # All their reposts
+        appBskyFeedRepostByDid(first: 10) {
+          totalCount
+          edges {
+            node {
+              subject
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="DID-Join-Arguments">DID Join Arguments</h3>
+<p>Non-unique DID joins support all standard connection arguments:</p>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>first</code></td>
+<td><code>Int</code></td>
+<td>Number of records to return (forward pagination)</td>
+</tr>
+<tr>
+<td><code>after</code></td>
+<td><code>String</code></td>
+<td>Cursor for forward pagination</td>
+</tr>
+<tr>
+<td><code>last</code></td>
+<td><code>Int</code></td>
+<td>Number of records to return (backward pagination)</td>
+</tr>
+<tr>
+<td><code>before</code></td>
+<td><code>String</code></td>
+<td>Cursor for backward pagination</td>
+</tr>
+<tr>
+<td><code>sortBy</code></td>
+<td><code>[SortFieldInput!]</code></td>
+<td>Sort by any field in the collection</td>
+</tr>
+<tr>
+<td><code>where</code></td>
+<td><code>WhereInput</code></td>
+<td>Filter nested records</td>
+</tr>
+</tbody>
+</table>
+<h2 id="Complete-Example">Complete Example</h2>
+<p>Combining forward joins, reverse joins, and DID joins to build a rich thread view:</p>
+<pre><code class="language-graphql">query GetThread($postUri: String!) {
+  appBskyFeedPost(where: { uri: { eq: $postUri } }) {
+    edges {
+      node {
+        uri
+        text
+        createdAt
+
+        # DID join: Get the author's profile
+        appBskyActorProfileByDid {
+          displayName
+          bio
+        }
+
+        # Forward join: Get the parent post
+        replyToResolved {
+          ... on AppBskyFeedPost {
+            uri
+            text
+            createdAt
+          }
+        }
+
+        # Reverse join: Get first 10 replies
+        appBskyFeedPostViaReplyTo(
+          first: 10
+          sortBy: [{field: &quot;createdAt&quot;, direction: ASC}]
+        ) {
+          totalCount  # Total replies
+          edges {
+            node {
+              uri
+              text
+              createdAt
+            }
+          }
+          pageInfo {
+            hasNextPage
+          }
+        }
+
+        # Reverse join: Get first 20 likes
+        appBskyFeedLikeViaSubject(first: 20) {
+          totalCount  # Like count
+          edges {
+            node {
+              uri
+              createdAt
+            }
+          }
+        }
+
+        # Reverse join: Get reposts
+        appBskyFeedRepostViaSubject(first: 20) {
+          totalCount  # Repost count
+          edges {
+            node {
+              uri
+              createdAt
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h2 id="DataLoader-Batching">DataLoader Batching</h2>
+<p>All joins use DataLoader for efficient batching:</p>
+<pre><code class="language-graphql"># This query will batch all replyToResolved lookups into a single database query
+query {
+  appBskyFeedPost(first: 100) {
+    edges {
+      node {
+        uri
+        text
+        replyToResolved {
+          ... on AppBskyFeedPost {
+            uri
+            text
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<p><strong>How it works:</strong></p>
+<ol>
+<li>Fetches 100 posts</li>
+<li>Collects all unique <code>replyTo</code> URIs</li>
+<li>Batches them into a single SQL query: <code>WHERE uri IN (...)</code></li>
+<li>Returns resolved records efficiently</li>
+</ol>
+<h2 id="Performance-Tips">Performance Tips</h2>
+<h3 id="1-Only-Request-What-You-Need">1. Only Request What You Need</h3>
+<pre><code class="language-graphql"># Good: Only request specific fields
+query {
+  appBskyFeedPost {
+    edges {
+      node {
+        uri
+        text
+        appBskyFeedLikeViaSubject(first: 20) {
+          totalCount  # Get count without fetching all records
+          edges {
+            node {
+              uri  # Only need the URI
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="2-Use-totalCount-for-Metrics">2. Use totalCount for Metrics</h3>
+<p>Get engagement counts efficiently without fetching all records:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPost {
+    edges {
+      node {
+        uri
+        text
+        # Just get counts, no records
+        likes: appBskyFeedLikeViaSubject(first: 0) {
+          totalCount  # Like count
+        }
+        reposts: appBskyFeedRepostViaSubject(first: 0) {
+          totalCount  # Repost count
+        }
+        replies: appBskyFeedPostViaReplyTo(first: 0) {
+          totalCount  # Reply count
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="3-Use-Pagination-on-Nested-Joins">3. Use Pagination on Nested Joins</h3>
+<p>Nested joins are paginated by default. Always specify <code>first</code> or <code>last</code> for optimal performance:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPost(first: 10) {
+    edges {
+      node {
+        uri
+        text
+        # Limit nested join results
+        appBskyFeedLikeViaSubject(first: 20) {
+          totalCount  # Total likes
+          edges {
+            node {
+              uri
+            }
+          }
+          pageInfo {
+            hasNextPage  # Know if there are more
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="4-Avoid-Deep-Nesting">4. Avoid Deep Nesting</h3>
+<pre><code class="language-graphql"># Avoid: Deeply nested joins can be expensive
+query {
+  appBskyFeedPost {
+    edges {
+      node {
+        replyToResolved {
+          ... on AppBskyFeedPost {
+            replyToResolved {
+              ... on AppBskyFeedPost {
+                replyToResolved {
+                  # Too deep!
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h2 id="Type-Resolution">Type Resolution</h2>
+<p>The <code>Record</code> union uses a type resolver that examines the <code>collection</code> field:</p>
+<table>
+<thead>
+<tr>
+<th>Collection</th>
+<th>GraphQL Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>app.bsky.feed.post</code></td>
+<td><code>AppBskyFeedPost</code></td>
+</tr>
+<tr>
+<td><code>app.bsky.feed.like</code></td>
+<td><code>AppBskyFeedLike</code></td>
+</tr>
+<tr>
+<td><code>app.bsky.actor.profile</code></td>
+<td><code>AppBskyActorProfile</code></td>
+</tr>
+</tbody>
+</table>
+<p>This allows inline fragments to work correctly:</p>
+<pre><code class="language-graphql">{
+  appBskyFeedPost {
+    edges {
+      node {
+        replyToResolved {
+          # Runtime type is determined by the collection field
+          ... on AppBskyFeedPost { text }
+          ... on AppBskyFeedLike { subject }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h2 id="Schema-Introspection">Schema Introspection</h2>
+<p>Discover available joins using introspection:</p>
+<pre><code class="language-graphql">query {
+  __type(name: &quot;AppBskyFeedPost&quot;) {
+    fields {
+      name
+      type {
+        name
+        kind
+      }
+    }
+  }
+}
+</code></pre>
+<p>Look for fields ending in:</p>
+<ul>
+<li><code>Resolved</code> (forward joins)</li>
+<li><code>Via*</code> (reverse joins)</li>
+<li><code>ByDid</code> (DID joins)</li>
+</ul>
+<h2 id="Common-Patterns">Common Patterns</h2>
+<h3 id="Thread-Navigation">Thread Navigation</h3>
+<pre><code class="language-graphql"># Get a post and its parent
+query {
+  appBskyFeedPost(where: { uri: { eq: $uri } }) {
+    edges {
+      node {
+        uri
+        text
+        replyToResolved {
+          ... on AppBskyFeedPost {
+            uri
+            text
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="Engagement-Metrics">Engagement Metrics</h3>
+<p>Use <code>totalCount</code> to get efficient engagement counts without fetching all records:</p>
+<pre><code class="language-graphql"># Get counts efficiently
+query {
+  appBskyFeedPost {
+    edges {
+      node {
+        uri
+        text
+        # Get like count
+        likes: appBskyFeedLikeViaSubject(first: 0) {
+          totalCount
+        }
+        # Get repost count
+        reposts: appBskyFeedRepostViaSubject(first: 0) {
+          totalCount
+        }
+        # Get reply count
+        replies: appBskyFeedPostViaReplyTo(first: 0) {
+          totalCount
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<p>Or fetch recent engagement with pagination:</p>
+<pre><code class="language-graphql">query {
+  appBskyFeedPost {
+    edges {
+      node {
+        uri
+        text
+        # Get 10 most recent likes
+        likes: appBskyFeedLikeViaSubject(
+          first: 10
+          sortBy: [{field: &quot;createdAt&quot;, direction: DESC}]
+        ) {
+          totalCount  # Total like count
+          edges {
+            node {
+              did  # Who liked it
+              createdAt
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h3 id="Users-Pinned-Content">User's Pinned Content</h3>
+<pre><code class="language-graphql">query {
+  appBskyActorProfile(where: { did: { eq: $did } }) {
+    edges {
+      node {
+        displayName
+        pinnedPostResolved {
+          ... on AppBskyFeedPost {
+            uri
+            text
+            createdAt
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+</div></main></div></body></html>

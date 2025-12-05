@@ -1,0 +1,347 @@
+<!doctype html>
+<html><head><meta charset="UTF-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><title>quickslice - Authentication</title><style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.6;
+  color: #1a1a1a;
+}
+.container { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 260px;
+  padding: 2rem 1rem;
+  background: #f5f5f5;
+  border-right: 1px solid #e0e0e0;
+  position: fixed;
+  height: 100vh;
+  overflow-y: auto;
+}
+.sidebar h1 { font-size: 1.25rem; margin-bottom: 1.5rem; padding: 0 0.5rem; }
+.sidebar ul { list-style: none; }
+.sidebar li { margin: 0.25rem 0; }
+.sidebar a {
+  display: block;
+  padding: 0.5rem;
+  color: #444;
+  text-decoration: none;
+  border-radius: 4px;
+}
+.sidebar a:hover { background: #e8e8e8; }
+.sidebar a.active { background: #007acc; color: white; }
+.content {
+  flex: 1;
+  margin-left: 260px;
+  padding: 2rem 3rem;
+  max-width: 900px;
+}
+.content h1 { font-size: 2rem; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; }
+.content h2 { font-size: 1.5rem; margin: 2rem 0 1rem; }
+.content h3 { font-size: 1.25rem; margin: 1.5rem 0 0.75rem; }
+.content p { margin: 1rem 0; }
+.content pre {
+  background: #f5f5f5;
+  padding: 1rem;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+.content code {
+  background: #f0f0f0;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.content pre code { background: none; padding: 0; }
+.content ul, .content ol { margin: 1rem 0; padding-left: 2rem; }
+.content li { margin: 0.5rem 0; }
+.content blockquote {
+  border-left: 4px solid #007acc;
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  background: #f8f8f8;
+}
+.content a { color: #007acc; }
+.content table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+.content th, .content td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+.content th { background: #f5f5f5; }
+</style></head><body><div class="container"><aside class="sidebar"><h1>quickslice</h1><nav><ul><li><a href="/">Getting Started</a></li><li><a class="active" href="/authentication">Authentication</a></li><li><a href="/queries">Queries</a></li><li><a href="/mutations">Mutations</a></li><li><a href="/joins">Joins</a></li><li><a href="/aggregations">Aggregations</a></li><li><a href="/subscriptions">Subscriptions</a></li><li><a href="/blobs">Blobs</a></li><li><a href="/variables">Variables</a></li><li><a href="/deployment">Deployment</a></li><li><a href="/mcp">MCP</a></li></ul></nav></aside><main class="content"><div><h1 id="Authentication">Authentication</h1>
+<p>Queries are public and require no authentication. Mutations require a valid access token. The <code>viewer</code> query returns the authenticated user's information, or <code>null</code> if not authenticated.</p>
+<h2 id="OAuth-Flow">OAuth Flow</h2>
+<p>Quickslice uses OAuth 2.0 with PKCE for authentication. Users authenticate via their AT Protocol identity (Bluesky account).</p>
+<h3 id="Prerequisites">Prerequisites</h3>
+<p>You need an OAuth client ID. Create one in the quickslice admin UI at <code>/settings</code> or via the GraphQL API.</p>
+<h3 id="1-Generate-PKCE-Values">1. Generate PKCE Values</h3>
+<p>Generate a code verifier and challenge for the PKCE flow:</p>
+<pre><code class="language-javascript">function base64UrlEncode(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i &lt; bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+async function generateCodeVerifier() {
+  const randomBytes = new Uint8Array(32);
+  crypto.getRandomValues(randomBytes);
+  return base64UrlEncode(randomBytes);
+}
+
+async function generateCodeChallenge(verifier) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return base64UrlEncode(hash);
+}
+
+function generateState() {
+  const randomBytes = new Uint8Array(16);
+  crypto.getRandomValues(randomBytes);
+  return base64UrlEncode(randomBytes);
+}
+</code></pre>
+<h3 id="2-Redirect-to-Authorization">2. Redirect to Authorization</h3>
+<p>Build the authorization URL and redirect the user:</p>
+<pre><code class="language-javascript">const codeVerifier = await generateCodeVerifier();
+const codeChallenge = await generateCodeChallenge(codeVerifier);
+const state = generateState();
+
+// Store these for the callback
+sessionStorage.setItem('code_verifier', codeVerifier);
+sessionStorage.setItem('oauth_state', state);
+
+const params = new URLSearchParams({
+  client_id: 'your-client-id',
+  redirect_uri: 'http://localhost:3000/callback',
+  response_type: 'code',
+  code_challenge: codeChallenge,
+  code_challenge_method: 'S256',
+  state: state,
+  login_hint: 'alice.bsky.social'  // User's handle
+});
+
+window.location.href = `http://localhost:8080/oauth/authorize?${params}`;
+</code></pre>
+<h3 id="3-Handle-the-Callback">3. Handle the Callback</h3>
+<p>After the user authenticates, they're redirected back with a <code>code</code> parameter:</p>
+<pre><code class="language-javascript">const params = new URLSearchParams(window.location.search);
+const code = params.get('code');
+const state = params.get('state');
+
+// Verify state matches
+if (state !== sessionStorage.getItem('oauth_state')) {
+  throw new Error('State mismatch - possible CSRF attack');
+}
+
+const codeVerifier = sessionStorage.getItem('code_verifier');
+</code></pre>
+<h3 id="4-Exchange-Code-for-Tokens">4. Exchange Code for Tokens</h3>
+<p>Exchange the authorization code for access and refresh tokens:</p>
+<pre><code class="language-javascript">const response = await fetch('http://localhost:8080/oauth/token', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  body: new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: code,
+    redirect_uri: 'http://localhost:3000/callback',
+    client_id: 'your-client-id',
+    code_verifier: codeVerifier
+  })
+});
+
+const tokens = await response.json();
+// tokens.access_token - Use this for authenticated requests
+// tokens.refresh_token - Use to get new access tokens
+// tokens.sub - The user's DID
+</code></pre>
+<h2 id="Using-Bearer-Tokens">Using Bearer Tokens</h2>
+<p>Include the access token in the <code>Authorization</code> header:</p>
+<pre><code class="language-javascript">const response = await fetch('http://localhost:8080/graphql', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${accessToken}`
+  },
+  body: JSON.stringify({
+    query: '{ viewer { did handle } }'
+  })
+});
+</code></pre>
+<p>Or with curl:</p>
+<pre><code class="language-bash">curl -X POST http://localhost:8080/graphql \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Authorization: Bearer YOUR_ACCESS_TOKEN&quot; \
+  -d '{&quot;query&quot;: &quot;{ viewer { did handle } }&quot;}'
+</code></pre>
+<h2 id="Viewer-Query">Viewer Query</h2>
+<p>The <code>viewer</code> query returns information about the authenticated user:</p>
+<pre><code class="language-graphql">query {
+  viewer {
+    did
+    handle
+    appBskyActorProfileByDid {
+      displayName
+      description
+      avatar { url }
+    }
+  }
+}
+</code></pre>
+<h3 id="Fields">Fields</h3>
+<ul>
+<li><code>did</code> - The user's decentralized identifier (e.g., <code>did:plc:abc123...</code>)</li>
+<li><code>handle</code> - The user's handle (e.g., <code>alice.bsky.social</code>)</li>
+<li><code>appBskyActorProfileByDid</code> - The user's profile record, joined by DID</li>
+</ul>
+<h3 id="Behavior">Behavior</h3>
+<ul>
+<li>Returns the user object when authenticated</li>
+<li>Returns <code>null</code> when not authenticated (no error)</li>
+<li>Useful for confirming authentication and fetching user info in one request</li>
+</ul>
+<h3 id="Example-Response">Example Response</h3>
+<pre><code class="language-json">{
+  &quot;data&quot;: {
+    &quot;viewer&quot;: {
+      &quot;did&quot;: &quot;did:plc:abc123xyz&quot;,
+      &quot;handle&quot;: &quot;alice.bsky.social&quot;,
+      &quot;appBskyActorProfileByDid&quot;: {
+        &quot;displayName&quot;: &quot;Alice&quot;,
+        &quot;description&quot;: &quot;Hello world!&quot;,
+        &quot;avatar&quot;: {
+          &quot;url&quot;: &quot;https://cdn.bsky.app/...&quot;
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<h2 id="Complete-Example">Complete Example</h2>
+<p>Here's an end-to-end example showing login, fetching the viewer, and creating a record:</p>
+<pre><code class="language-javascript">// === Configuration ===
+const GRAPHQL_URL = 'http://localhost:8080/graphql';
+const OAUTH_AUTHORIZE_URL = 'http://localhost:8080/oauth/authorize';
+const OAUTH_TOKEN_URL = 'http://localhost:8080/oauth/token';
+const CLIENT_ID = 'your-client-id';
+const REDIRECT_URI = window.location.origin + '/callback';
+
+// === GraphQL helper ===
+async function graphql(query, variables = {}, token = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(GRAPHQL_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ query, variables })
+  });
+
+  const result = await response.json();
+  if (result.errors?.length) {
+    throw new Error(result.errors[0].message);
+  }
+  return result.data;
+}
+
+// === Login ===
+async function login(handle) {
+  const codeVerifier = await generateCodeVerifier();
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
+  const state = generateState();
+
+  sessionStorage.setItem('code_verifier', codeVerifier);
+  sessionStorage.setItem('oauth_state', state);
+
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
+    response_type: 'code',
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+    state: state,
+    login_hint: handle
+  });
+
+  window.location.href = `${OAUTH_AUTHORIZE_URL}?${params}`;
+}
+
+// === Handle OAuth callback ===
+async function handleCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+
+  if (!code) return null;
+
+  if (state !== sessionStorage.getItem('oauth_state')) {
+    throw new Error('State mismatch');
+  }
+
+  const response = await fetch(OAUTH_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: REDIRECT_URI,
+      client_id: CLIENT_ID,
+      code_verifier: sessionStorage.getItem('code_verifier')
+    })
+  });
+
+  const tokens = await response.json();
+  sessionStorage.setItem('access_token', tokens.access_token);
+
+  // Clean up URL
+  window.history.replaceState({}, '', window.location.pathname);
+
+  return tokens.access_token;
+}
+
+// === Fetch current user ===
+async function getViewer(token) {
+  const data = await graphql(`
+    query {
+      viewer {
+        did
+        handle
+        appBskyActorProfileByDid {
+          displayName
+          avatar { url }
+        }
+      }
+    }
+  `, {}, token);
+
+  return data.viewer;
+}
+
+// === Create a record (example: status) ===
+async function createStatus(token, emoji) {
+  const data = await graphql(`
+    mutation CreateStatus($status: String!, $createdAt: DateTime!) {
+      createXyzStatusphereStatus(input: { status: $status, createdAt: $createdAt }) {
+        uri
+        status
+      }
+    }
+  `, {
+    status: emoji,
+    createdAt: new Date().toISOString()
+  }, token);
+
+  return data.createXyzStatusphereStatus;
+}
+</code></pre>
+<h2 id="See-Also">See Also</h2>
+<ul>
+<li><a href="../examples/01-statusphere-html/">examples/01-statusphere-html/</a> - Complete working example</li>
+<li><a href="./mutations.md">Mutations</a> - Creating, updating, and deleting records</li>
+<li><a href="./queries.md">Queries</a> - Fetching data without authentication</li>
+</ul>
+</div></main></div></body></html>
