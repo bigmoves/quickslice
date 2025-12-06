@@ -8,7 +8,7 @@ pub fn generate_metadata_test() {
       "https://example.com/oauth-client-metadata.json",
       "Test Client",
       ["https://example.com/callback"],
-      "atproto openid profile",
+      "atproto transition:generic",
       None,
       None,
     )
@@ -16,21 +16,22 @@ pub fn generate_metadata_test() {
   metadata.client_id
   |> should.equal("https://example.com/oauth-client-metadata.json")
   metadata.client_name |> should.equal("Test Client")
-  metadata.scope |> should.equal("atproto")
+  metadata.scope |> should.equal("atproto transition:generic")
   metadata.dpop_bound_access_tokens |> should.be_true
 }
 
-pub fn filter_atproto_scopes_test() {
+pub fn scopes_passed_through_test() {
   let metadata =
     client_metadata.generate_metadata(
       "https://example.com",
       "Test",
       [],
-      "atproto transition:generic openid profile email",
+      "atproto transition:generic transition:chat.bsky",
       None,
       None,
     )
 
-  // Should only keep atproto and transition:generic
-  metadata.scope |> should.equal("atproto transition:generic")
+  // Scopes should be passed through as-is (validated at config save time)
+  metadata.scope
+  |> should.equal("atproto transition:generic transition:chat.bsky")
 }
