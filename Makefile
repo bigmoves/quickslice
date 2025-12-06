@@ -37,8 +37,11 @@ format-examples:
 	@prettier --write "examples/**/*.html"
 
 # Generate documentation
-docs:
+docs-build:
 	@cd www && gleam run
+
+docs-dev:
+	@cd www && npx serve priv
 
 # Deploy www to Bunny CDN
 deploy-www: docs
