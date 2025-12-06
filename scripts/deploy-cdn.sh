@@ -36,8 +36,16 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Load .env file if it exists
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 # Required environment variables
-: "${BUNNY_API_KEY:?BUNNY_API_KEY environment variable is required}"
+: "${BUNNY_API_KEY:?BUNNY_API_KEY environment variable is required (Account API key for cache purge)}"
+: "${BUNNY_STORAGE_PASSWORD:?BUNNY_STORAGE_PASSWORD environment variable is required (Storage Zone password)}"
 : "${BUNNY_STORAGE_ZONE:?BUNNY_STORAGE_ZONE environment variable is required}"
 : "${BUNNY_STORAGE_HOST:?BUNNY_STORAGE_HOST environment variable is required (e.g., storage.bunnycdn.com)}"
 : "${BUNNY_PULLZONE_ID:?BUNNY_PULLZONE_ID environment variable is required}"
@@ -96,7 +104,7 @@ upload_file() {
 
     response=$(curl -s -w "\n%{http_code}" -X PUT \
         "${STORAGE_URL}/${remote_path}" \
-        -H "AccessKey: ${BUNNY_API_KEY}" \
+        -H "AccessKey: ${BUNNY_STORAGE_PASSWORD}" \
         -H "Content-Type: ${content_type}" \
         --data-binary "@${local_path}")
 
@@ -119,7 +127,7 @@ list_remote_files() {
 
     local response
     response=$(curl -s -X GET "$url" \
-        -H "AccessKey: ${BUNNY_API_KEY}" \
+        -H "AccessKey: ${BUNNY_STORAGE_PASSWORD}" \
         -H "Accept: application/json")
 
     # Parse JSON response - each item has ObjectName and IsDirectory
@@ -160,7 +168,7 @@ delete_file() {
     local http_code
     http_code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
         "${STORAGE_URL}/${remote_path}" \
-        -H "AccessKey: ${BUNNY_API_KEY}")
+        -H "AccessKey: ${BUNNY_STORAGE_PASSWORD}")
 
     if [[ "$http_code" =~ ^2 ]]; then
         ((DELETED++))
@@ -208,14 +216,15 @@ fi
 
 # Step 1: Upload all local files
 echo "Uploading files..."
-declare -A LOCAL_FILES
+LOCAL_FILES_LIST=$(mktemp)
+trap "rm -f $LOCAL_FILES_LIST" EXIT
 
-while IFS= read -r -d '' file; do
+find "$LOCAL_DIR" -type f -print0 | while IFS= read -r -d '' file; do
     # Get path relative to LOCAL_DIR
     relative_path="${file#${LOCAL_DIR}/}"
-    LOCAL_FILES["$relative_path"]=1
+    echo "$relative_path" >> "$LOCAL_FILES_LIST"
     upload_file "$file" "$relative_path"
-done < <(find "$LOCAL_DIR" -type f -print0)
+done
 
 echo ""
 
@@ -228,7 +237,7 @@ if [ -n "$REMOTE_FILES" ]; then
         if [ -z "$remote_file" ]; then
             continue
         fi
-        if [ -z "${LOCAL_FILES[$remote_file]+x}" ]; then
+        if ! grep -qxF "$remote_file" "$LOCAL_FILES_LIST"; then
             delete_file "$remote_file"
         fi
     done <<< "$REMOTE_FILES"
