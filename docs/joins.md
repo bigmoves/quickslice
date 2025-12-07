@@ -1,14 +1,16 @@
 # Joins
 
-quickslice automatically generates **forward joins**, **reverse joins**, and **DID joins** based on AT Protocol lexicon schemas, allowing you to traverse relationships between records.
+quickslice automatically generates **forward joins**, **reverse joins**, and **DID joins** based on your lexicon schemas, allowing you to traverse relationships between records.
+
+> **Note:** The examples in this document use [Grain](https://grain.social)'s `social.grain.*` lexicons. The same join patterns apply to any AT Protocol lexicons you load into quickslice.
 
 ## Overview
 
-- **Forward Joins**: Follow references from one record to another (e.g., post → parent post)
+- **Forward Joins**: Follow references from one record to another (e.g., comment → photo it's about)
   - Returns: Single object or `Record` union
   - Naming: `{fieldName}Resolved`
 
-- **Reverse Joins**: Discover records that reference a given record (e.g., post → all likes on that post)
+- **Reverse Joins**: Discover records that reference a given record (e.g., photo → all favorites on it)
   - Returns: **Paginated Connection** with sorting, filtering, and pagination
   - Naming: `{SourceType}Via{FieldName}`
 
@@ -22,22 +24,31 @@ quickslice automatically generates **forward joins**, **reverse joins**, and **D
 
 Forward joins are generated for fields that reference other records via:
 - `at-uri` format strings
-- `strongRef` objects
+- `strongRef` objects (containing `uri` and `cid`)
 
-### Basic Forward Join
+### Resolving Favorite Subjects
 
-When a field references another record, quickslice creates a `*Resolved` field:
+Favorites have a `subject` field containing an AT-URI. This gets a `subjectResolved` field to fetch the actual record:
 
 ```graphql
 query {
-  appBskyFeedPost {
+  socialGrainFavorite(first: 3) {
     edges {
       node {
         uri
-        text
-        replyTo              # The at-uri string
-        replyToResolved {    # The resolved record
-          uri
+        subject
+        createdAt
+        # Resolve what was favorited
+        subjectResolved {
+          ... on SocialGrainPhoto {
+            uri
+            alt
+            createdAt
+          }
+          ... on SocialGrainGallery {
+            uri
+            title
+          }
         }
       }
     }
@@ -51,22 +62,22 @@ Forward join fields return a `Record` union type because the referenced record c
 
 ```graphql
 query {
-  appBskyFeedPost {
+  socialGrainComment(first: 5) {
     edges {
       node {
         uri
         text
-        replyToResolved {
-          # Access fields based on the actual type
-          ... on AppBskyFeedPost {
+        createdAt
+        # The subject could be a photo or gallery
+        subjectResolved {
+          ... on SocialGrainPhoto {
             uri
-            text
-            createdAt
+            alt
           }
-          ... on AppBskyFeedLike {
+          ... on SocialGrainGallery {
             uri
-            subject
-            createdAt
+            title
+            description
           }
         }
       }
@@ -75,25 +86,30 @@ query {
 }
 ```
 
-### StrongRef Forward Joins
+### Gallery Item Forward Joins
 
-StrongRef fields (containing `uri` and `cid`) are resolved automatically:
+Gallery items link photos to galleries. Both references can be resolved:
 
 ```graphql
 query {
-  appBskyActorProfile {
+  socialGrainGalleryItem(first: 3) {
     edges {
       node {
-        displayName
-        pinnedPost {
-          uri    # Original strongRef uri
-          cid    # Original strongRef cid
+        uri
+        position
+        createdAt
+        # Resolve the gallery this item belongs to
+        galleryResolved {
+          ... on SocialGrainGallery {
+            title
+            description
+          }
         }
-        pinnedPostResolved {
-          ... on AppBskyFeedPost {
+        # Resolve the photo
+        itemResolved {
+          ... on SocialGrainPhoto {
             uri
-            text
-            likeCount
+            alt
           }
         }
       }
@@ -106,31 +122,29 @@ query {
 
 Reverse joins are automatically discovered by analyzing all lexicons. They allow you to find all records that reference a given record. **Reverse joins return paginated connections** with support for sorting, filtering, and cursor-based pagination.
 
-### Basic Reverse Join
+### Favorites on a Photo
 
-Reverse join fields are named: `{SourceType}Via{FieldName}` and return a Connection type:
+Find all users who favorited a specific photo:
 
 ```graphql
 query {
-  appBskyFeedPost {
+  socialGrainPhoto(first: 5) {
     edges {
       node {
         uri
-        text
-        # Find all likes that reference this post via their 'subject' field
-        appBskyFeedLikeViaSubject(first: 20) {
-          totalCount  # Total number of likes
+        alt
+        createdAt
+        # Find all favorites on this photo
+        socialGrainFavoriteViaSubject(first: 10) {
+          totalCount
           edges {
             node {
-              uri
               createdAt
             }
             cursor
           }
           pageInfo {
             hasNextPage
-            hasPreviousPage
-            startCursor
             endCursor
           }
         }
@@ -140,73 +154,25 @@ query {
 }
 ```
 
-### Multiple Reverse Joins
+### Comments on a Gallery
 
-A record type can have multiple reverse join fields. You can request different page sizes for each:
+Find all comments on a gallery:
 
 ```graphql
 query {
-  appBskyFeedPost {
+  socialGrainGallery(first: 3) {
     edges {
       node {
         uri
-        text
-        # Get first 10 replies
-        appBskyFeedPostViaReplyTo(first: 10) {
+        title
+        description
+        # Find all comments on this gallery
+        socialGrainCommentViaSubject(first: 20) {
           totalCount
           edges {
             node {
-              uri
               text
-            }
-          }
-        }
-        # Get first 20 likes
-        appBskyFeedLikeViaSubject(first: 20) {
-          totalCount
-          edges {
-            node {
-              uri
               createdAt
-            }
-          }
-        }
-        # Get first 20 reposts
-        appBskyFeedRepostViaSubject(first: 20) {
-          totalCount
-          edges {
-            node {
-              uri
-              createdAt
-            }
-          }
-        }
-      }
-    }
-  }
-}
-```
-
-### Reverse Joins with StrongRef
-
-Reverse joins work with strongRef fields too. You can also use sorting and filtering:
-
-```graphql
-query {
-  appBskyFeedPost {
-    edges {
-      node {
-        uri
-        text
-        # Find all profiles that pinned this post
-        appBskyActorProfileViaPinnedPost(
-          sortBy: [{field: "indexedAt", direction: DESC}]
-        ) {
-          totalCount
-          edges {
-            node {
-              uri
-              displayName
             }
           }
         }
@@ -218,22 +184,23 @@ query {
 
 ### Sorting Reverse Joins
 
-You can sort reverse join results by any field in the joined collection:
+Sort reverse join results by any field in the joined collection:
 
 ```graphql
 query {
-  appBskyFeedPost {
+  socialGrainGallery(first: 3) {
     edges {
       node {
         uri
-        # Get most recent likes first
-        appBskyFeedLikeViaSubject(
+        title
+        # Get items sorted by position
+        socialGrainGalleryItemViaGallery(
           first: 10
-          sortBy: [{field: "createdAt", direction: DESC}]
+          sortBy: [{ field: position, direction: ASC }]
         ) {
           edges {
             node {
-              uri
+              position
               createdAt
             }
           }
@@ -250,19 +217,18 @@ Use `where` filters to narrow down nested join results:
 
 ```graphql
 query {
-  appBskyFeedPost {
+  socialGrainPhoto(first: 5) {
     edges {
       node {
         uri
-        text
-        # Only get likes from a specific user
-        appBskyFeedLikeViaSubject(
-          where: { did: { eq: "did:plc:abc123" } }
+        alt
+        # Only get favorites created after a certain date
+        socialGrainFavoriteViaSubject(
+          where: { createdAt: { gt: "2025-06-01T00:00:00Z" } }
         ) {
-          totalCount  # Likes from this specific user
+          totalCount
           edges {
             node {
-              uri
               createdAt
             }
           }
@@ -285,16 +251,16 @@ Collections with a `literal:self` key (like profiles) have only one record per D
 
 ```graphql
 query {
-  appBskyFeedPost {
+  socialGrainPhoto(first: 5) {
     edges {
       node {
         uri
-        text
-        # Get the author's profile (single object, not paginated)
-        appBskyActorProfileByDid {
-          uri
+        alt
+        did
+        # Get the photographer's profile (single object, not paginated)
+        socialGrainActorProfileByDid {
           displayName
-          bio
+          description
         }
       }
     }
@@ -308,21 +274,21 @@ Most collections can have multiple records per DID. These return **paginated con
 
 ```graphql
 query {
-  appBskyActorProfile {
+  socialGrainActorProfile(first: 3) {
     edges {
       node {
         displayName
-        # Get all posts by this user (paginated)
-        appBskyFeedPostByDid(
+        # Get all photos by this user (paginated)
+        socialGrainPhotoByDid(
           first: 10
-          sortBy: [{field: "indexedAt", direction: DESC}]
+          sortBy: [{ field: createdAt, direction: DESC }]
         ) {
-          totalCount  # Total posts by this user
+          totalCount
           edges {
             node {
               uri
-              text
-              indexedAt
+              alt
+              createdAt
             }
           }
           pageInfo {
@@ -336,26 +302,80 @@ query {
 }
 ```
 
-### DID Join with Filtering
+### User's Photos
 
-Combine DID joins with filters to find specific records:
+Get a user's recent photos from their profile:
 
 ```graphql
 query {
-  appBskyActorProfile(where: { did: { eq: "did:plc:abc123" } }) {
+  socialGrainActorProfile(first: 1) {
     edges {
       node {
         displayName
-        # Get only posts containing "gleam"
-        appBskyFeedPostByDid(
-          where: { text: { contains: "gleam" } }
-          sortBy: [{field: "indexedAt", direction: DESC}]
-        ) {
-          totalCount  # Posts mentioning "gleam"
+        description
+        socialGrainPhotoByDid(first: 5, sortBy: [{ field: createdAt, direction: DESC }]) {
+          totalCount
           edges {
             node {
-              text
-              indexedAt
+              alt
+              createdAt
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### User's Galleries
+
+Get all galleries created by a user:
+
+```graphql
+query {
+  socialGrainActorProfile(first: 1) {
+    edges {
+      node {
+        displayName
+        socialGrainGalleryByDid(first: 10, sortBy: [{ field: createdAt, direction: DESC }]) {
+          totalCount
+          edges {
+            node {
+              title
+              description
+              createdAt
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### User's Favorites
+
+Get what a user has favorited:
+
+```graphql
+query {
+  socialGrainActorProfile(first: 1) {
+    edges {
+      node {
+        displayName
+        socialGrainFavoriteByDid(first: 10, sortBy: [{ field: createdAt, direction: DESC }]) {
+          totalCount
+          edges {
+            node {
+              subject
+              createdAt
+              # Resolve what was favorited
+              subjectResolved {
+                ... on SocialGrainGallery {
+                  title
+                }
+              }
             }
           }
         }
@@ -371,36 +391,84 @@ DID joins work across all collection pairs, enabling powerful cross-collection q
 
 ```graphql
 query {
-  appBskyActorProfile {
+  socialGrainActorProfile(first: 3) {
     edges {
       node {
         displayName
-        # All their posts
-        appBskyFeedPostByDid(first: 10) {
+        # All their photos
+        socialGrainPhotoByDid(first: 5) {
           totalCount
           edges {
             node {
-              text
+              alt
             }
           }
         }
-        # All their likes
-        appBskyFeedLikeByDid(first: 10) {
+        # All their galleries
+        socialGrainGalleryByDid(first: 5) {
           totalCount
           edges {
             node {
-              subject
+              title
             }
           }
         }
-        # All their reposts
-        appBskyFeedRepostByDid(first: 10) {
+        # All their favorites
+        socialGrainFavoriteByDid(first: 5) {
           totalCount
-          edges {
-            node {
-              subject
-            }
+        }
+      }
+    }
+  }
+}
+```
+
+### From Photo to Author Profile
+
+Navigate from any photo back to the author's full profile:
+
+```graphql
+query {
+  socialGrainPhoto(first: 5) {
+    edges {
+      node {
+        alt
+        createdAt
+        socialGrainActorProfileByDid {
+          displayName
+          description
+          # And back to their other photos
+          socialGrainPhotoByDid(first: 3) {
+            totalCount
           }
+        }
+      }
+    }
+  }
+}
+```
+
+### Cross-Lexicon DID Joins (Bluesky Profile)
+
+DID joins work across different lexicon families. Get a user's Bluesky profile alongside their Grain data:
+
+```graphql
+query {
+  socialGrainPhoto(first: 5) {
+    edges {
+      node {
+        alt
+        createdAt
+        # Get the Bluesky profile for avatar
+        appBskyActorProfileByDid {
+          displayName
+          avatar {
+            url(preset: "avatar")
+          }
+        }
+        # Get the Grain profile for bio
+        socialGrainActorProfileByDid {
+          description
         }
       }
     }
@@ -423,68 +491,67 @@ Non-unique DID joins support all standard connection arguments:
 
 ## Complete Example
 
-Combining forward joins, reverse joins, and DID joins to build a rich thread view:
+Combining forward joins, reverse joins, and DID joins to build a rich gallery view:
 
 ```graphql
-query GetThread($postUri: String!) {
-  appBskyFeedPost(where: { uri: { eq: $postUri } }) {
+query {
+  socialGrainGallery(first: 3) {
     edges {
       node {
         uri
-        text
+        title
+        description
         createdAt
 
-        # DID join: Get the author's profile
-        appBskyActorProfileByDid {
+        # DID join: Get the author's Grain profile
+        socialGrainActorProfileByDid {
           displayName
-          bio
+          description
         }
 
-        # Forward join: Get the parent post
-        replyToResolved {
-          ... on AppBskyFeedPost {
-            uri
-            text
-            createdAt
+        # DID join: Get the author's Bluesky profile for avatar
+        appBskyActorProfileByDid {
+          avatar {
+            url(preset: "avatar")
           }
         }
 
-        # Reverse join: Get first 10 replies
-        appBskyFeedPostViaReplyTo(
+        # Reverse join: Get items in this gallery
+        socialGrainGalleryItemViaGallery(
           first: 10
-          sortBy: [{field: "createdAt", direction: ASC}]
+          sortBy: [{ field: position, direction: ASC }]
         ) {
-          totalCount  # Total replies
+          totalCount
           edges {
             node {
-              uri
+              position
+              # Forward join: Resolve the photo
+              itemResolved {
+                ... on SocialGrainPhoto {
+                  uri
+                  alt
+                }
+              }
+            }
+          }
+        }
+
+        # Reverse join: Get favorites on this gallery
+        socialGrainFavoriteViaSubject(first: 5) {
+          totalCount
+        }
+
+        # Reverse join: Get comments on this gallery
+        socialGrainCommentViaSubject(first: 5) {
+          totalCount
+          edges {
+            node {
               text
               createdAt
-            }
-          }
-          pageInfo {
-            hasNextPage
-          }
-        }
-
-        # Reverse join: Get first 20 likes
-        appBskyFeedLikeViaSubject(first: 20) {
-          totalCount  # Like count
-          edges {
-            node {
-              uri
-              createdAt
-            }
-          }
-        }
-
-        # Reverse join: Get reposts
-        appBskyFeedRepostViaSubject(first: 20) {
-          totalCount  # Repost count
-          edges {
-            node {
-              uri
-              createdAt
+              # DID join: Get commenter's profile
+              socialGrainActorProfileByDid {
+                displayName
+              }
             }
           }
         }
@@ -499,18 +566,14 @@ query GetThread($postUri: String!) {
 All joins use DataLoader for efficient batching:
 
 ```graphql
-# This query will batch all replyToResolved lookups into a single database query
 query {
-  appBskyFeedPost(first: 100) {
+  socialGrainPhoto(first: 100) {
     edges {
       node {
         uri
-        text
-        replyToResolved {
-          ... on AppBskyFeedPost {
-            uri
-            text
-          }
+        alt
+        socialGrainActorProfileByDid {
+          displayName
         }
       }
     }
@@ -519,117 +582,10 @@ query {
 ```
 
 **How it works:**
-1. Fetches 100 posts
-2. Collects all unique `replyTo` URIs
-3. Batches them into a single SQL query: `WHERE uri IN (...)`
-4. Returns resolved records efficiently
-
-## Performance Tips
-
-### 1. Only Request What You Need
-
-```graphql
-# Good: Only request specific fields
-query {
-  appBskyFeedPost {
-    edges {
-      node {
-        uri
-        text
-        appBskyFeedLikeViaSubject(first: 20) {
-          totalCount  # Get count without fetching all records
-          edges {
-            node {
-              uri  # Only need the URI
-            }
-          }
-        }
-      }
-    }
-  }
-}
-```
-
-### 2. Use totalCount for Metrics
-
-Get engagement counts efficiently without fetching all records:
-
-```graphql
-query {
-  appBskyFeedPost {
-    edges {
-      node {
-        uri
-        text
-        # Just get counts, no records
-        likes: appBskyFeedLikeViaSubject(first: 0) {
-          totalCount  # Like count
-        }
-        reposts: appBskyFeedRepostViaSubject(first: 0) {
-          totalCount  # Repost count
-        }
-        replies: appBskyFeedPostViaReplyTo(first: 0) {
-          totalCount  # Reply count
-        }
-      }
-    }
-  }
-}
-```
-
-### 3. Use Pagination on Nested Joins
-
-Nested joins are paginated by default. Always specify `first` or `last` for optimal performance:
-
-```graphql
-query {
-  appBskyFeedPost(first: 10) {
-    edges {
-      node {
-        uri
-        text
-        # Limit nested join results
-        appBskyFeedLikeViaSubject(first: 20) {
-          totalCount  # Total likes
-          edges {
-            node {
-              uri
-            }
-          }
-          pageInfo {
-            hasNextPage  # Know if there are more
-          }
-        }
-      }
-    }
-  }
-}
-```
-
-### 4. Avoid Deep Nesting
-
-```graphql
-# Avoid: Deeply nested joins can be expensive
-query {
-  appBskyFeedPost {
-    edges {
-      node {
-        replyToResolved {
-          ... on AppBskyFeedPost {
-            replyToResolved {
-              ... on AppBskyFeedPost {
-                replyToResolved {
-                  # Too deep!
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-```
+1. Fetches 100 photos
+2. Collects all unique DIDs from those photos
+3. Batches them into a single SQL query: `WHERE did IN (...)`
+4. Returns resolved profiles efficiently
 
 ## Type Resolution
 
@@ -637,21 +593,21 @@ The `Record` union uses a type resolver that examines the `collection` field:
 
 | Collection | GraphQL Type |
 |------------|--------------|
-| `app.bsky.feed.post` | `AppBskyFeedPost` |
-| `app.bsky.feed.like` | `AppBskyFeedLike` |
+| `social.grain.photo` | `SocialGrainPhoto` |
+| `social.grain.gallery` | `SocialGrainGallery` |
+| `social.grain.actor.profile` | `SocialGrainActorProfile` |
 | `app.bsky.actor.profile` | `AppBskyActorProfile` |
 
 This allows inline fragments to work correctly:
 
 ```graphql
-{
-  appBskyFeedPost {
+query {
+  socialGrainFavorite(first: 5) {
     edges {
       node {
-        replyToResolved {
-          # Runtime type is determined by the collection field
-          ... on AppBskyFeedPost { text }
-          ... on AppBskyFeedLike { subject }
+        subjectResolved {
+          ... on SocialGrainPhoto { alt }
+          ... on SocialGrainGallery { title }
         }
       }
     }
@@ -665,7 +621,7 @@ Discover available joins using introspection:
 
 ```graphql
 query {
-  __type(name: "AppBskyFeedPost") {
+  __type(name: "SocialGrainPhoto") {
     fields {
       name
       type {
@@ -681,106 +637,3 @@ Look for fields ending in:
 - `Resolved` (forward joins)
 - `Via*` (reverse joins)
 - `ByDid` (DID joins)
-
-## Common Patterns
-
-### Thread Navigation
-
-```graphql
-# Get a post and its parent
-query {
-  appBskyFeedPost(where: { uri: { eq: $uri } }) {
-    edges {
-      node {
-        uri
-        text
-        replyToResolved {
-          ... on AppBskyFeedPost {
-            uri
-            text
-          }
-        }
-      }
-    }
-  }
-}
-```
-
-### Engagement Metrics
-
-Use `totalCount` to get efficient engagement counts without fetching all records:
-
-```graphql
-# Get counts efficiently
-query {
-  appBskyFeedPost {
-    edges {
-      node {
-        uri
-        text
-        # Get like count
-        likes: appBskyFeedLikeViaSubject(first: 0) {
-          totalCount
-        }
-        # Get repost count
-        reposts: appBskyFeedRepostViaSubject(first: 0) {
-          totalCount
-        }
-        # Get reply count
-        replies: appBskyFeedPostViaReplyTo(first: 0) {
-          totalCount
-        }
-      }
-    }
-  }
-}
-```
-
-Or fetch recent engagement with pagination:
-
-```graphql
-query {
-  appBskyFeedPost {
-    edges {
-      node {
-        uri
-        text
-        # Get 10 most recent likes
-        likes: appBskyFeedLikeViaSubject(
-          first: 10
-          sortBy: [{field: "createdAt", direction: DESC}]
-        ) {
-          totalCount  # Total like count
-          edges {
-            node {
-              did  # Who liked it
-              createdAt
-            }
-          }
-        }
-      }
-    }
-  }
-}
-```
-
-### User's Pinned Content
-
-```graphql
-query {
-  appBskyActorProfile(where: { did: { eq: $did } }) {
-    edges {
-      node {
-        displayName
-        pinnedPostResolved {
-          ... on AppBskyFeedPost {
-            uri
-            text
-            createdAt
-          }
-        }
-      }
-    }
-  }
-}
-```
