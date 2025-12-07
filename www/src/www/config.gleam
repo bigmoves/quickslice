@@ -8,25 +8,49 @@ pub type DocPage {
     path: String,
     /// Display title for navigation
     title: String,
+    /// Sidebar group name
+    group: String,
     /// Markdown content (loaded from file)
     content: String,
   )
 }
 
-/// Manual ordering of documentation pages
-/// Format: #(filename, path, nav_title)
-pub const page_order: List(#(String, String, String)) = [
-  #("README.md", "/", "Getting Started"),
-  #("authentication.md", "/authentication", "Authentication"),
-  #("queries.md", "/queries", "Queries"),
-  #("mutations.md", "/mutations", "Mutations"),
-  #("joins.md", "/joins", "Joins"),
-  #("aggregations.md", "/aggregations", "Aggregations"),
-  #("subscriptions.md", "/subscriptions", "Subscriptions"),
-  #("blobs.md", "/blobs", "Blobs"),
-  #("variables.md", "/variables", "Variables"),
-  #("deployment.md", "/deployment", "Deployment"),
-  #("mcp.md", "/mcp", "MCP"),
+/// Navigation group for sidebar
+pub type NavGroup {
+  NavGroup(name: String, pages: List(#(String, String, String)))
+}
+
+/// Sidebar navigation structure
+/// Each group contains: #(filename, path, nav_title)
+pub const navigation: List(NavGroup) = [
+  NavGroup(
+    "Getting Started",
+    [
+      #("README.md", "/", "Introduction"),
+      #("quickstart.md", "/quickstart", "Quickstart"),
+      #("building-apps.md", "/building-apps", "Building Apps"),
+      #("authentication.md", "/authentication", "Authentication"),
+    ],
+  ),
+  NavGroup(
+    "GraphQL",
+    [
+      #("queries.md", "/queries", "Queries"),
+      #("mutations.md", "/mutations", "Mutations"),
+      #("joins.md", "/joins", "Joins"),
+      #("aggregations.md", "/aggregations", "Aggregations"),
+      #("subscriptions.md", "/subscriptions", "Subscriptions"),
+      #("blobs.md", "/blobs", "Blobs"),
+      #("variables.md", "/variables", "Variables"),
+    ],
+  ),
+  NavGroup(
+    "Other",
+    [
+      #("deployment.md", "/deployment", "Deployment"),
+      #("mcp.md", "/mcp", "MCP"),
+    ],
+  ),
 ]
 
 /// Path to the docs directory (relative to project root)

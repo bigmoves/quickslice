@@ -117,10 +117,24 @@ fn sidebar(current_path: String, pages: List(DocPage)) -> Element(Nil) {
       tangled_logo(),
       span([], [html.text("tangled.sh")]),
     ]),
-    nav([], [
+    nav([], render_grouped_nav(current_path, pages)),
+  ])
+}
+
+/// Group pages by their group field and render navigation
+fn render_grouped_nav(
+  current_path: String,
+  pages: List(DocPage),
+) -> List(Element(Nil)) {
+  pages
+  |> group_by_group
+  |> list.map(fn(group) {
+    let #(group_name, group_pages) = group
+    div([class("sidebar-group")], [
+      div([class("sidebar-group-label")], [html.text(group_name)]),
       ul(
         [],
-        list.map(pages, fn(p) {
+        list.map(group_pages, fn(p) {
           let is_active = p.path == current_path
           let classes = case is_active {
             True -> "active"
@@ -129,8 +143,22 @@ fn sidebar(current_path: String, pages: List(DocPage)) -> Element(Nil) {
           li([], [a([href(p.path), class(classes)], [html.text(p.title)])])
         }),
       ),
-    ]),
-  ])
+    ])
+  })
+}
+
+/// Group pages by their group field, preserving order
+fn group_by_group(pages: List(DocPage)) -> List(#(String, List(DocPage))) {
+  list.fold(pages, [], fn(acc, page) {
+    case list.key_pop(acc, page.group) {
+      Ok(#(existing, rest)) -> [
+        #(page.group, list.append(existing, [page])),
+        ..rest
+      ]
+      Error(Nil) -> [#(page.group, [page]), ..acc]
+    }
+  })
+  |> list.reverse
 }
 
 /// Render the Tangled (GitHub clone) logo SVG
