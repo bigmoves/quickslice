@@ -184,7 +184,7 @@ fn tangled_logo() -> Element(Nil) {
 }
 
 /// Render the quickslice logo SVG
-fn logo() -> Element(Nil) {
+pub fn logo() -> Element(Nil) {
   svg.svg(
     [
       attribute("viewBox", "0 0 128 128"),
