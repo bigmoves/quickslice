@@ -18,6 +18,7 @@ packages = [
   { name = "lustre", version = "5.4.0", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_json", "gleam_otp", "gleam_stdlib", "houdini"], otp_app = "lustre", source = "hex", outer_checksum = "40E097BABCE65FB7C460C073078611F7F5802EB07E1A9BFB5C229F71B60F8E50" },
   { name = "lustre_ssg", version = "0.11.0", build_tools = ["gleam"], requirements = ["filepath", "gleam_regexp", "gleam_stdlib", "jot", "lustre", "simplifile", "temporary", "tom"], otp_app = "lustre_ssg", source = "hex", outer_checksum = "D1F2B47EBE27C2B1DE6552A0883BC676D8EB076359D152FFA323FADDC74FFC41" },
   { name = "mork", version = "1.8.0", build_tools = ["gleam"], requirements = ["casefold", "gleam_regexp", "gleam_stdlib", "splitter"], otp_app = "mork", source = "hex", outer_checksum = "6C48D71DC9DD20F23E63E9422B17F9D12689FB1D47A9DBEF97E982B638C8D1E9" },
+  { name = "og_image", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "lustre", "simplifile"], source = "local", path = "../../og_image" },
   { name = "simplifile", version = "2.3.1", build_tools = ["gleam"], requirements = ["filepath", "gleam_stdlib"], otp_app = "simplifile", source = "hex", outer_checksum = "957E0E5B75927659F1D2A1B7B75D7B9BA96FAA8D0C53EA71C4AD9CD0C6B848F6" },
   { name = "splitter", version = "1.2.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "splitter", source = "hex", outer_checksum = "3DFD6B6C49E61EDAF6F7B27A42054A17CFF6CA2135FF553D0CB61C234D281DD0" },
   { name = "temporary", version = "1.0.0", build_tools = ["gleam"], requirements = ["envoy", "exception", "filepath", "gleam_crypto", "gleam_stdlib", "simplifile"], otp_app = "temporary", source = "hex", outer_checksum = "51C0FEF4D72CE7CA507BD188B21C1F00695B3D5B09D7DFE38240BFD3A8E1E9B3" },
@@ -25,10 +26,11 @@ packages = [
 ]
 
 [requirements]
+gleam_regexp = { version = ">= 1.1.1 and < 2.0.0" }
 gleam_stdlib = { version = ">= 0.44.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
+lustre = { version = ">= 5.4.0 and < 6.0.0" }
 lustre_ssg = { version = ">= 0.11.0 and < 1.0.0" }
 mork = { version = ">= 1.8.0 and < 2.0.0" }
+og_image = { path = "../../og_image" }
 simplifile = { version = ">= 2.3.1 and < 3.0.0" }
-lustre = { version = ">= 5.4.0 and < 6.0.0" }
-gleam_regexp = { version = ">= 1.1.1 and < 2.0.0" }
