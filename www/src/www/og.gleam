@@ -4,10 +4,7 @@ import lustre/element.{type Element}
 import lustre/element/html.{div, text}
 import og_image
 import www/config.{type DocPage}
-import www/layout
-
-/// Base URL for OG image links
-pub const base_url = "https://quickslice.slices.network"
+import www/logo
 
 /// Render an OG image for a doc page
 pub fn render(page: DocPage) -> Result(BitArray, og_image.RenderError) {
@@ -33,7 +30,7 @@ fn build_element(page: DocPage) -> Element(Nil) {
       ]),
     ],
     [
-      layout.logo(),
+      logo.logo(),
       divider(),
       title(page.title),
       domain(),
@@ -90,9 +87,4 @@ fn domain() -> Element(Nil) {
 /// Get the output path for a page's OG image
 pub fn output_path(page: DocPage) -> String {
   "priv/og/" <> page.slug <> ".png"
-}
-
-/// Get the URL for a page's OG image
-pub fn url(page: DocPage) -> String {
-  base_url <> "/og/" <> page.slug <> ".png"
 }

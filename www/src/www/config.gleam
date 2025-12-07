@@ -61,3 +61,11 @@ pub const out_dir: String = "./priv"
 
 /// Static assets directory
 pub const static_dir: String = "./static"
+
+/// Base URL for the site
+pub const base_url: String = "https://quickslice.slices.network"
+
+/// Get the URL for a page's OG image
+pub fn og_image_url(page: DocPage) -> String {
+  base_url <> "/og/" <> page.slug <> ".png"
+}
