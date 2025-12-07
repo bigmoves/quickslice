@@ -68,7 +68,6 @@ Delete a record:
 mutation {
   deleteXyzStatusphereStatus(rkey: "3kvt7a2xyzw2a") {
     uri
-    status
   }
 }
 ```
@@ -114,8 +113,7 @@ Use the blob reference in a record:
 mutation {
   createAppBskyActorProfile(
     input: {
-      displayName: "Alice"
-      description: "Builder of things"
+      displayName: "Jerry"
       avatar: {
         ref: "bafkreiabc123..."
         mimeType: "image/png"
@@ -142,34 +140,19 @@ mutation {
   updateAppBskyActorProfile(
     rkey: "self"
     input: {
-      displayName: "Alice Smith"
-      description: "Software engineer & designer"
-      pronouns: "she/her"
-      website: "https://alice.com"
+      displayName: "Jerry"
       avatar: {
         ref: "bafkreiabc123avatar"
         mimeType: "image/jpeg"
         size: 125000
       }
-      banner: {
-        ref: "bafkreixyz789banner"
-        mimeType: "image/jpeg"
-        size: 450000
-      }
     }
   ) {
     uri
     displayName
-    description
-    pronouns
-    website
     avatar {
       ref
       url(preset: "avatar")
-    }
-    banner {
-      ref
-      url(preset: "banner")
     }
   }
 }

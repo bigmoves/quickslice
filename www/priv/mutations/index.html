@@ -54,7 +54,6 @@
 <pre><code class="language-graphql">mutation {
   deleteXyzStatusphereStatus(rkey: &quot;3kvt7a2xyzw2a&quot;) {
     uri
-    status
   }
 }
 </code></pre>
@@ -88,8 +87,7 @@
 <pre><code class="language-graphql">mutation {
   createAppBskyActorProfile(
     input: {
-      displayName: &quot;Alice&quot;
-      description: &quot;Builder of things&quot;
+      displayName: &quot;Jerry&quot;
       avatar: {
         ref: &quot;bafkreiabc123...&quot;
         mimeType: &quot;image/png&quot;
@@ -113,34 +111,19 @@
   updateAppBskyActorProfile(
     rkey: &quot;self&quot;
     input: {
-      displayName: &quot;Alice Smith&quot;
-      description: &quot;Software engineer &amp; designer&quot;
-      pronouns: &quot;she/her&quot;
-      website: &quot;https://alice.com&quot;
+      displayName: &quot;Jerry&quot;
       avatar: {
         ref: &quot;bafkreiabc123avatar&quot;
         mimeType: &quot;image/jpeg&quot;
         size: 125000
       }
-      banner: {
-        ref: &quot;bafkreixyz789banner&quot;
-        mimeType: &quot;image/jpeg&quot;
-        size: 450000
-      }
     }
   ) {
     uri
     displayName
-    description
-    pronouns
-    website
     avatar {
       ref
       url(preset: &quot;avatar&quot;)
-    }
-    banner {
-      ref
-      url(preset: &quot;banner&quot;)
     }
   }
 }

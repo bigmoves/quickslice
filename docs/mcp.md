@@ -4,37 +4,18 @@ Quickslice provides an MCP (Model Context Protocol) server that lets AI assistan
 
 ## Endpoint
 
+Any quickslice instance exposes MCP at `{EXTERNAL_BASE_URL}/mcp`. For example:
+
 ```
-POST http://localhost:8080/mcp
+https://xyzstatusphere.slices.network/mcp
 ```
 
 ## Setup
 
-Start the quickslice server:
-
-```bash
-cd server && gleam run
-```
-
-Connect your MCP client to `http://localhost:8080/mcp`
-
 ### Claude Code
 
 ```bash
-claude mcp add --transport http --scope user quickslice http://localhost:8080/mcp
-```
-
-### Claude Desktop
-
-Add to your `claude_desktop_config.json`:
-```json
-{
-  "mcpServers": {
-    "quickslice": {
-      "url": "http://localhost:8080/mcp"
-    }
-  }
-}
+claude mcp add --transport http quickslice https://xyzstatusphere.slices.network/mcp
 ```
 
 ### Other MCP Clients

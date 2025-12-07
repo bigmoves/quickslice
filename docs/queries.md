@@ -82,7 +82,7 @@ Sort records using the `sortBy` argument:
 ```graphql
 query {
   xyzStatusphereStatus(sortBy: [
-    { field: "createdAt", direction: DESC }
+    { field: createdAt, direction: DESC }
   ]) {
     edges {
       node {
@@ -100,8 +100,8 @@ query {
 ```graphql
 query {
   appBskyActorProfile(sortBy: [
-    { field: "displayName", direction: ASC }
-    { field: "createdAt", direction: DESC }
+    { field: displayName, direction: ASC }
+    { field: createdAt, direction: DESC }
   ]) {
     edges {
       node {
@@ -123,7 +123,7 @@ Use `first` and `after` to paginate forward:
 query {
   xyzStatusphereStatus(
     first: 10
-    sortBy: [{ field: "createdAt", direction: DESC }]
+    sortBy: [{ field: createdAt, direction: DESC }]
   ) {
     edges {
       node {
@@ -149,7 +149,7 @@ query {
   xyzStatusphereStatus(
     first: 10
     after: "cursor_from_previous_page"
-    sortBy: [{ field: "createdAt", direction: DESC }]
+    sortBy: [{ field: createdAt, direction: DESC }]
   ) {
     edges {
       node {
@@ -176,7 +176,7 @@ query {
   xyzStatusphereStatus(
     last: 10
     before: "some_cursor"
-    sortBy: [{ field: "createdAt", direction: DESC }]
+    sortBy: [{ field: createdAt, direction: DESC }]
   ) {
     edges {
       node {
@@ -213,7 +213,7 @@ query GetRecentStatuses($pageSize: Int!, $cursor: String) {
     where: {
       status: { ne: "" }
     }
-    sortBy: [{ field: "createdAt", direction: DESC }]
+    sortBy: [{ field: createdAt, direction: DESC }]
     first: $pageSize
     after: $cursor
   ) {

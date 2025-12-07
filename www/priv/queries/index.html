@@ -69,7 +69,7 @@ query {
 <p>Sort records using the <code>sortBy</code> argument:</p>
 <pre><code class="language-graphql">query {
   xyzStatusphereStatus(sortBy: [
-    { field: &quot;createdAt&quot;, direction: DESC }
+    { field: createdAt, direction: DESC }
   ]) {
     edges {
       node {
@@ -84,8 +84,8 @@ query {
 <h3 id="Sort-Multiple-Fields">Sort Multiple Fields</h3>
 <pre><code class="language-graphql">query {
   appBskyActorProfile(sortBy: [
-    { field: &quot;displayName&quot;, direction: ASC }
-    { field: &quot;createdAt&quot;, direction: DESC }
+    { field: displayName, direction: ASC }
+    { field: createdAt, direction: DESC }
   ]) {
     edges {
       node {
@@ -102,7 +102,7 @@ query {
 <pre><code class="language-graphql">query {
   xyzStatusphereStatus(
     first: 10
-    sortBy: [{ field: &quot;createdAt&quot;, direction: DESC }]
+    sortBy: [{ field: createdAt, direction: DESC }]
   ) {
     edges {
       node {
@@ -125,7 +125,7 @@ query {
   xyzStatusphereStatus(
     first: 10
     after: &quot;cursor_from_previous_page&quot;
-    sortBy: [{ field: &quot;createdAt&quot;, direction: DESC }]
+    sortBy: [{ field: createdAt, direction: DESC }]
   ) {
     edges {
       node {
@@ -148,7 +148,7 @@ query {
   xyzStatusphereStatus(
     last: 10
     before: &quot;some_cursor&quot;
-    sortBy: [{ field: &quot;createdAt&quot;, direction: DESC }]
+    sortBy: [{ field: createdAt, direction: DESC }]
   ) {
     edges {
       node {
@@ -180,7 +180,7 @@ query {
     where: {
       status: { ne: &quot;&quot; }
     }
-    sortBy: [{ field: &quot;createdAt&quot;, direction: DESC }]
+    sortBy: [{ field: createdAt, direction: DESC }]
     first: $pageSize
     after: $cursor
   ) {
