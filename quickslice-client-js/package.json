@@ -1,0 +1,26 @@
+{
+  "name": "quickslice-client-js",
+  "version": "0.1.0",
+  "description": "Quickslice client SDK for browser SPAs",
+  "main": "dist/quickslice-client.js",
+  "module": "dist/quickslice-client.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node build.mjs && tsc",
+    "watch": "node build.mjs --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "typescript": "^5.3.0"
+  },
+  "keywords": [
+    "quickslice",
+    "oauth",
+    "dpop",
+    "atproto"
+  ],
+  "license": "MIT"
+}

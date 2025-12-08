@@ -150,6 +150,12 @@ fn migration_v8(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   tables.create_admin_session_table(conn)
 }
 
+/// Migration v9: Add oauth_dpop_jti table for DPoP replay protection
+fn migration_v9(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+  logging.log(logging.Info, "Running migration v9 (oauth_dpop_jti table)...")
+  tables.create_oauth_dpop_jti_table(conn)
+}
+
 /// Runs all pending migrations based on current schema version
 pub fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   use _ <- result.try(create_schema_version_table(conn))
@@ -171,10 +177,11 @@ pub fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
       use _ <- result.try(apply_migration(conn, 5, migration_v5))
       use _ <- result.try(apply_migration(conn, 6, migration_v6))
       use _ <- result.try(apply_migration(conn, 7, migration_v7))
-      apply_migration(conn, 8, migration_v8)
+      use _ <- result.try(apply_migration(conn, 8, migration_v8))
+      apply_migration(conn, 9, migration_v9)
     }
 
-    // Run v2, v3, v4, v5, v6, v7, and v8 migrations
+    // Run v2 through v9 migrations
     1 -> {
       use _ <- result.try(apply_migration(conn, 2, migration_v2))
       use _ <- result.try(apply_migration(conn, 3, migration_v3))
@@ -182,55 +189,67 @@ pub fn run_migrations(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
       use _ <- result.try(apply_migration(conn, 5, migration_v5))
       use _ <- result.try(apply_migration(conn, 6, migration_v6))
       use _ <- result.try(apply_migration(conn, 7, migration_v7))
-      apply_migration(conn, 8, migration_v8)
+      use _ <- result.try(apply_migration(conn, 8, migration_v8))
+      apply_migration(conn, 9, migration_v9)
     }
 
-    // Run v3, v4, v5, v6, v7, and v8 migrations
+    // Run v3 through v9 migrations
     2 -> {
       use _ <- result.try(apply_migration(conn, 3, migration_v3))
       use _ <- result.try(apply_migration(conn, 4, migration_v4))
       use _ <- result.try(apply_migration(conn, 5, migration_v5))
       use _ <- result.try(apply_migration(conn, 6, migration_v6))
       use _ <- result.try(apply_migration(conn, 7, migration_v7))
-      apply_migration(conn, 8, migration_v8)
+      use _ <- result.try(apply_migration(conn, 8, migration_v8))
+      apply_migration(conn, 9, migration_v9)
     }
 
-    // Run v4, v5, v6, v7, and v8 migrations
+    // Run v4 through v9 migrations
     3 -> {
       use _ <- result.try(apply_migration(conn, 4, migration_v4))
       use _ <- result.try(apply_migration(conn, 5, migration_v5))
       use _ <- result.try(apply_migration(conn, 6, migration_v6))
       use _ <- result.try(apply_migration(conn, 7, migration_v7))
-      apply_migration(conn, 8, migration_v8)
+      use _ <- result.try(apply_migration(conn, 8, migration_v8))
+      apply_migration(conn, 9, migration_v9)
     }
 
-    // Run v5, v6, v7, and v8 migrations
+    // Run v5 through v9 migrations
     4 -> {
       use _ <- result.try(apply_migration(conn, 5, migration_v5))
       use _ <- result.try(apply_migration(conn, 6, migration_v6))
       use _ <- result.try(apply_migration(conn, 7, migration_v7))
-      apply_migration(conn, 8, migration_v8)
+      use _ <- result.try(apply_migration(conn, 8, migration_v8))
+      apply_migration(conn, 9, migration_v9)
     }
 
-    // Run v6, v7, and v8 migrations
+    // Run v6 through v9 migrations
     5 -> {
       use _ <- result.try(apply_migration(conn, 6, migration_v6))
       use _ <- result.try(apply_migration(conn, 7, migration_v7))
-      apply_migration(conn, 8, migration_v8)
+      use _ <- result.try(apply_migration(conn, 8, migration_v8))
+      apply_migration(conn, 9, migration_v9)
     }
 
-    // Run v7 and v8 migrations
+    // Run v7 through v9 migrations
     6 -> {
       use _ <- result.try(apply_migration(conn, 7, migration_v7))
-      apply_migration(conn, 8, migration_v8)
+      use _ <- result.try(apply_migration(conn, 8, migration_v8))
+      apply_migration(conn, 9, migration_v9)
     }
 
-    // Run v8 migration
-    7 -> apply_migration(conn, 8, migration_v8)
+    // Run v8 and v9 migrations
+    7 -> {
+      use _ <- result.try(apply_migration(conn, 8, migration_v8))
+      apply_migration(conn, 9, migration_v9)
+    }
+
+    // Run v9 migration
+    8 -> apply_migration(conn, 9, migration_v9)
 
     // Already at latest version
-    8 -> {
-      logging.log(logging.Info, "Schema is up to date (v8)")
+    9 -> {
+      logging.log(logging.Info, "Schema is up to date (v9)")
       Ok(Nil)
     }
 

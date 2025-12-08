@@ -346,6 +346,28 @@ pub fn create_oauth_dpop_nonce_table(
   sqlight.exec(create_expires_at_index_sql, conn)
 }
 
+/// Creates the oauth_dpop_jti table for DPoP JTI replay protection
+pub fn create_oauth_dpop_jti_table(
+  conn: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
+  let create_table_sql =
+    "
+    CREATE TABLE IF NOT EXISTS oauth_dpop_jti (
+      jti TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL
+    )
+  "
+
+  let create_created_at_index_sql =
+    "
+    CREATE INDEX IF NOT EXISTS idx_oauth_dpop_jti_created_at
+    ON oauth_dpop_jti(created_at)
+  "
+
+  use _ <- result.try(sqlight.exec(create_table_sql, conn))
+  sqlight.exec(create_created_at_index_sql, conn)
+}
+
 /// Creates the oauth_auth_request table for client authorization requests during bridge flow
 pub fn create_oauth_auth_request_table(
   conn: sqlight.Connection,

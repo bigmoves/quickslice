@@ -44,10 +44,10 @@ fn handle_graphql_post(
   plc_url: String,
 ) -> wisp.Response {
   // Extract Authorization header (optional for queries, required for mutations)
-  // Strip "Bearer " prefix if present
+  // Strip "Bearer " or "DPoP " prefix if present
   let auth_token =
     list.key_find(req.headers, "authorization")
-    |> result.map(strip_bearer_prefix)
+    |> result.map(strip_auth_prefix)
 
   // Read request body
   case wisp.read_body_bits(req) {
@@ -85,10 +85,10 @@ fn handle_graphql_get(
   plc_url: String,
 ) -> wisp.Response {
   // Extract Authorization header (optional for queries, required for mutations)
-  // Strip "Bearer " prefix if present
+  // Strip "Bearer " or "DPoP " prefix if present
   let auth_token =
     list.key_find(req.headers, "authorization")
-    |> result.map(strip_bearer_prefix)
+    |> result.map(strip_auth_prefix)
 
   // Support GET requests with query parameter (no variables for GET)
   let query_params = wisp.get_query(req)
@@ -151,11 +151,15 @@ fn extract_request_from_json(
   Ok(#(query, json_str))
 }
 
-/// Strip "Bearer " prefix from Authorization header value
-fn strip_bearer_prefix(auth_header: String) -> String {
+/// Strip "Bearer " or "DPoP " prefix from Authorization header value
+fn strip_auth_prefix(auth_header: String) -> String {
   case string.starts_with(auth_header, "Bearer ") {
     True -> string.drop_start(auth_header, 7)
-    False -> auth_header
+    False ->
+      case string.starts_with(auth_header, "DPoP ") {
+        True -> string.drop_start(auth_header, 5)
+        False -> auth_header
+      }
   }
 }
 
