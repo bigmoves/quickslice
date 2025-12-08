@@ -21,6 +21,16 @@ Quickslice acts as an OAuth proxy between your app and users' Personal Data Serv
 
 Your app never handles AT Protocol credentials directly. The access token authorizes GraphQL mutations that write records to the user's repository.
 
+### Security: PKCE and DPoP
+
+The Quickslice client SDK implements two security mechanisms that protect browser-based apps:
+
+**PKCE (Proof Key for Code Exchange)** prevents authorization code interception attacks. Before redirecting to login, the SDK generates a random secret (code verifier) and sends only its hash (code challenge) to the server. When exchanging the authorization code for tokens, the SDK proves it initiated the request by providing the original verifier.
+
+**DPoP (Demonstrating Proof-of-Possession)** binds tokens to a cryptographic key stored in your browser. Each request includes a signed proof that the token holder possesses the private key. Even if an attacker steals your access token, they can't use it without the key.
+
+Together, these mechanisms provide security comparable to confidential clients—without requiring server-side secrets.
+
 ## 1. Create an OAuth Client
 
 Before implementing authentication, register an OAuth client in your Quickslice instance.
@@ -48,170 +58,89 @@ Most browser-based apps use **Public** clients. If you're building a server-rend
 4. Click **Create**
 5. Copy the **Client ID** — you'll need this in your app
 
-## 2. Implement the OAuth Flow
+## 2. Install the SDK
 
-Public clients use PKCE (Proof Key for Code Exchange) to secure the OAuth flow without a client secret.
+The Quickslice client SDK handles OAuth, PKCE, DPoP, token refresh, and GraphQL requests.
 
-### Overview
+### npm
 
-The flow works like this:
-
-1. Generate a random code verifier and its SHA-256 hash (challenge)
-2. Redirect user to `/oauth/authorize` with the challenge
-3. User authenticates with their PDS
-4. Handle callback with authorization code
-5. Exchange code + verifier for access token
-
-### PKCE Helpers
-
-Add these utility functions to your app:
+```bash
+npm install quickslice-client
+```
 
 ```javascript
-function base64UrlEncode(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
+import { createQuicksliceClient } from 'quickslice-client';
+```
 
-async function generateCodeVerifier() {
-  const randomBytes = new Uint8Array(32);
-  crypto.getRandomValues(randomBytes);
-  return base64UrlEncode(randomBytes);
-}
+### CDN
 
-async function generateCodeChallenge(verifier) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return base64UrlEncode(hash);
-}
+```html
+<script src="https://unpkg.com/quickslice-client/dist/quickslice-client.min.js"></script>
+```
 
-function generateState() {
-  const randomBytes = new Uint8Array(16);
-  crypto.getRandomValues(randomBytes);
-  return base64UrlEncode(randomBytes);
+The SDK exposes `QuicksliceClient` and `createQuicksliceClient` globally.
+
+## 3. Implement Authentication
+
+### Initialize the Client
+
+Create a client instance with your server URL and OAuth client ID:
+
+```javascript
+const client = await createQuicksliceClient({
+  server: "https://yourapp.slices.network",
+  clientId: "YOUR_CLIENT_ID",
+});
+```
+
+### Login
+
+Redirect the user to authenticate with their AT Protocol identity:
+
+```javascript
+await client.loginWithRedirect({
+  handle: "alice.bsky.social",  // User's handle
+});
+```
+
+### Handle the Callback
+
+After authentication, the user returns to your app. Handle the callback to complete login:
+
+```javascript
+// Check if this is an OAuth callback
+if (window.location.search.includes("code=")) {
+  await client.handleRedirectCallback();
 }
 ```
 
-### Initiating Login
+The SDK automatically exchanges the authorization code for tokens using PKCE and DPoP, stores them securely, and cleans up the URL.
 
-When a user clicks "Login", generate the PKCE values and redirect:
+### Check Authentication State
 
 ```javascript
-async function initiateLogin(handle) {
-  const codeVerifier = await generateCodeVerifier();
-  const codeChallenge = await generateCodeChallenge(codeVerifier);
-  const state = generateState();
+const isLoggedIn = await client.isAuthenticated();
 
-  // Store for callback verification
-  sessionStorage.setItem("code_verifier", codeVerifier);
-  sessionStorage.setItem("oauth_state", state);
-
-  const params = new URLSearchParams({
-    client_id: "YOUR_CLIENT_ID",
-    redirect_uri: window.location.origin,
-    response_type: "code",
-    code_challenge: codeChallenge,
-    code_challenge_method: "S256",
-    state: state,
-    login_hint: handle,  // User's AT Protocol handle
-  });
-
-  window.location.href = `https://yourapp.slices.network/oauth/authorize?${params}`;
+if (isLoggedIn) {
+  const user = client.getUser();
+  console.log(user.did);  // "did:plc:abc123..."
 }
 ```
 
-### Handling the Callback
-
-After authentication, the user returns to your redirect URI with `code` and `state` parameters:
+### Logout
 
 ```javascript
-async function handleOAuthCallback() {
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get("code");
-  const state = params.get("state");
-
-  // Verify state to prevent CSRF
-  const storedState = sessionStorage.getItem("oauth_state");
-  if (state !== storedState) {
-    throw new Error("State mismatch — possible CSRF attack");
-  }
-
-  // Exchange code for tokens
-  const codeVerifier = sessionStorage.getItem("code_verifier");
-
-  const response = await fetch("https://yourapp.slices.network/oauth/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code: code,
-      redirect_uri: window.location.origin,
-      client_id: "YOUR_CLIENT_ID",
-      code_verifier: codeVerifier,
-    }),
-  });
-
-  const tokens = await response.json();
-
-  // Store access token
-  sessionStorage.setItem("access_token", tokens.access_token);
-
-  // Clean up
-  sessionStorage.removeItem("code_verifier");
-  sessionStorage.removeItem("oauth_state");
-
-  // Remove code from URL
-  window.history.replaceState({}, document.title, window.location.pathname);
-}
+await client.logout();
 ```
 
-### Token Storage
+## 4. Query the GraphQL API
 
-The example above uses `sessionStorage` for simplicity. This works for demos but has limitations:
+### Public Queries
 
-- **sessionStorage**: Cleared when tab closes, vulnerable to XSS
-- **localStorage**: Persists across sessions, also vulnerable to XSS
-
-For production apps, consider more secure approaches:
-
-- **Silent refresh with Web Workers**: Store tokens in memory, use a worker to refresh silently (similar to [Auth0's approach](https://auth0.com/docs/secure/tokens/refresh-tokens/refresh-token-rotation))
-- **Backend-for-Frontend (BFF)**: Use a confidential client on your server, store tokens server-side, use HTTP-only cookies for sessions
-
-## 3. Query the GraphQL API
-
-### Unauthenticated Queries
-
-All queries are public and require no authentication:
+Use `publicQuery()` for unauthenticated requests. All queries are public by default:
 
 ```javascript
-async function graphqlQuery(query, variables = {}) {
-  const response = await fetch("https://yourapp.slices.network/graphql", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, variables }),
-  });
-
-  const result = await response.json();
-
-  if (result.errors?.length > 0) {
-    throw new Error(result.errors[0].message);
-  }
-
-  return result.data;
-}
-```
-
-Example — fetch recent statuses:
-
-```javascript
-const data = await graphqlQuery(`
+const data = await client.publicQuery(`
   query {
     xyzStatusphereStatus(
       first: 20
@@ -229,49 +158,12 @@ const data = await graphqlQuery(`
 `);
 ```
 
-### Authenticated Requests
+### Authenticated Queries
 
-Mutations and the `viewer` query require an access token. Add the `Authorization` header:
-
-```javascript
-async function authenticatedQuery(query, variables = {}) {
-  const token = sessionStorage.getItem("access_token");
-
-  const response = await fetch("https://yourapp.slices.network/graphql", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-
-  const result = await response.json();
-  return result.data;
-}
-```
-
-### The Viewer Query
-
-Get the authenticated user's identity:
+Use `query()` for requests that require authentication. The SDK automatically includes the access token with DPoP proof:
 
 ```javascript
-const data = await authenticatedQuery(`
-  query {
-    viewer {
-      did
-      handle
-    }
-  }
-`);
-
-console.log(data.viewer.handle); // "alice.bsky.social"
-```
-
-Join to profile data from other collections:
-
-```javascript
-const data = await authenticatedQuery(`
+const data = await client.query(`
   query {
     viewer {
       did
@@ -283,14 +175,16 @@ const data = await authenticatedQuery(`
     }
   }
 `);
+
+console.log(data.viewer.handle); // "alice.bsky.social"
 ```
 
-## 4. Create Records with Mutations
+## 5. Create Records with Mutations
 
-Mutations require authentication and create records in the user's AT Protocol repository:
+Use `mutate()` to create records in the user's AT Protocol repository:
 
 ```javascript
-const data = await authenticatedQuery(`
+const data = await client.mutate(`
   mutation CreateStatus($status: String!, $createdAt: DateTime!) {
     createXyzStatusphereStatus(
       input: { status: $status, createdAt: $createdAt }
@@ -308,7 +202,7 @@ const data = await authenticatedQuery(`
 
 The mutation returns the created record, including its `uri` (the AT Protocol record identifier).
 
-## 5. Confidential Clients
+## 6. Confidential Clients
 
 Use a confidential client when your app has a secure backend that can store secrets.
 
@@ -344,10 +238,3 @@ const response = await fetch("https://yourapp.slices.network/oauth/token", {
 ```
 
 > **Security Note**: Never expose the client secret in browser code. This request must happen on your server.
-
-## Next Steps
-
-- [Authentication Reference](/authentication) — OAuth endpoints and token details
-- [Queries](/queries) — Filtering, sorting, and pagination
-- [Mutations](/mutations) — Creating, updating, and deleting records
-- [Subscriptions](/subscriptions) — Real-time updates via WebSocket

@@ -65,7 +65,7 @@ pub const static_dir: String = "./static"
 /// Base URL for the site
 pub const base_url: String = "https://quickslice.slices.network"
 
-/// Get the URL for a page's OG image
-pub fn og_image_url(page: DocPage) -> String {
-  base_url <> "/og/" <> page.slug <> ".webp"
+/// Get the URL for the OG image (single image for all pages)
+pub fn og_image_url(_page: DocPage) -> String {
+  base_url <> "/og/default.webp"
 }

@@ -48,13 +48,3 @@ Records are the data units in AT Protocol, defined by Lexicon schemas. Quickslic
 - `/oauth/authorize` - OAuth authorization endpoint
 
 Queries are public. Mutations require authentication via Bearer token.
-
-## Documentation
-
-- [Authentication](./authentication.md) - OAuth flow and user context
-- [Queries](./queries.md) - Fetching records with filters and sorting
-- [Mutations](./mutations.md) - Creating, updating, and deleting records
-- [Joins](./joins.md) - Traversing relationships between records
-- [Subscriptions](./subscriptions.md) - Real-time updates via WebSocket
-- [Blobs](./blobs.md) - Working with binary data
-- [Deployment](./deployment.md) - Running your own instance

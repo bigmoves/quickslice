@@ -158,10 +158,3 @@ query {
 ```
 
 Your quickslice instance is now live.
-
-## Next Steps
-
-- [Authentication](/authentication) - Adding user auth to your app
-- [Queries](/queries) - Filtering, sorting, and pagination
-- [Mutations](/mutations) - Creating, updating, and deleting records
-- [Subscriptions](/subscriptions) - Real-time updates via WebSocket

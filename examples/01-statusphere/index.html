@@ -376,6 +376,7 @@
       // =============================================================================
 
       const SERVER_URL = "http://localhost:8080";
+      const CLIENT_ID = ""; // Set your OAuth client ID here
 
       const EMOJIS = [
         "👍",
@@ -415,14 +416,11 @@
       // =============================================================================
 
       async function main() {
-        // Get client ID from localStorage if previously saved
-        const savedClientId = localStorage.getItem("statusphere_client_id");
-
         // Check if this is an OAuth callback
         if (window.location.search.includes("code=")) {
-          if (!savedClientId) {
+          if (!CLIENT_ID) {
             showError(
-              "OAuth callback received but no client ID found. Please login again.",
+              "OAuth callback received but CLIENT_ID is not configured.",
             );
             renderLoginForm();
             return;
@@ -431,7 +429,7 @@
           try {
             client = await QuicksliceClient.createQuicksliceClient({
               server: SERVER_URL,
-              clientId: savedClientId,
+              clientId: CLIENT_ID,
             });
             await client.handleRedirectCallback();
             console.log("OAuth callback handled successfully");
@@ -443,12 +441,12 @@
             await loadAndRenderStatuses();
             return;
           }
-        } else if (savedClientId) {
-          // Initialize client with saved ID
+        } else if (CLIENT_ID) {
+          // Initialize client with configured ID
           try {
             client = await QuicksliceClient.createQuicksliceClient({
               server: SERVER_URL,
-              clientId: savedClientId,
+              clientId: CLIENT_ID,
             });
           } catch (error) {
             console.error("Failed to initialize client:", error);
@@ -589,21 +587,17 @@
       async function handleLogin(event) {
         event.preventDefault();
 
-        const clientId = document.getElementById("client-id").value.trim();
         const handle = document.getElementById("handle").value.trim();
 
-        if (!clientId || !handle) {
-          showError("Please enter both Client ID and Handle");
+        if (!handle) {
+          showError("Please enter your Bluesky handle");
           return;
         }
 
         try {
-          // Save client ID for callback
-          localStorage.setItem("statusphere_client_id", clientId);
-
           client = await QuicksliceClient.createQuicksliceClient({
             server: SERVER_URL,
-            clientId: clientId,
+            clientId: CLIENT_ID,
           });
 
           await client.loginWithRedirect({ handle });
@@ -638,7 +632,6 @@
       }
 
       function logout() {
-        localStorage.removeItem("statusphere_client_id");
         if (client) {
           client.logout();
         } else {
@@ -688,22 +681,25 @@
 
       function renderLoginForm() {
         const container = document.getElementById("auth-section");
-        const savedClientId =
-          localStorage.getItem("statusphere_client_id") || "";
+
+        // Show configuration message if CLIENT_ID is not set
+        if (!CLIENT_ID) {
+          container.innerHTML = `
+            <div class="card">
+              <p style="color: var(--error-text); text-align: center; margin-bottom: 1rem;">
+                <strong>Configuration Required</strong>
+              </p>
+              <p style="color: var(--gray-700); text-align: center;">
+                Please set the <code style="background: var(--gray-100); padding: 0.125rem 0.375rem; border-radius: 0.25rem;">CLIENT_ID</code> constant in this file to your OAuth client ID.
+              </p>
+            </div>
+          `;
+          return;
+        }
 
         container.innerHTML = `
           <div class="card">
             <form class="login-form" onsubmit="handleLogin(event)">
-              <div class="form-group">
-                <label for="client-id">OAuth Client ID</label>
-                <input
-                  type="text"
-                  id="client-id"
-                  placeholder="client_abc123..."
-                  value="${escapeHtml(savedClientId)}"
-                  required
-                >
-              </div>
               <div class="form-group">
                 <label for="handle">Bluesky Handle</label>
                 <input

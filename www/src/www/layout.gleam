@@ -1,5 +1,6 @@
 /// Docs site layout with sidebar navigation
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import lustre/attribute.{attribute, class, href, rel}
 import lustre/element.{type Element}
 import lustre/element/html.{
@@ -54,7 +55,10 @@ pub fn wrap(
       div([class("container")], [
         sidebar(page.path, all_pages),
         main([class("content")], [
-          element.unsafe_raw_html("", "div", [], content_html),
+          div([], [
+            element.unsafe_raw_html("", "div", [], content_html),
+            page_nav(page, all_pages),
+          ]),
           minimap(headings),
         ]),
       ]),
@@ -87,6 +91,58 @@ fn minimap(headings: List(Heading)) -> Element(Nil) {
           )
         })
       ])
+  }
+}
+
+/// Render previous/next page navigation
+fn page_nav(current: DocPage, all_pages: List(DocPage)) -> Element(Nil) {
+  let #(prev, next) = find_adjacent_pages(current, all_pages)
+
+  nav([class("page-nav")], [
+    case prev {
+      Some(p) ->
+        a([href(p.path), class("page-nav-link page-nav-prev")], [
+          span([class("page-nav-label")], [html.text("Previous")]),
+          span([class("page-nav-title")], [html.text(p.title)]),
+        ])
+      None -> div([class("page-nav-link page-nav-empty")], [])
+    },
+    case next {
+      Some(p) ->
+        a([href(p.path), class("page-nav-link page-nav-next")], [
+          span([class("page-nav-label")], [html.text("Next")]),
+          span([class("page-nav-title")], [html.text(p.title)]),
+        ])
+      None -> div([class("page-nav-link page-nav-empty")], [])
+    },
+  ])
+}
+
+/// Find the previous and next pages relative to current
+fn find_adjacent_pages(
+  current: DocPage,
+  all_pages: List(DocPage),
+) -> #(Option(DocPage), Option(DocPage)) {
+  find_adjacent_helper(current, all_pages, None)
+}
+
+fn find_adjacent_helper(
+  current: DocPage,
+  remaining: List(DocPage),
+  prev: Option(DocPage),
+) -> #(Option(DocPage), Option(DocPage)) {
+  case remaining {
+    [] -> #(None, None)
+    [page] ->
+      case page.path == current.path {
+        True -> #(prev, None)
+        False -> #(None, None)
+      }
+    [page, next, ..rest] ->
+      case page.path == current.path {
+        True -> #(prev, Some(next))
+        False -> find_adjacent_helper(current, [next, ..rest], Some(page))
+      }
   }
 }
 

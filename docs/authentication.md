@@ -66,8 +66,3 @@ query {
   }
 }
 ```
-
-## See Also
-
-- [examples/01-statusphere/](../examples/01-statusphere/) - Complete working example with OAuth
-- [Mutations](./mutations.md) - Creating, updating, and deleting records

@@ -1,6 +1,5 @@
 /// Docs site static site generator
 import gleam/io
-import gleam/list
 import lustre/ssg
 import simplifile
 import www/config.{type DocPage}
@@ -31,9 +30,9 @@ pub fn main() -> Nil {
         Ok(_) -> {
           io.println("Build succeeded! Output: " <> config.out_dir)
 
-          // Create og directory and generate images AFTER ssg.build
+          // Create og directory and generate single OG image
           let _ = simplifile.create_directory_all("./priv/og")
-          list.each(all_pages, generate_og_image)
+          generate_og_image()
         }
         Error(_) -> io.println("Build failed!")
       }
@@ -41,16 +40,16 @@ pub fn main() -> Nil {
   }
 }
 
-fn generate_og_image(page: DocPage) -> Nil {
-  case og.render(page) {
+fn generate_og_image() -> Nil {
+  case og.render() {
     Ok(bytes) -> {
-      let path = og.output_path(page)
+      let path = og.output_path()
       case simplifile.write_bits(path, bytes) {
         Ok(_) -> io.println("Generated: " <> path)
         Error(_) -> io.println("Failed to write: " <> path)
       }
     }
-    Error(_) -> io.println("Failed to render OG image for: " <> page.slug)
+    Error(_) -> io.println("Failed to render OG image")
   }
 }
 
