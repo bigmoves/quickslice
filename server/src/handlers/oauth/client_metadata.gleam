@@ -1,9 +1,7 @@
 /// Client metadata endpoint for ATProtocol OAuth
 /// GET /oauth-client-metadata.json
 import gleam/json
-import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/string
 import wisp
 
 /// Client metadata response
@@ -25,22 +23,6 @@ pub type ClientMetadataResponse {
   )
 }
 
-/// Filter scopes to only ATProto-compatible scopes
-fn filter_atproto_scopes(scope: String) -> String {
-  let scopes = string.split(scope, " ")
-
-  let filtered =
-    list.filter(scopes, fn(s) {
-      case s {
-        "atproto" -> True
-        "transition:generic" -> True
-        _ -> False
-      }
-    })
-
-  string.join(filtered, " ")
-}
-
 /// Generate client metadata
 pub fn generate_metadata(
   client_id: String,
@@ -50,15 +32,13 @@ pub fn generate_metadata(
   jwks: Option(json.Json),
   jwks_uri: Option(String),
 ) -> ClientMetadataResponse {
-  let filtered_scope = filter_atproto_scopes(scope)
-
   ClientMetadataResponse(
     client_id: client_id,
     client_name: client_name,
     redirect_uris: redirect_uris,
     grant_types: ["authorization_code", "refresh_token"],
     response_types: ["code"],
-    scope: filtered_scope,
+    scope: scope,
     token_endpoint_auth_method: "private_key_jwt",
     token_endpoint_auth_signing_alg: "ES256",
     subject_type: "public",

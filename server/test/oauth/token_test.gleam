@@ -19,7 +19,7 @@ pub fn token_missing_grant_type_returns_400_test() {
     |> simulate.header("content-type", "application/x-www-form-urlencoded")
     |> simulate.string_body("client_id=test")
 
-  let response = token.handle(req, conn)
+  let response = token.handle(req, conn, "http://localhost:8080")
   response.status |> should.equal(400)
 }
 
@@ -31,7 +31,7 @@ pub fn token_unsupported_grant_type_returns_400_test() {
     |> simulate.header("content-type", "application/x-www-form-urlencoded")
     |> simulate.string_body("grant_type=password&client_id=test")
 
-  let response = token.handle(req, conn)
+  let response = token.handle(req, conn, "http://localhost:8080")
   response.status |> should.equal(400)
 }
 
@@ -87,7 +87,7 @@ pub fn token_refresh_invalid_scope_returns_400_test() {
       "grant_type=refresh_token&client_id=test-client&refresh_token=test-refresh-token&scope=invalid:::",
     )
 
-  let response = token.handle(req, conn)
+  let response = token.handle(req, conn, "http://localhost:8080")
 
   // Should return 400 with invalid_scope error
   response.status |> should.equal(400)
@@ -136,7 +136,7 @@ pub fn token_confidential_client_missing_secret_returns_401_test() {
       "grant_type=authorization_code&client_id=confidential-client&code=test-code&redirect_uri=https://example.com/callback&code_verifier=test",
     )
 
-  let response = token.handle(req, conn)
+  let response = token.handle(req, conn, "http://localhost:8080")
 
   // Should return 401 unauthorized
   response.status |> should.equal(401)
@@ -183,7 +183,7 @@ pub fn token_confidential_client_wrong_secret_returns_401_test() {
       "grant_type=authorization_code&client_id=confidential-client&client_secret=wrong-secret&code=test-code&redirect_uri=https://example.com/callback",
     )
 
-  let response = token.handle(req, conn)
+  let response = token.handle(req, conn, "http://localhost:8080")
 
   response.status |> should.equal(401)
 
@@ -231,7 +231,7 @@ pub fn token_public_client_no_secret_required_test() {
       "grant_type=authorization_code&client_id=public-client&code=test-code&redirect_uri=https://example.com/callback&code_verifier=test",
     )
 
-  let response = token.handle(req, conn)
+  let response = token.handle(req, conn, "http://localhost:8080")
 
   // Should NOT be 401 (auth passed, will fail on invalid code instead)
   response.status |> should.not_equal(401)

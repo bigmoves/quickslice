@@ -1,5 +1,5 @@
 -module(jose_ffi).
--export([generate_dpop_proof/5, sha256_hash/1, compute_jwk_thumbprint/1, sha256_base64url/1]).
+-export([generate_dpop_proof/5, sha256_hash/1, compute_jwk_thumbprint/1, sha256_base64url/1, verify_dpop_proof/4]).
 
 %% Generate a DPoP proof JWT token
 %% Args: Method (binary), URL (binary), AccessToken (binary), JWKJson (binary), ServerNonce (binary)
@@ -127,3 +127,111 @@ compute_jwk_thumbprint(JWKJson) when is_binary(JWKJson) ->
 compute_jwk_thumbprint(JWKJson) when is_list(JWKJson) ->
     compute_jwk_thumbprint(list_to_binary(JWKJson)).
 
+%% Verify a DPoP proof JWT
+%% Args: DPoPProof (binary), ExpectedMethod (binary), ExpectedUrl (binary), MaxAgeSeconds (integer)
+%% Returns: {ok, #{jkt => Thumbprint, jti => Jti, iat => Iat}} | {error, Reason}
+verify_dpop_proof(DPoPProof, ExpectedMethod, ExpectedUrl, MaxAgeSeconds) ->
+    try
+        %% Split JWT into parts (compact serialization: header.payload.signature)
+        case binary:split(DPoPProof, <<".">>, [global]) of
+            [HeaderB64, _PayloadB64, _SignatureB64] ->
+                %% Decode the header (base64url)
+                HeaderJson = base64:decode(HeaderB64, #{mode => urlsafe, padding => false}),
+                HeaderMap = json:decode(HeaderJson),
+
+                %% Extract the JWK from the header
+                case maps:get(<<"jwk">>, HeaderMap, undefined) of
+                    undefined ->
+                        {error, <<"Missing jwk in DPoP header">>};
+                    JWKMap ->
+                        %% Verify typ is dpop+jwt
+                        case maps:get(<<"typ">>, HeaderMap, undefined) of
+                            <<"dpop+jwt">> ->
+                                %% Reconstruct JWK for verification
+                                %% jose_jwk:from_map expects base64url encoding natively
+                                JWK = jose_jwk:from_map(JWKMap),
+
+                                %% Verify the signature using jose
+                                case jose_jwt:verify(JWK, DPoPProof) of
+                                    {true, JWT, _JWS} ->
+                                        Claims = jose_jwt:to_map(JWT),
+                                        validate_dpop_claims(Claims, JWK, ExpectedMethod, ExpectedUrl, MaxAgeSeconds);
+                                    {false, _, _} ->
+                                        {error, <<"Invalid DPoP signature">>}
+                                end;
+                            Other ->
+                                {error, iolist_to_binary([<<"Invalid typ: expected dpop+jwt, got ">>,
+                                                           io_lib:format("~p", [Other])])}
+                        end
+                end;
+            _ ->
+                {error, <<"Invalid JWT format">>}
+        end
+    catch
+        error:Reason:Stacktrace ->
+            io:format("[DPoP] Error: ~p~nStacktrace: ~p~n", [Reason, Stacktrace]),
+            {error, iolist_to_binary([<<"DPoP verification failed: ">>,
+                                       io_lib:format("~p", [Reason])])};
+        _:Error ->
+            {error, iolist_to_binary([<<"DPoP verification error: ">>,
+                                       io_lib:format("~p", [Error])])}
+    end.
+
+%% Internal: Validate DPoP claims
+validate_dpop_claims({_Kind, Claims}, JWK, ExpectedMethod, ExpectedUrl, MaxAgeSeconds) ->
+    Now = erlang:system_time(second),
+
+    %% Extract required claims
+    Htm = maps:get(<<"htm">>, Claims, undefined),
+    Htu = maps:get(<<"htu">>, Claims, undefined),
+    Jti = maps:get(<<"jti">>, Claims, undefined),
+    Iat = maps:get(<<"iat">>, Claims, undefined),
+
+    %% Validate all required claims exist
+    case {Htm, Htu, Jti, Iat} of
+        {undefined, _, _, _} -> {error, <<"Missing htm claim">>};
+        {_, undefined, _, _} -> {error, <<"Missing htu claim">>};
+        {_, _, undefined, _} -> {error, <<"Missing jti claim">>};
+        {_, _, _, undefined} -> {error, <<"Missing iat claim">>};
+        _ ->
+            %% Validate htm matches
+            case Htm =:= ExpectedMethod of
+                false ->
+                    {error, iolist_to_binary([<<"htm mismatch: expected ">>, ExpectedMethod,
+                                               <<", got ">>, Htm])};
+                true ->
+                    %% Validate htu matches (normalize URLs)
+                    case normalize_url(Htu) =:= normalize_url(ExpectedUrl) of
+                        false ->
+                            {error, iolist_to_binary([<<"htu mismatch: expected ">>, ExpectedUrl,
+                                                       <<", got ">>, Htu])};
+                        true ->
+                            %% Validate iat is within acceptable range
+                            case abs(Now - Iat) =< MaxAgeSeconds of
+                                false ->
+                                    {error, <<"iat outside acceptable time window">>};
+                                true ->
+                                    %% Compute JKT (SHA-256 thumbprint of the JWK)
+                                    Thumbprint = jose_jwk:thumbprint(JWK),
+                                    {ok, #{
+                                        jkt => Thumbprint,
+                                        jti => Jti,
+                                        iat => Iat
+                                    }}
+                            end
+                    end
+            end
+    end.
+
+%% Internal: Normalize URL for comparison (remove trailing slash, fragments)
+normalize_url(Url) when is_binary(Url) ->
+    %% Remove fragment
+    case binary:split(Url, <<"#">>) of
+        [Base | _] ->
+            %% Remove trailing slash
+            case byte_size(Base) > 0 andalso binary:last(Base) of
+                $/ -> binary:part(Base, 0, byte_size(Base) - 1);
+                _ -> Base
+            end;
+        _ -> Url
+    end.

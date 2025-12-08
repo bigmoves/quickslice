@@ -589,7 +589,8 @@ fn handle_request(
       )
     }
 
-    ["oauth", "token"] -> oauth_token_handler.handle(req, ctx.db)
+    ["oauth", "token"] ->
+      oauth_token_handler.handle(req, ctx.db, ctx.external_base_url)
     ["oauth", "atp", "callback"] -> {
       let redirect_uri = ctx.external_base_url <> "/oauth/atp/callback"
       let client_id = case ctx.oauth_loopback_mode {
@@ -641,7 +642,7 @@ fn middleware(
       |> wisp.set_header("access-control-allow-methods", "GET, POST, OPTIONS")
       |> wisp.set_header(
         "access-control-allow-headers",
-        "Content-Type, Authorization",
+        "Content-Type, Authorization, DPoP",
       )
       |> wisp.set_body(wisp.Text(""))
     }
@@ -653,7 +654,7 @@ fn middleware(
       |> wisp.set_header("access-control-allow-methods", "GET, POST, OPTIONS")
       |> wisp.set_header(
         "access-control-allow-headers",
-        "Content-Type, Authorization",
+        "Content-Type, Authorization, DPoP",
       )
     }
   }

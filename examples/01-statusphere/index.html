@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://xyzstatusphere.slices.network; img-src 'self' https: data:;"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src http://localhost:8080; img-src 'self' https: data:;"
     />
     <title>Statusphere</title>
     <style>
@@ -366,19 +366,16 @@
       </main>
       <div id="error-banner" class="hidden"></div>
     </div>
+
+    <!-- Quickslice Client SDK -->
+    <script src="../../quickslice-client-js/dist/quickslice-client.min.js"></script>
+
     <script>
       // =============================================================================
-      // CONSTANTS
+      // CONFIGURATION
       // =============================================================================
 
-      // Set your OAuth Client ID here
-      const OAUTH_CLIENT_ID = "";
-
-      const GRAPHQL_URL = "https://xyzstatusphere.slices.network/graphql";
-      const OAUTH_AUTHORIZE_URL =
-        "https://xyzstatusphere.slices.network/oauth/authorize";
-      const OAUTH_TOKEN_URL =
-        "https://xyzstatusphere.slices.network/oauth/token";
+      const SERVER_URL = "http://localhost:8080";
 
       const EMOJIS = [
         "👍",
@@ -410,232 +407,78 @@
         "💯",
       ];
 
-      const STORAGE_KEYS = {
-        accessToken: "qs_access_token",
-        refreshToken: "qs_refresh_token",
-        userDid: "qs_user_did",
-        codeVerifier: "qs_code_verifier",
-        oauthState: "qs_oauth_state",
-      };
+      // Client instance
+      let client;
 
       // =============================================================================
-      // STORAGE UTILITIES
+      // INITIALIZATION
       // =============================================================================
 
-      const storage = {
-        get(key) {
-          return sessionStorage.getItem(key);
-        },
-        set(key, value) {
-          sessionStorage.setItem(key, value);
-        },
-        remove(key) {
-          sessionStorage.removeItem(key);
-        },
-        clear() {
-          Object.values(STORAGE_KEYS).forEach((key) =>
-            sessionStorage.removeItem(key),
-          );
-        },
-      };
+      async function main() {
+        // Get client ID from localStorage if previously saved
+        const savedClientId = localStorage.getItem("statusphere_client_id");
 
-      // =============================================================================
-      // PKCE UTILITIES
-      // =============================================================================
-
-      function base64UrlEncode(buffer) {
-        const bytes = new Uint8Array(buffer);
-        let binary = "";
-        for (let i = 0; i < bytes.length; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        return btoa(binary)
-          .replace(/\+/g, "-")
-          .replace(/\//g, "_")
-          .replace(/=+$/, "");
-      }
-
-      async function generateCodeVerifier() {
-        const randomBytes = new Uint8Array(32);
-        crypto.getRandomValues(randomBytes);
-        return base64UrlEncode(randomBytes);
-      }
-
-      async function generateCodeChallenge(verifier) {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(verifier);
-        const hash = await crypto.subtle.digest("SHA-256", data);
-        return base64UrlEncode(hash);
-      }
-
-      function generateState() {
-        const randomBytes = new Uint8Array(16);
-        crypto.getRandomValues(randomBytes);
-        return base64UrlEncode(randomBytes);
-      }
-
-      // =============================================================================
-      // OAUTH FUNCTIONS
-      // =============================================================================
-
-      async function initiateLogin(handle) {
-        const codeVerifier = await generateCodeVerifier();
-        const codeChallenge = await generateCodeChallenge(codeVerifier);
-        const state = generateState();
-
-        // Store for callback
-        storage.set(STORAGE_KEYS.codeVerifier, codeVerifier);
-        storage.set(STORAGE_KEYS.oauthState, state);
-
-        // Build redirect URI (current page without query params)
-        const redirectUri = window.location.origin + window.location.pathname;
-
-        // Build authorization URL
-        const params = new URLSearchParams({
-          client_id: OAUTH_CLIENT_ID,
-          redirect_uri: redirectUri,
-          response_type: "code",
-          code_challenge: codeChallenge,
-          code_challenge_method: "S256",
-          state: state,
-          login_hint: handle,
-        });
-
-        window.location.href = `${OAUTH_AUTHORIZE_URL}?${params.toString()}`;
-      }
-
-      async function handleOAuthCallback() {
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get("code");
-        const state = params.get("state");
-        const error = params.get("error");
-
-        if (error) {
-          throw new Error(
-            `OAuth error: ${error} - ${params.get("error_description") || ""}`,
-          );
-        }
-
-        if (!code || !state) {
-          return false; // Not a callback
-        }
-
-        // Verify state
-        const storedState = storage.get(STORAGE_KEYS.oauthState);
-        if (state !== storedState) {
-          throw new Error("OAuth state mismatch - possible CSRF attack");
-        }
-
-        // Get stored values
-        const codeVerifier = storage.get(STORAGE_KEYS.codeVerifier);
-        const redirectUri = window.location.origin + window.location.pathname;
-
-        if (!codeVerifier) {
-          throw new Error("Missing OAuth session data");
-        }
-
-        // Exchange code for tokens
-        const tokenResponse = await fetch(OAUTH_TOKEN_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            grant_type: "authorization_code",
-            code: code,
-            redirect_uri: redirectUri,
-            client_id: OAUTH_CLIENT_ID,
-            code_verifier: codeVerifier,
-          }),
-        });
-
-        if (!tokenResponse.ok) {
-          const errorData = await tokenResponse.json().catch(() => ({}));
-          throw new Error(
-            `Token exchange failed: ${
-              errorData.error_description || tokenResponse.statusText
-            }`,
-          );
-        }
-
-        const tokens = await tokenResponse.json();
-
-        // Store tokens
-        storage.set(STORAGE_KEYS.accessToken, tokens.access_token);
-        if (tokens.refresh_token) {
-          storage.set(STORAGE_KEYS.refreshToken, tokens.refresh_token);
-        }
-
-        // Extract DID from token response (sub claim) or we'll fetch it later
-        if (tokens.sub) {
-          storage.set(STORAGE_KEYS.userDid, tokens.sub);
-        }
-
-        // Clean up OAuth state
-        storage.remove(STORAGE_KEYS.codeVerifier);
-        storage.remove(STORAGE_KEYS.oauthState);
-
-        // Clear URL params
-        window.history.replaceState(
-          {},
-          document.title,
-          window.location.pathname,
-        );
-
-        return true;
-      }
-
-      function logout() {
-        storage.clear();
-        window.location.reload();
-      }
-
-      function isLoggedIn() {
-        return !!storage.get(STORAGE_KEYS.accessToken);
-      }
-
-      function getAccessToken() {
-        return storage.get(STORAGE_KEYS.accessToken);
-      }
-
-      function getUserDid() {
-        return storage.get(STORAGE_KEYS.userDid);
-      }
-
-      // =============================================================================
-      // GRAPHQL UTILITIES
-      // =============================================================================
-
-      async function graphqlQuery(query, variables = {}, requireAuth = false) {
-        const headers = {
-          "Content-Type": "application/json",
-        };
-
-        if (requireAuth) {
-          const token = getAccessToken();
-          if (!token) {
-            throw new Error("Not authenticated");
+        // Check if this is an OAuth callback
+        if (window.location.search.includes("code=")) {
+          if (!savedClientId) {
+            showError(
+              "OAuth callback received but no client ID found. Please login again.",
+            );
+            renderLoginForm();
+            return;
           }
-          headers["Authorization"] = `Bearer ${token}`;
+
+          try {
+            client = await QuicksliceClient.createQuicksliceClient({
+              server: SERVER_URL,
+              clientId: savedClientId,
+            });
+            await client.handleRedirectCallback();
+            console.log("OAuth callback handled successfully");
+          } catch (error) {
+            console.error("OAuth callback error:", error);
+            showError(`Authentication failed: ${error.message}`);
+            renderLoginForm();
+            renderEmojiPicker(null, false);
+            await loadAndRenderStatuses();
+            return;
+          }
+        } else if (savedClientId) {
+          // Initialize client with saved ID
+          try {
+            client = await QuicksliceClient.createQuicksliceClient({
+              server: SERVER_URL,
+              clientId: savedClientId,
+            });
+          } catch (error) {
+            console.error("Failed to initialize client:", error);
+          }
         }
 
-        const response = await fetch(GRAPHQL_URL, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ query, variables }),
-        });
+        // Render based on auth state
+        await renderApp();
+      }
 
-        if (!response.ok) {
-          throw new Error(`GraphQL request failed: ${response.statusText}`);
+      async function renderApp() {
+        const isLoggedIn = client && (await client.isAuthenticated());
+
+        if (isLoggedIn) {
+          try {
+            const viewer = await fetchViewer();
+            renderUserCard(viewer);
+          } catch (error) {
+            console.error("Failed to fetch viewer:", error);
+            renderUserCard(null);
+          }
+        } else {
+          renderLoginForm();
         }
 
-        const result = await response.json();
+        // Render emoji picker (enabled only if logged in)
+        renderEmojiPicker(null, isLoggedIn);
 
-        if (result.errors && result.errors.length > 0) {
-          throw new Error(`GraphQL error: ${result.errors[0].message}`);
-        }
-
-        return result.data;
+        // Load statuses
+        await loadAndRenderStatuses();
       }
 
       // =============================================================================
@@ -665,8 +508,22 @@
           }
         `;
 
-        const data = await graphqlQuery(query);
-        return data.xyzStatusphereStatus?.edges?.map((e) => e.node) || [];
+        // Use client if available, otherwise create a temporary one for public query
+        if (client) {
+          const data = await client.publicQuery(query);
+          return data.xyzStatusphereStatus?.edges?.map((e) => e.node) || [];
+        } else {
+          // For unauthenticated users, make a direct fetch
+          const response = await fetch(`${SERVER_URL}/graphql`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query }),
+          });
+          const result = await response.json();
+          return (
+            result.data?.xyzStatusphereStatus?.edges?.map((e) => e.node) || []
+          );
+        }
       }
 
       async function fetchViewer() {
@@ -683,7 +540,7 @@
           }
         `;
 
-        const data = await graphqlQuery(query, {}, true);
+        const data = await client.query(query);
         return data?.viewer;
       }
 
@@ -705,8 +562,88 @@
           createdAt: new Date().toISOString(),
         };
 
-        const data = await graphqlQuery(mutation, variables, true);
-        return data.createXyzStatusphereStatus;
+        return await client.mutate(mutation, variables);
+      }
+
+      async function loadAndRenderStatuses() {
+        renderLoading("status-feed");
+        try {
+          const statuses = await fetchStatuses();
+          renderStatusFeed(statuses);
+        } catch (error) {
+          console.error("Failed to fetch statuses:", error);
+          document.getElementById("status-feed").innerHTML = `
+            <div class="card">
+              <p class="loading" style="color: var(--error-text);">
+                Failed to load statuses. Is the quickslice server running at ${SERVER_URL}?
+              </p>
+            </div>
+          `;
+        }
+      }
+
+      // =============================================================================
+      // EVENT HANDLERS
+      // =============================================================================
+
+      async function handleLogin(event) {
+        event.preventDefault();
+
+        const clientId = document.getElementById("client-id").value.trim();
+        const handle = document.getElementById("handle").value.trim();
+
+        if (!clientId || !handle) {
+          showError("Please enter both Client ID and Handle");
+          return;
+        }
+
+        try {
+          // Save client ID for callback
+          localStorage.setItem("statusphere_client_id", clientId);
+
+          client = await QuicksliceClient.createQuicksliceClient({
+            server: SERVER_URL,
+            clientId: clientId,
+          });
+
+          await client.loginWithRedirect({ handle });
+        } catch (error) {
+          showError(`Login failed: ${error.message}`);
+        }
+      }
+
+      async function selectStatus(emoji) {
+        if (!client || !(await client.isAuthenticated())) {
+          showError("Please login to set your status");
+          return;
+        }
+
+        try {
+          // Disable buttons while posting
+          document
+            .querySelectorAll(".emoji-btn")
+            .forEach((btn) => (btn.disabled = true));
+
+          await postStatus(emoji);
+
+          // Refresh the page to show new status
+          window.location.reload();
+        } catch (error) {
+          showError(`Failed to post status: ${error.message}`);
+          // Re-enable buttons
+          document
+            .querySelectorAll(".emoji-btn")
+            .forEach((btn) => (btn.disabled = false));
+        }
+      }
+
+      function logout() {
+        localStorage.removeItem("statusphere_client_id");
+        if (client) {
+          client.logout();
+        } else {
+          window.location.reload();
+        }
       }
 
       // =============================================================================
@@ -751,12 +688,24 @@
 
       function renderLoginForm() {
         const container = document.getElementById("auth-section");
+        const savedClientId =
+          localStorage.getItem("statusphere_client_id") || "";
 
         container.innerHTML = `
           <div class="card">
             <form class="login-form" onsubmit="handleLogin(event)">
               <div class="form-group">
-                <label for="handle">AT Protocol Handle</label>
+                <label for="client-id">OAuth Client ID</label>
+                <input
+                  type="text"
+                  id="client-id"
+                  placeholder="client_abc123..."
+                  value="${escapeHtml(savedClientId)}"
+                  required
+                >
+              </div>
+              <div class="form-group">
+                <label for="handle">Bluesky Handle</label>
                 <input
                   type="text"
                   id="handle"
@@ -767,27 +716,24 @@
               <button type="submit" class="btn btn-primary">Login with Bluesky</button>
             </form>
             <p style="margin-top: 1rem; font-size: 0.875rem; color: var(--gray-500); text-align: center;">
-              Don't have an AT Protocol account? <a href="https://bsky.app" target="_blank">Sign up</a>
+              Don't have a Bluesky account? <a href="https://bsky.app" target="_blank">Sign up</a>
             </p>
           </div>
         `;
       }
 
-      function renderUserCard(profile) {
+      function renderUserCard(viewer) {
         const container = document.getElementById("auth-section");
-        const displayName = profile?.displayName || "User";
-        const handle = profile?.actorHandle || "unknown";
-        const avatarUrl = profile?.avatar?.url;
+        const displayName =
+          viewer?.appBskyActorProfileByDid?.displayName || "User";
+        const handle = viewer?.handle || "unknown";
+        const avatarUrl = viewer?.appBskyActorProfileByDid?.avatar?.url;
 
         container.innerHTML = `
           <div class="card user-card">
             <div class="user-info">
               <div class="user-avatar">
-                ${
-                  avatarUrl
-                    ? `<img src="${escapeHtml(avatarUrl)}" alt="Avatar">`
-                    : "👤"
-                }
+                ${avatarUrl ? `<img src="${escapeHtml(avatarUrl)}" alt="Avatar">` : "👤"}
               </div>
               <div>
                 <div class="user-name">Hi, ${escapeHtml(displayName)}!</div>
@@ -854,14 +800,10 @@
                     <span class="status-emoji">${status.status}</span>
                     <div class="status-content">
                       <span class="status-text">
-                        <a href="${profileUrl}" target="_blank" class="status-author">@${escapeHtml(
-                          displayHandle,
-                        )}</a>
+                        <a href="${profileUrl}" target="_blank" class="status-author">@${escapeHtml(displayHandle)}</a>
                         is feeling ${status.status}
                       </span>
-                      <div class="status-date">${formatDate(
-                        status.createdAt,
-                      )}</div>
+                      <div class="status-date">${formatDate(status.createdAt)}</div>
                     </div>
                   </li>
                 `;
@@ -878,121 +820,6 @@
             <p class="loading">Loading...</p>
           </div>
         `;
-      }
-
-      // =============================================================================
-      // EVENT HANDLERS
-      // =============================================================================
-
-      async function handleLogin(event) {
-        event.preventDefault();
-
-        const handle = document.getElementById("handle").value.trim();
-
-        if (!handle) {
-          showError("Please enter your AT Protocol Handle");
-          return;
-        }
-
-        try {
-          await initiateLogin(handle);
-        } catch (error) {
-          showError(`Login failed: ${error.message}`);
-        }
-      }
-
-      async function selectStatus(emoji) {
-        if (!isLoggedIn()) {
-          showError("Please login to set your status");
-          return;
-        }
-
-        try {
-          // Disable buttons while posting
-          document
-            .querySelectorAll(".emoji-btn")
-            .forEach((btn) => (btn.disabled = true));
-
-          await postStatus(emoji);
-
-          // Refresh the page to show new status
-          window.location.reload();
-        } catch (error) {
-          showError(`Failed to post status: ${error.message}`);
-          // Re-enable buttons
-          document
-            .querySelectorAll(".emoji-btn")
-            .forEach((btn) => (btn.disabled = false));
-        }
-      }
-
-      // =============================================================================
-      // MAIN INITIALIZATION
-      // =============================================================================
-
-      async function main() {
-        // Check if OAuth Client ID is configured
-        if (!OAUTH_CLIENT_ID) {
-          document.getElementById("app").innerHTML = `
-            <div class="card" style="text-align: center; margin-top: 4rem;">
-              <p>Please set OAUTH_CLIENT_ID</p>
-            </div>
-          `;
-          return;
-        }
-
-        try {
-          // Check if this is an OAuth callback
-          const isCallback = await handleOAuthCallback();
-          if (isCallback) {
-            console.log("OAuth callback handled successfully");
-          }
-        } catch (error) {
-          showError(`Authentication failed: ${error.message}`);
-          storage.clear();
-        }
-
-        // Render auth section
-        if (isLoggedIn()) {
-          try {
-            const viewer = await fetchViewer();
-            if (viewer) {
-              const profile = {
-                did: viewer.did,
-                actorHandle: viewer.handle,
-                displayName: viewer.appBskyActorProfileByDid?.displayName,
-                avatar: viewer.appBskyActorProfileByDid?.avatar,
-              };
-              renderUserCard(profile);
-            } else {
-              renderUserCard(null);
-            }
-          } catch (error) {
-            console.error("Failed to fetch viewer:", error);
-            renderUserCard(null);
-          }
-        } else {
-          renderLoginForm();
-        }
-
-        // Render emoji picker (enabled only if logged in)
-        renderEmojiPicker(null, isLoggedIn());
-
-        // Fetch and render statuses
-        renderLoading("status-feed");
-        try {
-          const statuses = await fetchStatuses();
-          renderStatusFeed(statuses);
-        } catch (error) {
-          console.error("Failed to fetch statuses:", error);
-          document.getElementById("status-feed").innerHTML = `
-            <div class="card">
-              <p class="loading" style="color: var(--error-text);">
-                Failed to load statuses. Is the quickslice server running at https://xyzstatusphere.slices.network?
-              </p>
-            </div>
-          `;
-        }
       }
 
       // Run on page load

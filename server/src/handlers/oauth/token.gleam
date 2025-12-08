@@ -4,10 +4,11 @@
 import database/repositories/oauth_access_tokens
 import database/repositories/oauth_authorization_code
 import database/repositories/oauth_clients
+import database/repositories/oauth_dpop_jti
 import database/repositories/oauth_refresh_tokens
 import database/types.{
-  type OAuthAuthorizationCode, type OAuthRefreshToken, Bearer, OAuthAccessToken,
-  OAuthRefreshToken, Plain, S256,
+  type OAuthAuthorizationCode, type OAuthClient, type OAuthRefreshToken, Bearer,
+  DPoP, OAuthAccessToken, OAuthRefreshToken, Plain, S256,
 }
 import gleam/json
 import gleam/list
@@ -15,6 +16,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/uri
+import lib/oauth/dpop/validator as dpop_validator
 import lib/oauth/pkce
 import lib/oauth/scopes/validator as scope_validator
 import lib/oauth/token_generator
@@ -108,8 +110,68 @@ fn validate_client_authentication(
   }
 }
 
+/// Extract and validate DPoP proof from request
+/// Returns the JKT (key thumbprint) if valid, or an error response
+fn validate_dpop_for_token_endpoint(
+  req: wisp.Request,
+  conn: sqlight.Connection,
+  client: OAuthClient,
+  external_base_url: String,
+) -> Result(Option(String), wisp.Response) {
+  // Get DPoP header
+  let dpop_header = dpop_validator.get_dpop_header(req.headers)
+
+  case dpop_header, client.token_endpoint_auth_method {
+    // Public clients MUST use DPoP
+    None, types.AuthNone ->
+      Error(error_response(
+        400,
+        "invalid_request",
+        "DPoP proof required for public clients",
+      ))
+
+    // DPoP provided - validate it
+    Some(dpop_proof), _ -> {
+      // Build the token endpoint URL
+      let token_url = external_base_url <> "/oauth/token"
+
+      case
+        dpop_validator.verify_dpop_proof(dpop_proof, "POST", token_url, 300)
+      {
+        Error(reason) ->
+          Error(error_response(400, "invalid_dpop_proof", reason))
+        Ok(result) -> {
+          // Check JTI hasn't been used (replay protection)
+          case oauth_dpop_jti.use_jti(conn, result.jti, result.iat) {
+            Error(err) ->
+              Error(error_response(
+                500,
+                "server_error",
+                "Database error: " <> string.inspect(err),
+              ))
+            Ok(False) ->
+              Error(error_response(
+                400,
+                "invalid_dpop_proof",
+                "DPoP proof has already been used (replay detected)",
+              ))
+            Ok(True) -> Ok(Some(result.jkt))
+          }
+        }
+      }
+    }
+
+    // Confidential client without DPoP - allowed
+    None, _ -> Ok(None)
+  }
+}
+
 /// Handle POST /oauth/token
-pub fn handle(req: wisp.Request, conn: sqlight.Connection) -> wisp.Response {
+pub fn handle(
+  req: wisp.Request,
+  conn: sqlight.Connection,
+  external_base_url: String,
+) -> wisp.Response {
   // Read request body
   use body <- wisp.require_string_body(req)
 
@@ -123,8 +185,10 @@ pub fn handle(req: wisp.Request, conn: sqlight.Connection) -> wisp.Response {
         None -> error_response(400, "invalid_request", "grant_type is required")
         Some(grant_type) -> {
           case grant_type {
-            "authorization_code" -> handle_authorization_code(params, conn)
-            "refresh_token" -> handle_refresh_token(params, conn)
+            "authorization_code" ->
+              handle_authorization_code(req, params, conn, external_base_url)
+            "refresh_token" ->
+              handle_refresh_token(req, params, conn, external_base_url)
             _ ->
               error_response(
                 400,
@@ -140,8 +204,10 @@ pub fn handle(req: wisp.Request, conn: sqlight.Connection) -> wisp.Response {
 
 /// Handle authorization_code grant
 fn handle_authorization_code(
+  req: wisp.Request,
   params: List(#(String, String)),
   conn: sqlight.Connection,
+  external_base_url: String,
 ) -> wisp.Response {
   // Extract required parameters
   let code_value = get_param(params, "code")
@@ -170,107 +236,146 @@ fn handle_authorization_code(
           case validate_client_authentication(client, params) {
             Error(err) -> err
             Ok(_) -> {
-              // Get authorization code
-              case oauth_authorization_code.get(conn, code_val) {
-                Error(err) ->
-                  error_response(
-                    500,
-                    "server_error",
-                    "Database error: " <> string.inspect(err),
-                  )
-                Ok(None) ->
-                  error_response(
-                    400,
-                    "invalid_grant",
-                    "Invalid authorization code",
-                  )
-                Ok(Some(code)) -> {
-                  // Validate authorization code
-                  case
-                    validate_authorization_code(code, cid, ruri, code_verifier)
-                  {
-                    Error(err) -> err
-                    Ok(_) -> {
-                      // Mark code as used
-                      case oauth_authorization_code.mark_used(conn, code_val) {
-                        Error(err) ->
-                          error_response(
-                            500,
-                            "server_error",
-                            "Database error: " <> string.inspect(err),
-                          )
+              // Validate DPoP if present/required
+              case
+                validate_dpop_for_token_endpoint(
+                  req,
+                  conn,
+                  client,
+                  external_base_url,
+                )
+              {
+                Error(err) -> err
+                Ok(dpop_jkt) -> {
+                  // Get authorization code
+                  case oauth_authorization_code.get(conn, code_val) {
+                    Error(err) ->
+                      error_response(
+                        500,
+                        "server_error",
+                        "Database error: " <> string.inspect(err),
+                      )
+                    Ok(None) ->
+                      error_response(
+                        400,
+                        "invalid_grant",
+                        "Invalid authorization code",
+                      )
+                    Ok(Some(code)) -> {
+                      // Validate authorization code
+                      case
+                        validate_authorization_code(
+                          code,
+                          cid,
+                          ruri,
+                          code_verifier,
+                        )
+                      {
+                        Error(err) -> err
                         Ok(_) -> {
-                          // Generate tokens
-                          let access_token_value =
-                            token_generator.generate_access_token()
-                          let refresh_token_value =
-                            token_generator.generate_refresh_token()
-                          let now = token_generator.current_timestamp()
-
-                          let access_token =
-                            OAuthAccessToken(
-                              token: access_token_value,
-                              token_type: Bearer,
-                              client_id: cid,
-                              user_id: Some(code.user_id),
-                              session_id: code.session_id,
-                              session_iteration: code.session_iteration,
-                              scope: code.scope,
-                              created_at: now,
-                              expires_at: token_generator.expiration_timestamp(
-                                client.access_token_expiration,
-                              ),
-                              revoked: False,
-                              dpop_jkt: None,
-                            )
-
-                          let refresh_token =
-                            OAuthRefreshToken(
-                              token: refresh_token_value,
-                              access_token: access_token_value,
-                              client_id: cid,
-                              user_id: code.user_id,
-                              session_id: code.session_id,
-                              session_iteration: code.session_iteration,
-                              scope: code.scope,
-                              created_at: now,
-                              expires_at: case client.refresh_token_expiration {
-                                0 -> None
-                                exp ->
-                                  Some(token_generator.expiration_timestamp(exp))
-                              },
-                              revoked: False,
-                            )
-
-                          // Store tokens
-                          case oauth_access_tokens.insert(conn, access_token) {
+                          // Mark code as used
+                          case
+                            oauth_authorization_code.mark_used(conn, code_val)
+                          {
                             Error(err) ->
                               error_response(
                                 500,
                                 "server_error",
-                                "Failed to store access token: "
-                                  <> string.inspect(err),
+                                "Database error: " <> string.inspect(err),
                               )
                             Ok(_) -> {
+                              // Generate tokens
+                              let access_token_value =
+                                token_generator.generate_access_token()
+                              let refresh_token_value =
+                                token_generator.generate_refresh_token()
+                              let now = token_generator.current_timestamp()
+
+                              // Determine token type based on DPoP
+                              let token_type = case dpop_jkt {
+                                Some(_) -> DPoP
+                                None -> Bearer
+                              }
+
+                              let access_token =
+                                OAuthAccessToken(
+                                  token: access_token_value,
+                                  token_type: token_type,
+                                  client_id: cid,
+                                  user_id: Some(code.user_id),
+                                  session_id: code.session_id,
+                                  session_iteration: code.session_iteration,
+                                  scope: code.scope,
+                                  created_at: now,
+                                  expires_at: token_generator.expiration_timestamp(
+                                    client.access_token_expiration,
+                                  ),
+                                  revoked: False,
+                                  dpop_jkt: dpop_jkt,
+                                )
+
+                              let refresh_token =
+                                OAuthRefreshToken(
+                                  token: refresh_token_value,
+                                  access_token: access_token_value,
+                                  client_id: cid,
+                                  user_id: code.user_id,
+                                  session_id: code.session_id,
+                                  session_iteration: code.session_iteration,
+                                  scope: code.scope,
+                                  created_at: now,
+                                  expires_at: case
+                                    client.refresh_token_expiration
+                                  {
+                                    0 -> None
+                                    exp ->
+                                      Some(token_generator.expiration_timestamp(
+                                        exp,
+                                      ))
+                                  },
+                                  revoked: False,
+                                )
+
+                              // Store tokens
                               case
-                                oauth_refresh_tokens.insert(conn, refresh_token)
+                                oauth_access_tokens.insert(conn, access_token)
                               {
                                 Error(err) ->
                                   error_response(
                                     500,
                                     "server_error",
-                                    "Failed to store refresh token: "
+                                    "Failed to store access token: "
                                       <> string.inspect(err),
                                   )
                                 Ok(_) -> {
-                                  // Return token response
-                                  token_response(
-                                    access_token_value,
-                                    "Bearer",
-                                    client.access_token_expiration,
-                                    Some(refresh_token_value),
-                                    code.scope,
-                                  )
+                                  case
+                                    oauth_refresh_tokens.insert(
+                                      conn,
+                                      refresh_token,
+                                    )
+                                  {
+                                    Error(err) ->
+                                      error_response(
+                                        500,
+                                        "server_error",
+                                        "Failed to store refresh token: "
+                                          <> string.inspect(err),
+                                      )
+                                    Ok(_) -> {
+                                      // Return token response
+                                      let token_type_str = case dpop_jkt {
+                                        Some(_) -> "DPoP"
+                                        None -> "Bearer"
+                                      }
+                                      token_response(
+                                        access_token_value,
+                                        token_type_str,
+                                        client.access_token_expiration,
+                                        Some(refresh_token_value),
+                                        code.scope,
+                                      )
+                                    }
+                                  }
                                 }
                               }
                             }
@@ -291,8 +396,10 @@ fn handle_authorization_code(
 
 /// Handle refresh_token grant
 fn handle_refresh_token(
+  req: wisp.Request,
   params: List(#(String, String)),
   conn: sqlight.Connection,
+  external_base_url: String,
 ) -> wisp.Response {
   // Extract required parameters
   let refresh_token_value = get_param(params, "refresh_token")
@@ -335,122 +442,153 @@ fn handle_refresh_token(
                 case validate_client_authentication(client, params) {
                   Error(err) -> err
                   Ok(_) -> {
-                    // Get refresh token
-                    case oauth_refresh_tokens.get(conn, rt_value) {
-                      Error(err) ->
-                        error_response(
-                          500,
-                          "server_error",
-                          "Database error: " <> string.inspect(err),
-                        )
-                      Ok(None) ->
-                        error_response(
-                          400,
-                          "invalid_grant",
-                          "Invalid refresh token",
-                        )
-                      Ok(Some(old_refresh_token)) -> {
-                        // Validate refresh token
-                        case validate_refresh_token(old_refresh_token, cid) {
-                          Error(err) -> err
-                          Ok(_) -> {
-                            // Revoke old refresh token
-                            case oauth_refresh_tokens.revoke(conn, rt_value) {
-                              Error(err) ->
-                                error_response(
-                                  500,
-                                  "server_error",
-                                  "Database error: " <> string.inspect(err),
-                                )
+                    // Validate DPoP if present/required
+                    case
+                      validate_dpop_for_token_endpoint(
+                        req,
+                        conn,
+                        client,
+                        external_base_url,
+                      )
+                    {
+                      Error(err) -> err
+                      Ok(dpop_jkt) -> {
+                        // Get refresh token
+                        case oauth_refresh_tokens.get(conn, rt_value) {
+                          Error(err) ->
+                            error_response(
+                              500,
+                              "server_error",
+                              "Database error: " <> string.inspect(err),
+                            )
+                          Ok(None) ->
+                            error_response(
+                              400,
+                              "invalid_grant",
+                              "Invalid refresh token",
+                            )
+                          Ok(Some(old_refresh_token)) -> {
+                            // Validate refresh token
+                            case
+                              validate_refresh_token(old_refresh_token, cid)
+                            {
+                              Error(err) -> err
                               Ok(_) -> {
-                                // Generate new tokens
-                                let new_access_token_value =
-                                  token_generator.generate_access_token()
-                                let new_refresh_token_value =
-                                  token_generator.generate_refresh_token()
-                                let now = token_generator.current_timestamp()
-
-                                // Use requested scope or fall back to original
-                                let scope = case requested_scope {
-                                  Some(_) -> requested_scope
-                                  None -> old_refresh_token.scope
-                                }
-
-                                let access_token =
-                                  OAuthAccessToken(
-                                    token: new_access_token_value,
-                                    token_type: Bearer,
-                                    client_id: cid,
-                                    user_id: Some(old_refresh_token.user_id),
-                                    session_id: old_refresh_token.session_id,
-                                    session_iteration: old_refresh_token.session_iteration,
-                                    scope: scope,
-                                    created_at: now,
-                                    expires_at: token_generator.expiration_timestamp(
-                                      client.access_token_expiration,
-                                    ),
-                                    revoked: False,
-                                    dpop_jkt: None,
-                                  )
-
-                                let refresh_token =
-                                  OAuthRefreshToken(
-                                    token: new_refresh_token_value,
-                                    access_token: new_access_token_value,
-                                    client_id: cid,
-                                    user_id: old_refresh_token.user_id,
-                                    session_id: old_refresh_token.session_id,
-                                    session_iteration: old_refresh_token.session_iteration,
-                                    scope: scope,
-                                    created_at: now,
-                                    expires_at: case
-                                      client.refresh_token_expiration
-                                    {
-                                      0 -> None
-                                      exp ->
-                                        Some(
-                                          token_generator.expiration_timestamp(
-                                            exp,
-                                          ),
-                                        )
-                                    },
-                                    revoked: False,
-                                  )
-
-                                // Store new tokens
+                                // Revoke old refresh token
                                 case
-                                  oauth_access_tokens.insert(conn, access_token)
+                                  oauth_refresh_tokens.revoke(conn, rt_value)
                                 {
                                   Error(err) ->
                                     error_response(
                                       500,
                                       "server_error",
-                                      "Failed to store access token: "
-                                        <> string.inspect(err),
+                                      "Database error: " <> string.inspect(err),
                                     )
                                   Ok(_) -> {
+                                    // Generate new tokens
+                                    let new_access_token_value =
+                                      token_generator.generate_access_token()
+                                    let new_refresh_token_value =
+                                      token_generator.generate_refresh_token()
+                                    let now =
+                                      token_generator.current_timestamp()
+
+                                    // Use requested scope or fall back to original
+                                    let scope = case requested_scope {
+                                      Some(_) -> requested_scope
+                                      None -> old_refresh_token.scope
+                                    }
+
+                                    // Determine token type based on DPoP
+                                    let token_type = case dpop_jkt {
+                                      Some(_) -> DPoP
+                                      None -> Bearer
+                                    }
+
+                                    let access_token =
+                                      OAuthAccessToken(
+                                        token: new_access_token_value,
+                                        token_type: token_type,
+                                        client_id: cid,
+                                        user_id: Some(old_refresh_token.user_id),
+                                        session_id: old_refresh_token.session_id,
+                                        session_iteration: old_refresh_token.session_iteration,
+                                        scope: scope,
+                                        created_at: now,
+                                        expires_at: token_generator.expiration_timestamp(
+                                          client.access_token_expiration,
+                                        ),
+                                        revoked: False,
+                                        dpop_jkt: dpop_jkt,
+                                      )
+
+                                    let refresh_token =
+                                      OAuthRefreshToken(
+                                        token: new_refresh_token_value,
+                                        access_token: new_access_token_value,
+                                        client_id: cid,
+                                        user_id: old_refresh_token.user_id,
+                                        session_id: old_refresh_token.session_id,
+                                        session_iteration: old_refresh_token.session_iteration,
+                                        scope: scope,
+                                        created_at: now,
+                                        expires_at: case
+                                          client.refresh_token_expiration
+                                        {
+                                          0 -> None
+                                          exp ->
+                                            Some(
+                                              token_generator.expiration_timestamp(
+                                                exp,
+                                              ),
+                                            )
+                                        },
+                                        revoked: False,
+                                      )
+
+                                    // Store new tokens
                                     case
-                                      oauth_refresh_tokens.insert(
+                                      oauth_access_tokens.insert(
                                         conn,
-                                        refresh_token,
+                                        access_token,
                                       )
                                     {
                                       Error(err) ->
                                         error_response(
                                           500,
                                           "server_error",
-                                          "Failed to store refresh token: "
+                                          "Failed to store access token: "
                                             <> string.inspect(err),
                                         )
                                       Ok(_) -> {
-                                        // Return token response
-                                        token_response(
-                                          new_access_token_value,
-                                          "Bearer",
-                                          client.access_token_expiration,
-                                          Some(new_refresh_token_value),
-                                          scope,
-                                        )
+                                        case
+                                          oauth_refresh_tokens.insert(
+                                            conn,
+                                            refresh_token,
+                                          )
+                                        {
+                                          Error(err) ->
+                                            error_response(
+                                              500,
+                                              "server_error",
+                                              "Failed to store refresh token: "
+                                                <> string.inspect(err),
+                                            )
+                                          Ok(_) -> {
+                                            // Return token response
+                                            let token_type_str = case dpop_jkt {
+                                              Some(_) -> "DPoP"
+                                              None -> "Bearer"
+                                            }
+                                            token_response(
+                                              new_access_token_value,
+                                              token_type_str,
+                                              client.access_token_expiration,
+                                              Some(new_refresh_token_value),
+                                              scope,
+                                            )
+                                          }
+                                        }
                                       }
                                     }
                                   }
