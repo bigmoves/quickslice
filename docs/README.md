@@ -1,6 +1,6 @@
 # Quickslice
 
-Quickslice is an AppView for AT Protocol applications. Point it at your Lexicon schemas and you get a production GraphQL API with OAuth authentication, real-time sync from the network, and joins across record types. No resolver boilerplate, no firehose ingestion code, no database normalization logic.
+Quickslice is an AppView for AT Protocol applications. Point it at your Lexicon schemas and you get a production GraphQL API with OAuth authentication, real-time sync from the network, and joins across record types.
 
 ## The Problem
 
@@ -9,11 +9,11 @@ Building an AppView from scratch means writing a lot of infrastructure code:
 - Jetstream connection and event handling
 - Record ingestion and validation
 - Database schema design and normalization
-- GraphQL schema and resolver functions
+- API endpoints for querying and writing data
 - OAuth session management and PDS writes
-- DataLoader implementation for efficient joins
+- Efficient batching when resolving related records
 
-This is hundreds of lines of code before you write any application logic.
+This adds up before you write any application logic.
 
 ## What Quickslice Does
 

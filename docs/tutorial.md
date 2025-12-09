@@ -101,10 +101,10 @@ query RecentStatuses {
 
 | Without Quickslice | With Quickslice |
 |---|---|
-| Write GraphQL schema | Query is auto-generated: |
-| Write resolver functions | |
+| Design query API | Query is auto-generated: |
+| Write database queries | |
 | Handle pagination logic | `xyzStatusphereStatus { edges { node { status } } }` |
-| Build SQL queries | |
+| Build filtering and sorting | |
 
 ## Step 3: Joining Profile Data
 
@@ -141,8 +141,8 @@ Behind the scenes, Quickslice:
 | Collect DIDs from status records | Add join to your query: |
 | Batch resolve DIDs to profiles | |
 | Handle N+1 query problem | `appBskyActorProfileByDid { displayName }` |
-| Write DataLoader implementation | |
-| Join data in resolver | |
+| Write batching logic | |
+| Join data in API response | |
 
 ### Other Join Types
 
@@ -229,9 +229,8 @@ By using Quickslice, you skipped writing:
 - **Jetstream connection**: Connecting to the firehose, filtering events, handling reconnection
 - **Record validation**: Checking incoming records against Lexicon schemas
 - **Database schema**: Designing tables, migrations, indexes
-- **GraphQL schema**: Types, queries, mutations, subscriptions
-- **Resolvers**: Database queries, pagination, filtering, sorting
-- **DataLoader**: Batching and caching for efficient joins
+- **Query API**: Endpoints for filtering, sorting, and pagination
+- **Batching**: Efficient resolution of related records
 - **Optimistic updates**: Indexing records before Jetstream confirmation
 - **OAuth flow**: Token exchange, session management, DPoP proofs
 
