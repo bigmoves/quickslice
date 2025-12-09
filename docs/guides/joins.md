@@ -4,6 +4,21 @@ AT Protocol data is organized into collections. A user's status records live in 
 
 ## Join Types
 
+```mermaid
+flowchart LR
+    subgraph "Forward Join"
+        Fav[Favorite] -->|subject URI| Photo1[Photo]
+    end
+
+    subgraph "Reverse Join"
+        Photo2[Photo] -->|find references| Favs[Favorites]
+    end
+
+    subgraph "DID Join"
+        Status[Status] -->|author DID| Profile[Profile]
+    end
+```
+
 Quickslice generates three types of joins automatically:
 
 | Type | What it does | Field naming |

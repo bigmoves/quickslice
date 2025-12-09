@@ -4,10 +4,25 @@ Quickslice acts as an OAuth proxy between your app and users' Personal Data Serv
 
 ## How It Works
 
-1. Your app redirects users to Quickslice's authorize endpoint
-2. Quickslice resolves the user's DID and locates their PDS
-3. The user authenticates with their PDS
-4. Quickslice issues your app an access token
+```mermaid
+sequenceDiagram
+    participant User
+    participant App
+    participant Quickslice
+    participant PDS
+
+    User->>App: Click Login
+    App->>Quickslice: Redirect to /oauth/authorize
+    Quickslice->>PDS: Authorization Request
+    PDS->>User: Login Prompt
+    User->>PDS: Credentials
+    PDS->>Quickslice: Auth Code
+    Quickslice->>PDS: Token Exchange
+    PDS->>Quickslice: Access Token
+    Quickslice->>App: Redirect with Code
+    App->>Quickslice: Exchange Code for Token
+    Quickslice->>App: Access Token
+```
 
 The access token authorizes mutations that write records to the user's repository.
 

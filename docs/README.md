@@ -15,6 +15,19 @@ Building an AppView from scratch means writing a lot of infrastructure code:
 
 This adds up before you write any application logic.
 
+## How It Works
+
+```mermaid
+flowchart LR
+    PDS[Personal Data Servers] --> Jetstream
+    Jetstream --> QS[Quickslice]
+    QS --> DB[(Database)]
+    QS --> GQL[GraphQL API]
+    GQL --> App[Your App]
+    App -->|mutations| QS
+    QS -->|writes| PDS
+```
+
 ## What Quickslice Does
 
 Quickslice handles all of that automatically:
