@@ -5,6 +5,7 @@ import gleam/regexp
 import lustre/element.{type Element}
 import mork
 import www/config.{type DocPage}
+import www/highlighter
 import www/layout.{type Heading}
 
 /// Render a doc page to a full HTML element
@@ -16,6 +17,7 @@ pub fn render(page: DocPage, all_pages: List(DocPage)) -> Element(Nil) {
     |> mork.parse_with_options(page.content)
     |> mork.to_html
     |> transform_links
+    |> highlighter.highlight_html
 
   let headings = extract_headings(html_content)
 
@@ -50,10 +52,10 @@ fn extract_headings(html: String) -> List(Heading) {
   })
 }
 
-/// Transform ./filename.md links to /filename paths
+/// Transform .md links to clean paths
 fn transform_links(html: String) -> String {
-  // Match href="./something.md" and replace with href="/something"
-  let assert Ok(re) = regexp.from_string("href=\"\\./([^\"]+)\\.md\"")
+  // Match href="./something.md" or href="something.md" and replace with href="/something"
+  let assert Ok(re) = regexp.from_string("href=\"(?:\\./)?([^\"]+)\\.md\"")
   regexp.match_map(re, html, fn(m) {
     case m.submatches {
       [Some(filename)] ->

@@ -14,8 +14,8 @@
   --text-comment: oklab(0.45 0 0);
 
   /* Accent colors (from logo) */
-  --accent-cyan: oklab(0.80 -0.10 -0.08);
-  --accent-cyan-hover: oklab(0.88 -0.08 -0.06);
+  --accent-cyan: oklab(0.876 -0.094 -0.036);
+  --accent-cyan-hover: oklab(0.92 -0.07 -0.02);
   --accent-red: oklab(0.68 0.15 0.10);
   --accent-orange: oklab(0.65 0.18 0.14);
   --accent-blue: oklab(0.58 -0.03 -0.10);
@@ -248,13 +248,19 @@ body {
 .content p { margin: var(--space-4) 0; }
 
 .content pre {
-  background: var(--bg-base);
+  background: var(--bg-base) !important;
   padding: var(--space-4) var(--space-5);
   overflow-x: auto;
   border-radius: var(--radius-md);
   margin: var(--space-5) 0;
   border: 1px solid var(--border);
   font-size: var(--text-sm);
+}
+
+/* Shiki generates pre.shiki */
+.content pre.shiki code {
+  background: none;
+  padding: 0;
 }
 
 .content code {
@@ -310,16 +316,18 @@ body {
   margin: var(--space-6) 0;
   width: 100%;
   max-width: 100%;
-  table-layout: fixed;
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
 }
 
 .content th, .content td {
   border: 1px solid var(--border);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   text-align: left;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  white-space: nowrap;
+}
+
+.content td:last-child {
+  white-space: normal;
 }
 
 .content th {

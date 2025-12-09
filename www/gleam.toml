@@ -1,5 +1,6 @@
 name = "www"
 version = "1.0.0"
+target = "javascript"
 
 # Fill out these fields if you intend to generate HTML documentation or publish
 # your project to the Hex package manager.
@@ -19,7 +20,7 @@ mork = ">= 1.8.0 and < 2.0.0"
 simplifile = ">= 2.3.1 and < 3.0.0"
 lustre = ">= 5.4.0 and < 6.0.0"
 gleam_regexp = ">= 1.1.1 and < 2.0.0"
-og_image = ">= 1.0.0 and < 2.0.0"
+og_image = { path = "../../og_image" }
 gleam_json = ">= 3.1.0 and < 4.0.0"
 
 [dev-dependencies]

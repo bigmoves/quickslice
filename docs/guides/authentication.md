@@ -4,25 +4,14 @@ Quickslice acts as an OAuth proxy between your app and users' Personal Data Serv
 
 ## How It Works
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant App
-    participant Quickslice
-    participant PDS
-
-    User->>App: Click Login
-    App->>Quickslice: Redirect to /oauth/authorize
-    Quickslice->>PDS: Authorization Request
-    PDS->>User: Login Prompt
-    User->>PDS: Credentials
-    PDS->>Quickslice: Auth Code
-    Quickslice->>PDS: Token Exchange
-    PDS->>Quickslice: Access Token
-    Quickslice->>App: Redirect with Code
-    App->>Quickslice: Exchange Code for Token
-    Quickslice->>App: Access Token
-```
+1. User clicks login in your app
+2. Your app redirects to Quickslice's `/oauth/authorize` endpoint
+3. Quickslice redirects to the user's PDS for authorization
+4. User enters credentials and approves your app
+5. PDS redirects back to Quickslice with an auth code
+6. Quickslice exchanges the code for tokens
+7. Quickslice redirects back to your app with a code
+8. Your app exchanges the code for an access token
 
 The access token authorizes mutations that write records to the user's repository.
 
@@ -64,13 +53,13 @@ The Quickslice client SDK handles OAuth, PKCE, DPoP, token refresh, and GraphQL 
 ### Install
 
 ```bash
-npm install quickslice-client
+npm install quickslice-client-js
 ```
 
 Or via CDN:
 
 ```html
-<script src="https://unpkg.com/quickslice-client/dist/quickslice-client.min.js"></script>
+<script src="https://unpkg.com/quickslice-client-js/dist/quickslice-client.min.js"></script>
 ```
 
 ### Initialize

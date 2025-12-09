@@ -1,0 +1,11 @@
+{
+  "name": "quickslice-www",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "gleam run"
+  },
+  "dependencies": {
+    "shiki": "^3.0.0"
+  }
+}

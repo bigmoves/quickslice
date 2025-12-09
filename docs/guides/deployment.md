@@ -160,6 +160,8 @@ docker compose up -d
 
 ## Backfill Configuration
 
+NOTE: These configurations are still a work in progress. If your container instance is running low on memory/crashes, consider reducing the number of concurrent workers and requests.
+
 Control memory usage during backfill with these variables:
 
 | Variable | Default | Description |

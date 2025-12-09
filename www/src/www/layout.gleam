@@ -62,7 +62,6 @@ pub fn wrap(
           minimap(headings),
         ]),
       ]),
-      script([attribute("src", "/highlight.js")], ""),
       script([attribute("src", "/mobile-nav.js")], ""),
       script([attribute("src", "/minimap.js")], ""),
       script([attribute("src", "/fuse.min.js")], ""),

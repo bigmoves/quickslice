@@ -13,24 +13,6 @@ Statusphere lets users:
 
 By the end of this tutorial, you'll understand how Quickslice eliminates the boilerplate of building an AppView.
 
-```mermaid
-flowchart TB
-    subgraph "What Quickslice Handles"
-        L[Lexicon Import] --> Schema[DB Schema Generation]
-        L --> Types[GraphQL Type Generation]
-        JS[Jetstream] --> Index[Record Indexing]
-        Index --> DB[(Database)]
-        Mutation[Mutations] --> PDS[PDS Write]
-        Mutation --> Optimistic[Optimistic Index]
-    end
-
-    subgraph "What You Write"
-        Query[GraphQL Queries]
-        Mut[GraphQL Mutations]
-        UI[Your UI]
-    end
-```
-
 ## Step 1: Project Setup and Importing Lexicons
 
 Every AT Protocol app starts with Lexicons. Here's the Lexicon for a status record:
