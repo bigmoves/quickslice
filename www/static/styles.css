@@ -521,8 +521,8 @@ body {
 }
 
 .page-nav-link:hover {
-  border-color: var(--accent-cyan);
-  background: var(--bg-base);
+  border-color: var(--text-dim);
+  background: oklab(0.30 0 0);
 }
 
 .page-nav-next {
