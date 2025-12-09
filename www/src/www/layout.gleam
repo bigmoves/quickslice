@@ -4,8 +4,8 @@ import gleam/option.{type Option, None, Some}
 import lustre/attribute.{attribute, class, href, rel}
 import lustre/element.{type Element}
 import lustre/element/html.{
-  a, aside, body, button, div, head, html, li, link, main, meta, nav, script,
-  span, title, ul,
+  a, aside, body, button, div, head, html, input, li, link, main, meta, nav,
+  script, span, title, ul,
 }
 import lustre/element/svg
 import www/config.{type DocPage}
@@ -65,6 +65,7 @@ pub fn wrap(
       script([attribute("src", "/highlight.js")], ""),
       script([attribute("src", "/mobile-nav.js")], ""),
       script([attribute("src", "/minimap.js")], ""),
+      script([attribute("src", "/search.js")], ""),
     ]),
   ])
 }
@@ -189,6 +190,15 @@ fn sidebar(current_path: String, pages: List(DocPage)) -> Element(Nil) {
     a([href("https://tangled.sh"), class("tangled-link")], [
       tangled_logo(),
       span([], [html.text("tangled.sh")]),
+    ]),
+    div([class("search-container")], [
+      input([
+        attribute("type", "text"),
+        attribute("placeholder", "Search docs..."),
+        attribute("id", "search-input"),
+        class("search-input"),
+      ]),
+      div([attribute("id", "search-results"), class("search-results")], []),
     ]),
     nav([], render_grouped_nav(current_path, pages)),
   ])
