@@ -194,20 +194,7 @@ Quickslice handles AT Protocol OAuth. Your frontend initiates login, and Quicksl
 5. PDS redirects back to Quickslice with an auth code
 6. Quickslice exchanges the code for tokens and establishes a session
 
-For authenticated queries and mutations, include the session token as a Bearer token:
-
-```javascript
-const response = await fetch('/graphql', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${sessionToken}`
-  },
-  body: JSON.stringify({ query, variables })
-});
-```
-
-See the [Authentication Guide](guides/authentication.md) for setup details.
+For authenticated queries and mutations, include the appropriate auth headers. The exact headers depend on which OAuth flow you're using (DPoP or Bearer token). See the [Authentication Guide](guides/authentication.md) for setup details.
 
 ## Step 6: Deploying to Railway
 

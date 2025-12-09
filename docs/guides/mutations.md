@@ -137,20 +137,17 @@ Common mutation errors:
 
 ## Authentication
 
-Include your session token in the Authorization header:
+Mutations require authentication. The headers you include depend on the OAuth flow:
 
-```javascript
-const response = await fetch('/graphql', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${sessionToken}`
-  },
-  body: JSON.stringify({
-    query: mutation,
-    variables: { status: "🎉", createdAt: new Date().toISOString() }
-  })
-});
+**DPoP flow** (recommended for browser apps):
+```
+Authorization: DPoP <access_token>
+DPoP: <dpop_proof>
 ```
 
-See the [Authentication Guide](authentication.md) for how to obtain a session token.
+**Bearer token flow**:
+```
+Authorization: Bearer <access_token>
+```
+
+See the [Authentication Guide](authentication.md) for details on each flow and how to obtain tokens.
