@@ -131,7 +131,7 @@ Response:
 
 ```
 ws://localhost:8080/graphql          # Local development
-wss://yourapp.slices.network/graphql  # Production
+wss://quickslice.example.com/graphql  # Production
 ```
 
 ### 2. Initialize
