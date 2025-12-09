@@ -6,6 +6,7 @@ import www/config.{type DocPage}
 import www/loader
 import www/og
 import www/page
+import www/search
 
 pub fn main() -> Nil {
   case loader.load_all() {
@@ -33,6 +34,9 @@ pub fn main() -> Nil {
           // Create og directory and generate single OG image
           let _ = simplifile.create_directory_all("./priv/og")
           generate_og_image()
+
+          // Generate search index
+          generate_search_index(all_pages)
         }
         Error(_) -> io.println("Build failed!")
       }
@@ -50,6 +54,14 @@ fn generate_og_image() -> Nil {
       }
     }
     Error(_) -> io.println("Failed to render OG image")
+  }
+}
+
+fn generate_search_index(pages: List(DocPage)) -> Nil {
+  let json = search.generate_index(pages)
+  case simplifile.write("./priv/search-index.json", json) {
+    Ok(_) -> io.println("Generated: priv/search-index.json")
+    Error(_) -> io.println("Failed to write search index")
   }
 }
 
