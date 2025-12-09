@@ -1,50 +1,34 @@
-# quickslice
+# Quickslice
 
-An AppView (backend service) for AT Protocol apps.
+Quickslice is an AppView for AT Protocol applications. Point it at your Lexicon schemas and you get a production GraphQL API with OAuth authentication, real-time sync from the network, and joins across record types. No resolver boilerplate, no firehose ingestion code, no database normalization logic.
 
-## What is quickslice?
+## The Problem
 
-Quickslice gives you a GraphQL API and OAuth authentication for AT Protocol data. Point it at any Lexicon schemas, and it automatically generates a complete backend: queries, mutations, joins, subscriptions, and user authentication via AT Protocol identity.
+Building an AppView from scratch means writing a lot of infrastructure code:
 
-Instead of building your own data layer and auth system, you get:
-- **GraphQL API** generated from your Lexicon definitions
-- **OAuth proxy** that authenticates users via their AT Protocol identity (Bluesky, etc.)
-- **Real-time ingestion** of records from the AT Protocol network
+- Jetstream connection and event handling
+- Record ingestion and validation
+- Database schema design and normalization
+- GraphQL schema and resolver functions
+- OAuth session management and PDS writes
+- DataLoader implementation for efficient joins
 
-## Core Concepts
+This is hundreds of lines of code before you write any application logic.
 
-### GraphQL API
+## What Quickslice Does
 
-Your Lexicon schemas become GraphQL types automatically. Query records with filtering, sorting, and pagination:
+Quickslice handles all of that automatically:
 
-```graphql
-query {
-  xyzStatusphereStatus(first: 10, sortBy: [{ field: createdAt, direction: DESC }]) {
-    edges {
-      node {
-        uri
-        did
-        status
-        createdAt
-      }
-    }
-  }
-}
-```
+- **Connects to Jetstream** and tracks the record types defined in your Lexicons
+- **Indexes records** into a normalized database with proper foreign key relationships
+- **Generates GraphQL** queries, mutations, and subscriptions from your Lexicon definitions
+- **Handles OAuth** and writes records back to the user's PDS
+- **Enables joins** by DID, URI, or strong reference, so you can query a status and its author's profile in one request
 
-### OAuth Authentication
+## When to Use It
 
-Users authenticate with their AT Protocol identity (e.g., their Bluesky account). Quickslice acts as an OAuth proxy—your app never handles credentials directly. Authenticated users can create, update, and delete their own records.
+Use Quickslice when you're building any application that needs to aggregate and query AT Protocol data. If your app reads from the network and needs a backend, Quickslice gives you one.
 
-### Records
+## Next Steps
 
-Records are the data units in AT Protocol, defined by Lexicon schemas. Quickslice ingests records from the network and stores them locally for fast querying. Mutations write records back to the user's repository (PDS).
-
-## Getting Started
-
-**Endpoints:**
-- `/graphql` - GraphQL API
-- `/graphiql` - Interactive GraphQL explorer
-- `/oauth/authorize` - OAuth authorization endpoint
-
-Queries are public. Mutations require authentication via Bearer token.
+[Build Statusphere with Quickslice](tutorial.md): A hands-on tutorial showing what Quickslice handles for you
