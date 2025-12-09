@@ -65,6 +65,7 @@ pub fn wrap(
       script([attribute("src", "/highlight.js")], ""),
       script([attribute("src", "/mobile-nav.js")], ""),
       script([attribute("src", "/minimap.js")], ""),
+      script([attribute("src", "/fuse.min.js")], ""),
       script([attribute("src", "/search.js")], ""),
     ]),
   ])
