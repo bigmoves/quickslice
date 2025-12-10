@@ -1,10 +1,18 @@
 {
   "name": "quickslice-client-js",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Quickslice client SDK for browser SPAs",
+  "type": "module",
   "main": "dist/quickslice-client.js",
   "module": "dist/quickslice-client.esm.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/quickslice-client.esm.js",
+      "require": "./dist/quickslice-client.js"
+    }
+  },
   "files": [
     "dist"
   ],
