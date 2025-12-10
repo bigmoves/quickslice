@@ -226,6 +226,11 @@ body {
   margin-bottom: var(--space-8);
 }
 
+.content h2,
+.content h3 {
+  position: relative;
+}
+
 .content h2 {
   font-family: var(--font-display);
   font-size: var(--text-2xl);
@@ -243,6 +248,26 @@ body {
   font-weight: var(--font-semibold);
   color: var(--text-primary);
   margin: var(--space-8) 0 var(--space-3);
+}
+
+.content h2 .header-anchor,
+.content h3 .header-anchor {
+  position: absolute;
+  left: -1em;
+  padding-right: 1em;
+  opacity: 0;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.content h2:hover .header-anchor,
+.content h3:hover .header-anchor {
+  opacity: 1;
+}
+
+.header-anchor:hover {
+  color: var(--accent-cyan);
 }
 
 .content p { margin: var(--space-4) 0; }

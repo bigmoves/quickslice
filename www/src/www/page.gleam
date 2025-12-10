@@ -17,6 +17,7 @@ pub fn render(page: DocPage, all_pages: List(DocPage)) -> Element(Nil) {
     |> mork.parse_with_options(page.content)
     |> mork.to_html
     |> transform_links
+    |> add_header_anchors
     |> highlighter.highlight_html
 
   let headings = extract_headings(html_content)
@@ -48,6 +49,24 @@ fn extract_headings(html: String) -> List(Heading) {
     case x {
       Some(h) -> Ok(h)
       None -> Error(Nil)
+    }
+  })
+}
+
+/// Add anchor links to h2 and h3 headings for direct linking
+fn add_header_anchors(html: String) -> String {
+  let assert Ok(re) = regexp.from_string("<h([23]) id=\"([^\"]+)\">")
+  regexp.match_map(re, html, fn(m) {
+    case m.submatches {
+      [Some(level), Some(id)] ->
+        "<h"
+        <> level
+        <> " id=\""
+        <> id
+        <> "\"><a href=\"#"
+        <> id
+        <> "\" class=\"header-anchor\">#</a>"
+      _ -> m.content
     }
   })
 }
