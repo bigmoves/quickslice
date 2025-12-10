@@ -84,6 +84,7 @@ import pages/home
 import pages/lexicons
 import pages/onboarding
 import pages/settings
+import pages/settings/types as settings_types
 import squall/unstable_registry as registry
 import squall_cache
 
@@ -402,7 +403,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       }
 
       let new_settings_model =
-        settings.Model(
+        settings_types.Model(
           ..model.settings_page_model,
           domain_authority_input: saved_domain_authority,
           alert: option.Some(#("error", friendly_error)),
@@ -603,7 +604,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         "ResetAll" -> {
           // Clear the domain authority input when reset completes
           let cleared_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               domain_authority_input: "",
             )
@@ -617,7 +618,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           // Populate all input fields with loaded settings
           case get_settings.parse_get_settings_response(response_body) {
             Ok(data) ->
-              settings.Model(
+              settings_types.Model(
                 ..model.settings_page_model,
                 domain_authority_input: data.settings.domain_authority,
                 relay_url_input: data.settings.relay_url,
@@ -1250,10 +1251,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
     SettingsPageMsg(settings_msg) -> {
       case settings_msg {
-        settings.UpdateDomainAuthorityInput(value) -> {
+        settings_types.UpdateDomainAuthorityInput(value) -> {
           // Clear alert when user starts typing
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               domain_authority_input: value,
               alert: None,
@@ -1264,10 +1265,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.SubmitBasicSettings -> {
+        settings_types.SubmitBasicSettings -> {
           // Clear any existing alert
           let cleared_settings_model =
-            settings.Model(..model.settings_page_model, alert: None)
+            settings_types.Model(..model.settings_page_model, alert: None)
 
           // Get current settings to preserve admin_dids
           let settings_vars = json.object([])
@@ -1447,12 +1448,12 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           }
         }
 
-        settings.SelectLexiconFile -> {
+        settings_types.SelectLexiconFile -> {
           // File selection is handled by browser - we'll read the file on upload
           #(model, effect.none())
         }
 
-        settings.UploadLexicons -> {
+        settings_types.UploadLexicons -> {
           // Read the file and convert to base64
           io.println("[UploadLexicons] Button clicked, creating file effect")
           let file_effect =
@@ -1468,10 +1469,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           #(model, file_effect)
         }
 
-        settings.UpdateResetConfirmation(value) -> {
+        settings_types.UpdateResetConfirmation(value) -> {
           // Clear alert when user starts typing
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               reset_confirmation: value,
               alert: None,
@@ -1482,7 +1483,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.SubmitReset -> {
+        settings_types.SubmitReset -> {
           // Execute ResetAll mutation
           let variables =
             json.object([
@@ -1514,7 +1515,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
           // Clear the confirmation field and alert after submission
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               reset_confirmation: "",
               alert: None,
@@ -1531,9 +1532,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         }
 
         // External Services Message Handlers
-        settings.UpdateRelayUrlInput(value) -> {
+        settings_types.UpdateRelayUrlInput(value) -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               relay_url_input: value,
               alert: None,
@@ -1544,9 +1545,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.UpdatePlcDirectoryUrlInput(value) -> {
+        settings_types.UpdatePlcDirectoryUrlInput(value) -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               plc_directory_url_input: value,
               alert: None,
@@ -1557,9 +1558,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.UpdateJetstreamUrlInput(value) -> {
+        settings_types.UpdateJetstreamUrlInput(value) -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               jetstream_url_input: value,
               alert: None,
@@ -1570,9 +1571,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.UpdateOAuthSupportedScopesInput(value) -> {
+        settings_types.UpdateOAuthSupportedScopesInput(value) -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               oauth_supported_scopes_input: value,
               alert: None,
@@ -1584,9 +1585,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         }
 
         // OAuth Client Message Handlers
-        settings.ToggleNewClientForm -> {
+        settings_types.ToggleNewClientForm -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               show_new_client_form: !model.settings_page_model.show_new_client_form,
             )
@@ -1596,27 +1597,33 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.UpdateNewClientName(value) -> {
+        settings_types.UpdateNewClientName(value) -> {
           let new_settings_model =
-            settings.Model(..model.settings_page_model, new_client_name: value)
+            settings_types.Model(
+              ..model.settings_page_model,
+              new_client_name: value,
+            )
           #(
             Model(..model, settings_page_model: new_settings_model),
             effect.none(),
           )
         }
 
-        settings.UpdateNewClientType(value) -> {
+        settings_types.UpdateNewClientType(value) -> {
           let new_settings_model =
-            settings.Model(..model.settings_page_model, new_client_type: value)
+            settings_types.Model(
+              ..model.settings_page_model,
+              new_client_type: value,
+            )
           #(
             Model(..model, settings_page_model: new_settings_model),
             effect.none(),
           )
         }
 
-        settings.UpdateNewClientRedirectUris(value) -> {
+        settings_types.UpdateNewClientRedirectUris(value) -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               new_client_redirect_uris: value,
             )
@@ -1626,16 +1633,19 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.UpdateNewClientScope(value) -> {
+        settings_types.UpdateNewClientScope(value) -> {
           let new_settings_model =
-            settings.Model(..model.settings_page_model, new_client_scope: value)
+            settings_types.Model(
+              ..model.settings_page_model,
+              new_client_scope: value,
+            )
           #(
             Model(..model, settings_page_model: new_settings_model),
             effect.none(),
           )
         }
 
-        settings.SubmitNewClient -> {
+        settings_types.SubmitNewClient -> {
           // Parse redirect URIs from newline-separated text
           let uris =
             string.split(
@@ -1692,7 +1702,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
           // Reset form state
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               show_new_client_form: False,
               new_client_name: "",
@@ -1711,7 +1721,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.StartEditClient(client_id) -> {
+        settings_types.StartEditClient(client_id) -> {
           // Look up client from cache to populate edit fields
           let #(_cache, result) =
             squall_cache.lookup(
@@ -1727,7 +1737,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                 list.find(data.oauth_clients, fn(c) { c.client_id == client_id })
               {
                 Ok(client) -> {
-                  settings.Model(
+                  settings_types.Model(
                     ..model.settings_page_model,
                     editing_client_id: option.Some(client_id),
                     edit_client_name: client.client_name,
@@ -1753,9 +1763,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.CancelEditClient -> {
+        settings_types.CancelEditClient -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               editing_client_id: None,
               edit_client_name: "",
@@ -1768,18 +1778,21 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.UpdateEditClientName(value) -> {
+        settings_types.UpdateEditClientName(value) -> {
           let new_settings_model =
-            settings.Model(..model.settings_page_model, edit_client_name: value)
+            settings_types.Model(
+              ..model.settings_page_model,
+              edit_client_name: value,
+            )
           #(
             Model(..model, settings_page_model: new_settings_model),
             effect.none(),
           )
         }
 
-        settings.UpdateEditClientRedirectUris(value) -> {
+        settings_types.UpdateEditClientRedirectUris(value) -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               edit_client_redirect_uris: value,
             )
@@ -1789,9 +1802,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.UpdateEditClientScope(value) -> {
+        settings_types.UpdateEditClientScope(value) -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               edit_client_scope: value,
             )
@@ -1801,7 +1814,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.SubmitEditClient -> {
+        settings_types.SubmitEditClient -> {
           case model.settings_page_model.editing_client_id {
             option.Some(client_id) -> {
               // Parse redirect URIs from newline-separated text
@@ -1861,7 +1874,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
               // Clear edit state
               let new_settings_model =
-                settings.Model(
+                settings_types.Model(
                   ..model.settings_page_model,
                   editing_client_id: None,
                   edit_client_name: "",
@@ -1882,7 +1895,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           }
         }
 
-        settings.ToggleSecretVisibility(client_id) -> {
+        settings_types.ToggleSecretVisibility(client_id) -> {
           let new_visible_secrets = case
             set.contains(model.settings_page_model.visible_secrets, client_id)
           {
@@ -1893,7 +1906,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           }
 
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               visible_secrets: new_visible_secrets,
             )
@@ -1903,9 +1916,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.ConfirmDeleteClient(client_id) -> {
+        settings_types.ConfirmDeleteClient(client_id) -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               delete_confirm_client_id: option.Some(client_id),
             )
@@ -1915,9 +1928,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.CancelDeleteClient -> {
+        settings_types.CancelDeleteClient -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               delete_confirm_client_id: None,
             )
@@ -1927,7 +1940,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.SubmitDeleteClient -> {
+        settings_types.SubmitDeleteClient -> {
           case model.settings_page_model.delete_confirm_client_id {
             option.Some(client_id) -> {
               let variables =
@@ -1967,7 +1980,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
               // Clear delete confirmation state
               let new_settings_model =
-                settings.Model(
+                settings_types.Model(
                   ..model.settings_page_model,
                   delete_confirm_client_id: None,
                 )
@@ -1986,16 +1999,19 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         }
 
         // Admin management messages
-        settings.UpdateNewAdminDid(value) -> {
+        settings_types.UpdateNewAdminDid(value) -> {
           let new_settings_model =
-            settings.Model(..model.settings_page_model, new_admin_did: value)
+            settings_types.Model(
+              ..model.settings_page_model,
+              new_admin_did: value,
+            )
           #(
             Model(..model, settings_page_model: new_settings_model),
             effect.none(),
           )
         }
 
-        settings.SubmitAddAdmin -> {
+        settings_types.SubmitAddAdmin -> {
           // Get current settings to build updated admin_dids list
           let settings_vars = json.object([])
           let #(_cache, settings_result) =
@@ -2060,7 +2076,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
               // Clear input
               let new_settings_model =
-                settings.Model(..model.settings_page_model, new_admin_did: "")
+                settings_types.Model(
+                  ..model.settings_page_model,
+                  new_admin_did: "",
+                )
 
               #(
                 Model(
@@ -2078,9 +2097,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           }
         }
 
-        settings.ConfirmRemoveAdmin(did) -> {
+        settings_types.ConfirmRemoveAdmin(did) -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               remove_confirm_did: option.Some(did),
             )
@@ -2090,9 +2109,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.CancelRemoveAdmin -> {
+        settings_types.CancelRemoveAdmin -> {
           let new_settings_model =
-            settings.Model(
+            settings_types.Model(
               ..model.settings_page_model,
               remove_confirm_did: option.None,
             )
@@ -2102,7 +2121,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        settings.SubmitRemoveAdmin -> {
+        settings_types.SubmitRemoveAdmin -> {
           // Get current settings and remove the confirmed DID
           case model.settings_page_model.remove_confirm_did {
             option.Some(did_to_remove) -> {
@@ -2176,7 +2195,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
                   // Clear confirm state
                   let new_settings_model =
-                    settings.Model(
+                    settings_types.Model(
                       ..model.settings_page_model,
                       remove_confirm_did: option.None,
                     )
@@ -2229,7 +2248,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
       // Clear the selected file
       let new_settings_model =
-        settings.Model(..model.settings_page_model, selected_file: None)
+        settings_types.Model(..model.settings_page_model, selected_file: None)
 
       #(
         Model(
