@@ -36,7 +36,6 @@ import handlers/oauth/par as oauth_par_handler
 import handlers/oauth/register as oauth_register_handler
 import handlers/oauth/token as oauth_token_handler
 import handlers/upload as upload_handler
-import importer
 import jetstream_consumer
 import lib/oauth/did_cache
 import logging
@@ -66,53 +65,8 @@ pub type Context {
 pub fn main() {
   // Check for CLI arguments
   case argv.load().arguments {
-    ["import", directory] -> run_import_command(directory)
     ["backfill"] -> run_backfill_command()
     _ -> start_server_normally()
-  }
-}
-
-fn run_import_command(directory: String) {
-  logging.log(logging.Info, "Importing lexicons from: " <> directory)
-  logging.log(logging.Info, "")
-
-  // Get database URL from environment variable or use default
-  let database_url = case envoy.get("DATABASE_URL") {
-    Ok(url) -> url
-    Error(_) -> "quickslice.db"
-  }
-
-  // Initialize the database
-  let assert Ok(db) = connection.initialize(database_url)
-
-  case importer.import_lexicons_from_directory(directory, db) {
-    Ok(stats) -> {
-      logging.log(logging.Info, "")
-      logging.log(logging.Info, "Import complete!")
-      logging.log(
-        logging.Info,
-        "   Total files: " <> int.to_string(stats.total),
-      )
-      logging.log(
-        logging.Info,
-        "   Imported: " <> int.to_string(stats.imported),
-      )
-      logging.log(logging.Info, "   Failed: " <> int.to_string(stats.failed))
-
-      case stats.errors {
-        [] -> Nil
-        errors -> {
-          logging.log(logging.Info, "")
-          logging.log(logging.Warning, "Errors:")
-          list.each(errors, fn(err) {
-            logging.log(logging.Warning, "   " <> err)
-          })
-        }
-      }
-    }
-    Error(err) -> {
-      logging.log(logging.Error, "Import failed: " <> err)
-    }
   }
 }
 

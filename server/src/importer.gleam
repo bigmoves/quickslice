@@ -82,6 +82,9 @@ pub fn import_lexicons_from_directory(
   // If validation failed, return error immediately
   use _ <- result.try(validation_result)
 
+  // Wipe existing lexicons before importing new set
+  let _ = lexicons.delete_all(db)
+
   // Validation succeeded, import each lexicon
   let results =
     file_contents

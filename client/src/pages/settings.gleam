@@ -500,8 +500,13 @@ fn lexicons_section(model: Model) -> Element(Msg) {
           event.on_input(fn(_) { SelectLexiconFile }),
         ]),
       ]),
+      html.p([attribute.class("text-sm text-zinc-500 mb-2")], [
+        element.text("Upload a ZIP file containing your lexicon JSON files."),
+      ]),
       html.p([attribute.class("text-sm text-zinc-500 mb-4")], [
-        element.text("Upload a ZIP file containing lexicon JSON files."),
+        element.text(
+          "NOTE: If you're swapping out lexicons with a totally new set, consider using RESET instead to clear all records as well.",
+        ),
       ]),
       html.div([attribute.class("flex gap-3")], [
         button.button(disabled: False, on_click: UploadLexicons, text: "Upload"),
