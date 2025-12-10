@@ -8,6 +8,7 @@ import { graphqlRequest } from './graphql';
 export interface QuicksliceClientOptions {
   server: string;
   clientId: string;
+  redirectUri?: string;
 }
 
 export interface User {
@@ -17,6 +18,7 @@ export interface User {
 export class QuicksliceClient {
   private server: string;
   private clientId: string;
+  private redirectUri?: string;
   private graphqlUrl: string;
   private authorizeUrl: string;
   private tokenUrl: string;
@@ -25,6 +27,7 @@ export class QuicksliceClient {
   constructor(options: QuicksliceClientOptions) {
     this.server = options.server.replace(/\/$/, ''); // Remove trailing slash
     this.clientId = options.clientId;
+    this.redirectUri = options.redirectUri;
 
     this.graphqlUrl = `${this.server}/graphql`;
     this.authorizeUrl = `${this.server}/oauth/authorize`;
@@ -48,7 +51,10 @@ export class QuicksliceClient {
    */
   async loginWithRedirect(options: LoginOptions = {}): Promise<void> {
     await this.init();
-    await initiateLogin(this.authorizeUrl, this.clientId, options);
+    await initiateLogin(this.authorizeUrl, this.clientId, {
+      ...options,
+      redirectUri: options.redirectUri || this.redirectUri,
+    });
   }
 
   /**

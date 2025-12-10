@@ -6,6 +6,7 @@ import { storeTokens } from './tokens';
 
 export interface LoginOptions {
   handle?: string;
+  redirectUri?: string;
 }
 
 /**
@@ -20,13 +21,14 @@ export async function initiateLogin(
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   const state = generateState();
 
+  // Build redirect URI (use provided or derive from current page)
+  const redirectUri = options.redirectUri || (window.location.origin + window.location.pathname);
+
   // Store for callback
   storage.set(STORAGE_KEYS.codeVerifier, codeVerifier);
   storage.set(STORAGE_KEYS.oauthState, state);
   storage.set(STORAGE_KEYS.clientId, clientId);
-
-  // Build redirect URI (current page without query params)
-  const redirectUri = window.location.origin + window.location.pathname;
+  storage.set(STORAGE_KEYS.redirectUri, redirectUri);
 
   // Build authorization URL
   const params = new URLSearchParams({
@@ -74,9 +76,9 @@ export async function handleOAuthCallback(tokenUrl: string): Promise<boolean> {
   // Get stored values
   const codeVerifier = storage.get(STORAGE_KEYS.codeVerifier);
   const clientId = storage.get(STORAGE_KEYS.clientId);
-  const redirectUri = window.location.origin + window.location.pathname;
+  const redirectUri = storage.get(STORAGE_KEYS.redirectUri);
 
-  if (!codeVerifier || !clientId) {
+  if (!codeVerifier || !clientId || !redirectUri) {
     throw new Error('Missing OAuth session data');
   }
 
@@ -113,6 +115,7 @@ export async function handleOAuthCallback(tokenUrl: string): Promise<boolean> {
   // Clean up OAuth state
   storage.remove(STORAGE_KEYS.codeVerifier);
   storage.remove(STORAGE_KEYS.oauthState);
+  storage.remove(STORAGE_KEYS.redirectUri);
 
   // Clear URL params
   window.history.replaceState({}, document.title, window.location.pathname);

@@ -2,6 +2,7 @@ import { LoginOptions } from './auth/oauth';
 export interface QuicksliceClientOptions {
     server: string;
     clientId: string;
+    redirectUri?: string;
 }
 export interface User {
     did: string;
@@ -9,6 +10,7 @@ export interface User {
 export declare class QuicksliceClient {
     private server;
     private clientId;
+    private redirectUri?;
     private graphqlUrl;
     private authorizeUrl;
     private tokenUrl;

@@ -6,7 +6,8 @@ var STORAGE_KEYS = {
   clientId: "quickslice_client_id",
   userDid: "quickslice_user_did",
   codeVerifier: "quickslice_code_verifier",
-  oauthState: "quickslice_oauth_state"
+  oauthState: "quickslice_oauth_state",
+  redirectUri: "quickslice_redirect_uri"
 };
 
 // src/storage/storage.ts
@@ -312,10 +313,11 @@ async function initiateLogin(authorizeUrl, clientId, options = {}) {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   const state = generateState();
+  const redirectUri = options.redirectUri || window.location.origin + window.location.pathname;
   storage.set(STORAGE_KEYS.codeVerifier, codeVerifier);
   storage.set(STORAGE_KEYS.oauthState, state);
   storage.set(STORAGE_KEYS.clientId, clientId);
-  const redirectUri = window.location.origin + window.location.pathname;
+  storage.set(STORAGE_KEYS.redirectUri, redirectUri);
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -348,8 +350,8 @@ async function handleOAuthCallback(tokenUrl) {
   }
   const codeVerifier = storage.get(STORAGE_KEYS.codeVerifier);
   const clientId = storage.get(STORAGE_KEYS.clientId);
-  const redirectUri = window.location.origin + window.location.pathname;
-  if (!codeVerifier || !clientId) {
+  const redirectUri = storage.get(STORAGE_KEYS.redirectUri);
+  if (!codeVerifier || !clientId || !redirectUri) {
     throw new Error("Missing OAuth session data");
   }
   const dpopProof = await createDPoPProof("POST", tokenUrl);
@@ -377,6 +379,7 @@ async function handleOAuthCallback(tokenUrl) {
   storeTokens(tokens);
   storage.remove(STORAGE_KEYS.codeVerifier);
   storage.remove(STORAGE_KEYS.oauthState);
+  storage.remove(STORAGE_KEYS.redirectUri);
   window.history.replaceState({}, document.title, window.location.pathname);
   return true;
 }
@@ -423,6 +426,7 @@ var QuicksliceClient = class {
     this.initialized = false;
     this.server = options.server.replace(/\/$/, "");
     this.clientId = options.clientId;
+    this.redirectUri = options.redirectUri;
     this.graphqlUrl = `${this.server}/graphql`;
     this.authorizeUrl = `${this.server}/oauth/authorize`;
     this.tokenUrl = `${this.server}/oauth/token`;
@@ -440,7 +444,10 @@ var QuicksliceClient = class {
    */
   async loginWithRedirect(options = {}) {
     await this.init();
-    await initiateLogin(this.authorizeUrl, this.clientId, options);
+    await initiateLogin(this.authorizeUrl, this.clientId, {
+      ...options,
+      redirectUri: options.redirectUri || this.redirectUri
+    });
   }
   /**
    * Handle OAuth callback after redirect

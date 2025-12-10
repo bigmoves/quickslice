@@ -23,6 +23,7 @@ npm install quickslice-client-js
 const client = await QuicksliceClient.createQuicksliceClient({
   server: 'https://api.example.com',
   clientId: 'client_abc123',
+  redirectUri: 'https://yourapp.com/oauth/callback', // optional
 });
 
 // Handle OAuth callback (on page load)
@@ -79,6 +80,7 @@ Factory function to create and initialize a client.
 Options:
 - `server` (required): Quickslice server URL
 - `clientId` (required): Pre-registered client ID
+- `redirectUri` (optional): OAuth callback URL. Defaults to current page URL if omitted. Useful when you have a dedicated callback route.
 
 ### `QuicksliceClient`
 

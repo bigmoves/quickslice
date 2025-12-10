@@ -9,6 +9,7 @@ export const STORAGE_KEYS = {
   userDid: 'quickslice_user_did',
   codeVerifier: 'quickslice_code_verifier',
   oauthState: 'quickslice_oauth_state',
+  redirectUri: 'quickslice_redirect_uri',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

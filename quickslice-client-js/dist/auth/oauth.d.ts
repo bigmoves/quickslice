@@ -1,5 +1,6 @@
 export interface LoginOptions {
     handle?: string;
+    redirectUri?: string;
 }
 /**
  * Initiate OAuth login flow with PKCE

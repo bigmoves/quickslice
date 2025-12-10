@@ -9,5 +9,6 @@ export declare const STORAGE_KEYS: {
     readonly userDid: "quickslice_user_did";
     readonly codeVerifier: "quickslice_code_verifier";
     readonly oauthState: "quickslice_oauth_state";
+    readonly redirectUri: "quickslice_redirect_uri";
 };
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
