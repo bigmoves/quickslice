@@ -40,6 +40,7 @@ pub fn build_schema_from_db(
   db: sqlight.Connection,
   did_cache: Subject(did_cache.Message),
   signing_key: option.Option(String),
+  atp_client_id: String,
   plc_url: String,
   domain_authority: String,
 ) -> Result(schema.Schema, String) {
@@ -381,6 +382,7 @@ pub fn build_schema_from_db(
           db: db,
           did_cache: did_cache,
           signing_key: signing_key,
+          atp_client_id: atp_client_id,
           plc_url: plc_url,
           collection_ids: collection_ids,
           external_collection_ids: external_collection_ids,
@@ -490,6 +492,7 @@ pub fn execute_query_with_db(
   auth_token: Result(String, Nil),
   did_cache: Subject(did_cache.Message),
   signing_key: option.Option(String),
+  atp_client_id: String,
   plc_url: String,
 ) -> Result(String, String) {
   // Get domain authority from database
@@ -503,6 +506,7 @@ pub fn execute_query_with_db(
     db,
     did_cache,
     signing_key,
+    atp_client_id,
     plc_url,
     domain_authority,
   ))

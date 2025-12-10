@@ -184,6 +184,7 @@ pub fn handle_websocket(
   db: sqlight.Connection,
   did_cache: Subject(did_cache.Message),
   signing_key: Option(String),
+  atp_client_id: String,
   plc_url: String,
   domain_authority: String,
 ) -> response.Response(ResponseData) {
@@ -198,6 +199,7 @@ pub fn handle_websocket(
           db,
           did_cache,
           signing_key,
+          atp_client_id,
           plc_url,
           domain_authority,
         )

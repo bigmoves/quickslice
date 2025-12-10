@@ -204,6 +204,7 @@ pub fn did_join_sortby_createdat_desc_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -349,6 +350,7 @@ pub fn did_join_sortby_createdat_asc_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -469,6 +471,7 @@ pub fn did_join_where_filter_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -598,6 +601,7 @@ pub fn did_join_sortby_where_first_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -767,6 +771,7 @@ pub fn user_query_pattern_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 

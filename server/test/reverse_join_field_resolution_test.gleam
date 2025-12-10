@@ -351,6 +351,7 @@ pub fn reverse_join_includes_forward_join_fields_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -432,6 +433,7 @@ pub fn integer_field_resolves_correctly_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -593,6 +595,7 @@ pub fn nested_query_profile_to_photos_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 

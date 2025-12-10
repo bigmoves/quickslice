@@ -201,7 +201,12 @@ pub fn refresh_tokens(
   ))
 
   // Build refresh request
-  let body = "grant_type=refresh_token" <> "&refresh_token=" <> refresh_token
+  let body =
+    "grant_type=refresh_token"
+    <> "&refresh_token="
+    <> uri.percent_encode(refresh_token)
+    <> "&client_id="
+    <> uri.percent_encode(client_id)
 
   // Make token request
   use token_response <- result.try(fetch_tokens(

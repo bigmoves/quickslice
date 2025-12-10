@@ -115,6 +115,7 @@ pub fn get_atp_session(
   did_cache: Subject(did_cache.Message),
   token: String,
   signing_key: Option(String),
+  atp_client_id: String,
 ) -> Result(AtprotoSession, AuthError) {
   // Look up access token to get session_id and iteration
   use access_token <- result.try(case oauth_access_tokens.get(conn, token) {
@@ -166,11 +167,20 @@ pub fn get_atp_session(
           conn,
           did_cache,
           atp_session,
-          access_token.client_id,
+          atp_client_id,
           signing_key,
         )
       {
-        Ok(refreshed) -> Ok(refreshed)
+        Ok(refreshed) -> {
+          // Update the access token's session_iteration to point to the new ATP session
+          let _ =
+            oauth_access_tokens.update_session_iteration(
+              conn,
+              token,
+              refreshed.iteration,
+            )
+          Ok(refreshed)
+        }
         Error(err) -> Error(RefreshFailed(string.inspect(err)))
       }
     }

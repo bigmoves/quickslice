@@ -27,11 +27,28 @@ pub fn handle_graphql_request(
   db: sqlight.Connection,
   did_cache: Subject(did_cache.Message),
   signing_key: option.Option(String),
+  atp_client_id: String,
   plc_url: String,
 ) -> wisp.Response {
   case req.method {
-    http.Post -> handle_graphql_post(req, db, did_cache, signing_key, plc_url)
-    http.Get -> handle_graphql_get(req, db, did_cache, signing_key, plc_url)
+    http.Post ->
+      handle_graphql_post(
+        req,
+        db,
+        did_cache,
+        signing_key,
+        atp_client_id,
+        plc_url,
+      )
+    http.Get ->
+      handle_graphql_get(
+        req,
+        db,
+        did_cache,
+        signing_key,
+        atp_client_id,
+        plc_url,
+      )
     _ -> method_not_allowed_response()
   }
 }
@@ -41,6 +58,7 @@ fn handle_graphql_post(
   db: sqlight.Connection,
   did_cache: Subject(did_cache.Message),
   signing_key: option.Option(String),
+  atp_client_id: String,
   plc_url: String,
 ) -> wisp.Response {
   // Extract Authorization header (optional for queries, required for mutations)
@@ -64,6 +82,7 @@ fn handle_graphql_post(
                 auth_token,
                 did_cache,
                 signing_key,
+                atp_client_id,
                 plc_url,
               )
             }
@@ -82,6 +101,7 @@ fn handle_graphql_get(
   db: sqlight.Connection,
   did_cache: Subject(did_cache.Message),
   signing_key: option.Option(String),
+  atp_client_id: String,
   plc_url: String,
 ) -> wisp.Response {
   // Extract Authorization header (optional for queries, required for mutations)
@@ -101,6 +121,7 @@ fn handle_graphql_get(
         auth_token,
         did_cache,
         signing_key,
+        atp_client_id,
         plc_url,
       )
     Error(_) -> bad_request_response("Missing 'query' parameter")
@@ -114,6 +135,7 @@ fn execute_graphql_query(
   auth_token: Result(String, Nil),
   did_cache: Subject(did_cache.Message),
   signing_key: option.Option(String),
+  atp_client_id: String,
   plc_url: String,
 ) -> wisp.Response {
   // Use the new pure Gleam GraphQL implementation
@@ -125,6 +147,7 @@ fn execute_graphql_query(
       auth_token,
       did_cache,
       signing_key,
+      atp_client_id,
       plc_url,
     )
   {

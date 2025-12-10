@@ -134,6 +134,7 @@ pub fn introspection_query_includes_did_join_fields_test() {
       db,
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -222,6 +223,7 @@ pub fn introspection_query_profile_join_fields_test() {
       db,
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -391,6 +393,7 @@ pub fn introspection_query_did_join_field_structure_test() {
       db,
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -515,6 +518,7 @@ pub fn did_join_field_query_execution_test() {
       db,
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 

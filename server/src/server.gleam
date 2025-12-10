@@ -58,6 +58,8 @@ pub type Context {
     did_cache: process.Subject(did_cache.Message),
     oauth_signing_key: option.Option(String),
     oauth_loopback_mode: Bool,
+    /// AT Protocol client_id for OAuth (metadata URL or loopback client_id)
+    atp_client_id: String,
   )
 }
 
@@ -378,6 +380,16 @@ fn start_server(
   let assert Ok(did_cache_subject) = did_cache.start()
   logging.log(logging.Info, "[server] DID cache actor initialized")
 
+  // Compute ATP client_id once (used for token refresh)
+  let atp_client_id = case oauth_loopback_mode {
+    True ->
+      build_loopback_client_id(
+        external_base_url <> "/oauth/atp/callback",
+        "atproto transition:generic",
+      )
+    False -> external_base_url <> "/oauth-client-metadata.json"
+  }
+
   let ctx =
     Context(
       db: db,
@@ -387,6 +399,7 @@ fn start_server(
       did_cache: did_cache_subject,
       oauth_signing_key: oauth_signing_key,
       oauth_loopback_mode: oauth_loopback_mode,
+      atp_client_id: atp_client_id,
     )
 
   let handler = fn(req) { handle_request(req, ctx, static_directory) }
@@ -426,6 +439,7 @@ fn start_server(
                   ctx.db,
                   ctx.did_cache,
                   ctx.oauth_signing_key,
+                  ctx.atp_client_id,
                   config_repo.get_plc_directory_url(ctx.db),
                   domain_authority,
                 )
@@ -527,6 +541,7 @@ fn handle_request(
         ctx.db,
         ctx.did_cache,
         ctx.oauth_signing_key,
+        ctx.atp_client_id,
         config_repo.get_plc_directory_url(ctx.db),
       )
     ["graphiql"] ->

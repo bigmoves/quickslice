@@ -177,6 +177,7 @@ pub fn graphql_post_request_with_records_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -251,6 +252,7 @@ pub fn graphql_post_request_empty_results_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -293,6 +295,7 @@ pub fn graphql_get_request_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -329,6 +332,7 @@ pub fn graphql_invalid_json_request_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -369,6 +373,7 @@ pub fn graphql_missing_query_field_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -401,6 +406,7 @@ pub fn graphql_method_not_allowed_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -501,6 +507,7 @@ pub fn graphql_multiple_lexicons_test() {
       db,
       cache1,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -553,6 +560,7 @@ pub fn graphql_multiple_lexicons_test() {
       db,
       cache2,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -622,6 +630,7 @@ pub fn graphql_record_limit_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -736,6 +745,7 @@ pub fn graphql_actor_handle_lookup_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -852,6 +862,7 @@ pub fn graphql_filter_by_actor_handle_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 

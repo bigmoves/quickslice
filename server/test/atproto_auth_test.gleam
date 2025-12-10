@@ -155,7 +155,7 @@ pub fn get_atp_session_no_session_id_returns_error_test() {
   let assert Ok(cache) = did_cache.start()
 
   let result =
-    atproto_auth.get_atp_session(conn, cache, "no-session-token", None)
+    atproto_auth.get_atp_session(conn, cache, "no-session-token", None, "")
 
   result |> should.be_error
   let assert Error(err) = result
@@ -205,7 +205,7 @@ pub fn get_atp_session_not_exchanged_returns_error_test() {
   let assert Ok(cache) = did_cache.start()
 
   let result =
-    atproto_auth.get_atp_session(conn, cache, "has-session-token", None)
+    atproto_auth.get_atp_session(conn, cache, "has-session-token", None, "")
 
   result |> should.be_error
   let assert Error(err) = result
@@ -254,7 +254,7 @@ pub fn get_atp_session_with_exchange_error_returns_error_test() {
   let assert Ok(cache) = did_cache.start()
 
   let result =
-    atproto_auth.get_atp_session(conn, cache, "error-session-token", None)
+    atproto_auth.get_atp_session(conn, cache, "error-session-token", None, "")
 
   result |> should.be_error
   let assert Error(err) = result

@@ -233,6 +233,7 @@ pub fn forward_join_at_uri_resolves_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -330,6 +331,7 @@ pub fn forward_join_strong_ref_resolves_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -444,6 +446,7 @@ pub fn reverse_join_resolves_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -569,6 +572,7 @@ pub fn dataloader_batches_forward_joins_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -698,6 +702,7 @@ pub fn reverse_join_with_strong_ref_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -837,6 +842,7 @@ pub fn forward_join_union_inline_fragments_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -986,6 +992,7 @@ pub fn did_join_to_literal_self_returns_single_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -1103,6 +1110,7 @@ pub fn did_join_to_non_literal_self_returns_list_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -1238,6 +1246,7 @@ pub fn did_join_batches_queries_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -1499,6 +1508,7 @@ pub fn nested_forward_join_resolves_reply_parent_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 

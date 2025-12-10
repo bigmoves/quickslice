@@ -267,6 +267,7 @@ pub fn graphql_simple_aggregation_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -315,6 +316,7 @@ pub fn graphql_multi_field_aggregation_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -360,6 +362,7 @@ pub fn graphql_aggregation_with_where_test() {
       db,
       cache2,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -389,6 +392,7 @@ pub fn graphql_aggregation_with_where_test() {
       db,
       cache3,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -419,6 +423,7 @@ pub fn graphql_aggregation_with_where_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -476,6 +481,7 @@ pub fn graphql_aggregation_with_order_by_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -518,6 +524,7 @@ pub fn graphql_aggregation_with_limit_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -560,6 +567,7 @@ pub fn graphql_status_aggregation_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -658,6 +666,7 @@ pub fn graphql_table_column_aggregation_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 
@@ -702,6 +711,7 @@ pub fn graphql_empty_aggregation_test() {
       db,
       cache,
       None,
+      "",
       "https://plc.directory",
     )
 

@@ -145,6 +145,7 @@ pub fn graphql_total_count_basic_test() {
       db,
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -253,6 +254,7 @@ pub fn graphql_total_count_with_filter_test() {
       db,
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -315,6 +317,7 @@ pub fn graphql_total_count_empty_result_test() {
       db,
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -390,6 +393,7 @@ pub fn graphql_total_count_with_pagination_test() {
       db,
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 

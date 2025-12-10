@@ -30,6 +30,7 @@ pub type MutationContext {
     db: sqlight.Connection,
     did_cache: Subject(did_cache.Message),
     signing_key: option.Option(String),
+    atp_client_id: String,
     plc_url: String,
     collection_ids: List(String),
     external_collection_ids: List(String),
@@ -360,6 +361,7 @@ pub fn create_resolver_factory(
         ctx.did_cache,
         token,
         ctx.signing_key,
+        ctx.atp_client_id,
       )
       |> result.map_error(fn(err) {
         case err {
@@ -575,6 +577,7 @@ pub fn update_resolver_factory(
         ctx.did_cache,
         token,
         ctx.signing_key,
+        ctx.atp_client_id,
       )
       |> result.map_error(fn(err) {
         case err {
@@ -764,6 +767,7 @@ pub fn delete_resolver_factory(
         ctx.did_cache,
         token,
         ctx.signing_key,
+        ctx.atp_client_id,
       )
       |> result.map_error(fn(err) {
         case err {
@@ -903,6 +907,7 @@ pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
         ctx.did_cache,
         token,
         ctx.signing_key,
+        ctx.atp_client_id,
       )
       |> result.map_error(fn(err) {
         case err {

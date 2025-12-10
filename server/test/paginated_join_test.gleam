@@ -236,6 +236,7 @@ pub fn did_join_first_one_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -354,6 +355,7 @@ pub fn did_join_first_two_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -470,6 +472,7 @@ pub fn reverse_join_first_one_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -587,6 +590,7 @@ pub fn did_join_default_pagination_test() {
       Error(Nil),
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 

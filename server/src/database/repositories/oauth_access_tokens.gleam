@@ -119,6 +119,24 @@ pub fn get_by_session_id(
   }
 }
 
+/// Update session iteration for an access token (after ATP token refresh)
+pub fn update_session_iteration(
+  conn: sqlight.Connection,
+  token_value: String,
+  new_iteration: Int,
+) -> Result(Nil, sqlight.Error) {
+  let sql =
+    "UPDATE oauth_access_token SET session_iteration = ? WHERE token = ?"
+
+  use _ <- result.try(sqlight.query(
+    sql,
+    on: conn,
+    with: [sqlight.int(new_iteration), sqlight.text(token_value)],
+    expecting: decode.dynamic,
+  ))
+  Ok(Nil)
+}
+
 /// Revoke an access token
 pub fn revoke(
   conn: sqlight.Connection,

@@ -126,6 +126,7 @@ pub fn blob_field_query_test() {
       db,
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -222,6 +223,7 @@ pub fn blob_field_with_different_presets_test() {
       db,
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -293,6 +295,7 @@ pub fn blob_field_default_preset_test() {
       db,
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 
@@ -356,6 +359,7 @@ pub fn blob_field_null_when_missing_test() {
       db,
       cache,
       option.None,
+      "",
       "https://plc.directory",
     )
 

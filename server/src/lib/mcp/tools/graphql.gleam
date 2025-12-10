@@ -23,6 +23,8 @@ pub fn execute_query(
     // No auth token for MCP queries
     did_cache,
     signing_key,
+    "",
+    // Empty atp_client_id - MCP queries don't do mutations that need ATP refresh
     plc_url,
   ))
 
