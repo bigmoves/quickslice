@@ -1,6 +1,6 @@
 # Tutorial: Build Statusphere with Quickslice
 
-We're building Statusphere, an app where users share their current status as an emoji. This is the same app from the [AT Protocol docs](https://atproto.com/guides/applications), but using Quickslice as the AppView.
+Let's build Statusphere, an app where users share their current status as an emoji. This is the same app from the [AT Protocol docs](https://atproto.com/guides/applications), but using Quickslice as the AppView.
 
 Along the way, we'll show what you'd write manually versus what Quickslice handles automatically.
 
@@ -52,7 +52,7 @@ When you import this Lexicon into Quickslice, several things happen automaticall
 | Without Quickslice | With Quickslice |
 |---|---|
 | Write Jetstream connection code | Import your Lexicon |
-| Filter events for your collection | `lexicons/xyz.statusphere.status.json` |
+| Filter events for your collection | `xyz.statusphere.status` |
 | Validate incoming records | |
 | Design database schema | Quickslice handles the rest. |
 | Write ingestion logic | |
@@ -179,13 +179,13 @@ When this mutation runs, Quickslice:
 |---|---|
 | Get OAuth session/agent | Call the mutation: |
 | Construct record with $type | |
-| Call putRecord on PDS | `createXyzStatusphereStatus(input: { status: "👍" })` |
+| Call putRecord XRPC on the PDS | `createXyzStatusphereStatus(input: { status: "👍" })` |
 | Optimistically update local DB | |
 | Handle errors | |
 
 ## Step 5: Authentication
 
-Quickslice handles AT Protocol OAuth. Your frontend initiates login, and Quickslice manages the authorization flow:
+Quickslice bridges AT Protocol OAuth. Your frontend initiates login, and Quickslice manages the authorization flow:
 
 1. User enters their handle (e.g., `alice.bsky.social`)
 2. Your app redirects to Quickslice's OAuth endpoint
