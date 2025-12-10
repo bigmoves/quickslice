@@ -8,6 +8,7 @@ import backfill
 import database/repositories/lexicons
 import database/repositories/records
 import dpop
+import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
@@ -54,6 +55,227 @@ fn graphql_value_to_json_value(val: value.Value) -> json.Json {
         }),
       )
     }
+  }
+}
+
+/// Get blob field paths from a lexicon for a given collection
+/// Returns a list of paths, where each path is a list of field names
+/// e.g., [["avatar"], ["banner"], ["nested", "image"]]
+fn get_blob_paths(
+  collection: String,
+  lexicons: List(json.Json),
+) -> List(List(String)) {
+  // Find the lexicon for this collection
+  let lexicon =
+    list.find(lexicons, fn(lex) {
+      case json.parse(json.to_string(lex), decode.at(["id"], decode.string)) {
+        Ok(id) -> id == collection
+        Error(_) -> False
+      }
+    })
+
+  case lexicon {
+    Ok(lex) -> {
+      // Get defs.main.record.properties
+      let properties_decoder =
+        decode.at(
+          ["defs", "main", "record", "properties"],
+          decode.dict(decode.string, decode.dynamic),
+        )
+      case json.parse(json.to_string(lex), properties_decoder) {
+        Ok(properties) -> extract_blob_paths_from_properties(properties, [])
+        Error(_) -> []
+      }
+    }
+    Error(_) -> []
+  }
+}
+
+/// Recursively extract blob paths from lexicon properties
+fn extract_blob_paths_from_properties(
+  properties: dict.Dict(String, dynamic.Dynamic),
+  current_path: List(String),
+) -> List(List(String)) {
+  dict.fold(properties, [], fn(acc, field_name, field_def) {
+    let field_path = list.append(current_path, [field_name])
+
+    // Check field type
+    let type_result = decode.run(field_def, decode.at(["type"], decode.string))
+
+    case type_result {
+      Ok("blob") -> {
+        // Found a blob field
+        [field_path, ..acc]
+      }
+      Ok("object") -> {
+        // Recurse into nested object properties
+        let nested_props_result =
+          decode.run(
+            field_def,
+            decode.at(
+              ["properties"],
+              decode.dict(decode.string, decode.dynamic),
+            ),
+          )
+        case nested_props_result {
+          Ok(nested_props) -> {
+            let nested_paths =
+              extract_blob_paths_from_properties(nested_props, field_path)
+            list.append(nested_paths, acc)
+          }
+          Error(_) -> acc
+        }
+      }
+      Ok("array") -> {
+        // Check if array items are blobs or objects containing blobs
+        let items_type_result =
+          decode.run(field_def, decode.at(["items", "type"], decode.string))
+        case items_type_result {
+          Ok("blob") -> {
+            // Array of blobs - the path points to the array
+            [field_path, ..acc]
+          }
+          Ok("object") -> {
+            // Array of objects - recurse into item properties
+            let item_props_result =
+              decode.run(
+                field_def,
+                decode.at(
+                  ["items", "properties"],
+                  decode.dict(decode.string, decode.dynamic),
+                ),
+              )
+            case item_props_result {
+              Ok(item_props) -> {
+                let nested_paths =
+                  extract_blob_paths_from_properties(item_props, field_path)
+                list.append(nested_paths, acc)
+              }
+              Error(_) -> acc
+            }
+          }
+          _ -> acc
+        }
+      }
+      _ -> acc
+    }
+  })
+}
+
+/// Transform blob inputs in a value from GraphQL format to AT Protocol format
+/// GraphQL: { ref: "bafyrei...", mimeType: "image/jpeg", size: 12345 }
+/// AT Proto: { "$type": "blob", ref: { "$link": "bafyrei..." }, mimeType: "image/jpeg", size: 12345 }
+fn transform_blob_inputs(
+  input: value.Value,
+  blob_paths: List(List(String)),
+) -> value.Value {
+  transform_value_at_paths(input, blob_paths, [])
+}
+
+/// Recursively transform values at blob paths
+fn transform_value_at_paths(
+  val: value.Value,
+  blob_paths: List(List(String)),
+  current_path: List(String),
+) -> value.Value {
+  case val {
+    value.Object(fields) -> {
+      // Check if current path matches any blob path exactly
+      let is_blob_path =
+        list.any(blob_paths, fn(path) {
+          path == current_path && current_path != []
+        })
+
+      case is_blob_path {
+        True -> {
+          // Transform this object from BlobInput to AT Protocol format
+          transform_blob_object(fields)
+        }
+        False -> {
+          // Recurse into object fields
+          value.Object(
+            list.map(fields, fn(field) {
+              let #(key, field_val) = field
+              let new_path = list.append(current_path, [key])
+              #(key, transform_value_at_paths(field_val, blob_paths, new_path))
+            }),
+          )
+        }
+      }
+    }
+    value.List(items) -> {
+      // Check if current path is a blob array path
+      let is_blob_array_path =
+        list.any(blob_paths, fn(path) {
+          path == current_path && current_path != []
+        })
+
+      case is_blob_array_path {
+        True -> {
+          // Transform each item as a blob
+          value.List(
+            list.map(items, fn(item) {
+              case item {
+                value.Object(item_fields) -> transform_blob_object(item_fields)
+                _ -> item
+              }
+            }),
+          )
+        }
+        False -> {
+          // Check if any blob path starts with current path (for arrays of objects)
+          let paths_through_here =
+            list.filter(blob_paths, fn(path) {
+              list.length(path) > list.length(current_path)
+              && list.take(path, list.length(current_path)) == current_path
+            })
+
+          case list.is_empty(paths_through_here) {
+            True -> val
+            False -> {
+              // Recurse into array items with the same path
+              value.List(
+                list.map(items, fn(item) {
+                  transform_value_at_paths(item, blob_paths, current_path)
+                }),
+              )
+            }
+          }
+        }
+      }
+    }
+    _ -> val
+  }
+}
+
+/// Transform a BlobInput object to AT Protocol blob format
+fn transform_blob_object(fields: List(#(String, value.Value))) -> value.Value {
+  // Extract ref, mimeType, size from fields
+  let ref = case list.key_find(fields, "ref") {
+    Ok(value.String(r)) -> r
+    _ -> ""
+  }
+  let mime_type = case list.key_find(fields, "mimeType") {
+    Ok(value.String(m)) -> m
+    _ -> ""
+  }
+  let size = case list.key_find(fields, "size") {
+    Ok(value.Int(s)) -> s
+    _ -> 0
+  }
+
+  // Only transform if it looks like a valid BlobInput
+  case ref != "" && mime_type != "" {
+    True ->
+      value.Object([
+        #("$type", value.String("blob")),
+        #("ref", value.Object([#("$link", value.String(ref))])),
+        #("mimeType", value.String(mime_type)),
+        #("size", value.Int(size)),
+      ])
+    False ->
+      // Not a valid BlobInput, return as-is
+      value.Object(fields)
   }
 }
 
@@ -151,11 +373,7 @@ pub fn create_resolver_factory(
       }),
     )
 
-    // Step 5: Convert input to JSON for validation and AT Protocol
-    let record_json_value = graphql_value_to_json_value(input)
-    let record_json_string = json.to_string(record_json_value)
-
-    // Step 6: Validate against lexicon (fetch all lexicons to resolve refs)
+    // Step 5: Fetch lexicons for validation and blob path extraction
     use all_lexicon_records <- result.try(
       lexicons.get_all(ctx.db)
       |> result.map_error(fn(_) { "Failed to fetch lexicons" }),
@@ -172,6 +390,15 @@ pub fn create_resolver_factory(
       }),
     )
 
+    // Step 6: Transform blob inputs from GraphQL format to AT Protocol format
+    let blob_paths = get_blob_paths(collection, all_lex_jsons)
+    let transformed_input = transform_blob_inputs(input, blob_paths)
+
+    // Convert transformed input to JSON for validation and AT Protocol
+    let record_json_value = graphql_value_to_json_value(transformed_input)
+    let record_json_string = json.to_string(record_json_value)
+
+    // Step 7: Validate against lexicon
     use _ <- result.try(
       honk.validate_record(all_lex_jsons, collection, record_json_value)
       |> result.map_error(fn(err) {
@@ -180,7 +407,7 @@ pub fn create_resolver_factory(
     )
 
     {
-      // Step 7: Call createRecord via AT Protocol
+      // Step 8: Call createRecord via AT Protocol
       // Omit rkey field when not provided to let PDS auto-generate TID
       let create_body =
         case rkey {
@@ -189,13 +416,13 @@ pub fn create_resolver_factory(
               #("repo", json.string(user_info.did)),
               #("collection", json.string(collection)),
               #("rkey", json.string(r)),
-              #("record", graphql_value_to_json_value(input)),
+              #("record", record_json_value),
             ])
           option.None ->
             json.object([
               #("repo", json.string(user_info.did)),
               #("collection", json.string(collection)),
-              #("record", graphql_value_to_json_value(input)),
+              #("record", record_json_value),
             ])
         }
         |> json.to_string
@@ -361,11 +588,7 @@ pub fn update_resolver_factory(
       }),
     )
 
-    // Step 5: Convert input to JSON for validation and AT Protocol
-    let record_json_value = graphql_value_to_json_value(input)
-    let record_json_string = json.to_string(record_json_value)
-
-    // Step 6: Validate against lexicon (fetch all lexicons to resolve refs)
+    // Step 5: Fetch lexicons for validation and blob path extraction
     use all_lexicon_records <- result.try(
       lexicons.get_all(ctx.db)
       |> result.map_error(fn(_) { "Failed to fetch lexicons" }),
@@ -382,6 +605,15 @@ pub fn update_resolver_factory(
       }),
     )
 
+    // Step 6: Transform blob inputs from GraphQL format to AT Protocol format
+    let blob_paths = get_blob_paths(collection, all_lex_jsons)
+    let transformed_input = transform_blob_inputs(input, blob_paths)
+
+    // Convert transformed input to JSON for validation and AT Protocol
+    let record_json_value = graphql_value_to_json_value(transformed_input)
+    let record_json_string = json.to_string(record_json_value)
+
+    // Step 7: Validate against lexicon
     use _ <- result.try(
       honk.validate_record(all_lex_jsons, collection, record_json_value)
       |> result.map_error(fn(err) {
@@ -390,13 +622,13 @@ pub fn update_resolver_factory(
     )
 
     {
-      // Step 7: Call putRecord via AT Protocol
+      // Step 8: Call putRecord via AT Protocol
       let update_body =
         json.object([
           #("repo", json.string(user_info.did)),
           #("collection", json.string(collection)),
           #("rkey", json.string(rkey)),
-          #("record", graphql_value_to_json_value(input)),
+          #("record", record_json_value),
         ])
         |> json.to_string
 
