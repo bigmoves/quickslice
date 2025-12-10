@@ -71,6 +71,100 @@ fn create_status_lexicon() -> String {
   |> json.to_string
 }
 
+// Helper to create a location lexicon (referenced by profile)
+fn create_location_lexicon() -> String {
+  json.object([
+    #("lexicon", json.int(1)),
+    #("id", json.string("community.lexicon.location.hthree")),
+    #(
+      "defs",
+      json.object([
+        #(
+          "main",
+          json.object([
+            #("type", json.string("object")),
+            #("description", json.string("A physical location in H3 format")),
+            #(
+              "properties",
+              json.object([
+                #(
+                  "name",
+                  json.object([
+                    #("type", json.string("string")),
+                  ]),
+                ),
+                #(
+                  "value",
+                  json.object([
+                    #("type", json.string("string")),
+                  ]),
+                ),
+              ]),
+            ),
+            #("required", json.array([json.string("value")], of: fn(x) { x })),
+          ]),
+        ),
+      ]),
+    ),
+  ])
+  |> json.to_string
+}
+
+// Helper to create a profile lexicon that references location
+fn create_profile_with_ref_lexicon() -> String {
+  json.object([
+    #("lexicon", json.int(1)),
+    #("id", json.string("org.atmosphereconf.profile")),
+    #(
+      "defs",
+      json.object([
+        #(
+          "main",
+          json.object([
+            #("type", json.string("record")),
+            #("key", json.string("literal:self")),
+            #(
+              "record",
+              json.object([
+                #("type", json.string("object")),
+                #(
+                  "properties",
+                  json.object([
+                    #(
+                      "displayName",
+                      json.object([
+                        #("type", json.string("string")),
+                      ]),
+                    ),
+                    #(
+                      "homeTown",
+                      json.object([
+                        #("type", json.string("ref")),
+                        #(
+                          "ref",
+                          json.string("community.lexicon.location.hthree"),
+                        ),
+                      ]),
+                    ),
+                    #(
+                      "createdAt",
+                      json.object([
+                        #("type", json.string("string")),
+                        #("format", json.string("datetime")),
+                      ]),
+                    ),
+                  ]),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+      ]),
+    ),
+  ])
+  |> json.to_string
+}
+
 // Mock resolver factory that returns success without making AT Protocol calls
 fn mock_create_resolver_factory(_collection: String) -> schema.Resolver {
   fn(ctx: schema.Context) -> Result(value.Value, String) {
@@ -706,4 +800,74 @@ pub fn test_upload_blob_mutation_requires_auth() {
     }
     False -> should.fail()
   }
+}
+
+// Test: Mutation with lexicon ref should validate correctly
+pub fn mutation_with_lexicon_ref_validates_test() {
+  // Setup: Create in-memory database with both lexicons
+  let assert Ok(db) = sqlight.open(":memory:")
+  let assert Ok(_) = tables.create_lexicon_table(db)
+
+  // Insert BOTH lexicons - the profile AND the referenced location
+  let location_lexicon = create_location_lexicon()
+  let assert Ok(_) =
+    lexicons.insert(db, "community.lexicon.location.hthree", location_lexicon)
+
+  let profile_lexicon = create_profile_with_ref_lexicon()
+  let assert Ok(_) =
+    lexicons.insert(db, "org.atmosphereconf.profile", profile_lexicon)
+
+  let assert Ok(lexicon_records) = lexicons.get_all(db)
+  let parsed_lexicons =
+    lexicon_records
+    |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
+
+  let empty_fetcher = fn(_collection, _params) {
+    Ok(#([], option.None, False, False, option.None))
+  }
+
+  // Mock resolver that simulates successful validation and record creation
+  let mock_create_resolver_factory = fn(_collection: String) {
+    fn(_ctx: schema.Context) {
+      Ok(
+        value.Object([
+          #(
+            "uri",
+            value.String("at://did:plc:test/org.atmosphereconf.profile/self"),
+          ),
+          #("cid", value.String("bafyreimock")),
+          #("did", value.String("did:plc:test")),
+          #("collection", value.String("org.atmosphereconf.profile")),
+          #("indexedAt", value.String("2024-01-01T00:00:00Z")),
+        ]),
+      )
+    }
+  }
+
+  let create_factory = option.Some(mock_create_resolver_factory)
+
+  let assert Ok(built_schema) =
+    database.build_schema_with_fetcher(
+      parsed_lexicons,
+      empty_fetcher,
+      option.None,
+      option.None,
+      create_factory,
+      option.None,
+      option.None,
+      option.None,
+    )
+
+  // Execute mutation with homeTown field that uses ref type
+  let mutation =
+    "mutation { createOrgAtmosphereconfProfile(rkey: \"self\", input: { displayName: \"Test\", homeTown: { name: \"Portland\", value: \"8528f003fffffff\" }, createdAt: \"2024-01-01T00:00:00Z\" }) { uri } }"
+
+  let ctx_data = value.Object([#("auth_token", value.String("mock_token_123"))])
+  let ctx = schema.context(option.Some(ctx_data))
+  let assert Ok(response) = executor.execute(mutation, built_schema, ctx)
+
+  // Should have no errors - ref should be resolved correctly
+  response.errors
+  |> list.length
+  |> should.equal(0)
 }

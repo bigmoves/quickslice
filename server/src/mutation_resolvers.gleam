@@ -155,111 +155,111 @@ pub fn create_resolver_factory(
     let record_json_value = graphql_value_to_json_value(input)
     let record_json_string = json.to_string(record_json_value)
 
-    // Step 6: Validate against lexicon
-    use lexicon_records <- result.try(
-      lexicons.get(ctx.db, collection)
-      |> result.map_error(fn(_) { "Failed to fetch lexicon" }),
+    // Step 6: Validate against lexicon (fetch all lexicons to resolve refs)
+    use all_lexicon_records <- result.try(
+      lexicons.get_all(ctx.db)
+      |> result.map_error(fn(_) { "Failed to fetch lexicons" }),
     )
 
-    case lexicon_records {
-      [lex, ..] -> {
-        // Parse lexicon JSON string to Json
-        use lex_json <- result.try(
-          honk.parse_json_string(lex.json)
-          |> result.map_error(fn(e) {
-            "Failed to parse lexicon JSON: " <> errors.to_string(e)
-          }),
-        )
-
-        use _ <- result.try(
-          honk.validate_record([lex_json], collection, record_json_value)
-          |> result.map_error(fn(err) {
-            "Validation failed: " <> errors.to_string(err)
-          }),
-        )
-
-        // Step 7: Call createRecord via AT Protocol
-        // Omit rkey field when not provided to let PDS auto-generate TID
-        let create_body =
-          case rkey {
-            option.Some(r) ->
-              json.object([
-                #("repo", json.string(user_info.did)),
-                #("collection", json.string(collection)),
-                #("rkey", json.string(r)),
-                #("record", graphql_value_to_json_value(input)),
-              ])
-            option.None ->
-              json.object([
-                #("repo", json.string(user_info.did)),
-                #("collection", json.string(collection)),
-                #("record", graphql_value_to_json_value(input)),
-              ])
-          }
-          |> json.to_string
-
-        let pds_url =
-          session.pds_endpoint <> "/xrpc/com.atproto.repo.createRecord"
-
-        use response <- result.try(
-          dpop.make_dpop_request("POST", pds_url, session, create_body)
-          |> result.map_error(fn(_) { "Failed to create record on PDS" }),
-        )
-
-        // Step 8: Check HTTP status and parse response
-        use #(uri, cid) <- result.try(case response.status {
-          200 | 201 -> {
-            // Parse successful response
-            let response_decoder = {
-              use uri <- decode.field("uri", decode.string)
-              use cid <- decode.field("cid", decode.string)
-              decode.success(#(uri, cid))
-            }
-
-            json.parse(response.body, response_decoder)
-            |> result.map_error(fn(_) {
-              "Failed to parse PDS success response. Body: " <> response.body
-            })
-          }
-          _ -> {
-            // Return actual PDS error
-            Error(
-              "PDS request failed with status "
-              <> int.to_string(response.status)
-              <> ": "
-              <> response.body,
-            )
-          }
+    // Parse all lexicon JSON strings
+    use all_lex_jsons <- result.try(
+      all_lexicon_records
+      |> list.try_map(fn(lex) {
+        honk.parse_json_string(lex.json)
+        |> result.map_error(fn(e) {
+          "Failed to parse lexicon JSON: " <> errors.to_string(e)
         })
+      }),
+    )
 
-        // Step 9: Index the created record in the database
-        use _ <- result.try(
-          records.insert(
-            ctx.db,
-            uri,
-            cid,
-            user_info.did,
-            collection,
-            record_json_string,
+    use _ <- result.try(
+      honk.validate_record(all_lex_jsons, collection, record_json_value)
+      |> result.map_error(fn(err) {
+        "Validation failed: " <> errors.to_string(err)
+      }),
+    )
+
+    {
+      // Step 7: Call createRecord via AT Protocol
+      // Omit rkey field when not provided to let PDS auto-generate TID
+      let create_body =
+        case rkey {
+          option.Some(r) ->
+            json.object([
+              #("repo", json.string(user_info.did)),
+              #("collection", json.string(collection)),
+              #("rkey", json.string(r)),
+              #("record", graphql_value_to_json_value(input)),
+            ])
+          option.None ->
+            json.object([
+              #("repo", json.string(user_info.did)),
+              #("collection", json.string(collection)),
+              #("record", graphql_value_to_json_value(input)),
+            ])
+        }
+        |> json.to_string
+
+      let pds_url =
+        session.pds_endpoint <> "/xrpc/com.atproto.repo.createRecord"
+
+      use response <- result.try(
+        dpop.make_dpop_request("POST", pds_url, session, create_body)
+        |> result.map_error(fn(_) { "Failed to create record on PDS" }),
+      )
+
+      // Step 8: Check HTTP status and parse response
+      use #(uri, cid) <- result.try(case response.status {
+        200 | 201 -> {
+          // Parse successful response
+          let response_decoder = {
+            use uri <- decode.field("uri", decode.string)
+            use cid <- decode.field("cid", decode.string)
+            decode.success(#(uri, cid))
+          }
+
+          json.parse(response.body, response_decoder)
+          |> result.map_error(fn(_) {
+            "Failed to parse PDS success response. Body: " <> response.body
+          })
+        }
+        _ -> {
+          // Return actual PDS error
+          Error(
+            "PDS request failed with status "
+            <> int.to_string(response.status)
+            <> ": "
+            <> response.body,
           )
-          |> result.map_error(fn(_) { "Failed to index record in database" }),
-        )
+        }
+      })
 
-        // Step 10: Return the created record as a GraphQL value
-        // The field resolvers expect the record data under "value" key
-        // (same structure as query results)
-        Ok(
-          value.Object([
-            #("uri", value.String(uri)),
-            #("cid", value.String(cid)),
-            #("did", value.String(user_info.did)),
-            #("collection", value.String(collection)),
-            #("indexedAt", value.String("")),
-            #("value", input),
-          ]),
+      // Step 9: Index the created record in the database
+      use _ <- result.try(
+        records.insert(
+          ctx.db,
+          uri,
+          cid,
+          user_info.did,
+          collection,
+          record_json_string,
         )
-      }
-      [] -> Error("Lexicon not found for collection: " <> collection)
+        |> result.map_error(fn(_) { "Failed to index record in database" }),
+      )
+
+      // Step 10: Return the created record as a GraphQL value
+      // The field resolvers expect the record data under "value" key
+      // (same structure as query results)
+      Ok(
+        value.Object([
+          #("uri", value.String(uri)),
+          #("cid", value.String(cid)),
+          #("did", value.String(user_info.did)),
+          #("collection", value.String(collection)),
+          #("indexedAt", value.String("")),
+          #("value", input),
+        ]),
+      )
     }
   }
 }
@@ -365,92 +365,92 @@ pub fn update_resolver_factory(
     let record_json_value = graphql_value_to_json_value(input)
     let record_json_string = json.to_string(record_json_value)
 
-    // Step 6: Validate against lexicon
-    use lexicon_records <- result.try(
-      lexicons.get(ctx.db, collection)
-      |> result.map_error(fn(_) { "Failed to fetch lexicon" }),
+    // Step 6: Validate against lexicon (fetch all lexicons to resolve refs)
+    use all_lexicon_records <- result.try(
+      lexicons.get_all(ctx.db)
+      |> result.map_error(fn(_) { "Failed to fetch lexicons" }),
     )
 
-    case lexicon_records {
-      [lex, ..] -> {
-        // Parse lexicon JSON string to Json
-        use lex_json <- result.try(
-          honk.parse_json_string(lex.json)
-          |> result.map_error(fn(e) {
-            "Failed to parse lexicon JSON: " <> errors.to_string(e)
-          }),
-        )
-
-        use _ <- result.try(
-          honk.validate_record([lex_json], collection, record_json_value)
-          |> result.map_error(fn(err) {
-            "Validation failed: " <> errors.to_string(err)
-          }),
-        )
-
-        // Step 7: Call putRecord via AT Protocol
-        let update_body =
-          json.object([
-            #("repo", json.string(user_info.did)),
-            #("collection", json.string(collection)),
-            #("rkey", json.string(rkey)),
-            #("record", graphql_value_to_json_value(input)),
-          ])
-          |> json.to_string
-
-        let pds_url = session.pds_endpoint <> "/xrpc/com.atproto.repo.putRecord"
-
-        use response <- result.try(
-          dpop.make_dpop_request("POST", pds_url, session, update_body)
-          |> result.map_error(fn(_) { "Failed to update record on PDS" }),
-        )
-
-        // Step 8: Check HTTP status and parse response
-        use #(uri, cid) <- result.try(case response.status {
-          200 | 201 -> {
-            // Parse successful response
-            let response_decoder = {
-              use uri <- decode.field("uri", decode.string)
-              use cid <- decode.field("cid", decode.string)
-              decode.success(#(uri, cid))
-            }
-
-            json.parse(response.body, response_decoder)
-            |> result.map_error(fn(_) {
-              "Failed to parse PDS success response. Body: " <> response.body
-            })
-          }
-          _ -> {
-            // Return actual PDS error
-            Error(
-              "PDS request failed with status "
-              <> int.to_string(response.status)
-              <> ": "
-              <> response.body,
-            )
-          }
+    // Parse all lexicon JSON strings
+    use all_lex_jsons <- result.try(
+      all_lexicon_records
+      |> list.try_map(fn(lex) {
+        honk.parse_json_string(lex.json)
+        |> result.map_error(fn(e) {
+          "Failed to parse lexicon JSON: " <> errors.to_string(e)
         })
+      }),
+    )
 
-        // Step 9: Update the record in the database
-        use _ <- result.try(
-          records.update(ctx.db, uri, cid, record_json_string)
-          |> result.map_error(fn(_) { "Failed to update record in database" }),
-        )
+    use _ <- result.try(
+      honk.validate_record(all_lex_jsons, collection, record_json_value)
+      |> result.map_error(fn(err) {
+        "Validation failed: " <> errors.to_string(err)
+      }),
+    )
 
-        // Step 10: Return the updated record as a GraphQL value
-        // The field resolvers expect the record data under "value" key
-        Ok(
-          value.Object([
-            #("uri", value.String(uri)),
-            #("cid", value.String(cid)),
-            #("did", value.String(user_info.did)),
-            #("collection", value.String(collection)),
-            #("indexedAt", value.String("")),
-            #("value", input),
-          ]),
-        )
-      }
-      [] -> Error("Lexicon not found for collection: " <> collection)
+    {
+      // Step 7: Call putRecord via AT Protocol
+      let update_body =
+        json.object([
+          #("repo", json.string(user_info.did)),
+          #("collection", json.string(collection)),
+          #("rkey", json.string(rkey)),
+          #("record", graphql_value_to_json_value(input)),
+        ])
+        |> json.to_string
+
+      let pds_url = session.pds_endpoint <> "/xrpc/com.atproto.repo.putRecord"
+
+      use response <- result.try(
+        dpop.make_dpop_request("POST", pds_url, session, update_body)
+        |> result.map_error(fn(_) { "Failed to update record on PDS" }),
+      )
+
+      // Step 8: Check HTTP status and parse response
+      use #(uri, cid) <- result.try(case response.status {
+        200 | 201 -> {
+          // Parse successful response
+          let response_decoder = {
+            use uri <- decode.field("uri", decode.string)
+            use cid <- decode.field("cid", decode.string)
+            decode.success(#(uri, cid))
+          }
+
+          json.parse(response.body, response_decoder)
+          |> result.map_error(fn(_) {
+            "Failed to parse PDS success response. Body: " <> response.body
+          })
+        }
+        _ -> {
+          // Return actual PDS error
+          Error(
+            "PDS request failed with status "
+            <> int.to_string(response.status)
+            <> ": "
+            <> response.body,
+          )
+        }
+      })
+
+      // Step 9: Update the record in the database
+      use _ <- result.try(
+        records.update(ctx.db, uri, cid, record_json_string)
+        |> result.map_error(fn(_) { "Failed to update record in database" }),
+      )
+
+      // Step 10: Return the updated record as a GraphQL value
+      // The field resolvers expect the record data under "value" key
+      Ok(
+        value.Object([
+          #("uri", value.String(uri)),
+          #("cid", value.String(cid)),
+          #("did", value.String(user_info.did)),
+          #("collection", value.String(collection)),
+          #("indexedAt", value.String("")),
+          #("value", input),
+        ]),
+      )
     }
   }
 }
