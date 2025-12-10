@@ -35,7 +35,6 @@ import handlers/oauth/metadata as oauth_metadata_handler
 import handlers/oauth/par as oauth_par_handler
 import handlers/oauth/register as oauth_register_handler
 import handlers/oauth/token as oauth_token_handler
-import handlers/upload as upload_handler
 import jetstream_consumer
 import lib/oauth/did_cache
 import logging
@@ -500,8 +499,6 @@ fn handle_request(
       )
     ["graphiql"] ->
       graphiql_handler.handle_graphiql_request(req, ctx.db, ctx.did_cache)
-    ["upload"] ->
-      upload_handler.handle_upload_request(req, ctx.db, ctx.did_cache)
     // MCP endpoint for AI assistant introspection
     ["mcp"] -> {
       let mcp_ctx =
