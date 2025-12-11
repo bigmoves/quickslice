@@ -5,6 +5,7 @@
 import actor_validator
 import atproto_auth
 import backfill
+import database/executor.{type Executor}
 import database/repositories/lexicons
 import database/repositories/records
 import dpop
@@ -20,14 +21,13 @@ import gleam/result
 import honk
 import honk/errors
 import lib/oauth/did_cache
-import sqlight
 import swell/schema
 import swell/value
 
 /// Context for mutation execution
 pub type MutationContext {
   MutationContext(
-    db: sqlight.Connection,
+    db: Executor,
     did_cache: Subject(did_cache.Message),
     signing_key: option.Option(String),
     atp_client_id: String,

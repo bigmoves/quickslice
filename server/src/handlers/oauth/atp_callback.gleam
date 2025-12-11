@@ -2,6 +2,7 @@
 /// Handles OAuth callback from ATProtocol PDS after user authorization
 import actor_validator
 import backfill
+import database/executor.{type Executor}
 import database/repositories/config as config_repo
 import database/repositories/oauth_atp_requests
 import database/repositories/oauth_atp_sessions
@@ -19,13 +20,12 @@ import lib/oauth/atproto/bridge
 import lib/oauth/did_cache
 import lib/oauth/token_generator
 import logging
-import sqlight
 import wisp
 
 /// Handle GET /oauth/atp/callback
 pub fn handle(
   req: wisp.Request,
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: process.Subject(did_cache.Message),
   redirect_uri: String,
   client_id: String,
@@ -66,7 +66,7 @@ pub fn handle(
 }
 
 fn handle_oauth_error(
-  conn: sqlight.Connection,
+  conn: Executor,
   query: List(#(String, String)),
   error: String,
 ) -> wisp.Response {
@@ -111,7 +111,7 @@ fn handle_oauth_error(
 }
 
 fn handle_callback(
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: process.Subject(did_cache.Message),
   code: String,
   state: String,

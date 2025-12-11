@@ -1,6 +1,7 @@
 /// Token endpoint
 /// POST /oauth/token
 /// Exchanges authorization code or refresh token for access tokens
+import database/executor.{type Executor}
 import database/repositories/oauth_access_tokens
 import database/repositories/oauth_authorization_code
 import database/repositories/oauth_clients
@@ -21,7 +22,6 @@ import lib/oauth/pkce
 import lib/oauth/scopes/validator as scope_validator
 import lib/oauth/token_generator
 import lib/oauth/types/error
-import sqlight
 import wisp
 
 /// Validate client authentication based on token_endpoint_auth_method
@@ -114,7 +114,7 @@ fn validate_client_authentication(
 /// Returns the JKT (key thumbprint) if valid, or an error response
 fn validate_dpop_for_token_endpoint(
   req: wisp.Request,
-  conn: sqlight.Connection,
+  conn: Executor,
   client: OAuthClient,
   external_base_url: String,
 ) -> Result(Option(String), wisp.Response) {
@@ -169,7 +169,7 @@ fn validate_dpop_for_token_endpoint(
 /// Handle POST /oauth/token
 pub fn handle(
   req: wisp.Request,
-  conn: sqlight.Connection,
+  conn: Executor,
   external_base_url: String,
 ) -> wisp.Response {
   // Read request body
@@ -206,7 +206,7 @@ pub fn handle(
 fn handle_authorization_code(
   req: wisp.Request,
   params: List(#(String, String)),
-  conn: sqlight.Connection,
+  conn: Executor,
   external_base_url: String,
 ) -> wisp.Response {
   // Extract required parameters
@@ -398,7 +398,7 @@ fn handle_authorization_code(
 fn handle_refresh_token(
   req: wisp.Request,
   params: List(#(String, String)),
-  conn: sqlight.Connection,
+  conn: Executor,
   external_base_url: String,
 ) -> wisp.Response {
   // Extract required parameters

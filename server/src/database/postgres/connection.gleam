@@ -16,6 +16,10 @@ import pog
 /// Default connection pool size
 const default_pool_size = 10
 
+/// Default idle interval in milliseconds (how often to ping idle connections)
+/// Set to 30 seconds to reduce noise from connection health checks
+const default_idle_interval = 30_000
+
 /// Connect to PostgreSQL database and return an Executor
 pub fn connect(url: String) -> Result(Executor, DbError) {
   use config <- result.try(parse_url(url))
@@ -31,6 +35,11 @@ pub fn connect(url: String) -> Result(Executor, DbError) {
     |> pog.user(config.user)
     |> apply_password(config.password)
     |> pog.pool_size(config.pool_size)
+    |> pog.idle_interval(config.idle_interval)
+    |> pog.ssl(case config.ssl {
+      True -> pog.SslUnverified
+      False -> pog.SslDisabled
+    })
 
   case pog.start(pog_config) {
     Ok(started) -> {
@@ -72,11 +81,13 @@ type PgConfig {
     user: String,
     password: option.Option(String),
     pool_size: Int,
+    idle_interval: Int,
+    ssl: Bool,
   )
 }
 
 /// Parse a PostgreSQL URL into connection config
-/// Format: postgres://user:password@host:port/database?pool_size=N
+/// Format: postgres://user:password@host:port/database?pool_size=N&idle_interval=N&sslmode=disable
 fn parse_url(url: String) -> Result(PgConfig, DbError) {
   case uri.parse(url) {
     Ok(parsed) -> {
@@ -97,10 +108,14 @@ fn parse_url(url: String) -> Result(PgConfig, DbError) {
         None -> #("postgres", None)
       }
 
-      // Parse query params for pool_size
-      let pool_size = case parsed.query {
-        Some(query) -> parse_pool_size(query)
-        None -> default_pool_size
+      // Parse query params for pool_size, idle_interval, and sslmode
+      let #(pool_size, idle_interval, ssl) = case parsed.query {
+        Some(query) -> #(
+          parse_pool_size(query),
+          parse_idle_interval(query),
+          parse_ssl_mode(query),
+        )
+        None -> #(default_pool_size, default_idle_interval, True)
       }
 
       case database {
@@ -113,6 +128,8 @@ fn parse_url(url: String) -> Result(PgConfig, DbError) {
             user: user,
             password: password,
             pool_size: pool_size,
+            idle_interval: idle_interval,
+            ssl: ssl,
           ))
       }
     }
@@ -135,4 +152,37 @@ fn parse_pool_size(query: String) -> Int {
     }
   })
   |> result.unwrap(default_pool_size)
+}
+
+/// Parse idle_interval from query string (in milliseconds)
+/// How often the pool pings idle connections to check if they're still alive
+fn parse_idle_interval(query: String) -> Int {
+  query
+  |> string.split("&")
+  |> list.find_map(fn(param) {
+    case string.split_once(param, "=") {
+      Ok(#("idle_interval", value)) ->
+        case int.parse(value) {
+          Ok(n) -> Ok(n)
+          Error(_) -> Error(Nil)
+        }
+      _ -> Error(Nil)
+    }
+  })
+  |> result.unwrap(default_idle_interval)
+}
+
+/// Parse sslmode from query string
+/// Returns True (SSL enabled) unless sslmode=disable is specified
+fn parse_ssl_mode(query: String) -> Bool {
+  query
+  |> string.split("&")
+  |> list.find_map(fn(param) {
+    case string.split_once(param, "=") {
+      Ok(#("sslmode", "disable")) -> Ok(False)
+      Ok(#("sslmode", _)) -> Ok(True)
+      _ -> Error(Nil)
+    }
+  })
+  |> result.unwrap(True)
 }

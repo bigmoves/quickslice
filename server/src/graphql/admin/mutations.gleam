@@ -2,6 +2,7 @@
 import admin_session as session
 import backfill
 import backfill_state
+import database/executor.{type Executor}
 import database/repositories/actors
 import database/repositories/config as config_repo
 import database/repositories/jetstream_activity
@@ -22,7 +23,6 @@ import lib/oauth/scopes/validator as scope_validator
 import lib/oauth/token_generator
 import lib/oauth/validator
 import logging
-import sqlight
 import swell/schema
 import swell/value
 import wisp
@@ -70,7 +70,7 @@ fn validate_scope_against_supported(
 
 /// Build the Mutation root type with all mutation resolvers
 pub fn mutation_type(
-  conn: sqlight.Connection,
+  conn: Executor,
   req: wisp.Request,
   jetstream_subject: Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),

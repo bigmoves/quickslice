@@ -29,9 +29,16 @@ pub fn insert(exec: Executor, id: String, json: String) -> Result(Nil, DbError) 
 
 /// Gets a lexicon by ID
 pub fn get(exec: Executor, id: String) -> Result(List(Lexicon), DbError) {
-  let sql = "SELECT id, json, created_at
-     FROM lexicon
-     WHERE id = " <> executor.placeholder(exec, 1)
+  // PostgreSQL: json is JSONB (needs ::text cast), created_at is TIMESTAMPTZ (needs ::text cast)
+  // SQLite: both are TEXT
+  let sql = case executor.dialect(exec) {
+    executor.SQLite -> "SELECT id, json, created_at
+       FROM lexicon
+       WHERE id = " <> executor.placeholder(exec, 1)
+    executor.PostgreSQL -> "SELECT id, json::text, created_at::text
+       FROM lexicon
+       WHERE id = " <> executor.placeholder(exec, 1)
+  }
 
   let decoder = {
     use id <- decode.field(0, decode.string)
@@ -45,10 +52,18 @@ pub fn get(exec: Executor, id: String) -> Result(List(Lexicon), DbError) {
 
 /// Gets all lexicons from the database
 pub fn get_all(exec: Executor) -> Result(List(Lexicon), DbError) {
-  let sql =
-    "SELECT id, json, created_at
-     FROM lexicon
-     ORDER BY created_at DESC"
+  // PostgreSQL: json is JSONB (needs ::text cast), created_at is TIMESTAMPTZ (needs ::text cast)
+  // SQLite: both are TEXT
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "SELECT id, json, created_at
+       FROM lexicon
+       ORDER BY created_at DESC"
+    executor.PostgreSQL ->
+      "SELECT id, json::text, created_at::text
+       FROM lexicon
+       ORDER BY created_at DESC"
+  }
 
   let decoder = {
     use id <- decode.field(0, decode.string)
@@ -88,16 +103,17 @@ pub fn has_for_collection(
     Ok(True) -> Ok(True)
     Ok(False) -> {
       // Fall back to searching record table for backward compatibility
-      // Use dialect-specific LIKE operator
-      let like_op = case executor.dialect(exec) {
-        executor.SQLite -> " LIKE "
-        executor.PostgreSQL -> " ILIKE "
+      // Use dialect-specific LIKE operator and JSON column access
+      let #(json_col, like_op) = case executor.dialect(exec) {
+        executor.SQLite -> #("json", " LIKE ")
+        // PostgreSQL needs ::text cast for JSONB LIKE
+        executor.PostgreSQL -> #("json::text", " ILIKE ")
       }
 
       let sql = "SELECT COUNT(*) as count
          FROM record
          WHERE collection = 'com.atproto.lexicon.schema'
-         AND json" <> like_op <> executor.placeholder(exec, 1)
+         AND " <> json_col <> like_op <> executor.placeholder(exec, 1)
 
       let decoder = {
         use count <- decode.field(0, decode.int)
@@ -134,12 +150,23 @@ pub fn get_count(exec: Executor) -> Result(Int, DbError) {
 
 /// Gets all lexicons that are of type "record" (collections)
 pub fn get_record_types(exec: Executor) -> Result(List(Lexicon), DbError) {
-  let sql =
-    "SELECT id, json, created_at
-     FROM lexicon
-     WHERE json LIKE '%\"type\":\"record\"%'
-        OR json LIKE '%\"type\": \"record\"%'
-     ORDER BY id ASC"
+  // Lexicon JSON structure has type at defs.main.type, not at root level
+  // PostgreSQL: use JSONB path query (json->'defs'->'main'->>'type')
+  // SQLite: use LIKE pattern matching on the JSON text
+  // PostgreSQL: json is JSONB (needs ::text cast), created_at is TIMESTAMPTZ (needs ::text cast)
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "SELECT id, json, created_at
+       FROM lexicon
+       WHERE json LIKE '%\"type\":\"record\"%'
+          OR json LIKE '%\"type\": \"record\"%'
+       ORDER BY id ASC"
+    executor.PostgreSQL ->
+      "SELECT id, json::text, created_at::text
+       FROM lexicon
+       WHERE json->'defs'->'main'->>'type' = 'record'
+       ORDER BY id ASC"
+  }
 
   let decoder = {
     use id <- decode.field(0, decode.string)

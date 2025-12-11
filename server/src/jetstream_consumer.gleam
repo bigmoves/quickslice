@@ -1,4 +1,5 @@
 import backfill
+import database/executor.{type Executor}
 import database/jetstream
 import database/repositories/config as config_repo
 import database/repositories/lexicons
@@ -14,7 +15,6 @@ import gleam/string
 import gleam/time/timestamp
 import goose
 import logging
-import sqlight
 
 // ============================================================================
 // CONFIGURATION
@@ -53,7 +53,7 @@ pub type ManagerMessage {
 /// State for the consumer manager actor
 pub type ManagerState {
   ManagerState(
-    db: sqlight.Connection,
+    db: Executor,
     last_message_time_ms: Int,
     consumer_subject: option.Option(process.Subject(Message)),
     self_subject: process.Subject(ManagerMessage),
@@ -75,7 +75,7 @@ pub type CursorMessage {
 /// Internal state of the Jetstream consumer actor
 type State {
   State(
-    db: sqlight.Connection,
+    db: Executor,
     consumer_pid: option.Option(process.Pid),
     cursor_tracker_pid: option.Option(process.Pid),
   )
@@ -84,7 +84,7 @@ type State {
 /// State for cursor tracker
 type CursorState {
   CursorState(
-    db: sqlight.Connection,
+    db: Executor,
     latest_cursor: option.Option(Int),
     last_flush_time: Int,
   )
@@ -95,9 +95,7 @@ type CursorState {
 // ============================================================================
 
 /// Start the consumer manager that spawns and monitors the consumer
-pub fn start(
-  db: sqlight.Connection,
-) -> Result(process.Subject(ManagerMessage), String) {
+pub fn start(db: Executor) -> Result(process.Subject(ManagerMessage), String) {
   let temp_subject = process.new_subject()
 
   let state =
@@ -336,7 +334,7 @@ fn handle_manager_message(
 
 /// Start the Jetstream consumer actor (called by manager)
 fn start_consumer_actor(
-  db: sqlight.Connection,
+  db: Executor,
   manager: option.Option(process.Subject(ManagerMessage)),
 ) -> Result(process.Subject(Message), String) {
   case start_consumer_process(db, manager) {
@@ -519,7 +517,7 @@ fn handle_cursor_message(
 
 /// Start cursor tracker actor
 fn start_cursor_tracker(
-  db: sqlight.Connection,
+  db: Executor,
   disable_cursor: Bool,
 ) -> option.Option(process.Subject(CursorMessage)) {
   case disable_cursor {
@@ -553,7 +551,7 @@ fn start_cursor_tracker(
 
 /// Start the actual consumer process (extracted from original start function)
 fn start_consumer_process(
-  db: sqlight.Connection,
+  db: Executor,
   manager: option.Option(process.Subject(ManagerMessage)),
 ) -> Result(process.Pid, String) {
   logging.log(logging.Info, "")
@@ -741,16 +739,14 @@ fn start_consumer_process(
 }
 
 /// Check if a DID exists in the actor table
-fn is_known_did(db: sqlight.Connection, did: String) -> Bool {
-  let sql = "SELECT 1 FROM actor WHERE did = ? LIMIT 1"
+fn is_known_did(db: Executor, did: String) -> Bool {
+  let sql = case executor.dialect(db) {
+    executor.SQLite -> "SELECT 1 FROM actor WHERE did = ? LIMIT 1"
+    executor.PostgreSQL -> "SELECT 1 FROM actor WHERE did = $1 LIMIT 1"
+  }
 
   case
-    sqlight.query(
-      sql,
-      on: db,
-      with: [sqlight.text(did)],
-      expecting: decode.at([0], decode.int),
-    )
+    executor.query(db, sql, [executor.Text(did)], decode.at([0], decode.int))
   {
     Ok(results) -> results != []
     Error(_) -> False
@@ -759,7 +755,7 @@ fn is_known_did(db: sqlight.Connection, did: String) -> Bool {
 
 /// Handle a raw Jetstream event JSON string
 fn handle_jetstream_event(
-  db: sqlight.Connection,
+  db: Executor,
   event_json: String,
   collection_ids: List(String),
   external_collection_ids: List(String),

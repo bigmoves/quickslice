@@ -22,6 +22,8 @@ pub type Value {
   Bool(Bool)
   Null
   Blob(BitArray)
+  /// ISO 8601 timestamp string - PostgreSQL treats as TIMESTAMPTZ, SQLite as TEXT
+  Timestamptz(String)
 }
 
 /// Database dialect identifier
@@ -175,10 +177,8 @@ pub fn nullable_int(value: Option(Int)) -> Value {
 }
 
 /// Convert a boolean to a Value
-/// For cross-database compatibility, use Int(1)/Int(0)
+/// PostgreSQL uses native BOOLEAN, SQLite uses INTEGER (0/1)
+/// Each executor handles this appropriately
 pub fn bool_value(value: Bool) -> Value {
-  case value {
-    True -> Int(1)
-    False -> Int(0)
-  }
+  Bool(value)
 }

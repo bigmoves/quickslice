@@ -2,9 +2,9 @@
 ///
 /// This test verifies that DID join fields are properly generated in the GraphQL schema
 /// by running a full introspection query and checking for the expected join fields.
+import database/executor.{type Executor}
 import database/repositories/lexicons
 import database/repositories/records
-import database/schema/tables
 import gleam/dynamic/decode
 import gleam/http
 import gleam/json
@@ -18,12 +18,12 @@ import honk
 import importer
 import lib/oauth/did_cache
 import simplifile
-import sqlight
+import test_helpers
 import wisp
 import wisp/simulate
 
 // Helper to load all lexicons from the grain fixtures directory
-fn load_grain_lexicons(db: sqlight.Connection) -> Result(Nil, String) {
+fn load_grain_lexicons(exec: Executor) -> Result(Nil, String) {
   let lexicons_dir = "test/fixtures/grain/lexicons"
 
   // Scan directory for all JSON files
@@ -65,7 +65,7 @@ fn load_grain_lexicons(db: sqlight.Connection) -> Result(Nil, String) {
           })
         {
           Ok(lexicon_id) ->
-            case lexicons.insert(db, lexicon_id, json_content) {
+            case lexicons.insert(exec, lexicon_id, json_content) {
               Ok(_) -> Ok(Nil)
               Error(_) -> Error("Database insertion failed")
             }
@@ -91,12 +91,12 @@ pub fn introspection_query_includes_did_join_fields_test() {
   // The actual GraphQL queries work correctly (see introspection_query_did_join_field_structure_test).
 
   // Create in-memory database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   // Load all grain lexicons from fixtures
-  let assert Ok(_) = load_grain_lexicons(db)
+  let assert Ok(_) = load_grain_lexicons(exec)
 
   // Use __type introspection to query the SocialGrainGallery type
   let introspection_query =
@@ -131,7 +131,7 @@ pub fn introspection_query_includes_did_join_fields_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       option.None,
       "",
@@ -170,9 +170,6 @@ pub fn introspection_query_includes_did_join_fields_test() {
 
   string.contains(body, "socialGrainFavoriteByDid")
   |> should.be_true
-
-  // Clean up
-  let assert Ok(_) = sqlight.close(db)
 }
 
 pub fn introspection_query_profile_join_fields_test() {
@@ -180,12 +177,12 @@ pub fn introspection_query_profile_join_fields_test() {
   // field to galleries.
 
   // Create in-memory database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   // Load all grain lexicons from fixtures
-  let assert Ok(_) = load_grain_lexicons(db)
+  let assert Ok(_) = load_grain_lexicons(exec)
 
   // Use __type introspection to query the SocialGrainActorProfile type
   let introspection_query =
@@ -220,7 +217,7 @@ pub fn introspection_query_profile_join_fields_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       option.None,
       "",
@@ -248,9 +245,6 @@ pub fn introspection_query_profile_join_fields_test() {
   // Verify that the DID join field to galleries exists
   string.contains(body, "socialGrainGalleryByDid")
   |> should.be_true
-
-  // Clean up
-  let assert Ok(_) = sqlight.close(db)
 }
 
 pub fn introspection_query_did_join_field_structure_test() {
@@ -259,12 +253,12 @@ pub fn introspection_query_did_join_field_structure_test() {
   // that the join fields not only exist in the schema but also execute correctly.
 
   // Create in-memory database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   // Load all grain lexicons from fixtures
-  let assert Ok(_) = load_grain_lexicons(db)
+  let assert Ok(_) = load_grain_lexicons(exec)
 
   let test_did = "did:plc:test"
 
@@ -278,7 +272,7 @@ pub fn introspection_query_did_join_field_structure_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://" <> test_did <> "/social.grain.actor.profile/self",
       "cid1",
       test_did,
@@ -296,7 +290,7 @@ pub fn introspection_query_did_join_field_structure_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://" <> test_did <> "/social.grain.gallery/123",
       "cid2",
       test_did,
@@ -314,7 +308,7 @@ pub fn introspection_query_did_join_field_structure_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://" <> test_did <> "/social.grain.photo/456",
       "cid3",
       test_did,
@@ -332,7 +326,7 @@ pub fn introspection_query_did_join_field_structure_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://" <> test_did <> "/social.grain.comment/789",
       "cid4",
       test_did,
@@ -353,7 +347,7 @@ pub fn introspection_query_did_join_field_structure_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://" <> test_did <> "/social.grain.favorite/abc",
       "cid5",
       test_did,
@@ -390,7 +384,7 @@ pub fn introspection_query_did_join_field_structure_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       option.None,
       "",
@@ -431,19 +425,16 @@ pub fn introspection_query_did_join_field_structure_test() {
       |> should.be_true
     }
   }
-
-  // Clean up
-  let assert Ok(_) = sqlight.close(db)
 }
 
 pub fn did_join_field_query_execution_test() {
   // Create in-memory database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   // Load all grain lexicons from fixtures
-  let assert Ok(_) = load_grain_lexicons(db)
+  let assert Ok(_) = load_grain_lexicons(exec)
 
   // Insert a profile record
   let profile_json =
@@ -455,7 +446,7 @@ pub fn did_join_field_query_execution_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://did:plc:test/social.grain.actor.profile/self",
       "cid1",
       "did:plc:test",
@@ -473,7 +464,7 @@ pub fn did_join_field_query_execution_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://did:plc:test/social.grain.gallery/123",
       "cid2",
       "did:plc:test",
@@ -490,7 +481,7 @@ pub fn did_join_field_query_execution_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://did:plc:test/social.grain.gallery/456",
       "cid3",
       "did:plc:test",
@@ -515,7 +506,7 @@ pub fn did_join_field_query_execution_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       option.None,
       "",
@@ -538,7 +529,4 @@ pub fn did_join_field_query_execution_test() {
 
   string.contains(body, "Gallery 2")
   |> should.be_true
-
-  // Clean up
-  let assert Ok(_) = sqlight.close(db)
 }

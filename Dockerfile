@@ -3,14 +3,15 @@ ARG GLEAM_VERSION=v1.13.0
 # Build stage - compile the application
 FROM ghcr.io/gleam-lang/gleam:${GLEAM_VERSION}-erlang-alpine AS builder
 
-# Install build dependencies
+# Install build dependencies (including PostgreSQL client for multi-database support)
 RUN apk add --no-cache \
     bash \
     git \
     nodejs \
     npm \
     build-base \
-    sqlite-dev
+    sqlite-dev \
+    postgresql-dev
 
 # Configure git for non-interactive use
 ENV GIT_TERMINAL_PROMPT=0
@@ -48,8 +49,8 @@ RUN cd /build/server \
 # Runtime stage - slim image with only what's needed to run
 FROM ghcr.io/gleam-lang/gleam:${GLEAM_VERSION}-erlang-alpine
 
-# Install runtime dependencies
-RUN apk add --no-cache sqlite-libs sqlite
+# Install runtime dependencies (SQLite and PostgreSQL client libraries)
+RUN apk add --no-cache sqlite-libs sqlite libpq
 
 # Copy the compiled server code from the builder stage
 COPY --from=builder /build/server/build/erlang-shipment /app

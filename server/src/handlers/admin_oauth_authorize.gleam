@@ -1,5 +1,6 @@
 /// Admin OAuth authorize handler
 /// POST /admin/oauth/authorize - Initiates ATProtocol OAuth for admin login
+import database/executor.{type Executor}
 import database/repositories/config as config_repo
 import database/repositories/oauth_atp_requests
 import database/repositories/oauth_atp_sessions
@@ -19,13 +20,12 @@ import lib/oauth/did_cache
 import lib/oauth/dpop/keygen
 import lib/oauth/pkce
 import lib/oauth/token_generator
-import sqlight
 import wisp
 
 /// Handle POST /admin/oauth/authorize
 pub fn handle(
   req: wisp.Request,
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: Subject(did_cache.Message),
   redirect_uri: String,
   client_id: String,
@@ -66,7 +66,7 @@ pub fn handle(
 }
 
 fn process_authorize(
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: Subject(did_cache.Message),
   login_hint: String,
   redirect_uri: String,
@@ -264,7 +264,7 @@ fn fetch_auth_server_metadata(pds_endpoint: String) -> Result(String, String) {
 }
 
 fn error_redirect(
-  conn: sqlight.Connection,
+  conn: Executor,
   error: String,
   description: String,
 ) -> wisp.Response {

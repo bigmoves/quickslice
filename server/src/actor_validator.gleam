@@ -1,9 +1,9 @@
 import backfill
+import database/executor.{type Executor}
 import database/repositories/actors
 import gleam/list
 import gleam/string
 import logging
-import sqlight
 
 /// Ensures that an actor exists in the database. If the actor is not found,
 /// it will be resolved from the PLC directory and added to the database.
@@ -12,7 +12,7 @@ import sqlight
 /// Returns Ok(False) if the actor already existed.
 /// Returns Error(String) if the actor could not be resolved or created.
 pub fn ensure_actor_exists(
-  db: sqlight.Connection,
+  db: Executor,
   did: String,
   plc_url: String,
 ) -> Result(Bool, String) {

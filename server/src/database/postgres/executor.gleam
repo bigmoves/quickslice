@@ -3,12 +3,14 @@
 import database/executor.{
   type DbError, type Executor, type Value, Blob, Bool, ConnectionError,
   ConstraintError, DecodeError, Float, Int, Null, PostgreSQL, QueryError, Text,
+  Timestamptz,
 }
 import gleam/dynamic/decode
 import gleam/int
 import gleam/list
 import gleam/result
 import gleam/string
+import gleam/time/timestamp
 import pog
 
 /// Create an Executor for PostgreSQL from a connection pool
@@ -63,6 +65,13 @@ fn set_pog_params(query: pog.Query(a), params: List(Value)) -> pog.Query(a) {
       Bool(b) -> pog.parameter(q, pog.bool(b))
       Null -> pog.parameter(q, pog.null())
       Blob(b) -> pog.parameter(q, pog.bytea(b))
+      Timestamptz(s) ->
+        // Parse ISO 8601/RFC 3339 string to timestamp
+        case timestamp.parse_rfc3339(s) {
+          Ok(ts) -> pog.parameter(q, pog.timestamp(ts))
+          // Fall back to text if parsing fails (shouldn't happen with valid input)
+          Error(_) -> pog.parameter(q, pog.text(s))
+        }
     }
   })
 }

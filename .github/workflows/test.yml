@@ -1,0 +1,83 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      # PostgreSQL service for integration tests
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: quickslice
+          POSTGRES_PASSWORD: quickslice
+          POSTGRES_DB: quickslice_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "26.0"
+          gleam-version: "1.6.0"
+          rebar3-version: "3"
+
+      - name: Install SQLite
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
+
+      - name: Download dependencies
+        working-directory: server
+        run: gleam deps download
+
+      - name: Build
+        working-directory: server
+        run: gleam build
+
+      - name: Run tests (SQLite only)
+        working-directory: server
+        run: gleam test
+
+      - name: Run tests (with PostgreSQL)
+        working-directory: server
+        env:
+          POSTGRES_TEST_URL: postgres://quickslice:quickslice@localhost:5432/quickslice_test
+        run: gleam test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "26.0"
+          gleam-version: "1.6.0"
+          rebar3-version: "3"
+
+      - name: Install SQLite
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
+
+      - name: Download dependencies
+        working-directory: server
+        run: gleam deps download
+
+      - name: Check formatting
+        working-directory: server
+        run: gleam format --check src test

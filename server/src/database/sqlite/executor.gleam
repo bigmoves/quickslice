@@ -2,7 +2,7 @@
 
 import database/executor.{
   type DbError, type Executor, type Value, Blob, Bool, ConstraintError, Float,
-  Int, Null, QueryError, SQLite, Text,
+  Int, Null, QueryError, SQLite, Text, Timestamptz,
 }
 import gleam/dynamic/decode
 import gleam/list
@@ -57,6 +57,8 @@ fn to_sqlight_values(values: List(Value)) -> List(sqlight.Value) {
         }
       Null -> sqlight.null()
       Blob(b) -> sqlight.blob(b)
+      // SQLite stores timestamps as TEXT
+      Timestamptz(s) -> sqlight.text(s)
     }
   })
 }

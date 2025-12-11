@@ -2,14 +2,14 @@
 ///
 /// Serves the GraphiQL interactive GraphQL IDE
 import admin_session as session
+import database/executor.{type Executor}
 import gleam/erlang/process.{type Subject}
 import lib/oauth/did_cache
-import sqlight
 import wisp
 
 pub fn handle_graphiql_request(
   req: wisp.Request,
-  db: sqlight.Connection,
+  db: Executor,
   did_cache: Subject(did_cache.Message),
 ) -> wisp.Response {
   // Get token from session if logged in

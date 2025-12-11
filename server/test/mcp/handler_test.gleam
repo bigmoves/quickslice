@@ -1,23 +1,24 @@
+import database/executor.{type Executor}
 import database/repositories/lexicons
-import database/schema/migrations
 import gleam/http
 import gleam/option
 import gleam/string
 import gleeunit/should
 import handlers/mcp
 import lib/oauth/did_cache
-import sqlight
+import test_helpers
 import wisp
 import wisp/simulate
 
-fn setup_test_ctx() -> #(sqlight.Connection, mcp.McpContext) {
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = migrations.run_migrations(db)
+fn setup_test_ctx() -> #(Executor, mcp.McpContext) {
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
   let assert Ok(did_cache) = did_cache.start()
 
   let ctx =
     mcp.McpContext(
-      db: db,
+      db: exec,
       external_base_url: "https://example.com",
       did_cache: did_cache,
       signing_key: option.None,
@@ -25,7 +26,7 @@ fn setup_test_ctx() -> #(sqlight.Connection, mcp.McpContext) {
       supported_scopes: ["atproto", "transition:generic"],
     )
 
-  #(db, ctx)
+  #(exec, ctx)
 }
 
 pub fn handle_initialize_test() {
@@ -72,12 +73,12 @@ pub fn handle_method_not_allowed_test() {
 }
 
 pub fn handle_tools_call_get_lexicon_test() {
-  let #(db, ctx) = setup_test_ctx()
+  let #(exec, ctx) = setup_test_ctx()
 
   // Insert a test lexicon
   let lexicon_json =
     "{\"lexicon\":1,\"id\":\"test.example.status\",\"defs\":{\"main\":{\"type\":\"record\"}}}"
-  let assert Ok(_) = lexicons.insert(db, "test.example.status", lexicon_json)
+  let assert Ok(_) = lexicons.insert(exec, "test.example.status", lexicon_json)
 
   let body =
     "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_lexicon\",\"arguments\":{\"nsid\":\"test.example.status\"}},\"id\":3}"
@@ -94,12 +95,12 @@ pub fn handle_tools_call_get_lexicon_test() {
 }
 
 pub fn handle_tools_call_execute_query_test() {
-  let #(db, ctx) = setup_test_ctx()
+  let #(exec, ctx) = setup_test_ctx()
 
   // Insert a test lexicon so schema builds
   let lexicon_json =
     "{\"lexicon\":1,\"id\":\"test.example.status\",\"defs\":{\"main\":{\"type\":\"record\",\"key\":\"tid\",\"record\":{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}}}}}}"
-  let assert Ok(_) = lexicons.insert(db, "test.example.status", lexicon_json)
+  let assert Ok(_) = lexicons.insert(exec, "test.example.status", lexicon_json)
 
   let body =
     "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"execute_query\",\"arguments\":{\"query\":\"{ __typename }\"}},\"id\":4}"

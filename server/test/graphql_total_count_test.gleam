@@ -1,10 +1,9 @@
-import database/repositories/actors
 /// Integration tests for GraphQL totalCount field
 ///
 /// These tests verify that totalCount is correctly returned in connection queries
+import database/repositories/actors
 import database/repositories/lexicons
 import database/repositories/records
-import database/schema/tables
 import gleam/http
 import gleam/int
 import gleam/json
@@ -14,7 +13,7 @@ import gleam/string
 import gleeunit/should
 import handlers/graphql as graphql_handler
 import lib/oauth/did_cache
-import sqlight
+import test_helpers
 import wisp
 import wisp/simulate
 
@@ -88,14 +87,14 @@ fn list_range_helper(current: Int, to: Int, acc: List(Int)) -> List(Int) {
 
 pub fn graphql_total_count_basic_test() {
   // Create in-memory database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
-  let assert Ok(_) = tables.create_actor_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert a lexicon
   let lexicon = create_status_lexicon()
-  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "xyz.statusphere.status", lexicon)
 
   // Insert 5 test records
   let _ =
@@ -111,7 +110,7 @@ pub fn graphql_total_count_basic_test() {
         |> json.to_string
       let assert Ok(_) =
         records.insert(
-          db,
+          exec,
           uri,
           cid,
           "did:plc:test",
@@ -142,7 +141,7 @@ pub fn graphql_total_count_basic_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       option.None,
       "",
@@ -162,25 +161,23 @@ pub fn graphql_total_count_basic_test() {
   // Should contain the count value (5 records)
   string.contains(body, "\"totalCount\": 5")
   |> should.be_true
-
   // Clean up
-  let assert Ok(_) = sqlight.close(db)
 }
 
 pub fn graphql_total_count_with_filter_test() {
   // Create in-memory database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
-  let assert Ok(_) = tables.create_actor_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert a lexicon
   let lexicon = create_status_lexicon()
-  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "xyz.statusphere.status", lexicon)
 
   // Insert test actors
-  let assert Ok(_) = actors.upsert(db, "did:plc:alice", "alice.bsky.social")
-  let assert Ok(_) = actors.upsert(db, "did:plc:bob", "bob.bsky.social")
+  let assert Ok(_) = actors.upsert(exec, "did:plc:alice", "alice.bsky.social")
+  let assert Ok(_) = actors.upsert(exec, "did:plc:bob", "bob.bsky.social")
 
   // Insert 3 records for alice
   let _ =
@@ -196,7 +193,7 @@ pub fn graphql_total_count_with_filter_test() {
         |> json.to_string
       let assert Ok(_) =
         records.insert(
-          db,
+          exec,
           uri,
           cid,
           "did:plc:alice",
@@ -220,7 +217,7 @@ pub fn graphql_total_count_with_filter_test() {
         |> json.to_string
       let assert Ok(_) =
         records.insert(
-          db,
+          exec,
           uri,
           cid,
           "did:plc:bob",
@@ -251,7 +248,7 @@ pub fn graphql_total_count_with_filter_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       option.None,
       "",
@@ -278,20 +275,18 @@ pub fn graphql_total_count_with_filter_test() {
 
   string.contains(body, "bob.bsky.social")
   |> should.be_false
-
   // Clean up
-  let assert Ok(_) = sqlight.close(db)
 }
 
 pub fn graphql_total_count_empty_result_test() {
   // Create in-memory database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   // Insert a lexicon
   let lexicon = create_status_lexicon()
-  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "xyz.statusphere.status", lexicon)
 
   // Query with totalCount field (no records inserted)
   let query =
@@ -314,7 +309,7 @@ pub fn graphql_total_count_empty_result_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       option.None,
       "",
@@ -330,20 +325,18 @@ pub fn graphql_total_count_empty_result_test() {
   // Should contain totalCount of 0
   string.contains(body, "\"totalCount\": 0")
   |> should.be_true
-
   // Clean up
-  let assert Ok(_) = sqlight.close(db)
 }
 
 pub fn graphql_total_count_with_pagination_test() {
   // Create in-memory database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   // Insert a lexicon
   let lexicon = create_status_lexicon()
-  let assert Ok(_) = lexicons.insert(db, "xyz.statusphere.status", lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "xyz.statusphere.status", lexicon)
 
   // Insert 10 test records
   let _ =
@@ -359,7 +352,7 @@ pub fn graphql_total_count_with_pagination_test() {
         |> json.to_string
       let assert Ok(_) =
         records.insert(
-          db,
+          exec,
           uri,
           cid,
           "did:plc:test",
@@ -390,7 +383,7 @@ pub fn graphql_total_count_with_pagination_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       option.None,
       "",
@@ -410,7 +403,5 @@ pub fn graphql_total_count_with_pagination_test() {
   // hasNextPage should be true (more records available)
   string.contains(body, "\"hasNextPage\": true")
   |> should.be_true
-
   // Clean up
-  let assert Ok(_) = sqlight.close(db)
 }

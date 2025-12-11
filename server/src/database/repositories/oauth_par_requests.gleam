@@ -38,12 +38,22 @@ pub fn get(
   exec: Executor,
   request_uri: String,
 ) -> Result(Option(OAuthParRequest), DbError) {
-  let sql = "SELECT request_uri, authorization_request, client_id,
-            created_at, expires_at, subject, metadata
-     FROM oauth_par_request WHERE request_uri = " <> executor.placeholder(
-      exec,
-      1,
-    )
+  // PostgreSQL: metadata is JSONB (needs ::text cast)
+  let sql = case executor.dialect(exec) {
+    executor.SQLite -> "SELECT request_uri, authorization_request, client_id,
+              created_at, expires_at, subject, metadata
+       FROM oauth_par_request WHERE request_uri = " <> executor.placeholder(
+        exec,
+        1,
+      )
+    executor.PostgreSQL ->
+      "SELECT request_uri, authorization_request, client_id,
+              created_at, expires_at, subject, metadata::text
+       FROM oauth_par_request WHERE request_uri = " <> executor.placeholder(
+        exec,
+        1,
+      )
+  }
 
   case executor.query(exec, sql, [Text(request_uri)], decoder()) {
     Ok(rows) ->

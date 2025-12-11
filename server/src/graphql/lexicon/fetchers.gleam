@@ -3,6 +3,7 @@
 /// These functions bridge the database layer to the lexicon_graphql library's
 /// expected fetcher signatures for queries, joins, and aggregations.
 import atproto_auth
+import database/executor.{type Executor}
 import database/queries/aggregates
 import database/queries/pagination
 import database/repositories/actors
@@ -18,11 +19,10 @@ import graphql/where_converter
 import lexicon_graphql/input/aggregate
 import lexicon_graphql/query/dataloader
 import lexicon_graphql/schema/database
-import sqlight
 import swell/value
 
 /// Create a record fetcher for paginated collection queries
-pub fn record_fetcher(db: sqlight.Connection) {
+pub fn record_fetcher(db: Executor) {
   fn(collection_nsid: String, pagination_params: dataloader.PaginationParams) -> Result(
     #(
       List(#(value.Value, String)),
@@ -87,7 +87,7 @@ pub fn record_fetcher(db: sqlight.Connection) {
 }
 
 /// Create a batch fetcher for join operations (forward and reverse)
-pub fn batch_fetcher(db: sqlight.Connection) {
+pub fn batch_fetcher(db: Executor) {
   fn(uris: List(String), collection: String, field: option.Option(String)) -> Result(
     dataloader.BatchResult,
     String,
@@ -176,7 +176,7 @@ pub fn batch_fetcher(db: sqlight.Connection) {
 }
 
 /// Create a paginated batch fetcher for join operations with pagination
-pub fn paginated_batch_fetcher(db: sqlight.Connection) {
+pub fn paginated_batch_fetcher(db: Executor) {
   fn(
     key: String,
     collection: String,
@@ -293,7 +293,7 @@ pub fn paginated_batch_fetcher(db: sqlight.Connection) {
 }
 
 /// Create an aggregate fetcher for GROUP BY queries
-pub fn aggregate_fetcher(db: sqlight.Connection) {
+pub fn aggregate_fetcher(db: Executor) {
   fn(collection_nsid: String, params: database.AggregateParams) {
     // Convert GraphQL where clause to SQL where clause
     let where_clause = case params.where {
@@ -333,7 +333,7 @@ pub fn aggregate_fetcher(db: sqlight.Connection) {
 }
 
 /// Create a viewer fetcher for authenticated user info
-pub fn viewer_fetcher(db: sqlight.Connection) {
+pub fn viewer_fetcher(db: Executor) {
   fn(token: String) {
     case atproto_auth.verify_token(db, token) {
       Error(_) -> Error("Invalid or expired token")

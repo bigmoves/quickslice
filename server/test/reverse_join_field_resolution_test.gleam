@@ -6,7 +6,6 @@
 /// 3. Nested queries work correctly: profile → galleries → items → photos
 import database/repositories/lexicons
 import database/repositories/records
-import database/schema/tables
 import gleam/bool
 import gleam/json
 import gleam/option
@@ -14,7 +13,7 @@ import gleam/string
 import gleeunit/should
 import graphql/lexicon/schema as lexicon_schema
 import lib/oauth/did_cache
-import sqlight
+import test_helpers
 
 // Helper to create gallery lexicon
 fn create_gallery_lexicon() -> String {
@@ -240,23 +239,22 @@ fn create_profile_lexicon() -> String {
 /// Test that forward join fields (itemResolved) are available through reverse joins
 /// This tests the fix for the circular dependency issue in schema building
 pub fn reverse_join_includes_forward_join_fields_test() {
-  let assert Ok(conn) = sqlight.open(":memory:")
-
-  let assert Ok(_) = tables.create_lexicon_table(conn)
-  let assert Ok(_) = tables.create_record_table(conn)
-  let assert Ok(_) = tables.create_actor_table(conn)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert lexicons
   let assert Ok(_) =
-    lexicons.insert(conn, "social.grain.gallery", create_gallery_lexicon())
+    lexicons.insert(exec, "social.grain.gallery", create_gallery_lexicon())
   let assert Ok(_) =
     lexicons.insert(
-      conn,
+      exec,
       "social.grain.gallery.item",
       create_gallery_item_lexicon(),
     )
   let assert Ok(_) =
-    lexicons.insert(conn, "social.grain.photo", create_photo_lexicon())
+    lexicons.insert(exec, "social.grain.photo", create_photo_lexicon())
 
   // Create test data
   let did1 = "did:test:user1"
@@ -273,7 +271,7 @@ pub fn reverse_join_includes_forward_join_fields_test() {
     |> json.to_string
   let assert Ok(_) =
     records.insert(
-      conn,
+      exec,
       gallery_uri,
       "cid1",
       did1,
@@ -290,7 +288,7 @@ pub fn reverse_join_includes_forward_join_fields_test() {
     |> json.to_string
   let assert Ok(_) =
     records.insert(
-      conn,
+      exec,
       photo_uri,
       "cid2",
       did1,
@@ -309,7 +307,7 @@ pub fn reverse_join_includes_forward_join_fields_test() {
     |> json.to_string
   let assert Ok(_) =
     records.insert(
-      conn,
+      exec,
       item_uri,
       "cid3",
       did1,
@@ -345,7 +343,7 @@ pub fn reverse_join_includes_forward_join_fields_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     lexicon_schema.execute_query_with_db(
-      conn,
+      exec,
       query,
       "{}",
       Error(Nil),
@@ -375,14 +373,14 @@ pub fn reverse_join_includes_forward_join_fields_test() {
 /// Test that integer fields are correctly resolved (not converted to strings)
 /// This tests the fix for field value type handling
 pub fn integer_field_resolves_correctly_test() {
-  let assert Ok(conn) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(conn)
-  let assert Ok(_) = tables.create_record_table(conn)
-  let assert Ok(_) = tables.create_actor_table(conn)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   let assert Ok(_) =
     lexicons.insert(
-      conn,
+      exec,
       "social.grain.gallery.item",
       create_gallery_item_lexicon(),
     )
@@ -404,7 +402,7 @@ pub fn integer_field_resolves_correctly_test() {
 
   let assert Ok(_) =
     records.insert(
-      conn,
+      exec,
       item_uri,
       "cid1",
       did1,
@@ -427,7 +425,7 @@ pub fn integer_field_resolves_correctly_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     lexicon_schema.execute_query_with_db(
-      conn,
+      exec,
       query,
       "{}",
       Error(Nil),
@@ -451,28 +449,28 @@ pub fn integer_field_resolves_correctly_test() {
 /// Test complete nested query: profile → galleries → items → photos with sorting
 /// This is the actual use case that was failing before the fixes
 pub fn nested_query_profile_to_photos_test() {
-  let assert Ok(conn) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(conn)
-  let assert Ok(_) = tables.create_record_table(conn)
-  let assert Ok(_) = tables.create_actor_table(conn)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert all lexicons
   let assert Ok(_) =
     lexicons.insert(
-      conn,
+      exec,
       "social.grain.actor.profile",
       create_profile_lexicon(),
     )
   let assert Ok(_) =
-    lexicons.insert(conn, "social.grain.gallery", create_gallery_lexicon())
+    lexicons.insert(exec, "social.grain.gallery", create_gallery_lexicon())
   let assert Ok(_) =
     lexicons.insert(
-      conn,
+      exec,
       "social.grain.gallery.item",
       create_gallery_item_lexicon(),
     )
   let assert Ok(_) =
-    lexicons.insert(conn, "social.grain.photo", create_photo_lexicon())
+    lexicons.insert(exec, "social.grain.photo", create_photo_lexicon())
 
   let did1 = "did:test:alice"
   let profile_uri = "at://" <> did1 <> "/social.grain.actor.profile/self"
@@ -485,7 +483,7 @@ pub fn nested_query_profile_to_photos_test() {
   // Insert profile
   let assert Ok(_) =
     records.insert(
-      conn,
+      exec,
       profile_uri,
       "cid1",
       did1,
@@ -496,7 +494,7 @@ pub fn nested_query_profile_to_photos_test() {
   // Insert gallery
   let assert Ok(_) =
     records.insert(
-      conn,
+      exec,
       gallery_uri,
       "cid2",
       did1,
@@ -507,7 +505,7 @@ pub fn nested_query_profile_to_photos_test() {
   // Insert photos
   let assert Ok(_) =
     records.insert(
-      conn,
+      exec,
       photo1_uri,
       "cid3",
       did1,
@@ -516,7 +514,7 @@ pub fn nested_query_profile_to_photos_test() {
     )
   let assert Ok(_) =
     records.insert(
-      conn,
+      exec,
       photo2_uri,
       "cid4",
       did1,
@@ -527,7 +525,7 @@ pub fn nested_query_profile_to_photos_test() {
   // Insert gallery items with positions
   let assert Ok(_) =
     records.insert(
-      conn,
+      exec,
       item1_uri,
       "cid5",
       did1,
@@ -540,7 +538,7 @@ pub fn nested_query_profile_to_photos_test() {
     )
   let assert Ok(_) =
     records.insert(
-      conn,
+      exec,
       item2_uri,
       "cid6",
       did1,
@@ -589,7 +587,7 @@ pub fn nested_query_profile_to_photos_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     lexicon_schema.execute_query_with_db(
-      conn,
+      exec,
       query,
       "{}",
       Error(Nil),

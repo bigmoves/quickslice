@@ -80,12 +80,23 @@ pub fn get(
   exec: Executor,
   client_id: String,
 ) -> Result(Option(OAuthClient), DbError) {
-  let sql = "SELECT client_id, client_secret, client_name, redirect_uris,
-            grant_types, response_types, scope, token_endpoint_auth_method,
-            client_type, created_at, updated_at, metadata,
-            access_token_expiration, refresh_token_expiration,
-            require_redirect_exact, registration_access_token, jwks
-     FROM oauth_client WHERE client_id = " <> executor.placeholder(exec, 1)
+  // PostgreSQL: metadata and jwks are JSONB (need ::text cast)
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "SELECT client_id, client_secret, client_name, redirect_uris,
+              grant_types, response_types, scope, token_endpoint_auth_method,
+              client_type, created_at, updated_at, metadata,
+              access_token_expiration, refresh_token_expiration,
+              require_redirect_exact, registration_access_token, jwks
+       FROM oauth_client WHERE client_id = " <> executor.placeholder(exec, 1)
+    executor.PostgreSQL ->
+      "SELECT client_id, client_secret, client_name, redirect_uris,
+              grant_types, response_types, scope, token_endpoint_auth_method,
+              client_type, created_at, updated_at, metadata::text,
+              access_token_expiration, refresh_token_expiration,
+              require_redirect_exact, registration_access_token, jwks::text
+       FROM oauth_client WHERE client_id = " <> executor.placeholder(exec, 1)
+  }
 
   case executor.query(exec, sql, [Text(client_id)], decoder()) {
     Ok(rows) ->
@@ -99,14 +110,25 @@ pub fn get(
 
 /// Get all OAuth clients (excludes internal 'admin' client)
 pub fn get_all(exec: Executor) -> Result(List(OAuthClient), DbError) {
-  let sql =
-    "SELECT client_id, client_secret, client_name, redirect_uris,
-            grant_types, response_types, scope, token_endpoint_auth_method,
-            client_type, created_at, updated_at, metadata,
-            access_token_expiration, refresh_token_expiration,
-            require_redirect_exact, registration_access_token, jwks
-     FROM oauth_client WHERE client_id != 'admin'
-     ORDER BY created_at DESC"
+  // PostgreSQL: metadata and jwks are JSONB (need ::text cast)
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "SELECT client_id, client_secret, client_name, redirect_uris,
+              grant_types, response_types, scope, token_endpoint_auth_method,
+              client_type, created_at, updated_at, metadata,
+              access_token_expiration, refresh_token_expiration,
+              require_redirect_exact, registration_access_token, jwks
+       FROM oauth_client WHERE client_id != 'admin'
+       ORDER BY created_at DESC"
+    executor.PostgreSQL ->
+      "SELECT client_id, client_secret, client_name, redirect_uris,
+              grant_types, response_types, scope, token_endpoint_auth_method,
+              client_type, created_at, updated_at, metadata::text,
+              access_token_expiration, refresh_token_expiration,
+              require_redirect_exact, registration_access_token, jwks::text
+       FROM oauth_client WHERE client_id != 'admin'
+       ORDER BY created_at DESC"
+  }
 
   executor.query(exec, sql, [], decoder())
 }

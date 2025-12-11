@@ -1,4 +1,3 @@
-import database/repositories/actors
 /// Integration tests for sortBy and where on nested join connections
 ///
 /// Tests verify that:
@@ -6,9 +5,9 @@ import database/repositories/actors
 /// - where filters work on nested joins
 /// - totalCount reflects filtered results
 /// - Combination of sortBy + where works correctly
+import database/repositories/actors
 import database/repositories/lexicons
 import database/repositories/records
-import database/schema/tables
 import gleam/int
 import gleam/json
 import gleam/list
@@ -17,7 +16,7 @@ import gleam/string
 import gleeunit/should
 import graphql/lexicon/schema as lexicon_schema
 import lib/oauth/did_cache
-import sqlight
+import test_helpers
 
 // Helper to create a status lexicon with createdAt field
 fn create_status_lexicon() -> String {
@@ -108,18 +107,18 @@ fn create_profile_lexicon() -> String {
 // Test: DID join with sortBy on createdAt DESC
 pub fn did_join_sortby_createdat_desc_test() {
   // Setup database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
-  let assert Ok(_) = tables.create_actor_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert lexicons
   let status_lexicon = create_status_lexicon()
   let profile_lexicon = create_profile_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(exec, "xyz.statusphere.status", status_lexicon)
   let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(exec, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile
   let profile_uri = "at://did:plc:user1/app.bsky.actor.profile/self"
@@ -129,7 +128,7 @@ pub fn did_join_sortby_createdat_desc_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       profile_uri,
       "cid_profile",
       "did:plc:user1",
@@ -159,7 +158,7 @@ pub fn did_join_sortby_createdat_desc_test() {
 
     let assert Ok(_) =
       records.insert(
-        db,
+        exec,
         status_uri,
         "cid_status" <> int.to_string(i),
         "did:plc:user1",
@@ -198,7 +197,7 @@ pub fn did_join_sortby_createdat_desc_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     lexicon_schema.execute_query_with_db(
-      db,
+      exec,
       query,
       "{}",
       Error(Nil),
@@ -260,18 +259,18 @@ pub fn did_join_sortby_createdat_desc_test() {
 // Test: DID join with sortBy createdAt ASC
 pub fn did_join_sortby_createdat_asc_test() {
   // Setup database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
-  let assert Ok(_) = tables.create_actor_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert lexicons
   let status_lexicon = create_status_lexicon()
   let profile_lexicon = create_profile_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(exec, "xyz.statusphere.status", status_lexicon)
   let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(exec, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile
   let profile_uri = "at://did:plc:user1/app.bsky.actor.profile/self"
@@ -281,7 +280,7 @@ pub fn did_join_sortby_createdat_asc_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       profile_uri,
       "cid_profile",
       "did:plc:user1",
@@ -306,7 +305,7 @@ pub fn did_join_sortby_createdat_asc_test() {
 
     let assert Ok(_) =
       records.insert(
-        db,
+        exec,
         status_uri,
         "cid_status" <> int.to_string(i),
         "did:plc:user1",
@@ -344,7 +343,7 @@ pub fn did_join_sortby_createdat_asc_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     lexicon_schema.execute_query_with_db(
-      db,
+      exec,
       query,
       "{}",
       Error(Nil),
@@ -375,18 +374,18 @@ pub fn did_join_sortby_createdat_asc_test() {
 // Test: DID join with where filter on status field
 pub fn did_join_where_filter_test() {
   // Setup database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
-  let assert Ok(_) = tables.create_actor_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert lexicons
   let status_lexicon = create_status_lexicon()
   let profile_lexicon = create_profile_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(exec, "xyz.statusphere.status", status_lexicon)
   let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(exec, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile
   let profile_uri = "at://did:plc:user1/app.bsky.actor.profile/self"
@@ -396,7 +395,7 @@ pub fn did_join_where_filter_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       profile_uri,
       "cid_profile",
       "did:plc:user1",
@@ -427,7 +426,7 @@ pub fn did_join_where_filter_test() {
 
     let assert Ok(_) =
       records.insert(
-        db,
+        exec,
         status_uri,
         "cid_status" <> int.to_string(i),
         "did:plc:user1",
@@ -465,7 +464,7 @@ pub fn did_join_where_filter_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     lexicon_schema.execute_query_with_db(
-      db,
+      exec,
       query,
       "{}",
       Error(Nil),
@@ -500,18 +499,18 @@ pub fn did_join_where_filter_test() {
 // Test: Combination of sortBy + where + first
 pub fn did_join_sortby_where_first_test() {
   // Setup database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
-  let assert Ok(_) = tables.create_actor_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert lexicons
   let status_lexicon = create_status_lexicon()
   let profile_lexicon = create_profile_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(exec, "xyz.statusphere.status", status_lexicon)
   let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(exec, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile
   let profile_uri = "at://did:plc:user1/app.bsky.actor.profile/self"
@@ -521,7 +520,7 @@ pub fn did_join_sortby_where_first_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       profile_uri,
       "cid_profile",
       "did:plc:user1",
@@ -552,7 +551,7 @@ pub fn did_join_sortby_where_first_test() {
 
     let assert Ok(_) =
       records.insert(
-        db,
+        exec,
         status_uri,
         "cid_status" <> int.to_string(i),
         "did:plc:user1",
@@ -595,7 +594,7 @@ pub fn did_join_sortby_where_first_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     lexicon_schema.execute_query_with_db(
-      db,
+      exec,
       query,
       "{}",
       Error(Nil),
@@ -641,18 +640,18 @@ pub fn did_join_sortby_where_first_test() {
 // Test: Exact query pattern from user - top-level where + nested sortBy
 pub fn user_query_pattern_test() {
   // Setup database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
-  let assert Ok(_) = tables.create_actor_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert lexicons
   let status_lexicon = create_status_lexicon()
   let profile_lexicon = create_profile_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(exec, "xyz.statusphere.status", status_lexicon)
   let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(exec, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert 2 profiles with different handles
   let profile1_uri = "at://did:plc:user1/app.bsky.actor.profile/self"
@@ -662,7 +661,7 @@ pub fn user_query_pattern_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       profile1_uri,
       "cid_profile1",
       "did:plc:user1",
@@ -670,7 +669,7 @@ pub fn user_query_pattern_test() {
       profile1_json,
     )
 
-  let assert Ok(_) = actors.upsert(db, "did:plc:user1", "chadtmiller.com")
+  let assert Ok(_) = actors.upsert(exec, "did:plc:user1", "chadtmiller.com")
 
   let profile2_uri = "at://did:plc:user2/app.bsky.actor.profile/self"
   let profile2_json =
@@ -679,7 +678,7 @@ pub fn user_query_pattern_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       profile2_uri,
       "cid_profile2",
       "did:plc:user2",
@@ -687,7 +686,7 @@ pub fn user_query_pattern_test() {
       profile2_json,
     )
 
-  let assert Ok(_) = actors.upsert(db, "did:plc:user2", "other.com")
+  let assert Ok(_) = actors.upsert(exec, "did:plc:user2", "other.com")
 
   // Insert statuses for user1 (chadtmiller.com)
   let statuses1 = [
@@ -710,7 +709,7 @@ pub fn user_query_pattern_test() {
 
     let assert Ok(_) =
       records.insert(
-        db,
+        exec,
         status_uri,
         "cid_status1_" <> int.to_string(i),
         "did:plc:user1",
@@ -723,7 +722,7 @@ pub fn user_query_pattern_test() {
   // Insert statuses for user2 (should be filtered out)
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://did:plc:user2/xyz.statusphere.status/status1",
       "cid_status2_1",
       "did:plc:user2",
@@ -765,7 +764,7 @@ pub fn user_query_pattern_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     lexicon_schema.execute_query_with_db(
-      db,
+      exec,
       query,
       "{}",
       Error(Nil),

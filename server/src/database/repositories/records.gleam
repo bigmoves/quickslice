@@ -1,6 +1,4 @@
-import database/executor.{
-  type DbError, type Executor, type Value, Int as DbInt, Text,
-}
+import database/executor.{type DbError, type Executor, type Value, Text}
 import database/queries/pagination
 import database/queries/where_clause
 import database/types.{
@@ -14,6 +12,29 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+
+// ===== Column Selection Helpers =====
+
+/// Returns the columns to select for Record queries
+/// PostgreSQL: json is JSONB (needs ::text cast), indexed_at is TIMESTAMPTZ (needs ::text cast)
+/// SQLite: both are TEXT
+fn record_columns(exec: Executor) -> String {
+  case executor.dialect(exec) {
+    executor.SQLite -> "uri, cid, did, collection, json, indexed_at"
+    executor.PostgreSQL ->
+      "uri, cid, did, collection, json::text, indexed_at::text"
+  }
+}
+
+/// Returns the prefixed columns to select for Record queries (for JOINs)
+fn record_columns_prefixed(exec: Executor) -> String {
+  case executor.dialect(exec) {
+    executor.SQLite ->
+      "record.uri, record.cid, record.did, record.collection, record.json, record.indexed_at"
+    executor.PostgreSQL ->
+      "record.uri, record.cid, record.did, record.collection, record.json::text, record.indexed_at::text"
+  }
+}
 
 // ===== Helper Functions =====
 
@@ -288,7 +309,9 @@ pub fn batch_insert(
 /// Gets a record by URI
 pub fn get(exec: Executor, uri: String) -> Result(List(Record), DbError) {
   let sql =
-    "SELECT uri, cid, did, collection, json, indexed_at FROM record WHERE uri = "
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE uri = "
     <> executor.placeholder(exec, 1)
 
   executor.query(exec, sql, [Text(uri)], record_decoder())
@@ -297,7 +320,9 @@ pub fn get(exec: Executor, uri: String) -> Result(List(Record), DbError) {
 /// Gets all records for a specific DID
 pub fn get_by_did(exec: Executor, did: String) -> Result(List(Record), DbError) {
   let sql =
-    "SELECT uri, cid, did, collection, json, indexed_at FROM record WHERE did = "
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE did = "
     <> executor.placeholder(exec, 1)
     <> " ORDER BY indexed_at DESC"
 
@@ -310,7 +335,9 @@ pub fn get_by_collection(
   collection: String,
 ) -> Result(List(Record), DbError) {
   let sql =
-    "SELECT uri, cid, did, collection, json, indexed_at FROM record WHERE collection = "
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE collection = "
     <> executor.placeholder(exec, 1)
     <> " ORDER BY indexed_at DESC LIMIT 100"
 
@@ -535,7 +562,9 @@ pub fn get_by_collection_paginated(
 
   // Build the SQL query
   let sql =
-    "SELECT uri, cid, did, collection, json, indexed_at FROM record WHERE "
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE "
     <> string.join(final_where_parts, " AND ")
     <> " ORDER BY "
     <> order_by_clause
@@ -686,7 +715,9 @@ pub fn get_by_collection_paginated_with_where(
 
   // Build the SQL query
   let sql =
-    "SELECT record.uri, record.cid, record.did, record.collection, record.json, record.indexed_at FROM "
+    "SELECT "
+    <> record_columns_prefixed(exec)
+    <> " FROM "
     <> from_clause
     <> " WHERE "
     <> string.join(final_where_parts, " AND ")
@@ -751,7 +782,9 @@ pub fn get_by_uris(
       let placeholders = executor.placeholders(exec, list.length(uris), 1)
 
       let sql =
-        "SELECT uri, cid, did, collection, json, indexed_at FROM record WHERE uri IN ("
+        "SELECT "
+        <> record_columns(exec)
+        <> " FROM record WHERE uri IN ("
         <> placeholders
         <> ")"
 
@@ -788,7 +821,9 @@ pub fn get_by_reference_field(
         executor.json_extract_path(exec, "json", [field_name, "uri"])
 
       let sql =
-        "SELECT uri, cid, did, collection, json, indexed_at FROM record WHERE collection = "
+        "SELECT "
+        <> record_columns(exec)
+        <> " FROM record WHERE collection = "
         <> executor.placeholder(exec, 1)
         <> " AND ("
         <> json_field
@@ -921,7 +956,9 @@ pub fn get_by_reference_field_paginated(
 
   // Build the SQL query
   let sql =
-    "SELECT uri, cid, did, collection, json, indexed_at FROM record WHERE "
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE "
     <> string.join(final_where_parts, " AND ")
     <> " ORDER BY "
     <> order_by_clause
@@ -1010,7 +1047,9 @@ pub fn get_by_dids_and_collection(
       let placeholders = executor.placeholders(exec, did_count, 1)
 
       let sql =
-        "SELECT uri, cid, did, collection, json, indexed_at FROM record WHERE did IN ("
+        "SELECT "
+        <> record_columns(exec)
+        <> " FROM record WHERE did IN ("
         <> placeholders
         <> ") AND collection = "
         <> executor.placeholder(exec, did_count + 1)
@@ -1115,7 +1154,9 @@ pub fn get_by_dids_and_collection_paginated(
 
   // Build the SQL query
   let sql =
-    "SELECT uri, cid, did, collection, json, indexed_at FROM record WHERE "
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE "
     <> string.join(final_where_parts, " AND ")
     <> " ORDER BY "
     <> order_by_clause

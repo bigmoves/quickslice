@@ -1,3 +1,4 @@
+import database/executor.{type Executor}
 import database/repositories/admin_session
 import database/repositories/oauth_access_tokens
 import database/repositories/oauth_atp_sessions
@@ -12,7 +13,6 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import lib/oauth/atproto/did_resolver
 import lib/oauth/did_cache
-import sqlight.{type Connection}
 import wisp.{type Request, type Response}
 
 /// OAuth session data stored server-side
@@ -74,7 +74,7 @@ pub fn clear_session_cookie(response: Response, req: Request) -> Response {
 /// Returns (did, handle, access_token)
 pub fn get_current_user(
   req: Request,
-  db: Connection,
+  db: Executor,
   did_cache: Subject(did_cache.Message),
 ) -> Result(#(String, String, String), Nil) {
   use sess <- result.try(get_current_session(req, db, did_cache))
@@ -85,7 +85,7 @@ pub fn get_current_user(
 /// Returns OAuthSession for compatibility with existing callers
 pub fn get_current_session(
   req: Request,
-  db: Connection,
+  db: Executor,
   did_cache: Subject(did_cache.Message),
 ) -> Result(OAuthSession, Nil) {
   use session_id <- result.try(get_session_id(req))
@@ -164,19 +164,24 @@ pub fn get_current_session(
 
 /// Check if a session token is expired or will expire soon (within 5 minutes)
 /// Returns True if token should be refreshed
-pub fn should_refresh_token(db: Connection, session: OAuthSession) -> Bool {
+pub fn should_refresh_token(db: Executor, session: OAuthSession) -> Bool {
   case session.expires_at {
     option.None -> False
     option.Some(expires_at) -> {
       // Check if token expires within 5 minutes (300 seconds)
-      let sql = "SELECT (? - unixepoch()) < 300"
+      // Use dialect-aware time function
+      let sql = case executor.dialect(db) {
+        executor.SQLite -> "SELECT (? - unixepoch()) < 300"
+        executor.PostgreSQL ->
+          "SELECT ($1::bigint - EXTRACT(EPOCH FROM NOW())::bigint) < 300"
+      }
 
       let decoder = {
         use should_refresh <- decode.field(0, decode.int)
         decode.success(should_refresh != 0)
       }
 
-      case sqlight.query(sql, db, [sqlight.int(expires_at)], decoder) {
+      case executor.query(db, sql, [executor.Int(expires_at)], decoder) {
         Ok([True]) -> True
         _ -> False
       }

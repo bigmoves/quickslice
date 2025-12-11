@@ -3,6 +3,12 @@
 
 .PHONY: help build test clean db-create db-migrate db-rollback db-status db-reset db-setup-sqlite db-setup-postgres
 
+# Load .env file if it exists (exports DATABASE_URL and other vars)
+ifneq (,$(wildcard .env))
+    include .env
+    export
+endif
+
 # Default target
 help:
 	@echo "Quickslice Server Commands"
@@ -24,7 +30,7 @@ help:
 	@echo "  make db-setup-postgres - Set up PostgreSQL database"
 	@echo ""
 	@echo "Environment Variables:"
-	@echo "  DATABASE_URL - Connection string (required for db-* commands)"
+	@echo "  DATABASE_URL - Connection string (auto-loaded from .env if present)"
 	@echo "    SQLite:     sqlite:data/quickslice.db"
 	@echo "    PostgreSQL: postgres://user:pass@localhost:5432/quickslice"
 

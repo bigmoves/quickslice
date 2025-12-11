@@ -1,20 +1,20 @@
 /// Converts GraphQL where input types to SQL where clause types
 ///
 /// This module bridges the gap between the GraphQL layer (lexicon_graphql/input/where)
-/// and the database layer (where_clause with sqlight types).
+/// and the database layer (where_clause with database Value types).
+import database/executor.{type Value, Bool, Int, Text}
 import database/queries/where_clause
 import gleam/dict
 import gleam/list
 import gleam/option.{type Option}
 import lexicon_graphql/input/where
-import sqlight
 
-/// Convert a where.WhereValue to a sqlight.Value
-fn convert_value(value: where.WhereValue) -> sqlight.Value {
+/// Convert a where.WhereValue to a database Value
+fn convert_value(value: where.WhereValue) -> Value {
   case value {
-    where.StringValue(s) -> sqlight.text(s)
-    where.IntValue(i) -> sqlight.int(i)
-    where.BoolValue(b) -> sqlight.bool(b)
+    where.StringValue(s) -> Text(s)
+    where.IntValue(i) -> Int(i)
+    where.BoolValue(b) -> Bool(b)
   }
 }
 

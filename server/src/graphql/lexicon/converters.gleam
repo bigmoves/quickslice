@@ -1,6 +1,7 @@
 /// Value converters for lexicon GraphQL API
 ///
 /// Transform database records and dynamic values to GraphQL value.Value objects
+import database/executor.{type Executor}
 import database/repositories/actors
 import database/types
 import gleam/dict
@@ -8,7 +9,6 @@ import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/json
 import gleam/list
-import sqlight
 import swell/value
 
 /// Convert a database Record to a GraphQL value.Value
@@ -16,7 +16,7 @@ import swell/value
 /// Creates an Object with all the record metadata plus the parsed JSON value
 pub fn record_to_graphql_value(
   record: types.Record,
-  db: sqlight.Connection,
+  db: Executor,
 ) -> value.Value {
   // Parse the record JSON and convert to GraphQL value
   let value_object = case parse_json_to_value(record.json) {

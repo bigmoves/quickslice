@@ -1,68 +1,85 @@
+import database/executor.{type Executor, Int, Text}
 import database/queries/where_clause
 import database/repositories/records
-import database/schema/tables
 import gleam/dict
-import gleam/dynamic/decode
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
 import gleeunit
 import gleeunit/should
-import sqlight
+import test_helpers
 
 pub fn main() {
   gleeunit.main()
 }
 
 // Helper to setup test database with sample records
-fn setup_test_db() -> Result(sqlight.Connection, sqlight.Error) {
-  use conn <- result.try(sqlight.open(":memory:"))
-  use _ <- result.try(tables.create_record_table(conn))
+fn setup_test_db() -> Result(Executor, String) {
+  use exec <- result.try(
+    test_helpers.create_test_db()
+    |> result.map_error(fn(_) { "Failed to connect" }),
+  )
+  use _ <- result.try(
+    test_helpers.create_record_table(exec)
+    |> result.map_error(fn(_) { "Failed to create table" }),
+  )
 
   // Insert test records
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:1/app.bsky.feed.post/1",
-    "cid1",
-    "did:plc:1",
-    "app.bsky.feed.post",
-    "{\"text\":\"Hello World\",\"likes\":100}",
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:1/app.bsky.feed.post/1",
+      "cid1",
+      "did:plc:1",
+      "app.bsky.feed.post",
+      "{\"text\":\"Hello World\",\"likes\":100}",
+    )
+    |> result.map_error(fn(_) { "Failed to insert record" }),
+  )
 
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:2/app.bsky.feed.post/2",
-    "cid2",
-    "did:plc:2",
-    "app.bsky.feed.post",
-    "{\"text\":\"Goodbye World\",\"likes\":50}",
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:2/app.bsky.feed.post/2",
+      "cid2",
+      "did:plc:2",
+      "app.bsky.feed.post",
+      "{\"text\":\"Goodbye World\",\"likes\":50}",
+    )
+    |> result.map_error(fn(_) { "Failed to insert record" }),
+  )
 
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:3/app.bsky.feed.post/3",
-    "cid3",
-    "did:plc:3",
-    "app.bsky.feed.post",
-    "{\"text\":\"Test post\",\"likes\":200}",
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:3/app.bsky.feed.post/3",
+      "cid3",
+      "did:plc:3",
+      "app.bsky.feed.post",
+      "{\"text\":\"Test post\",\"likes\":200}",
+    )
+    |> result.map_error(fn(_) { "Failed to insert record" }),
+  )
 
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:1/app.bsky.actor.profile/1",
-    "cid4",
-    "did:plc:1",
-    "app.bsky.actor.profile",
-    "{\"displayName\":\"Alice\"}",
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:1/app.bsky.actor.profile/1",
+      "cid4",
+      "did:plc:1",
+      "app.bsky.actor.profile",
+      "{\"displayName\":\"Alice\"}",
+    )
+    |> result.map_error(fn(_) { "Failed to insert record" }),
+  )
 
-  Ok(conn)
+  Ok(exec)
 }
 
 // Test: Filter by DID (table column)
 pub fn filter_by_did_test() {
-  let assert Ok(conn) = setup_test_db()
+  let assert Ok(exec) = setup_test_db()
 
   let where_clause =
     where_clause.WhereClause(
@@ -70,7 +87,7 @@ pub fn filter_by_did_test() {
         #(
           "did",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("did:plc:1")),
+            eq: Some(Text("did:plc:1")),
             in_values: None,
             contains: None,
             gt: None,
@@ -88,7 +105,7 @@ pub fn filter_by_did_test() {
 
   let result =
     records.get_by_collection_paginated_with_where(
-      conn,
+      exec,
       "app.bsky.feed.post",
       Some(10),
       None,
@@ -112,7 +129,7 @@ pub fn filter_by_did_test() {
 
 // Test: Filter by JSON field with contains
 pub fn filter_by_json_contains_test() {
-  let assert Ok(conn) = setup_test_db()
+  let assert Ok(exec) = setup_test_db()
 
   let where_clause =
     where_clause.WhereClause(
@@ -138,7 +155,7 @@ pub fn filter_by_json_contains_test() {
 
   let result =
     records.get_by_collection_paginated_with_where(
-      conn,
+      exec,
       "app.bsky.feed.post",
       Some(10),
       None,
@@ -162,7 +179,7 @@ pub fn filter_by_json_contains_test() {
 
 // Test: Filter by JSON field comparison (gt)
 pub fn filter_by_json_comparison_test() {
-  let assert Ok(conn) = setup_test_db()
+  let assert Ok(exec) = setup_test_db()
 
   let where_clause =
     where_clause.WhereClause(
@@ -173,7 +190,7 @@ pub fn filter_by_json_comparison_test() {
             eq: None,
             in_values: None,
             contains: None,
-            gt: Some(sqlight.int(75)),
+            gt: Some(Int(75)),
             gte: None,
             lt: None,
             lte: None,
@@ -188,7 +205,7 @@ pub fn filter_by_json_comparison_test() {
 
   let result =
     records.get_by_collection_paginated_with_where(
-      conn,
+      exec,
       "app.bsky.feed.post",
       Some(10),
       None,
@@ -209,7 +226,7 @@ pub fn filter_by_json_comparison_test() {
 
 // Test: Range query with gte and lt
 pub fn filter_range_query_test() {
-  let assert Ok(conn) = setup_test_db()
+  let assert Ok(exec) = setup_test_db()
 
   let where_clause =
     where_clause.WhereClause(
@@ -221,8 +238,8 @@ pub fn filter_range_query_test() {
             in_values: None,
             contains: None,
             gt: None,
-            gte: Some(sqlight.int(50)),
-            lt: Some(sqlight.int(150)),
+            gte: Some(Int(50)),
+            lt: Some(Int(150)),
             lte: None,
             is_null: None,
             is_numeric: False,
@@ -235,7 +252,7 @@ pub fn filter_range_query_test() {
 
   let result =
     records.get_by_collection_paginated_with_where(
-      conn,
+      exec,
       "app.bsky.feed.post",
       Some(10),
       None,
@@ -256,7 +273,7 @@ pub fn filter_range_query_test() {
 
 // Test: Nested AND with multiple conditions
 pub fn filter_nested_and_test() {
-  let assert Ok(conn) = setup_test_db()
+  let assert Ok(exec) = setup_test_db()
 
   let did_clause =
     where_clause.WhereClause(
@@ -264,7 +281,7 @@ pub fn filter_nested_and_test() {
         #(
           "did",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("did:plc:1")),
+            eq: Some(Text("did:plc:1")),
             in_values: None,
             contains: None,
             gt: None,
@@ -289,7 +306,7 @@ pub fn filter_nested_and_test() {
             eq: None,
             in_values: None,
             contains: None,
-            gt: Some(sqlight.int(50)),
+            gt: Some(Int(50)),
             gte: None,
             lt: None,
             lte: None,
@@ -311,7 +328,7 @@ pub fn filter_nested_and_test() {
 
   let result =
     records.get_by_collection_paginated_with_where(
-      conn,
+      exec,
       "app.bsky.feed.post",
       Some(10),
       None,
@@ -339,7 +356,7 @@ pub fn filter_nested_and_test() {
 
 // Test: Nested OR with multiple conditions
 pub fn filter_nested_or_test() {
-  let assert Ok(conn) = setup_test_db()
+  let assert Ok(exec) = setup_test_db()
 
   let did1_clause =
     where_clause.WhereClause(
@@ -347,7 +364,7 @@ pub fn filter_nested_or_test() {
         #(
           "did",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("did:plc:1")),
+            eq: Some(Text("did:plc:1")),
             in_values: None,
             contains: None,
             gt: None,
@@ -369,7 +386,7 @@ pub fn filter_nested_or_test() {
         #(
           "did",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("did:plc:2")),
+            eq: Some(Text("did:plc:2")),
             in_values: None,
             contains: None,
             gt: None,
@@ -394,7 +411,7 @@ pub fn filter_nested_or_test() {
 
   let result =
     records.get_by_collection_paginated_with_where(
-      conn,
+      exec,
       "app.bsky.feed.post",
       Some(10),
       None,
@@ -415,13 +432,13 @@ pub fn filter_nested_or_test() {
 
 // Test: Empty where clause returns all records
 pub fn filter_empty_where_test() {
-  let assert Ok(conn) = setup_test_db()
+  let assert Ok(exec) = setup_test_db()
 
   let where_clause = where_clause.empty_clause()
 
   let result =
     records.get_by_collection_paginated_with_where(
-      conn,
+      exec,
       "app.bsky.feed.post",
       Some(10),
       None,
@@ -442,7 +459,7 @@ pub fn filter_empty_where_test() {
 
 // Test: Where clause with pagination
 pub fn filter_with_pagination_test() {
-  let assert Ok(conn) = setup_test_db()
+  let assert Ok(exec) = setup_test_db()
 
   let where_clause =
     where_clause.WhereClause(
@@ -453,7 +470,7 @@ pub fn filter_with_pagination_test() {
             eq: None,
             in_values: None,
             contains: None,
-            gt: Some(sqlight.int(25)),
+            gt: Some(Int(25)),
             gte: None,
             lt: None,
             lte: None,
@@ -469,7 +486,7 @@ pub fn filter_with_pagination_test() {
   // First page: limit 2
   let result =
     records.get_by_collection_paginated_with_where(
-      conn,
+      exec,
       "app.bsky.feed.post",
       Some(2),
       None,
@@ -492,7 +509,7 @@ pub fn filter_with_pagination_test() {
 
 // Test: Numeric comparison with is_numeric=True uses INTEGER cast
 pub fn filter_numeric_with_cast_test() {
-  let assert Ok(conn) = setup_test_db()
+  let assert Ok(exec) = setup_test_db()
 
   // Test that numeric comparisons work with is_numeric: True
   let where_clause =
@@ -504,7 +521,7 @@ pub fn filter_numeric_with_cast_test() {
             eq: None,
             in_values: None,
             contains: None,
-            gt: Some(sqlight.int(75)),
+            gt: Some(Int(75)),
             gte: None,
             lt: None,
             lte: None,
@@ -519,7 +536,7 @@ pub fn filter_numeric_with_cast_test() {
 
   let result =
     records.get_by_collection_paginated_with_where(
-      conn,
+      exec,
       "app.bsky.feed.post",
       Some(10),
       None,
@@ -540,35 +557,29 @@ pub fn filter_numeric_with_cast_test() {
 
 // Test: String datetime comparison without INTEGER cast
 pub fn filter_datetime_string_comparison_test() {
-  let assert Ok(conn) = setup_test_db()
+  let assert Ok(exec) = setup_test_db()
 
   // Insert records with ISO datetime strings in JSON
   let assert Ok(_) =
-    sqlight.query(
+    executor.exec(
+      exec,
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES (?, 'cid5', 'did:plc:5', 'app.bsky.feed.post', ?, datetime('now'))",
-      on: conn,
-      with: [
-        sqlight.text("at://did:plc:5/app.bsky.feed.post/5"),
-        sqlight.text(
-          "{\"text\":\"Old post\",\"playedTime\":\"2024-01-01T00:00:00Z\"}",
-        ),
+      [
+        Text("at://did:plc:5/app.bsky.feed.post/5"),
+        Text("{\"text\":\"Old post\",\"playedTime\":\"2024-01-01T00:00:00Z\"}"),
       ],
-      expecting: decode.string,
     )
 
   let assert Ok(_) =
-    sqlight.query(
+    executor.exec(
+      exec,
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES (?, 'cid6', 'did:plc:6', 'app.bsky.feed.post', ?, datetime('now'))",
-      on: conn,
-      with: [
-        sqlight.text("at://did:plc:6/app.bsky.feed.post/6"),
-        sqlight.text(
-          "{\"text\":\"New post\",\"playedTime\":\"2024-12-01T00:00:00Z\"}",
-        ),
+      [
+        Text("at://did:plc:6/app.bsky.feed.post/6"),
+        Text("{\"text\":\"New post\",\"playedTime\":\"2024-12-01T00:00:00Z\"}"),
       ],
-      expecting: decode.string,
     )
 
   // Filter for records with playedTime >= "2024-06-01" (string comparison)
@@ -582,7 +593,7 @@ pub fn filter_datetime_string_comparison_test() {
             in_values: None,
             contains: None,
             gt: None,
-            gte: Some(sqlight.text("2024-06-01T00:00:00Z")),
+            gte: Some(Text("2024-06-01T00:00:00Z")),
             lt: None,
             lte: None,
             is_null: None,
@@ -596,7 +607,7 @@ pub fn filter_datetime_string_comparison_test() {
 
   let result =
     records.get_by_collection_paginated_with_where(
-      conn,
+      exec,
       "app.bsky.feed.post",
       Some(10),
       None,
@@ -623,46 +634,43 @@ pub fn filter_datetime_string_comparison_test() {
 
 /// Test isNull: true end-to-end from GraphQL parsing through SQL execution
 pub fn is_null_true_end_to_end_test() {
-  let assert Ok(conn) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_record_table(conn)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   // Insert records - some with replyParent, some without
   let assert Ok(_) =
-    sqlight.query(
+    executor.exec(
+      exec,
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES (?, 'cid1', 'did:plc:1', 'app.bsky.feed.post', ?, datetime('now'))",
-      on: conn,
-      with: [
-        sqlight.text("at://did:plc:1/app.bsky.feed.post/1"),
-        sqlight.text("{\"text\":\"Root post\"}"),
+      [
+        Text("at://did:plc:1/app.bsky.feed.post/1"),
+        Text("{\"text\":\"Root post\"}"),
       ],
-      expecting: decode.string,
     )
 
   let assert Ok(_) =
-    sqlight.query(
+    executor.exec(
+      exec,
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES (?, 'cid2', 'did:plc:2', 'app.bsky.feed.post', ?, datetime('now'))",
-      on: conn,
-      with: [
-        sqlight.text("at://did:plc:2/app.bsky.feed.post/2"),
-        sqlight.text(
+      [
+        Text("at://did:plc:2/app.bsky.feed.post/2"),
+        Text(
           "{\"text\":\"Reply post\",\"replyParent\":\"at://did:plc:1/app.bsky.feed.post/1\"}",
         ),
       ],
-      expecting: decode.string,
     )
 
   let assert Ok(_) =
-    sqlight.query(
+    executor.exec(
+      exec,
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES (?, 'cid3', 'did:plc:3', 'app.bsky.feed.post', ?, datetime('now'))",
-      on: conn,
-      with: [
-        sqlight.text("at://did:plc:3/app.bsky.feed.post/3"),
-        sqlight.text("{\"text\":\"Another root post\"}"),
+      [
+        Text("at://did:plc:3/app.bsky.feed.post/3"),
+        Text("{\"text\":\"Another root post\"}"),
       ],
-      expecting: decode.string,
     )
 
   // Filter for records where replyParent IS NULL (root posts only)
@@ -690,7 +698,7 @@ pub fn is_null_true_end_to_end_test() {
 
   let result =
     records.get_by_collection_paginated_with_where(
-      conn,
+      exec,
       "app.bsky.feed.post",
       Some(10),
       None,
@@ -716,46 +724,43 @@ pub fn is_null_true_end_to_end_test() {
 
 /// Test isNull: false end-to-end from GraphQL parsing through SQL execution
 pub fn is_null_false_end_to_end_test() {
-  let assert Ok(conn) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_record_table(conn)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   // Insert records - some with replyParent, some without
   let assert Ok(_) =
-    sqlight.query(
+    executor.exec(
+      exec,
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES (?, 'cid1', 'did:plc:1', 'app.bsky.feed.post', ?, datetime('now'))",
-      on: conn,
-      with: [
-        sqlight.text("at://did:plc:1/app.bsky.feed.post/1"),
-        sqlight.text("{\"text\":\"Root post\"}"),
+      [
+        Text("at://did:plc:1/app.bsky.feed.post/1"),
+        Text("{\"text\":\"Root post\"}"),
       ],
-      expecting: decode.string,
     )
 
   let assert Ok(_) =
-    sqlight.query(
+    executor.exec(
+      exec,
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES (?, 'cid2', 'did:plc:2', 'app.bsky.feed.post', ?, datetime('now'))",
-      on: conn,
-      with: [
-        sqlight.text("at://did:plc:2/app.bsky.feed.post/2"),
-        sqlight.text(
+      [
+        Text("at://did:plc:2/app.bsky.feed.post/2"),
+        Text(
           "{\"text\":\"Reply post\",\"replyParent\":\"at://did:plc:1/app.bsky.feed.post/1\"}",
         ),
       ],
-      expecting: decode.string,
     )
 
   let assert Ok(_) =
-    sqlight.query(
+    executor.exec(
+      exec,
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES (?, 'cid3', 'did:plc:3', 'app.bsky.feed.post', ?, datetime('now'))",
-      on: conn,
-      with: [
-        sqlight.text("at://did:plc:3/app.bsky.feed.post/3"),
-        sqlight.text("{\"text\":\"Another root post\"}"),
+      [
+        Text("at://did:plc:3/app.bsky.feed.post/3"),
+        Text("{\"text\":\"Another root post\"}"),
       ],
-      expecting: decode.string,
     )
 
   // Filter for records where replyParent IS NOT NULL (replies only)
@@ -783,7 +788,7 @@ pub fn is_null_false_end_to_end_test() {
 
   let result =
     records.get_by_collection_paginated_with_where(
-      conn,
+      exec,
       "app.bsky.feed.post",
       Some(10),
       None,

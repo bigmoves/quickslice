@@ -2,6 +2,7 @@
 ///
 /// Handles POST requests to /graphql endpoint, builds schemas from lexicons,
 /// and executes GraphQL queries.
+import database/executor.{type Executor}
 import gleam/bit_array
 import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
@@ -13,7 +14,6 @@ import gleam/result
 import gleam/string
 import graphql/lexicon/schema as lexicon_schema
 import lib/oauth/did_cache
-import sqlight
 import wisp
 
 /// Handle GraphQL HTTP requests
@@ -24,7 +24,7 @@ import wisp
 /// Returns GraphQL query results as JSON
 pub fn handle_graphql_request(
   req: wisp.Request,
-  db: sqlight.Connection,
+  db: Executor,
   did_cache: Subject(did_cache.Message),
   signing_key: option.Option(String),
   atp_client_id: String,
@@ -55,7 +55,7 @@ pub fn handle_graphql_request(
 
 fn handle_graphql_post(
   req: wisp.Request,
-  db: sqlight.Connection,
+  db: Executor,
   did_cache: Subject(did_cache.Message),
   signing_key: option.Option(String),
   atp_client_id: String,
@@ -98,7 +98,7 @@ fn handle_graphql_post(
 
 fn handle_graphql_get(
   req: wisp.Request,
-  db: sqlight.Connection,
+  db: Executor,
   did_cache: Subject(did_cache.Message),
   signing_key: option.Option(String),
   atp_client_id: String,
@@ -129,7 +129,7 @@ fn handle_graphql_get(
 }
 
 fn execute_graphql_query(
-  db: sqlight.Connection,
+  db: Executor,
   query: String,
   variables_json_str: String,
   auth_token: Result(String, Nil),

@@ -5,9 +5,10 @@
 /// 2. Insert records with blob data in AT Protocol format
 /// 3. Execute GraphQL queries with blob field selection
 /// 4. Verify blob fields are resolved correctly with all sub-fields
+import database/executor
 import database/repositories/lexicons
 import database/repositories/records
-import database/schema/tables
+import database/sqlite/connection as db_connection
 import gleam/http
 import gleam/json
 import gleam/option
@@ -15,7 +16,6 @@ import gleam/string
 import gleeunit/should
 import handlers/graphql as graphql_handler
 import lib/oauth/did_cache
-import sqlight
 import wisp
 import wisp/simulate
 
@@ -67,13 +67,23 @@ fn create_profile_lexicon() -> String {
 
 pub fn blob_field_query_test() {
   // Create in-memory database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(exec) = db_connection.connect("sqlite::memory:")
+  let assert Ok(_) =
+    executor.exec(
+      exec,
+      "CREATE TABLE IF NOT EXISTS lexicon (id TEXT PRIMARY KEY NOT NULL, json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+      [],
+    )
+  let assert Ok(_) =
+    executor.exec(
+      exec,
+      "CREATE TABLE IF NOT EXISTS record (uri TEXT PRIMARY KEY NOT NULL, cid TEXT NOT NULL, did TEXT NOT NULL, collection TEXT NOT NULL, json TEXT NOT NULL, indexed_at TEXT NOT NULL DEFAULT (datetime('now')))",
+      [],
+    )
 
   // Insert profile lexicon with blob fields
   let lexicon = create_profile_lexicon()
-  let assert Ok(_) = lexicons.insert(db, "app.test.profile", lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "app.test.profile", lexicon)
 
   // Insert a profile record with avatar blob
   // AT Protocol blob format: { ref: { $link: "cid" }, mimeType: "...", size: 123 }
@@ -94,7 +104,7 @@ pub fn blob_field_query_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://did:plc:alice123/app.test.profile/self",
       "cidprofile1",
       "did:plc:alice123",
@@ -123,7 +133,7 @@ pub fn blob_field_query_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       option.None,
       "",
@@ -166,13 +176,23 @@ pub fn blob_field_query_test() {
 
 pub fn blob_field_with_different_presets_test() {
   // Create in-memory database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(exec) = db_connection.connect("sqlite::memory:")
+  let assert Ok(_) =
+    executor.exec(
+      exec,
+      "CREATE TABLE IF NOT EXISTS lexicon (id TEXT PRIMARY KEY NOT NULL, json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+      [],
+    )
+  let assert Ok(_) =
+    executor.exec(
+      exec,
+      "CREATE TABLE IF NOT EXISTS record (uri TEXT PRIMARY KEY NOT NULL, cid TEXT NOT NULL, did TEXT NOT NULL, collection TEXT NOT NULL, json TEXT NOT NULL, indexed_at TEXT NOT NULL DEFAULT (datetime('now')))",
+      [],
+    )
 
   // Insert profile lexicon
   let lexicon = create_profile_lexicon()
-  let assert Ok(_) = lexicons.insert(db, "app.test.profile", lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "app.test.profile", lexicon)
 
   // Insert a profile with banner blob
   let record_json =
@@ -191,7 +211,7 @@ pub fn blob_field_with_different_presets_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://did:plc:bob456/app.test.profile/self",
       "cidbanner1",
       "did:plc:bob456",
@@ -220,7 +240,7 @@ pub fn blob_field_with_different_presets_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       option.None,
       "",
@@ -242,12 +262,22 @@ pub fn blob_field_with_different_presets_test() {
 
 pub fn blob_field_default_preset_test() {
   // Test that when no preset is specified, feed_fullsize is used
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(exec) = db_connection.connect("sqlite::memory:")
+  let assert Ok(_) =
+    executor.exec(
+      exec,
+      "CREATE TABLE IF NOT EXISTS lexicon (id TEXT PRIMARY KEY NOT NULL, json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+      [],
+    )
+  let assert Ok(_) =
+    executor.exec(
+      exec,
+      "CREATE TABLE IF NOT EXISTS record (uri TEXT PRIMARY KEY NOT NULL, cid TEXT NOT NULL, did TEXT NOT NULL, collection TEXT NOT NULL, json TEXT NOT NULL, indexed_at TEXT NOT NULL DEFAULT (datetime('now')))",
+      [],
+    )
 
   let lexicon = create_profile_lexicon()
-  let assert Ok(_) = lexicons.insert(db, "app.test.profile", lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "app.test.profile", lexicon)
 
   let record_json =
     json.object([
@@ -265,7 +295,7 @@ pub fn blob_field_default_preset_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://did:plc:charlie/app.test.profile/self",
       "cidcharlie",
       "did:plc:charlie",
@@ -292,7 +322,7 @@ pub fn blob_field_default_preset_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       option.None,
       "",
@@ -314,12 +344,22 @@ pub fn blob_field_default_preset_test() {
 
 pub fn blob_field_null_when_missing_test() {
   // Test that blob fields return null when not present in record
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
+  let assert Ok(exec) = db_connection.connect("sqlite::memory:")
+  let assert Ok(_) =
+    executor.exec(
+      exec,
+      "CREATE TABLE IF NOT EXISTS lexicon (id TEXT PRIMARY KEY NOT NULL, json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+      [],
+    )
+  let assert Ok(_) =
+    executor.exec(
+      exec,
+      "CREATE TABLE IF NOT EXISTS record (uri TEXT PRIMARY KEY NOT NULL, cid TEXT NOT NULL, did TEXT NOT NULL, collection TEXT NOT NULL, json TEXT NOT NULL, indexed_at TEXT NOT NULL DEFAULT (datetime('now')))",
+      [],
+    )
 
   let lexicon = create_profile_lexicon()
-  let assert Ok(_) = lexicons.insert(db, "app.test.profile", lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "app.test.profile", lexicon)
 
   // Insert record without avatar field
   let record_json =
@@ -328,7 +368,7 @@ pub fn blob_field_null_when_missing_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       "at://did:plc:dave/app.test.profile/self",
       "ciddave",
       "did:plc:dave",
@@ -356,7 +396,7 @@ pub fn blob_field_null_when_missing_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       option.None,
       "",

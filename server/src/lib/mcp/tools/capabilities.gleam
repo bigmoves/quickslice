@@ -1,15 +1,13 @@
+import database/executor.{type Executor}
 import database/repositories/config
 import database/repositories/lexicons
 import database/repositories/records
 import gleam/json
 import gleam/option.{None, Some}
 import gleam/result
-import sqlight
 
 /// Get server capabilities
-pub fn get_server_capabilities(
-  db: sqlight.Connection,
-) -> Result(json.Json, String) {
+pub fn get_server_capabilities(db: Executor) -> Result(json.Json, String) {
   // Get counts for status
   let lexicon_count =
     lexicons.get_count(db)

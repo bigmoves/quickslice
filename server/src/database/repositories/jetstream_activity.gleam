@@ -1,5 +1,6 @@
 import database/executor.{
   type DbError, type Executor, ConstraintError, Int as DbInt, Null, Text,
+  Timestamptz,
 }
 import database/types.{
   type ActivityBucket, type ActivityEntry, ActivityBucket, ActivityEntry,
@@ -26,20 +27,38 @@ pub fn log_activity(
   let p4 = executor.placeholder(exec, 4)
   let p5 = executor.placeholder(exec, 5)
 
-  let sql =
-    "INSERT INTO jetstream_activity (timestamp, operation, collection, did, status, event_json)
-     VALUES ("
-    <> p1
-    <> ", "
-    <> p2
-    <> ", "
-    <> p3
-    <> ", "
-    <> p4
-    <> ", 'processing', "
-    <> p5
-    <> ")
-     RETURNING id"
+  // PostgreSQL: Timestamptz value type handles TIMESTAMPTZ, event_json needs ::jsonb cast
+  // SQLite: both are TEXT
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "INSERT INTO jetstream_activity (timestamp, operation, collection, did, status, event_json)
+       VALUES ("
+      <> p1
+      <> ", "
+      <> p2
+      <> ", "
+      <> p3
+      <> ", "
+      <> p4
+      <> ", 'processing', "
+      <> p5
+      <> ")
+       RETURNING id"
+    executor.PostgreSQL ->
+      "INSERT INTO jetstream_activity (timestamp, operation, collection, did, status, event_json)
+       VALUES ("
+      <> p1
+      <> ", "
+      <> p2
+      <> ", "
+      <> p3
+      <> ", "
+      <> p4
+      <> ", 'processing', "
+      <> p5
+      <> "::jsonb)
+       RETURNING id"
+  }
 
   let decoder = {
     use id <- decode.field(0, decode.int)
@@ -51,7 +70,7 @@ pub fn log_activity(
       exec,
       sql,
       [
-        Text(timestamp),
+        Timestamptz(timestamp),
         Text(operation),
         Text(collection),
         Text(did),
@@ -97,6 +116,8 @@ pub fn get_recent_activity(
   let hours_str = int.to_string(hours)
 
   // Use dialect-specific datetime comparison
+  // PostgreSQL: timestamp is TIMESTAMPTZ (needs ::text cast), event_json is JSONB (needs ::text cast)
+  // SQLite: both are TEXT
   let sql = case executor.dialect(exec) {
     executor.SQLite ->
       "SELECT id, timestamp, operation, collection, did, status, error_message, event_json
@@ -107,9 +128,9 @@ pub fn get_recent_activity(
        ORDER BY timestamp DESC
        LIMIT 1000"
     executor.PostgreSQL ->
-      "SELECT id, timestamp, operation, collection, did, status, error_message, event_json
+      "SELECT id, timestamp::text, operation, collection, did, status, error_message, event_json::text
        FROM jetstream_activity
-       WHERE timestamp::timestamp >= NOW() - INTERVAL '"
+       WHERE timestamp >= NOW() - INTERVAL '"
       <> hours_str
       <> " hours'
        ORDER BY timestamp DESC
@@ -302,10 +323,12 @@ fn get_activity_bucketed(
       GROUP BY ts.bucket
       ORDER BY ts.bucket"
     }
-    executor.PostgreSQL -> "WITH time_series AS (
+    executor.PostgreSQL ->
+      // generate_series is inclusive, so end at NOW() - 1 interval to get expected_buckets count
+      "WITH time_series AS (
         SELECT generate_series(
           NOW() - INTERVAL '" <> hours_str <> " hours',
-          NOW(),
+          NOW() - INTERVAL '" <> interval_str <> " minutes',
           INTERVAL '" <> interval_str <> " minutes'
         ) AS bucket
       )

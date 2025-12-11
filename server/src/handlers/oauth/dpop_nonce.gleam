@@ -1,11 +1,11 @@
 /// DPoP nonce endpoint handler
 /// GET /oauth/dpop/nonce
+import database/executor.{type Executor}
 import database/repositories/oauth_dpop_nonces
 import database/types.{OAuthDpopNonce}
 import gleam/bit_array
 import gleam/crypto
 import gleam/json
-import sqlight
 import wisp
 
 /// Nonce response
@@ -15,7 +15,7 @@ pub type NonceResponse {
 
 /// Handle GET /oauth/dpop/nonce
 /// Returns a fresh DPoP nonce for use in subsequent requests
-pub fn handle(conn: sqlight.Connection) -> wisp.Response {
+pub fn handle(conn: Executor) -> wisp.Response {
   // Generate a fresh nonce
   let nonce = generate_nonce()
 

@@ -1,9 +1,7 @@
 import database/executor.{type DbError, type Executor, Text}
 import database/types.{type Actor, Actor}
 import gleam/dynamic/decode
-import gleam/int
 import gleam/list
-import gleam/result
 import gleam/string
 
 // ===== Actor Functions =====
@@ -37,9 +35,16 @@ pub fn upsert(
 
 /// Gets an actor by DID
 pub fn get(exec: Executor, did: String) -> Result(List(Actor), DbError) {
-  let sql = "SELECT did, handle, indexed_at
-     FROM actor
-     WHERE did = " <> executor.placeholder(exec, 1)
+  // PostgreSQL: indexed_at is TIMESTAMPTZ (needs ::text cast)
+  // SQLite: indexed_at is TEXT
+  let sql = case executor.dialect(exec) {
+    executor.SQLite -> "SELECT did, handle, indexed_at
+       FROM actor
+       WHERE did = " <> executor.placeholder(exec, 1)
+    executor.PostgreSQL -> "SELECT did, handle, indexed_at::text
+       FROM actor
+       WHERE did = " <> executor.placeholder(exec, 1)
+  }
 
   let decoder = {
     use did <- decode.field(0, decode.string)
@@ -56,9 +61,16 @@ pub fn get_by_handle(
   exec: Executor,
   handle: String,
 ) -> Result(List(Actor), DbError) {
-  let sql = "SELECT did, handle, indexed_at
-     FROM actor
-     WHERE handle = " <> executor.placeholder(exec, 1)
+  // PostgreSQL: indexed_at is TIMESTAMPTZ (needs ::text cast)
+  // SQLite: indexed_at is TEXT
+  let sql = case executor.dialect(exec) {
+    executor.SQLite -> "SELECT did, handle, indexed_at
+       FROM actor
+       WHERE handle = " <> executor.placeholder(exec, 1)
+    executor.PostgreSQL -> "SELECT did, handle, indexed_at::text
+       FROM actor
+       WHERE handle = " <> executor.placeholder(exec, 1)
+  }
 
   let decoder = {
     use did <- decode.field(0, decode.string)
@@ -117,7 +129,6 @@ fn batch_upsert_chunk(
   batch: List(#(String, String)),
 ) -> Result(Nil, DbError) {
   let now = executor.now(exec)
-  let batch_len = list.length(batch)
 
   // Build placeholders for all actors in batch
   let value_placeholders =

@@ -1,5 +1,6 @@
 /// OAuth authorization endpoint handler
 /// GET /oauth/authorize
+import database/executor.{type Executor}
 import database/repositories/oauth_atp_requests
 import database/repositories/oauth_atp_sessions
 import database/repositories/oauth_auth_requests
@@ -27,7 +28,6 @@ import lib/oauth/token_generator
 import lib/oauth/types/error
 import lib/oauth/types/request.{type AuthorizationRequest, AuthorizationRequest}
 import lib/oauth/validator
-import sqlight
 import wisp
 
 /// Authorization response type
@@ -44,7 +44,7 @@ pub type AuthorizeResponse {
 /// Handle GET /oauth/authorize
 pub fn handle(
   req: wisp.Request,
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: Subject(did_cache.Message),
   redirect_uri: String,
   client_id: String,
@@ -82,7 +82,7 @@ fn json_error_response(message: String) -> wisp.Response {
 /// Handle authorization with proper error redirects after validation
 fn handle_authorize_with_error_redirect(
   query: String,
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: Subject(did_cache.Message),
   server_redirect_uri: String,
   server_client_id: String,
@@ -164,7 +164,7 @@ fn handle_authorize_with_error_redirect(
 /// Handle standard authorization flow
 fn handle_standard_flow(
   params: List(#(String, String)),
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: Subject(did_cache.Message),
   server_redirect_uri: String,
   server_client_id: String,
@@ -282,7 +282,7 @@ fn validate_authorization_request(
 fn process_authorization(
   req: AuthorizationRequest,
   client: OAuthClient,
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: Subject(did_cache.Message),
   server_redirect_uri: String,
   server_client_id: String,

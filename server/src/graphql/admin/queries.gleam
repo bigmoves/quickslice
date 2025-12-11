@@ -1,6 +1,7 @@
 /// Query resolvers for admin GraphQL API
 import admin_session as session
 import backfill_state
+import database/executor.{type Executor}
 import database/repositories/actors
 import database/repositories/config as config_repo
 import database/repositories/jetstream_activity
@@ -14,14 +15,13 @@ import gleam/otp/actor
 import graphql/admin/converters
 import graphql/admin/types as admin_types
 import lib/oauth/did_cache
-import sqlight
 import swell/schema
 import swell/value
 import wisp
 
 /// Fetch activity buckets for a given time range
 fn fetch_activity_buckets(
-  conn: sqlight.Connection,
+  conn: Executor,
   range: admin_types.TimeRange,
 ) -> Result(value.Value, String) {
   let fetch_result = case range {
@@ -40,7 +40,7 @@ fn fetch_activity_buckets(
 
 /// Build the Query root type with all query resolvers
 pub fn query_type(
-  conn: sqlight.Connection,
+  conn: Executor,
   req: wisp.Request,
   did_cache: Subject(did_cache.Message),
   backfill_state_subject: Subject(backfill_state.Message),

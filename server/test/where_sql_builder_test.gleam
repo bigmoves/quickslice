@@ -1,3 +1,4 @@
+import database/executor.{Int, Text}
 import database/queries/where_clause
 import gleam/dict
 import gleam/list
@@ -5,16 +6,22 @@ import gleam/option.{None, Some}
 import gleam/string
 import gleeunit
 import gleeunit/should
-import sqlight
+import test_helpers
 
 pub fn main() {
   gleeunit.main()
 }
 
+fn get_test_exec() {
+  let assert Ok(exec) = test_helpers.create_test_db()
+  exec
+}
+
 // Test: Empty where clause should produce empty SQL
 pub fn build_where_empty_clause_test() {
+  let exec = get_test_exec()
   let clause = where_clause.empty_clause()
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("")
   list.length(params) |> should.equal(0)
@@ -22,9 +29,10 @@ pub fn build_where_empty_clause_test() {
 
 // Test: Single eq operator on table column
 pub fn build_where_eq_on_table_column_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("app.bsky.feed.post")),
+      eq: Some(Text("app.bsky.feed.post")),
       in_values: None,
       contains: None,
       gt: None,
@@ -41,7 +49,7 @@ pub fn build_where_eq_on_table_column_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("collection = ?")
   list.length(params) |> should.equal(1)
@@ -49,13 +57,14 @@ pub fn build_where_eq_on_table_column_test() {
 
 // Test: in operator with multiple values
 pub fn build_where_in_operator_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
       in_values: Some([
-        sqlight.text("did1"),
-        sqlight.text("did2"),
-        sqlight.text("did3"),
+        Text("did1"),
+        Text("did2"),
+        Text("did3"),
       ]),
       contains: None,
       gt: None,
@@ -72,7 +81,7 @@ pub fn build_where_in_operator_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("did IN (?, ?, ?)")
   list.length(params) |> should.equal(3)
@@ -80,12 +89,13 @@ pub fn build_where_in_operator_test() {
 
 // Test: gt operator on indexed_at
 pub fn build_where_gt_operator_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
       in_values: None,
       contains: None,
-      gt: Some(sqlight.text("2024-01-01T00:00:00Z")),
+      gt: Some(Text("2024-01-01T00:00:00Z")),
       gte: None,
       lt: None,
       lte: None,
@@ -99,7 +109,7 @@ pub fn build_where_gt_operator_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("indexed_at > ?")
   list.length(params) |> should.equal(1)
@@ -107,13 +117,14 @@ pub fn build_where_gt_operator_test() {
 
 // Test: gte operator
 pub fn build_where_gte_operator_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
       in_values: None,
       contains: None,
       gt: None,
-      gte: Some(sqlight.int(2000)),
+      gte: Some(Int(2000)),
       lt: None,
       lte: None,
       is_null: None,
@@ -126,7 +137,7 @@ pub fn build_where_gte_operator_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Now includes CAST for numeric comparisons on JSON fields
   sql |> should.equal("CAST(json_extract(json, '$.year') AS INTEGER) >= ?")
@@ -135,6 +146,7 @@ pub fn build_where_gte_operator_test() {
 
 // Test: lt operator
 pub fn build_where_lt_operator_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
@@ -142,7 +154,7 @@ pub fn build_where_lt_operator_test() {
       contains: None,
       gt: None,
       gte: None,
-      lt: Some(sqlight.text("2024-12-31T23:59:59Z")),
+      lt: Some(Text("2024-12-31T23:59:59Z")),
       lte: None,
       is_null: None,
       is_numeric: False,
@@ -154,7 +166,7 @@ pub fn build_where_lt_operator_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("indexed_at < ?")
   list.length(params) |> should.equal(1)
@@ -162,6 +174,7 @@ pub fn build_where_lt_operator_test() {
 
 // Test: lte operator
 pub fn build_where_lte_operator_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
@@ -170,7 +183,7 @@ pub fn build_where_lte_operator_test() {
       gt: None,
       gte: None,
       lt: None,
-      lte: Some(sqlight.int(100)),
+      lte: Some(Int(100)),
       is_null: None,
       is_numeric: True,
     )
@@ -181,7 +194,7 @@ pub fn build_where_lte_operator_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Now includes CAST for numeric comparisons on JSON fields
   sql |> should.equal("CAST(json_extract(json, '$.count') AS INTEGER) <= ?")
@@ -190,14 +203,15 @@ pub fn build_where_lte_operator_test() {
 
 // Test: Range query with both gt and lt
 pub fn build_where_range_query_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
       in_values: None,
       contains: None,
-      gt: Some(sqlight.text("2024-01-01T00:00:00Z")),
+      gt: Some(Text("2024-01-01T00:00:00Z")),
       gte: None,
-      lt: Some(sqlight.text("2024-02-01T00:00:00Z")),
+      lt: Some(Text("2024-02-01T00:00:00Z")),
       lte: None,
       is_null: None,
       is_numeric: False,
@@ -209,7 +223,7 @@ pub fn build_where_range_query_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Should combine both conditions with AND
   sql |> should.equal("indexed_at > ? AND indexed_at < ?")
@@ -218,9 +232,10 @@ pub fn build_where_range_query_test() {
 
 // Test: Multiple fields combined with AND
 pub fn build_where_multiple_fields_test() {
+  let exec = get_test_exec()
   let cond1 =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("app.bsky.feed.post")),
+      eq: Some(Text("app.bsky.feed.post")),
       in_values: None,
       contains: None,
       gt: None,
@@ -232,7 +247,7 @@ pub fn build_where_multiple_fields_test() {
     )
   let cond2 =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("did:plc:xyz")),
+      eq: Some(Text("did:plc:xyz")),
       in_values: None,
       contains: None,
       gt: None,
@@ -252,7 +267,7 @@ pub fn build_where_multiple_fields_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Order might vary due to dict, but should have AND
   should.be_true(string.contains(sql, "AND"))
@@ -265,9 +280,10 @@ pub fn build_where_multiple_fields_test() {
 
 // Test: Simple JSON field with eq operator
 pub fn build_where_json_field_eq_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("Hello World")),
+      eq: Some(Text("Hello World")),
       in_values: None,
       contains: None,
       gt: None,
@@ -284,7 +300,7 @@ pub fn build_where_json_field_eq_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("json_extract(json, '$.text') = ?")
   list.length(params) |> should.equal(1)
@@ -292,9 +308,10 @@ pub fn build_where_json_field_eq_test() {
 
 // Test: Nested JSON path (dot notation)
 pub fn build_where_nested_json_path_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("Alice")),
+      eq: Some(Text("Alice")),
       in_values: None,
       contains: None,
       gt: None,
@@ -311,7 +328,7 @@ pub fn build_where_nested_json_path_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("json_extract(json, '$.user.name') = ?")
   list.length(params) |> should.equal(1)
@@ -319,9 +336,10 @@ pub fn build_where_nested_json_path_test() {
 
 // Test: Deeply nested JSON path
 pub fn build_where_deeply_nested_json_path_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("value")),
+      eq: Some(Text("value")),
       in_values: None,
       contains: None,
       gt: None,
@@ -338,7 +356,7 @@ pub fn build_where_deeply_nested_json_path_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("json_extract(json, '$.metadata.tags.0') = ?")
   list.length(params) |> should.equal(1)
@@ -346,14 +364,15 @@ pub fn build_where_deeply_nested_json_path_test() {
 
 // Test: JSON field with comparison operators
 pub fn build_where_json_field_comparison_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
       in_values: None,
       contains: None,
-      gt: Some(sqlight.int(100)),
+      gt: Some(Int(100)),
       gte: None,
-      lt: Some(sqlight.int(1000)),
+      lt: Some(Int(1000)),
       lte: None,
       is_null: None,
       is_numeric: True,
@@ -365,7 +384,7 @@ pub fn build_where_json_field_comparison_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Now includes CAST for numeric comparisons on JSON fields
   sql
@@ -377,9 +396,10 @@ pub fn build_where_json_field_comparison_test() {
 
 // Test: Mix of table columns and JSON fields
 pub fn build_where_mixed_table_and_json_test() {
+  let exec = get_test_exec()
   let cond1 =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("app.bsky.feed.post")),
+      eq: Some(Text("app.bsky.feed.post")),
       in_values: None,
       contains: None,
       gt: None,
@@ -394,7 +414,7 @@ pub fn build_where_mixed_table_and_json_test() {
       eq: None,
       in_values: None,
       contains: None,
-      gt: Some(sqlight.int(10)),
+      gt: Some(Int(10)),
       gte: None,
       lt: None,
       lte: None,
@@ -411,7 +431,7 @@ pub fn build_where_mixed_table_and_json_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Should have both table column and JSON extract with CAST for numeric comparison
   should.be_true(string.contains(sql, "collection = ?"))
@@ -427,6 +447,7 @@ pub fn build_where_mixed_table_and_json_test() {
 
 // Test: contains on JSON field
 pub fn build_where_contains_json_field_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
@@ -446,7 +467,7 @@ pub fn build_where_contains_json_field_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql
   |> should.equal(
@@ -457,6 +478,7 @@ pub fn build_where_contains_json_field_test() {
 
 // Test: contains on table column (uri)
 pub fn build_where_contains_table_column_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
@@ -476,7 +498,7 @@ pub fn build_where_contains_table_column_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("uri LIKE '%' || ? || '%' COLLATE NOCASE")
   list.length(params) |> should.equal(1)
@@ -484,6 +506,7 @@ pub fn build_where_contains_table_column_test() {
 
 // Test: contains with special LIKE characters (should be escaped)
 pub fn build_where_contains_special_chars_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
@@ -503,7 +526,7 @@ pub fn build_where_contains_special_chars_test() {
       or: None,
     )
 
-  let #(sql, _params) = where_clause.build_where_sql(clause, False)
+  let #(sql, _params) = where_clause.build_where_sql(exec, clause, False)
 
   // SQL should be generated (actual escaping would be handled by the parameter binding)
   should.be_true(string.contains(sql, "LIKE"))
@@ -512,6 +535,7 @@ pub fn build_where_contains_special_chars_test() {
 
 // Test: Multiple contains conditions
 pub fn build_where_multiple_contains_test() {
+  let exec = get_test_exec()
   let cond1 =
     where_clause.WhereCondition(
       eq: None,
@@ -546,7 +570,7 @@ pub fn build_where_multiple_contains_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Should have both LIKE clauses
   should.be_true(string.contains(sql, "LIKE"))
@@ -556,12 +580,13 @@ pub fn build_where_multiple_contains_test() {
 
 // Test: contains combined with eq operator on same field
 pub fn build_where_contains_with_other_operators_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
       in_values: None,
       contains: Some("search"),
-      gt: Some(sqlight.int(100)),
+      gt: Some(Int(100)),
       gte: None,
       lt: None,
       lte: None,
@@ -575,7 +600,7 @@ pub fn build_where_contains_with_other_operators_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Should have both LIKE and > operator
   should.be_true(string.contains(sql, "LIKE"))
@@ -588,13 +613,14 @@ pub fn build_where_contains_with_other_operators_test() {
 
 // Test: Nested AND with two simple clauses
 pub fn build_where_nested_and_simple_test() {
+  let exec = get_test_exec()
   let clause1 =
     where_clause.WhereClause(
       conditions: dict.from_list([
         #(
           "collection",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("app.bsky.feed.post")),
+            eq: Some(Text("app.bsky.feed.post")),
             in_values: None,
             contains: None,
             gt: None,
@@ -616,7 +642,7 @@ pub fn build_where_nested_and_simple_test() {
         #(
           "did",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("did:plc:test")),
+            eq: Some(Text("did:plc:test")),
             in_values: None,
             contains: None,
             gt: None,
@@ -639,7 +665,7 @@ pub fn build_where_nested_and_simple_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(root_clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, root_clause, False)
 
   // Should have both conditions AND'ed together with parentheses
   should.be_true(string.contains(sql, "collection = ?"))
@@ -650,6 +676,7 @@ pub fn build_where_nested_and_simple_test() {
 
 // Test: Nested AND with conditions at root level
 pub fn build_where_and_with_root_conditions_test() {
+  let exec = get_test_exec()
   let nested_clause =
     where_clause.WhereClause(
       conditions: dict.from_list([
@@ -678,7 +705,7 @@ pub fn build_where_and_with_root_conditions_test() {
         #(
           "collection",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("app.bsky.feed.post")),
+            eq: Some(Text("app.bsky.feed.post")),
             in_values: None,
             contains: None,
             gt: None,
@@ -694,7 +721,7 @@ pub fn build_where_and_with_root_conditions_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(root_clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, root_clause, False)
 
   // Should have both root condition and nested condition
   should.be_true(string.contains(sql, "collection = ?"))
@@ -706,6 +733,7 @@ pub fn build_where_and_with_root_conditions_test() {
 // Test: Complex nested AND matching Slice API example
 // Example: (artist contains "pearl jam") AND (year >= 2000)
 pub fn build_where_complex_and_test() {
+  let exec = get_test_exec()
   let artist_clause =
     where_clause.WhereClause(
       conditions: dict.from_list([
@@ -738,7 +766,7 @@ pub fn build_where_complex_and_test() {
             in_values: None,
             contains: None,
             gt: None,
-            gte: Some(sqlight.int(2000)),
+            gte: Some(Int(2000)),
             lt: None,
             lte: None,
             is_null: None,
@@ -757,7 +785,7 @@ pub fn build_where_complex_and_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(root_clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, root_clause, False)
 
   // Should have both conditions
   should.be_true(string.contains(sql, "artist"))
@@ -770,6 +798,7 @@ pub fn build_where_complex_and_test() {
 
 // Test: Three-level nested AND
 pub fn build_where_deeply_nested_and_test() {
+  let exec = get_test_exec()
   let inner_clause =
     where_clause.WhereClause(
       conditions: dict.from_list([
@@ -779,7 +808,7 @@ pub fn build_where_deeply_nested_and_test() {
             eq: None,
             in_values: None,
             contains: None,
-            gt: Some(sqlight.int(10)),
+            gt: Some(Int(10)),
             gte: None,
             lt: None,
             lte: None,
@@ -820,7 +849,7 @@ pub fn build_where_deeply_nested_and_test() {
         #(
           "collection",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("app.bsky.feed.post")),
+            eq: Some(Text("app.bsky.feed.post")),
             in_values: None,
             contains: None,
             gt: None,
@@ -836,7 +865,7 @@ pub fn build_where_deeply_nested_and_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(root_clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, root_clause, False)
 
   // Should have all three conditions
   should.be_true(string.contains(sql, "collection = ?"))
@@ -850,6 +879,7 @@ pub fn build_where_deeply_nested_and_test() {
 
 // Test: Simple OR with two clauses
 pub fn build_where_simple_or_test() {
+  let exec = get_test_exec()
   let clause1 =
     where_clause.WhereClause(
       conditions: dict.from_list([
@@ -878,7 +908,7 @@ pub fn build_where_simple_or_test() {
         #(
           "genre",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("rock")),
+            eq: Some(Text("rock")),
             in_values: None,
             contains: None,
             gt: None,
@@ -901,7 +931,7 @@ pub fn build_where_simple_or_test() {
       or: Some([clause1, clause2]),
     )
 
-  let #(sql, params) = where_clause.build_where_sql(root_clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, root_clause, False)
 
   // Should have both conditions OR'ed together
   should.be_true(string.contains(sql, "artist"))
@@ -915,6 +945,7 @@ pub fn build_where_simple_or_test() {
 // Test: Combined AND/OR - Slice API example
 // Example: (artist contains "pearl jam" OR genre = "rock") AND (year >= 2000)
 pub fn build_where_combined_and_or_test() {
+  let exec = get_test_exec()
   let artist_clause =
     where_clause.WhereClause(
       conditions: dict.from_list([
@@ -943,7 +974,7 @@ pub fn build_where_combined_and_or_test() {
         #(
           "genre",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("rock")),
+            eq: Some(Text("rock")),
             in_values: None,
             contains: None,
             gt: None,
@@ -976,7 +1007,7 @@ pub fn build_where_combined_and_or_test() {
             in_values: None,
             contains: None,
             gt: None,
-            gte: Some(sqlight.int(2000)),
+            gte: Some(Int(2000)),
             lt: None,
             lte: None,
             is_null: None,
@@ -995,7 +1026,7 @@ pub fn build_where_combined_and_or_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(root_clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, root_clause, False)
 
   // Should have proper precedence: (artist LIKE OR genre =) AND year >=
   should.be_true(string.contains(sql, "OR"))
@@ -1009,6 +1040,7 @@ pub fn build_where_combined_and_or_test() {
 // Test: Complex nested OR/AND from Slice API documentation
 // { "and": [ { "or": [artist, genre] }, { "and": [uri1, uri2] }, year ] }
 pub fn build_where_complex_nested_or_and_test() {
+  let exec = get_test_exec()
   let artist_clause =
     where_clause.WhereClause(
       conditions: dict.from_list([
@@ -1121,7 +1153,7 @@ pub fn build_where_complex_nested_or_and_test() {
             in_values: None,
             contains: None,
             gt: None,
-            gte: Some(sqlight.int(2000)),
+            gte: Some(Int(2000)),
             lt: None,
             lte: None,
             is_null: None,
@@ -1140,7 +1172,7 @@ pub fn build_where_complex_nested_or_and_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(root_clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, root_clause, False)
 
   // Should have both OR and AND with proper nesting
   should.be_true(string.contains(sql, "OR"))
@@ -1154,13 +1186,14 @@ pub fn build_where_complex_nested_or_and_test() {
 
 // Test: Multiple OR clauses at root level
 pub fn build_where_multiple_or_at_root_test() {
+  let exec = get_test_exec()
   let clause1 =
     where_clause.WhereClause(
       conditions: dict.from_list([
         #(
           "did",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("did:plc:1")),
+            eq: Some(Text("did:plc:1")),
             in_values: None,
             contains: None,
             gt: None,
@@ -1182,7 +1215,7 @@ pub fn build_where_multiple_or_at_root_test() {
         #(
           "did",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("did:plc:2")),
+            eq: Some(Text("did:plc:2")),
             in_values: None,
             contains: None,
             gt: None,
@@ -1204,7 +1237,7 @@ pub fn build_where_multiple_or_at_root_test() {
         #(
           "did",
           where_clause.WhereCondition(
-            eq: Some(sqlight.text("did:plc:3")),
+            eq: Some(Text("did:plc:3")),
             in_values: None,
             contains: None,
             gt: None,
@@ -1227,7 +1260,7 @@ pub fn build_where_multiple_or_at_root_test() {
       or: Some([clause1, clause2, clause3]),
     )
 
-  let #(sql, params) = where_clause.build_where_sql(root_clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, root_clause, False)
 
   // Should have all three OR'ed together
   should.be_true(string.contains(sql, "OR"))
@@ -1239,6 +1272,7 @@ pub fn build_where_multiple_or_at_root_test() {
 
 // Test: isNull true on JSON field
 pub fn build_where_is_null_true_json_field_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
@@ -1258,7 +1292,7 @@ pub fn build_where_is_null_true_json_field_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("json_extract(json, '$.replyParent') IS NULL")
   list.length(params) |> should.equal(0)
@@ -1266,6 +1300,7 @@ pub fn build_where_is_null_true_json_field_test() {
 
 // Test: isNull false on JSON field
 pub fn build_where_is_null_false_json_field_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
@@ -1285,7 +1320,7 @@ pub fn build_where_is_null_false_json_field_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("json_extract(json, '$.replyParent') IS NOT NULL")
   list.length(params) |> should.equal(0)
@@ -1293,6 +1328,7 @@ pub fn build_where_is_null_false_json_field_test() {
 
 // Test: isNull true on table column
 pub fn build_where_is_null_true_table_column_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
@@ -1312,7 +1348,7 @@ pub fn build_where_is_null_true_table_column_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("cid IS NULL")
   list.length(params) |> should.equal(0)
@@ -1320,6 +1356,7 @@ pub fn build_where_is_null_true_table_column_test() {
 
 // Test: isNull false on table column
 pub fn build_where_is_null_false_table_column_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
@@ -1339,7 +1376,7 @@ pub fn build_where_is_null_false_table_column_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("uri IS NOT NULL")
   list.length(params) |> should.equal(0)
@@ -1347,6 +1384,7 @@ pub fn build_where_is_null_false_table_column_test() {
 
 // Test: isNull with table prefix (for joins)
 pub fn build_where_is_null_with_table_prefix_test() {
+  let exec = get_test_exec()
   let condition =
     where_clause.WhereCondition(
       eq: None,
@@ -1366,7 +1404,7 @@ pub fn build_where_is_null_with_table_prefix_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, True)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, True)
 
   sql |> should.equal("json_extract(record.json, '$.text') IS NULL")
   list.length(params) |> should.equal(0)
@@ -1374,6 +1412,7 @@ pub fn build_where_is_null_with_table_prefix_test() {
 
 // Test: isNull in nested AND clause
 pub fn build_where_is_null_in_and_clause_test() {
+  let exec = get_test_exec()
   let is_null_clause =
     where_clause.WhereClause(
       conditions: dict.from_list([
@@ -1425,7 +1464,7 @@ pub fn build_where_is_null_in_and_clause_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(root_clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, root_clause, False)
 
   should.be_true(string.contains(sql, "IS NULL"))
   should.be_true(string.contains(sql, "LIKE"))

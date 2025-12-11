@@ -1,8 +1,8 @@
 /// End-to-end integration tests for GraphQL where clause filtering
 ///
 /// Tests the complete flow: GraphQL value → WhereInput parsing → SQL generation → Database query
+import database/executor.{type Executor}
 import database/repositories/records
-import database/schema/tables
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
@@ -11,63 +11,81 @@ import gleeunit
 import gleeunit/should
 import graphql/where_converter
 import lexicon_graphql/input/where as where_input
-import sqlight
 import swell/value
+import test_helpers
 
 pub fn main() {
   gleeunit.main()
 }
 
 // Helper to setup test database with sample records
-fn setup_test_db() -> Result(sqlight.Connection, sqlight.Error) {
-  use conn <- result.try(sqlight.open(":memory:"))
-  use _ <- result.try(tables.create_record_table(conn))
+fn setup_test_db() -> Result(Executor, String) {
+  use exec <- result.try(
+    test_helpers.create_test_db()
+    |> result.map_error(fn(_) { "Failed to connect" }),
+  )
+  use _ <- result.try(
+    test_helpers.create_record_table(exec)
+    |> result.map_error(fn(_) { "Failed to create table" }),
+  )
 
   // Insert test records with different properties
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:alice/app.bsky.feed.post/1",
-    "cid1",
-    "did:plc:alice",
-    "app.bsky.feed.post",
-    "{\"text\":\"Hello World\",\"likes\":100,\"author\":\"alice\"}",
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:alice/app.bsky.feed.post/1",
+      "cid1",
+      "did:plc:alice",
+      "app.bsky.feed.post",
+      "{\"text\":\"Hello World\",\"likes\":100,\"author\":\"alice\"}",
+    )
+    |> result.map_error(fn(_) { "insert failed" }),
+  )
 
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:bob/app.bsky.feed.post/2",
-    "cid2",
-    "did:plc:bob",
-    "app.bsky.feed.post",
-    "{\"text\":\"Goodbye World\",\"likes\":50,\"author\":\"bob\"}",
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:bob/app.bsky.feed.post/2",
+      "cid2",
+      "did:plc:bob",
+      "app.bsky.feed.post",
+      "{\"text\":\"Goodbye World\",\"likes\":50,\"author\":\"bob\"}",
+    )
+    |> result.map_error(fn(_) { "insert failed" }),
+  )
 
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:charlie/app.bsky.feed.post/3",
-    "cid3",
-    "did:plc:charlie",
-    "app.bsky.feed.post",
-    "{\"text\":\"Hello Universe\",\"likes\":200,\"author\":\"charlie\"}",
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:charlie/app.bsky.feed.post/3",
+      "cid3",
+      "did:plc:charlie",
+      "app.bsky.feed.post",
+      "{\"text\":\"Hello Universe\",\"likes\":200,\"author\":\"charlie\"}",
+    )
+    |> result.map_error(fn(_) { "insert failed" }),
+  )
 
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:alice/app.bsky.feed.post/4",
-    "cid4",
-    "did:plc:alice",
-    "app.bsky.feed.post",
-    "{\"text\":\"Another post\",\"likes\":75,\"author\":\"alice\"}",
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:alice/app.bsky.feed.post/4",
+      "cid4",
+      "did:plc:alice",
+      "app.bsky.feed.post",
+      "{\"text\":\"Another post\",\"likes\":75,\"author\":\"alice\"}",
+    )
+    |> result.map_error(fn(_) { "insert failed" }),
+  )
 
-  Ok(conn)
+  Ok(exec)
 }
 
 // Test: Simple field filter through full GraphQL stack
 pub fn graphql_simple_filter_test() {
   case setup_test_db() {
     Error(_) -> should.fail()
-    Ok(conn) -> {
+    Ok(exec) -> {
       // Create GraphQL where value: { text: { contains: "Hello" } }
       let text_condition = value.Object([#("contains", value.String("Hello"))])
 
@@ -82,7 +100,7 @@ pub fn graphql_simple_filter_test() {
       // Execute query
       case
         records.get_by_collection_paginated_with_where(
-          conn,
+          exec,
           "app.bsky.feed.post",
           Some(10),
           None,
@@ -108,7 +126,7 @@ pub fn graphql_simple_filter_test() {
 pub fn graphql_or_filter_test() {
   case setup_test_db() {
     Error(_) -> should.fail()
-    Ok(conn) -> {
+    Ok(exec) -> {
       // Create GraphQL where value:
       // {
       //   or: [
@@ -137,7 +155,7 @@ pub fn graphql_or_filter_test() {
       // Execute query
       case
         records.get_by_collection_paginated_with_where(
-          conn,
+          exec,
           "app.bsky.feed.post",
           Some(10),
           None,
@@ -174,7 +192,7 @@ pub fn graphql_or_filter_test() {
 pub fn graphql_and_filter_test() {
   case setup_test_db() {
     Error(_) -> should.fail()
-    Ok(conn) -> {
+    Ok(exec) -> {
       // Create GraphQL where value:
       // {
       //   and: [
@@ -204,7 +222,7 @@ pub fn graphql_and_filter_test() {
       // Execute query
       case
         records.get_by_collection_paginated_with_where(
-          conn,
+          exec,
           "app.bsky.feed.post",
           Some(10),
           None,
@@ -236,7 +254,7 @@ pub fn graphql_and_filter_test() {
 pub fn graphql_nested_and_or_test() {
   case setup_test_db() {
     Error(_) -> should.fail()
-    Ok(conn) -> {
+    Ok(exec) -> {
       // Create GraphQL where value:
       // {
       //   and: [
@@ -280,7 +298,7 @@ pub fn graphql_nested_and_or_test() {
       // Execute query
       case
         records.get_by_collection_paginated_with_where(
-          conn,
+          exec,
           "app.bsky.feed.post",
           Some(10),
           None,
@@ -315,7 +333,7 @@ pub fn graphql_nested_and_or_test() {
 pub fn graphql_complex_nested_test() {
   case setup_test_db() {
     Error(_) -> should.fail()
-    Ok(conn) -> {
+    Ok(exec) -> {
       // Simplify test: just OR two simple conditions
       // {
       //   or: [
@@ -342,7 +360,7 @@ pub fn graphql_complex_nested_test() {
       // Execute query
       case
         records.get_by_collection_paginated_with_where(
-          conn,
+          exec,
           "app.bsky.feed.post",
           Some(10),
           None,
@@ -379,7 +397,7 @@ pub fn graphql_complex_nested_test() {
 pub fn graphql_empty_logic_arrays_test() {
   case setup_test_db() {
     Error(_) -> should.fail()
-    Ok(conn) -> {
+    Ok(exec) -> {
       // Create GraphQL where value with empty AND array: { and: [] }
       let where_value = value.Object([#("and", value.List([]))])
 
@@ -401,7 +419,7 @@ pub fn graphql_empty_logic_arrays_test() {
       // Execute query - should return all records
       case
         records.get_by_collection_paginated_with_where(
-          conn,
+          exec,
           "app.bsky.feed.post",
           Some(10),
           None,

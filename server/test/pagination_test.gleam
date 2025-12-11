@@ -2,6 +2,7 @@ import database/queries/pagination
 import database/types.{Record}
 import gleam/option.{None, Some}
 import gleeunit/should
+import test_helpers
 
 /// Test encoding a cursor with no sort fields (just CID)
 pub fn encode_cursor_no_sort_test() {
@@ -260,6 +261,7 @@ pub fn extract_field_value_missing_test() {
 
 /// Test building WHERE clause for single field DESC
 pub fn build_where_single_field_desc_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   let decoded =
     pagination.DecodedCursor(
       field_values: ["2025-01-15 12:00:00"],
@@ -269,7 +271,7 @@ pub fn build_where_single_field_desc_test() {
   let sort_by = Some([#("indexed_at", "desc")])
 
   let #(sql, params) =
-    pagination.build_cursor_where_clause(decoded, sort_by, False)
+    pagination.build_cursor_where_clause(exec, decoded, sort_by, False)
 
   // For DESC: indexed_at < cursor_value OR (indexed_at = cursor_value AND cid < cursor_cid)
   sql
@@ -285,6 +287,7 @@ pub fn build_where_single_field_desc_test() {
 
 /// Test building WHERE clause for single field ASC
 pub fn build_where_single_field_asc_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   let decoded =
     pagination.DecodedCursor(
       field_values: ["2025-01-15 12:00:00"],
@@ -294,7 +297,7 @@ pub fn build_where_single_field_asc_test() {
   let sort_by = Some([#("indexed_at", "asc")])
 
   let #(sql, params) =
-    pagination.build_cursor_where_clause(decoded, sort_by, False)
+    pagination.build_cursor_where_clause(exec, decoded, sort_by, False)
 
   // For ASC: indexed_at > cursor_value OR (indexed_at = cursor_value AND cid > cursor_cid)
   sql
@@ -310,13 +313,14 @@ pub fn build_where_single_field_asc_test() {
 
 /// Test building WHERE clause for JSON field
 pub fn build_where_json_field_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   let decoded =
     pagination.DecodedCursor(field_values: ["Hello world"], cid: "bafytest123")
 
   let sort_by = Some([#("text", "desc")])
 
   let #(sql, params) =
-    pagination.build_cursor_where_clause(decoded, sort_by, False)
+    pagination.build_cursor_where_clause(exec, decoded, sort_by, False)
 
   // JSON fields use json_extract
   sql
@@ -330,13 +334,14 @@ pub fn build_where_json_field_test() {
 
 /// Test building WHERE clause for nested JSON field
 pub fn build_where_nested_json_field_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   let decoded =
     pagination.DecodedCursor(field_values: ["Alice"], cid: "bafytest123")
 
   let sort_by = Some([#("author.name", "asc")])
 
   let #(sql, params) =
-    pagination.build_cursor_where_clause(decoded, sort_by, False)
+    pagination.build_cursor_where_clause(exec, decoded, sort_by, False)
 
   // Nested JSON fields use $.path.to.field
   sql
@@ -350,6 +355,7 @@ pub fn build_where_nested_json_field_test() {
 
 /// Test building WHERE clause for multiple fields
 pub fn build_where_multi_field_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   let decoded =
     pagination.DecodedCursor(
       field_values: ["Hello", "2025-01-15T12:00:00Z"],
@@ -359,7 +365,7 @@ pub fn build_where_multi_field_test() {
   let sort_by = Some([#("text", "desc"), #("createdAt", "desc")])
 
   let #(sql, params) =
-    pagination.build_cursor_where_clause(decoded, sort_by, False)
+    pagination.build_cursor_where_clause(exec, decoded, sort_by, False)
 
   // Multi-field: progressive equality checks
   // (text < ?) OR (text = ? AND createdAt < ?) OR (text = ? AND createdAt = ? AND cid < ?)
@@ -381,6 +387,7 @@ pub fn build_where_multi_field_test() {
 
 /// Test building WHERE clause for backward pagination (before)
 pub fn build_where_backward_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   let decoded =
     pagination.DecodedCursor(
       field_values: ["2025-01-15 12:00:00"],
@@ -391,7 +398,7 @@ pub fn build_where_backward_test() {
 
   // is_before = True reverses the comparison operators
   let #(sql, params) =
-    pagination.build_cursor_where_clause(decoded, sort_by, True)
+    pagination.build_cursor_where_clause(exec, decoded, sort_by, True)
 
   // For before with DESC: indexed_at > cursor_value OR (indexed_at = cursor_value AND cid > cursor_cid)
   sql

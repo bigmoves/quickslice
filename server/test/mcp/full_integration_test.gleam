@@ -1,18 +1,19 @@
+import database/executor.{type Executor}
 import database/repositories/lexicons
-import database/schema/migrations
 import gleam/http
 import gleam/option
 import gleam/string
 import gleeunit/should
 import handlers/mcp
 import lib/oauth/did_cache
-import sqlight
+import test_helpers
 import wisp
 import wisp/simulate
 
-fn setup_full_ctx() -> #(sqlight.Connection, mcp.McpContext) {
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = migrations.run_migrations(db)
+fn setup_full_ctx() -> #(Executor, mcp.McpContext) {
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
   let assert Ok(did_cache) = did_cache.start()
 
   // Insert test lexicons
@@ -20,12 +21,12 @@ fn setup_full_ctx() -> #(sqlight.Connection, mcp.McpContext) {
     "{\"lexicon\":1,\"id\":\"app.example.post\",\"defs\":{\"main\":{\"type\":\"record\",\"key\":\"tid\",\"record\":{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}}}}}}"
   let lexicon2 =
     "{\"lexicon\":1,\"id\":\"app.example.like\",\"defs\":{\"main\":{\"type\":\"record\",\"key\":\"tid\",\"record\":{\"type\":\"object\",\"properties\":{\"subject\":{\"type\":\"string\"}}}}}}"
-  let assert Ok(_) = lexicons.insert(db, "app.example.post", lexicon1)
-  let assert Ok(_) = lexicons.insert(db, "app.example.like", lexicon2)
+  let assert Ok(_) = lexicons.insert(exec, "app.example.post", lexicon1)
+  let assert Ok(_) = lexicons.insert(exec, "app.example.like", lexicon2)
 
   let ctx =
     mcp.McpContext(
-      db: db,
+      db: exec,
       external_base_url: "https://example.com",
       did_cache: did_cache,
       signing_key: option.None,
@@ -33,7 +34,7 @@ fn setup_full_ctx() -> #(sqlight.Connection, mcp.McpContext) {
       supported_scopes: ["atproto", "transition:generic"],
     )
 
-  #(db, ctx)
+  #(exec, ctx)
 }
 
 pub fn full_mcp_flow_test() {

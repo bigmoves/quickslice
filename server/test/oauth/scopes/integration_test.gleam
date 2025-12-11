@@ -1,18 +1,17 @@
 /// Integration tests for OAuth scope validation across all endpoints
-import database/schema/tables
 import gleam/http
 import gleam/json
 import gleam/string
 import gleeunit/should
 import handlers/oauth/register
-import sqlight
+import test_helpers
 import wisp
 import wisp/simulate
 
 /// Test that all ATProto scope types are accepted
 pub fn all_atproto_scopes_accepted_test() {
-  let assert Ok(conn) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_oauth_client_table(conn)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_all_tables(exec)
 
   let all_scopes =
     "atproto transition:generic transition:email transition:chat.bsky "
@@ -39,7 +38,7 @@ pub fn all_atproto_scopes_accepted_test() {
     |> simulate.string_body(body)
     |> simulate.header("content-type", "application/json")
 
-  let response = register.handle(req, conn)
+  let response = register.handle(req, exec)
 
   response.status |> should.equal(201)
 
@@ -59,8 +58,8 @@ pub fn all_atproto_scopes_accepted_test() {
 
 /// Test that complex multi-action repo scope is accepted
 pub fn multi_action_repo_scope_test() {
-  let assert Ok(conn) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_oauth_client_table(conn)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_all_tables(exec)
 
   let body =
     json.object([
@@ -78,15 +77,15 @@ pub fn multi_action_repo_scope_test() {
     |> simulate.string_body(body)
     |> simulate.header("content-type", "application/json")
 
-  let response = register.handle(req, conn)
+  let response = register.handle(req, exec)
 
   response.status |> should.equal(201)
 }
 
 /// Test that minimal atproto scope is accepted
 pub fn minimal_atproto_scope_test() {
-  let assert Ok(conn) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_oauth_client_table(conn)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_all_tables(exec)
 
   let body =
     json.object([
@@ -104,15 +103,15 @@ pub fn minimal_atproto_scope_test() {
     |> simulate.string_body(body)
     |> simulate.header("content-type", "application/json")
 
-  let response = register.handle(req, conn)
+  let response = register.handle(req, exec)
 
   response.status |> should.equal(201)
 }
 
 /// Test that malformed scope prefix is rejected
 pub fn malformed_scope_prefix_rejected_test() {
-  let assert Ok(conn) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_oauth_client_table(conn)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_all_tables(exec)
 
   let body =
     json.object([
@@ -130,7 +129,7 @@ pub fn malformed_scope_prefix_rejected_test() {
     |> simulate.string_body(body)
     |> simulate.header("content-type", "application/json")
 
-  let response = register.handle(req, conn)
+  let response = register.handle(req, exec)
 
   response.status |> should.equal(400)
 
@@ -144,8 +143,8 @@ pub fn malformed_scope_prefix_rejected_test() {
 
 /// Test that blob with invalid MIME type is rejected
 pub fn invalid_blob_mime_type_rejected_test() {
-  let assert Ok(conn) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_oauth_client_table(conn)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_all_tables(exec)
 
   let body =
     json.object([
@@ -163,7 +162,7 @@ pub fn invalid_blob_mime_type_rejected_test() {
     |> simulate.string_body(body)
     |> simulate.header("content-type", "application/json")
 
-  let response = register.handle(req, conn)
+  let response = register.handle(req, exec)
 
   response.status |> should.equal(400)
 
@@ -177,8 +176,8 @@ pub fn invalid_blob_mime_type_rejected_test() {
 
 /// Test that RPC scope without audience is rejected
 pub fn rpc_without_audience_rejected_test() {
-  let assert Ok(conn) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_oauth_client_table(conn)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_all_tables(exec)
 
   let body =
     json.object([
@@ -196,7 +195,7 @@ pub fn rpc_without_audience_rejected_test() {
     |> simulate.string_body(body)
     |> simulate.header("content-type", "application/json")
 
-  let response = register.handle(req, conn)
+  let response = register.handle(req, exec)
 
   response.status |> should.equal(400)
 

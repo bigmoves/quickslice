@@ -1,9 +1,9 @@
 /// Admin session repository operations
+import database/executor.{type DbError, type Executor, Text}
 import gleam/dynamic/decode
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
-import sqlight
 
 /// Admin session record
 pub type AdminSession {
@@ -12,42 +12,43 @@ pub type AdminSession {
 
 /// Create a new admin session
 pub fn insert(
-  conn: sqlight.Connection,
+  exec: Executor,
   session_id: String,
   atp_session_id: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
-    INSERT INTO admin_session (session_id, atp_session_id)
-    VALUES (?, ?)
-  "
+) -> Result(Nil, DbError) {
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "INSERT INTO admin_session (session_id, atp_session_id) VALUES (?, ?)"
+    executor.PostgreSQL ->
+      "INSERT INTO admin_session (session_id, atp_session_id) VALUES ($1, $2)"
+  }
 
-  use _ <- result.try(sqlight.query(
+  use _ <- result.try(executor.query(
+    exec,
     sql,
-    on: conn,
-    with: [sqlight.text(session_id), sqlight.text(atp_session_id)],
-    expecting: decode.dynamic,
+    [Text(session_id), Text(atp_session_id)],
+    decode.dynamic,
   ))
   Ok(Nil)
 }
 
 /// Get admin session by session_id (cookie ID)
 pub fn get(
-  conn: sqlight.Connection,
+  exec: Executor,
   session_id: String,
-) -> Result(Option(AdminSession), sqlight.Error) {
-  let sql =
-    "
-    SELECT session_id, atp_session_id, created_at
-    FROM admin_session
-    WHERE session_id = ?
-  "
+) -> Result(Option(AdminSession), DbError) {
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "SELECT session_id, atp_session_id, created_at FROM admin_session WHERE session_id = ?"
+    executor.PostgreSQL ->
+      "SELECT session_id, atp_session_id, created_at FROM admin_session WHERE session_id = $1"
+  }
 
-  use rows <- result.try(sqlight.query(
+  use rows <- result.try(executor.query(
+    exec,
     sql,
-    on: conn,
-    with: [sqlight.text(session_id)],
-    expecting: decoder(),
+    [Text(session_id)],
+    decoder(),
   ))
 
   case list.first(rows) {
@@ -57,17 +58,17 @@ pub fn get(
 }
 
 /// Delete admin session (logout)
-pub fn delete(
-  conn: sqlight.Connection,
-  session_id: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql = "DELETE FROM admin_session WHERE session_id = ?"
+pub fn delete(exec: Executor, session_id: String) -> Result(Nil, DbError) {
+  let sql = case executor.dialect(exec) {
+    executor.SQLite -> "DELETE FROM admin_session WHERE session_id = ?"
+    executor.PostgreSQL -> "DELETE FROM admin_session WHERE session_id = $1"
+  }
 
-  use _ <- result.try(sqlight.query(
+  use _ <- result.try(executor.query(
+    exec,
     sql,
-    on: conn,
-    with: [sqlight.text(session_id)],
-    expecting: decode.dynamic,
+    [Text(session_id)],
+    decode.dynamic,
   ))
   Ok(Nil)
 }
