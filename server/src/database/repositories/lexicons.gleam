@@ -1,45 +1,37 @@
+import database/executor.{type DbError, type Executor, Text}
 import database/types.{type Lexicon, Lexicon}
 import gleam/dynamic/decode
-import gleam/result
-import sqlight
 
 // ===== Lexicon Functions =====
 
 /// Inserts or updates a lexicon in the database
-pub fn insert(
-  conn: sqlight.Connection,
-  id: String,
-  json: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
-    INSERT INTO lexicon (id, json, created_at)
-    VALUES (?, ?, datetime('now'))
-    ON CONFLICT(id) DO UPDATE SET
-      json = excluded.json,
-      created_at = datetime('now')
-  "
+pub fn insert(exec: Executor, id: String, json: String) -> Result(Nil, DbError) {
+  let now = executor.now(exec)
+  let p1 = executor.placeholder(exec, 1)
+  let p2 = executor.placeholder(exec, 2)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(id), sqlight.text(json)],
-    expecting: decode.string,
-  ))
-  Ok(Nil)
+  // Use dialect-specific UPSERT syntax
+  let sql = case executor.dialect(exec) {
+    executor.SQLite -> "INSERT INTO lexicon (id, json, created_at)
+       VALUES (" <> p1 <> ", " <> p2 <> ", " <> now <> ")
+       ON CONFLICT(id) DO UPDATE SET
+         json = excluded.json,
+         created_at = " <> now
+    executor.PostgreSQL -> "INSERT INTO lexicon (id, json, created_at)
+       VALUES (" <> p1 <> ", " <> p2 <> ", " <> now <> ")
+       ON CONFLICT(id) DO UPDATE SET
+         json = EXCLUDED.json,
+         created_at = " <> now
+  }
+
+  executor.exec(exec, sql, [Text(id), Text(json)])
 }
 
 /// Gets a lexicon by ID
-pub fn get(
-  conn: sqlight.Connection,
-  id: String,
-) -> Result(List(Lexicon), sqlight.Error) {
-  let sql =
-    "
-    SELECT id, json, created_at
-    FROM lexicon
-    WHERE id = ?
-  "
+pub fn get(exec: Executor, id: String) -> Result(List(Lexicon), DbError) {
+  let sql = "SELECT id, json, created_at
+     FROM lexicon
+     WHERE id = " <> executor.placeholder(exec, 1)
 
   let decoder = {
     use id <- decode.field(0, decode.string)
@@ -48,17 +40,15 @@ pub fn get(
     decode.success(Lexicon(id:, json:, created_at:))
   }
 
-  sqlight.query(sql, on: conn, with: [sqlight.text(id)], expecting: decoder)
+  executor.query(exec, sql, [Text(id)], decoder)
 }
 
 /// Gets all lexicons from the database
-pub fn get_all(conn: sqlight.Connection) -> Result(List(Lexicon), sqlight.Error) {
+pub fn get_all(exec: Executor) -> Result(List(Lexicon), DbError) {
   let sql =
-    "
-    SELECT id, json, created_at
-    FROM lexicon
-    ORDER BY created_at DESC
-  "
+    "SELECT id, json, created_at
+     FROM lexicon
+     ORDER BY created_at DESC"
 
   let decoder = {
     use id <- decode.field(0, decode.string)
@@ -67,26 +57,21 @@ pub fn get_all(conn: sqlight.Connection) -> Result(List(Lexicon), sqlight.Error)
     decode.success(Lexicon(id:, json:, created_at:))
   }
 
-  sqlight.query(sql, on: conn, with: [], expecting: decoder)
+  executor.query(exec, sql, [], decoder)
 }
 
 /// Checks if a lexicon exists by ID
-pub fn has(conn: sqlight.Connection, id: String) -> Result(Bool, sqlight.Error) {
-  let sql =
-    "
-    SELECT COUNT(*) as count
-    FROM lexicon
-    WHERE id = ?
-  "
+pub fn has(exec: Executor, id: String) -> Result(Bool, DbError) {
+  let sql = "SELECT COUNT(*) as count
+     FROM lexicon
+     WHERE id = " <> executor.placeholder(exec, 1)
 
   let decoder = {
     use count <- decode.field(0, decode.int)
     decode.success(count)
   }
 
-  case
-    sqlight.query(sql, on: conn, with: [sqlight.text(id)], expecting: decoder)
-  {
+  case executor.query(exec, sql, [Text(id)], decoder) {
     Ok([count]) -> Ok(count > 0)
     Ok(_) -> Ok(False)
     Error(err) -> Error(err)
@@ -95,21 +80,24 @@ pub fn has(conn: sqlight.Connection, id: String) -> Result(Bool, sqlight.Error) 
 
 /// Checks if a lexicon exists for a collection (with fallback to record table)
 pub fn has_for_collection(
-  conn: sqlight.Connection,
+  exec: Executor,
   collection: String,
-) -> Result(Bool, sqlight.Error) {
+) -> Result(Bool, DbError) {
   // First check lexicon table (direct lookup is faster)
-  case has(conn, collection) {
+  case has(exec, collection) {
     Ok(True) -> Ok(True)
     Ok(False) -> {
       // Fall back to searching record table for backward compatibility
-      let sql =
-        "
-        SELECT COUNT(*) as count
-        FROM record
-        WHERE collection = 'com.atproto.lexicon.schema'
-        AND json LIKE ?
-      "
+      // Use dialect-specific LIKE operator
+      let like_op = case executor.dialect(exec) {
+        executor.SQLite -> " LIKE "
+        executor.PostgreSQL -> " ILIKE "
+      }
+
+      let sql = "SELECT COUNT(*) as count
+         FROM record
+         WHERE collection = 'com.atproto.lexicon.schema'
+         AND json" <> like_op <> executor.placeholder(exec, 1)
 
       let decoder = {
         use count <- decode.field(0, decode.int)
@@ -118,14 +106,7 @@ pub fn has_for_collection(
 
       let pattern = "%" <> collection <> "%"
 
-      case
-        sqlight.query(
-          sql,
-          on: conn,
-          with: [sqlight.text(pattern)],
-          expecting: decoder,
-        )
-      {
+      case executor.query(exec, sql, [Text(pattern)], decoder) {
         Ok([count]) -> Ok(count > 0)
         Ok(_) -> Ok(False)
         Error(err) -> Error(err)
@@ -136,19 +117,15 @@ pub fn has_for_collection(
 }
 
 /// Gets the total number of lexicons in the database
-pub fn get_count(conn: sqlight.Connection) -> Result(Int, sqlight.Error) {
-  let sql =
-    "
-    SELECT COUNT(*) as count
-    FROM lexicon
-  "
+pub fn get_count(exec: Executor) -> Result(Int, DbError) {
+  let sql = "SELECT COUNT(*) as count FROM lexicon"
 
   let decoder = {
     use count <- decode.field(0, decode.int)
     decode.success(count)
   }
 
-  case sqlight.query(sql, on: conn, with: [], expecting: decoder) {
+  case executor.query(exec, sql, [], decoder) {
     Ok([count]) -> Ok(count)
     Ok(_) -> Ok(0)
     Error(err) -> Error(err)
@@ -156,17 +133,13 @@ pub fn get_count(conn: sqlight.Connection) -> Result(Int, sqlight.Error) {
 }
 
 /// Gets all lexicons that are of type "record" (collections)
-pub fn get_record_types(
-  conn: sqlight.Connection,
-) -> Result(List(Lexicon), sqlight.Error) {
+pub fn get_record_types(exec: Executor) -> Result(List(Lexicon), DbError) {
   let sql =
-    "
-    SELECT id, json, created_at
-    FROM lexicon
-    WHERE json LIKE '%\"type\":\"record\"%'
-       OR json LIKE '%\"type\": \"record\"%'
-    ORDER BY id ASC
-  "
+    "SELECT id, json, created_at
+     FROM lexicon
+     WHERE json LIKE '%\"type\":\"record\"%'
+        OR json LIKE '%\"type\": \"record\"%'
+     ORDER BY id ASC"
 
   let decoder = {
     use id <- decode.field(0, decode.string)
@@ -175,13 +148,10 @@ pub fn get_record_types(
     decode.success(Lexicon(id:, json:, created_at:))
   }
 
-  sqlight.query(sql, on: conn, with: [], expecting: decoder)
+  executor.query(exec, sql, [], decoder)
 }
 
 /// Deletes all lexicons from the database
-pub fn delete_all(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
-  let sql = "DELETE FROM lexicon"
-
-  sqlight.exec(sql, conn)
-  |> result.map(fn(_) { Nil })
+pub fn delete_all(exec: Executor) -> Result(Nil, DbError) {
+  executor.exec(exec, "DELETE FROM lexicon", [])
 }

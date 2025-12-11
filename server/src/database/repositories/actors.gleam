@@ -1,47 +1,45 @@
+import database/executor.{type DbError, type Executor, Text}
 import database/types.{type Actor, Actor}
 import gleam/dynamic/decode
+import gleam/int
 import gleam/list
 import gleam/result
 import gleam/string
-import sqlight
 
 // ===== Actor Functions =====
 
 /// Inserts or updates an actor in the database
 pub fn upsert(
-  conn: sqlight.Connection,
+  exec: Executor,
   did: String,
   handle: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
-    INSERT INTO actor (did, handle, indexed_at)
-    VALUES (?, ?, datetime('now'))
-    ON CONFLICT(did) DO UPDATE SET
-      handle = excluded.handle,
-      indexed_at = excluded.indexed_at
-  "
+) -> Result(Nil, DbError) {
+  let now = executor.now(exec)
+  let p1 = executor.placeholder(exec, 1)
+  let p2 = executor.placeholder(exec, 2)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(did), sqlight.text(handle)],
-    expecting: decode.string,
-  ))
-  Ok(Nil)
+  // Use dialect-specific UPSERT syntax
+  let sql = case executor.dialect(exec) {
+    executor.SQLite -> "INSERT INTO actor (did, handle, indexed_at)
+       VALUES (" <> p1 <> ", " <> p2 <> ", " <> now <> ")
+       ON CONFLICT(did) DO UPDATE SET
+         handle = excluded.handle,
+         indexed_at = excluded.indexed_at"
+    executor.PostgreSQL -> "INSERT INTO actor (did, handle, indexed_at)
+       VALUES (" <> p1 <> ", " <> p2 <> ", " <> now <> ")
+       ON CONFLICT(did) DO UPDATE SET
+         handle = EXCLUDED.handle,
+         indexed_at = EXCLUDED.indexed_at"
+  }
+
+  executor.exec(exec, sql, [Text(did), Text(handle)])
 }
 
 /// Gets an actor by DID
-pub fn get(
-  conn: sqlight.Connection,
-  did: String,
-) -> Result(List(Actor), sqlight.Error) {
-  let sql =
-    "
-    SELECT did, handle, indexed_at
-    FROM actor
-    WHERE did = ?
-  "
+pub fn get(exec: Executor, did: String) -> Result(List(Actor), DbError) {
+  let sql = "SELECT did, handle, indexed_at
+     FROM actor
+     WHERE did = " <> executor.placeholder(exec, 1)
 
   let decoder = {
     use did <- decode.field(0, decode.string)
@@ -50,20 +48,17 @@ pub fn get(
     decode.success(Actor(did:, handle:, indexed_at:))
   }
 
-  sqlight.query(sql, on: conn, with: [sqlight.text(did)], expecting: decoder)
+  executor.query(exec, sql, [Text(did)], decoder)
 }
 
 /// Gets an actor by handle
 pub fn get_by_handle(
-  conn: sqlight.Connection,
+  exec: Executor,
   handle: String,
-) -> Result(List(Actor), sqlight.Error) {
-  let sql =
-    "
-    SELECT did, handle, indexed_at
-    FROM actor
-    WHERE handle = ?
-  "
+) -> Result(List(Actor), DbError) {
+  let sql = "SELECT did, handle, indexed_at
+     FROM actor
+     WHERE handle = " <> executor.placeholder(exec, 1)
 
   let decoder = {
     use did <- decode.field(0, decode.string)
@@ -72,23 +67,19 @@ pub fn get_by_handle(
     decode.success(Actor(did:, handle:, indexed_at:))
   }
 
-  sqlight.query(sql, on: conn, with: [sqlight.text(handle)], expecting: decoder)
+  executor.query(exec, sql, [Text(handle)], decoder)
 }
 
 /// Gets the total number of actors in the database
-pub fn get_count(conn: sqlight.Connection) -> Result(Int, sqlight.Error) {
-  let sql =
-    "
-    SELECT COUNT(*) as count
-    FROM actor
-  "
+pub fn get_count(exec: Executor) -> Result(Int, DbError) {
+  let sql = "SELECT COUNT(*) as count FROM actor"
 
   let decoder = {
     use count <- decode.field(0, decode.int)
     decode.success(count)
   }
 
-  case sqlight.query(sql, on: conn, with: [], expecting: decoder) {
+  case executor.query(exec, sql, [], decoder) {
     Ok([count]) -> Ok(count)
     Ok(_) -> Ok(0)
     Error(err) -> Error(err)
@@ -96,53 +87,65 @@ pub fn get_count(conn: sqlight.Connection) -> Result(Int, sqlight.Error) {
 }
 
 /// Deletes all actors from the database
-pub fn delete_all(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
-  let sql = "DELETE FROM actor"
-
-  sqlight.exec(sql, conn)
-  |> result.map(fn(_) { Nil })
+pub fn delete_all(exec: Executor) -> Result(Nil, DbError) {
+  executor.exec(exec, "DELETE FROM actor", [])
 }
 
 /// Batch upsert multiple actors in a single transaction
 /// More efficient than individual upserts for large datasets
 pub fn batch_upsert(
-  conn: sqlight.Connection,
+  exec: Executor,
   actors: List(#(String, String)),
-) -> Result(Nil, sqlight.Error) {
+) -> Result(Nil, DbError) {
   case actors {
     [] -> Ok(Nil)
     _ -> {
-      // Process in chunks of 100 to avoid SQLite parameter limits
-      // (999 max params, 2 params per actor = 400 safe, use 100 for safety)
+      // Process in chunks to avoid parameter limits
+      // SQLite: 999 max params, PostgreSQL: 65535 max params
+      // 2 params per actor, use 100 for safety
       let batch_size = 100
 
       list.sized_chunk(actors, batch_size)
-      |> list.try_each(fn(batch) {
-        // Build the SQL with multiple value sets
-        let value_placeholders =
-          list.repeat("(?, ?, datetime('now'))", list.length(batch))
-          |> string.join(", ")
-
-        let sql =
-          "INSERT INTO actor (did, handle, indexed_at) VALUES "
-          <> value_placeholders
-          <> " ON CONFLICT(did) DO UPDATE SET handle = excluded.handle, indexed_at = excluded.indexed_at"
-
-        // Flatten actor tuples into parameter list
-        let params =
-          list.flat_map(batch, fn(actor) {
-            let #(did, handle) = actor
-            [sqlight.text(did), sqlight.text(handle)]
-          })
-
-        use _ <- result.try(sqlight.query(
-          sql,
-          on: conn,
-          with: params,
-          expecting: decode.string,
-        ))
-        Ok(Nil)
-      })
+      |> list.try_each(fn(batch) { batch_upsert_chunk(exec, batch) })
     }
   }
+}
+
+/// Internal: upsert a single batch of actors
+fn batch_upsert_chunk(
+  exec: Executor,
+  batch: List(#(String, String)),
+) -> Result(Nil, DbError) {
+  let now = executor.now(exec)
+  let batch_len = list.length(batch)
+
+  // Build placeholders for all actors in batch
+  let value_placeholders =
+    list.index_map(batch, fn(_, i) {
+      let p1 = executor.placeholder(exec, i * 2 + 1)
+      let p2 = executor.placeholder(exec, i * 2 + 2)
+      "(" <> p1 <> ", " <> p2 <> ", " <> now <> ")"
+    })
+    |> string.join(", ")
+
+  // Use dialect-specific UPSERT syntax
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "INSERT INTO actor (did, handle, indexed_at) VALUES "
+      <> value_placeholders
+      <> " ON CONFLICT(did) DO UPDATE SET handle = excluded.handle, indexed_at = excluded.indexed_at"
+    executor.PostgreSQL ->
+      "INSERT INTO actor (did, handle, indexed_at) VALUES "
+      <> value_placeholders
+      <> " ON CONFLICT(did) DO UPDATE SET handle = EXCLUDED.handle, indexed_at = EXCLUDED.indexed_at"
+  }
+
+  // Flatten actor tuples into parameter list
+  let params =
+    list.flat_map(batch, fn(actor) {
+      let #(did, handle) = actor
+      [Text(did), Text(handle)]
+    })
+
+  executor.exec(exec, sql, params)
 }
