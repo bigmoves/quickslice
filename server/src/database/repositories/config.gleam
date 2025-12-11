@@ -1,9 +1,8 @@
+import database/executor.{type DbError, type Executor, ConstraintError, Text}
 import envoy
 import gleam/dynamic/decode
 import gleam/list
-import gleam/result
 import gleam/string
-import sqlight
 
 // ===== Default Values =====
 
@@ -18,88 +17,62 @@ pub const default_oauth_supported_scopes = "atproto transition:generic"
 // ===== Config Functions =====
 
 /// Get a config value by key
-pub fn get(
-  conn: sqlight.Connection,
-  key: String,
-) -> Result(String, sqlight.Error) {
+pub fn get(exec: Executor, key: String) -> Result(String, DbError) {
   let sql =
-    "
-    SELECT value
-    FROM config
-    WHERE key = ?
-  "
+    "SELECT value FROM config WHERE key = " <> executor.placeholder(exec, 1)
 
   let decoder = {
     use value <- decode.field(0, decode.string)
     decode.success(value)
   }
 
-  case
-    sqlight.query(sql, on: conn, with: [sqlight.text(key)], expecting: decoder)
-  {
+  case executor.query(exec, sql, [Text(key)], decoder) {
     Ok([value, ..]) -> Ok(value)
-    Ok([]) ->
-      Error(sqlight.SqlightError(
-        sqlight.ConstraintForeignkey,
-        "Config key not found",
-        -1,
-      ))
+    Ok([]) -> Error(ConstraintError("Config key not found: " <> key))
     Error(err) -> Error(err)
   }
 }
 
 /// Set or update a config value
-pub fn set(
-  conn: sqlight.Connection,
-  key: String,
-  value: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
-    INSERT INTO config (key, value, updated_at)
-    VALUES (?, ?, datetime('now'))
-    ON CONFLICT(key) DO UPDATE SET
-      value = excluded.value,
-      updated_at = datetime('now')
-  "
+pub fn set(exec: Executor, key: String, value: String) -> Result(Nil, DbError) {
+  let now = executor.now(exec)
+  let p1 = executor.placeholder(exec, 1)
+  let p2 = executor.placeholder(exec, 2)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(key), sqlight.text(value)],
-    expecting: decode.string,
-  ))
-  Ok(Nil)
+  // Use dialect-specific syntax for UPSERT
+  let sql = case executor.dialect(exec) {
+    executor.SQLite -> "INSERT INTO config (key, value, updated_at)
+       VALUES (" <> p1 <> ", " <> p2 <> ", " <> now <> ")
+       ON CONFLICT(key) DO UPDATE SET
+         value = excluded.value,
+         updated_at = " <> now
+    executor.PostgreSQL -> "INSERT INTO config (key, value, updated_at)
+       VALUES (" <> p1 <> ", " <> p2 <> ", " <> now <> ")
+       ON CONFLICT(key) DO UPDATE SET
+         value = EXCLUDED.value,
+         updated_at = " <> now
+  }
+
+  executor.exec(exec, sql, [Text(key), Text(value)])
 }
 
 /// Delete a config value by key
-pub fn delete(
-  conn: sqlight.Connection,
-  key: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql = "DELETE FROM config WHERE key = ?"
+pub fn delete(exec: Executor, key: String) -> Result(Nil, DbError) {
+  let sql = "DELETE FROM config WHERE key = " <> executor.placeholder(exec, 1)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(key)],
-    expecting: decode.string,
-  ))
-  Ok(Nil)
+  executor.exec(exec, sql, [Text(key)])
 }
 
 /// Deletes the domain_authority config entry
-pub fn delete_domain_authority(
-  conn: sqlight.Connection,
-) -> Result(Nil, sqlight.Error) {
-  delete(conn, "domain_authority")
+pub fn delete_domain_authority(exec: Executor) -> Result(Nil, DbError) {
+  delete(exec, "domain_authority")
 }
 
 // ===== Admin DID Functions =====
 
 /// Get admin DIDs from config
-pub fn get_admin_dids(conn: sqlight.Connection) -> List(String) {
-  case get(conn, "admin_dids") {
+pub fn get_admin_dids(exec: Executor) -> List(String) {
+  case get(exec, "admin_dids") {
     Ok(value) -> {
       value
       |> string.split(",")
@@ -111,18 +84,14 @@ pub fn get_admin_dids(conn: sqlight.Connection) -> List(String) {
 }
 
 /// Add an admin DID to the list
-pub fn add_admin_did(
-  conn: sqlight.Connection,
-  did: String,
-) -> Result(Nil, sqlight.Error) {
-  let current = get_admin_dids(conn)
+pub fn add_admin_did(exec: Executor, did: String) -> Result(Nil, DbError) {
+  let current = get_admin_dids(exec)
   case list.contains(current, did) {
     True -> Ok(Nil)
-    // Already exists, idempotent
     False -> {
       let new_list = list.append(current, [did])
       let value = string.join(new_list, ",")
-      set(conn, "admin_dids", value)
+      set(exec, "admin_dids", value)
     }
   }
 }
@@ -130,16 +99,16 @@ pub fn add_admin_did(
 pub type RemoveAdminError {
   LastAdminError
   NotFoundError
-  DatabaseError(sqlight.Error)
+  DatabaseError(DbError)
 }
 
 /// Remove an admin DID from the list
 /// Returns error if trying to remove the last admin
 pub fn remove_admin_did(
-  conn: sqlight.Connection,
+  exec: Executor,
   did: String,
 ) -> Result(List(String), RemoveAdminError) {
-  let current = get_admin_dids(conn)
+  let current = get_admin_dids(exec)
   case list.contains(current, did) {
     False -> Error(NotFoundError)
     True -> {
@@ -148,7 +117,7 @@ pub fn remove_admin_did(
         [] -> Error(LastAdminError)
         _ -> {
           let value = string.join(new_list, ",")
-          case set(conn, "admin_dids", value) {
+          case set(exec, "admin_dids", value) {
             Ok(_) -> Ok(new_list)
             Error(err) -> Error(DatabaseError(err))
           }
@@ -160,22 +129,22 @@ pub fn remove_admin_did(
 
 /// Set the full admin DIDs list (replaces existing)
 pub fn set_admin_dids(
-  conn: sqlight.Connection,
+  exec: Executor,
   dids: List(String),
-) -> Result(Nil, sqlight.Error) {
+) -> Result(Nil, DbError) {
   let value = string.join(dids, ",")
-  set(conn, "admin_dids", value)
+  set(exec, "admin_dids", value)
 }
 
 /// Check if a DID is an admin
-pub fn is_admin(conn: sqlight.Connection, did: String) -> Bool {
-  let admins = get_admin_dids(conn)
+pub fn is_admin(exec: Executor, did: String) -> Bool {
+  let admins = get_admin_dids(exec)
   list.contains(admins, did)
 }
 
 /// Check if any admins are configured
-pub fn has_admins(conn: sqlight.Connection) -> Bool {
-  case get_admin_dids(conn) {
+pub fn has_admins(exec: Executor) -> Bool {
+  case get_admin_dids(exec) {
     [] -> False
     _ -> True
   }
@@ -184,19 +153,19 @@ pub fn has_admins(conn: sqlight.Connection) -> Bool {
 // ===== External Services Configuration =====
 
 /// Get relay URL from config, with default fallback
-pub fn get_relay_url(conn: sqlight.Connection) -> String {
-  case get(conn, "relay_url") {
+pub fn get_relay_url(exec: Executor) -> String {
+  case get(exec, "relay_url") {
     Ok(url) -> url
     Error(_) -> default_relay_url
   }
 }
 
-/// Get PLC directory URL with precedence: env var → database → default
-pub fn get_plc_directory_url(conn: sqlight.Connection) -> String {
+/// Get PLC directory URL with precedence: env var -> database -> default
+pub fn get_plc_directory_url(exec: Executor) -> String {
   case envoy.get("PLC_DIRECTORY_URL") {
     Ok(url) -> url
     Error(_) -> {
-      case get(conn, "plc_directory_url") {
+      case get(exec, "plc_directory_url") {
         Ok(url) -> url
         Error(_) -> default_plc_directory_url
       }
@@ -205,25 +174,24 @@ pub fn get_plc_directory_url(conn: sqlight.Connection) -> String {
 }
 
 /// Get Jetstream URL from config, with default fallback
-pub fn get_jetstream_url(conn: sqlight.Connection) -> String {
-  case get(conn, "jetstream_url") {
+pub fn get_jetstream_url(exec: Executor) -> String {
+  case get(exec, "jetstream_url") {
     Ok(url) -> url
     Error(_) -> default_jetstream_url
   }
 }
 
 /// Get OAuth supported scopes from config, with default fallback
-/// Returns space-separated string
-pub fn get_oauth_supported_scopes(conn: sqlight.Connection) -> String {
-  case get(conn, "oauth_supported_scopes") {
+pub fn get_oauth_supported_scopes(exec: Executor) -> String {
+  case get(exec, "oauth_supported_scopes") {
     Ok(scopes) -> scopes
     Error(_) -> default_oauth_supported_scopes
   }
 }
 
 /// Parse OAuth supported scopes into List(String)
-pub fn get_oauth_supported_scopes_list(conn: sqlight.Connection) -> List(String) {
-  let scopes_str = get_oauth_supported_scopes(conn)
+pub fn get_oauth_supported_scopes_list(exec: Executor) -> List(String) {
+  let scopes_str = get_oauth_supported_scopes(exec)
   scopes_str
   |> string.split(" ")
   |> list.map(string.trim)
@@ -231,76 +199,61 @@ pub fn get_oauth_supported_scopes_list(conn: sqlight.Connection) -> List(String)
 }
 
 /// Set relay URL
-pub fn set_relay_url(
-  conn: sqlight.Connection,
-  url: String,
-) -> Result(Nil, sqlight.Error) {
-  set(conn, "relay_url", url)
+pub fn set_relay_url(exec: Executor, url: String) -> Result(Nil, DbError) {
+  set(exec, "relay_url", url)
 }
 
 /// Set PLC directory URL
 pub fn set_plc_directory_url(
-  conn: sqlight.Connection,
+  exec: Executor,
   url: String,
-) -> Result(Nil, sqlight.Error) {
-  set(conn, "plc_directory_url", url)
+) -> Result(Nil, DbError) {
+  set(exec, "plc_directory_url", url)
 }
 
 /// Set Jetstream URL
-pub fn set_jetstream_url(
-  conn: sqlight.Connection,
-  url: String,
-) -> Result(Nil, sqlight.Error) {
-  set(conn, "jetstream_url", url)
+pub fn set_jetstream_url(exec: Executor, url: String) -> Result(Nil, DbError) {
+  set(exec, "jetstream_url", url)
 }
 
 /// Set OAuth supported scopes (space-separated string)
 pub fn set_oauth_supported_scopes(
-  conn: sqlight.Connection,
+  exec: Executor,
   scopes: String,
-) -> Result(Nil, sqlight.Error) {
-  set(conn, "oauth_supported_scopes", scopes)
+) -> Result(Nil, DbError) {
+  set(exec, "oauth_supported_scopes", scopes)
 }
 
 /// Initialize config with defaults if not already set
-/// Should be called once during server startup
-pub fn initialize_config_defaults(
-  conn: sqlight.Connection,
-) -> Result(Nil, sqlight.Error) {
-  // Only set if the key doesn't exist (don't overwrite user settings)
-
-  // Relay URL
-  case get(conn, "relay_url") {
+pub fn initialize_config_defaults(exec: Executor) -> Result(Nil, DbError) {
+  case get(exec, "relay_url") {
     Error(_) -> {
-      let _ = set(conn, "relay_url", default_relay_url)
+      let _ = set(exec, "relay_url", default_relay_url)
       Nil
     }
     Ok(_) -> Nil
   }
 
-  // PLC Directory URL
-  case get(conn, "plc_directory_url") {
+  case get(exec, "plc_directory_url") {
     Error(_) -> {
-      let _ = set(conn, "plc_directory_url", default_plc_directory_url)
+      let _ = set(exec, "plc_directory_url", default_plc_directory_url)
       Nil
     }
     Ok(_) -> Nil
   }
 
-  // Jetstream URL
-  case get(conn, "jetstream_url") {
+  case get(exec, "jetstream_url") {
     Error(_) -> {
-      let _ = set(conn, "jetstream_url", default_jetstream_url)
+      let _ = set(exec, "jetstream_url", default_jetstream_url)
       Nil
     }
     Ok(_) -> Nil
   }
 
-  // OAuth Supported Scopes
-  case get(conn, "oauth_supported_scopes") {
+  case get(exec, "oauth_supported_scopes") {
     Error(_) -> {
       let _ =
-        set(conn, "oauth_supported_scopes", default_oauth_supported_scopes)
+        set(exec, "oauth_supported_scopes", default_oauth_supported_scopes)
       Nil
     }
     Ok(_) -> Nil
