@@ -12,7 +12,7 @@ import gleam/json
 import gleam/option
 import gleam/string
 import gleeunit/should
-import graphql_gleam
+import graphql/lexicon/schema as lexicon_schema
 import lib/oauth/did_cache
 import sqlight
 
@@ -344,7 +344,7 @@ pub fn reverse_join_includes_forward_join_fields_test() {
 
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(
+    lexicon_schema.execute_query_with_db(
       conn,
       query,
       "{}",
@@ -426,7 +426,7 @@ pub fn integer_field_resolves_correctly_test() {
 
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(
+    lexicon_schema.execute_query_with_db(
       conn,
       query,
       "{}",
@@ -588,7 +588,7 @@ pub fn nested_query_profile_to_photos_test() {
 
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(
+    lexicon_schema.execute_query_with_db(
       conn,
       query,
       "{}",

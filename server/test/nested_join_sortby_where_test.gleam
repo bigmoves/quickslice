@@ -15,7 +15,7 @@ import gleam/list
 import gleam/option
 import gleam/string
 import gleeunit/should
-import graphql_gleam
+import graphql/lexicon/schema as lexicon_schema
 import lib/oauth/did_cache
 import sqlight
 
@@ -197,7 +197,7 @@ pub fn did_join_sortby_createdat_desc_test() {
 
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(
+    lexicon_schema.execute_query_with_db(
       db,
       query,
       "{}",
@@ -343,7 +343,7 @@ pub fn did_join_sortby_createdat_asc_test() {
 
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(
+    lexicon_schema.execute_query_with_db(
       db,
       query,
       "{}",
@@ -464,7 +464,7 @@ pub fn did_join_where_filter_test() {
 
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(
+    lexicon_schema.execute_query_with_db(
       db,
       query,
       "{}",
@@ -594,7 +594,7 @@ pub fn did_join_sortby_where_first_test() {
 
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(
+    lexicon_schema.execute_query_with_db(
       db,
       query,
       "{}",
@@ -764,7 +764,7 @@ pub fn user_query_pattern_test() {
 
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
-    graphql_gleam.execute_query_with_db(
+    lexicon_schema.execute_query_with_db(
       db,
       query,
       "{}",

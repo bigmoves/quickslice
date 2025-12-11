@@ -11,7 +11,7 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
-import graphql_gleam
+import graphql/lexicon/schema as lexicon_schema
 import lib/oauth/did_cache
 import sqlight
 import wisp
@@ -140,7 +140,7 @@ fn execute_graphql_query(
 ) -> wisp.Response {
   // Use the new pure Gleam GraphQL implementation
   case
-    graphql_gleam.execute_query_with_db(
+    lexicon_schema.execute_query_with_db(
       db,
       query,
       variables_json_str,

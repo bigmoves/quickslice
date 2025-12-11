@@ -2,7 +2,7 @@ import gleam/erlang/process.{type Subject}
 import gleam/json
 import gleam/option.{type Option}
 import gleam/result
-import graphql_gleam
+import graphql/lexicon/schema as lexicon_schema
 import lib/oauth/did_cache
 import sqlight
 
@@ -15,7 +15,7 @@ pub fn execute_query(
   signing_key: Option(String),
   plc_url: String,
 ) -> Result(json.Json, String) {
-  use result_str <- result.try(graphql_gleam.execute_query_with_db(
+  use result_str <- result.try(lexicon_schema.execute_query_with_db(
     db,
     query,
     variables_json,

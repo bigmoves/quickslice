@@ -10,7 +10,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
-import graphql_gleam
+import graphql/lexicon/schema as lexicon_schema
 import graphql_ws
 import lib/oauth/did_cache
 import logging
@@ -48,7 +48,7 @@ fn event_to_graphql_value(
   db: sqlight.Connection,
 ) -> value.Value {
   // Parse the record JSON value
-  let value_object = case graphql_gleam.parse_json_to_value(event.value) {
+  let value_object = case lexicon_schema.parse_json_to_value(event.value) {
     Ok(val) -> val
     Error(_) -> value.Object([])
   }
@@ -91,7 +91,7 @@ fn execute_subscription_query(
   use response <- result.try(executor.execute(query, graphql_schema, ctx))
 
   // Format the response as JSON
-  Ok(graphql_gleam.format_response(response))
+  Ok(lexicon_schema.format_response(response))
 }
 
 /// Convert collection name to GraphQL field name format
@@ -195,7 +195,7 @@ pub fn handle_websocket(
 
       // Build GraphQL schema for subscriptions
       let graphql_schema = case
-        graphql_gleam.build_schema_from_db(
+        lexicon_schema.build_schema_from_db(
           db,
           did_cache,
           signing_key,
@@ -358,7 +358,7 @@ fn handle_text_message(state: State, conn: WebsocketConnection, text: String) {
                   // Parse variables from JSON
                   let variables = case variables_opt {
                     Some(vars_json) ->
-                      graphql_gleam.json_string_to_variables_dict(vars_json)
+                      lexicon_schema.json_string_to_variables_dict(vars_json)
                     None -> dict.new()
                   }
 
