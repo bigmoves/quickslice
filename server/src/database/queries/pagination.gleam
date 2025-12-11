@@ -7,6 +7,7 @@
 /// - All sort field values are included in the cursor
 /// - Values are separated by pipe (|) characters
 /// - CID is always the last element as the ultimate tiebreaker
+import database/executor.{type Executor}
 import database/types.{type Record}
 import gleam/bit_array
 import gleam/dict
@@ -206,6 +207,7 @@ pub fn decode_cursor(
 ///
 /// Returns: #(where_clause_sql, bind_values)
 pub fn build_cursor_where_clause(
+  exec: Executor,
   decoded_cursor: DecodedCursor,
   sort_by: Option(List(#(String, String))),
   is_before: Bool,
@@ -220,6 +222,7 @@ pub fn build_cursor_where_clause(
     False -> {
       let clauses =
         build_progressive_clauses(
+          exec,
           sort_fields,
           decoded_cursor.field_values,
           decoded_cursor.cid,
@@ -234,6 +237,7 @@ pub fn build_cursor_where_clause(
 
 /// Builds progressive equality clauses for cursor pagination
 fn build_progressive_clauses(
+  exec: Executor,
   sort_fields: List(#(String, String)),
   field_values: List(String),
   cid: String,
@@ -251,7 +255,7 @@ fn build_progressive_clauses(
               list_at(sort_fields, j) |> result.unwrap(#("", ""))
             let value = list_at(field_values, j) |> result.unwrap("")
 
-            let field_ref = build_cursor_field_reference(prior_field.0)
+            let field_ref = build_cursor_field_reference(exec, prior_field.0)
             let new_part = field_ref <> " = ?"
             let new_params = list.append(eq_params, [value])
 
@@ -263,7 +267,7 @@ fn build_progressive_clauses(
       let value = list_at(field_values, i) |> result.unwrap("")
 
       let comparison_op = get_comparison_operator(field.1, is_before)
-      let field_ref = build_cursor_field_reference(field.0)
+      let field_ref = build_cursor_field_reference(exec, field.0)
 
       let comparison_part = field_ref <> " " <> comparison_op <> " ?"
       let all_parts = list.append(equality_parts, [comparison_part])
@@ -282,7 +286,7 @@ fn build_progressive_clauses(
   let #(final_equality_parts, final_equality_params) =
     list.index_map(sort_fields, fn(field, j) {
       let value = list_at(field_values, j) |> result.unwrap("")
-      let field_ref = build_cursor_field_reference(field.0)
+      let field_ref = build_cursor_field_reference(exec, field.0)
       #(field_ref <> " = ?", value)
     })
     |> list.unzip
@@ -302,13 +306,10 @@ fn build_progressive_clauses(
 }
 
 /// Builds a field reference for cursor SQL queries (handles JSON fields)
-fn build_cursor_field_reference(field: String) -> String {
+fn build_cursor_field_reference(exec: Executor, field: String) -> String {
   case field {
     "uri" | "cid" | "did" | "collection" | "indexed_at" -> field
-    _ -> {
-      let json_path = "$." <> string.replace(field, ".", ".")
-      "json_extract(json, '" <> json_path <> "')"
-    }
+    _ -> executor.json_extract(exec, "json", field)
   }
 }
 
@@ -363,6 +364,7 @@ pub fn reverse_sort_fields(
 /// Builds an ORDER BY clause from sort fields
 /// use_table_prefix: if True, prefixes table columns with "record." for joins
 pub fn build_order_by(
+  exec: Executor,
   sort_fields: List(#(String, String)),
   use_table_prefix: Bool,
 ) -> String {
@@ -378,15 +380,24 @@ pub fn build_order_by(
           table_prefix <> field_name
         "createdAt" | "indexedAt" -> {
           let json_field =
-            "json_extract(" <> table_prefix <> "json, '$." <> field_name <> "')"
-          "CASE
+            executor.json_extract(exec, table_prefix <> "json", field_name)
+          // Validate datetime - syntax differs by dialect
+          case executor.dialect(exec) {
+            executor.SQLite -> "CASE
             WHEN " <> json_field <> " IS NULL THEN NULL
             WHEN datetime(" <> json_field <> ") IS NULL THEN NULL
             ELSE " <> json_field <> "
            END"
+            executor.PostgreSQL ->
+              // PostgreSQL: check if value is a valid timestamp format
+              "CASE
+            WHEN " <> json_field <> " IS NULL THEN NULL
+            WHEN " <> json_field <> " ~ '^\\d{4}-\\d{2}-\\d{2}' THEN " <> json_field <> "
+            ELSE NULL
+           END"
+          }
         }
-        _ ->
-          "json_extract(" <> table_prefix <> "json, '$." <> field_name <> "')"
+        _ -> executor.json_extract(exec, table_prefix <> "json", field_name)
       }
       let dir = case string.lowercase(direction) {
         "asc" -> "ASC"
