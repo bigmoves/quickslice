@@ -1,6 +1,6 @@
 # Deployment
 
-This guide covers deploying Quickslice to production. The quickest path is Railway with the one-click deploy button.
+Deploy Quickslice to production. Railway with one-click deploy is fastest.
 
 ## Railway (Recommended)
 
@@ -10,7 +10,7 @@ Click the button to create a new Quickslice instance:
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/quickslice?referralCode=Ofii6e&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
-Railway will prompt you to configure environment variables. Leave the form open while you generate a signing key.
+Railway prompts you to configure environment variables. Leave the form open while you generate a signing key.
 
 ### 2. Generate OAuth Signing Key
 
@@ -41,7 +41,7 @@ Railway creates a public URL like `quickslice-production-xxxx.up.railway.app`.
 
 ### 4. Create Admin Account
 
-Visit your domain. You'll see a welcome screen prompting you to create an admin account:
+Visit your domain. The welcome screen prompts you to create an admin account:
 
 1. Enter your AT Protocol handle (e.g., `yourname.bsky.social`)
 2. Click **Authenticate**
@@ -160,7 +160,7 @@ docker compose up -d
 
 ## Backfill Configuration
 
-NOTE: These configurations are still a work in progress. If your container instance is running low on memory/crashes, consider reducing the number of concurrent workers and requests.
+NOTE: These configurations are evolving. If your container runs low on memory or crashes, reduce concurrent workers and requests.
 
 Control memory usage during backfill with these variables:
 

@@ -6,9 +6,9 @@ Common issues and how to resolve them.
 
 ### "Invalid redirect URI"
 
-The redirect URI in your OAuth request doesn't match any registered URI for your client.
+The redirect URI in your OAuth request doesn't match any registered URI.
 
-**Fix:** Check that the redirect URI in your app exactly matches one registered in Settings > OAuth Clients. URIs must match including protocol, host, port, and path.
+**Fix:** Ensure the redirect URI in your app exactly matches one in Settings > OAuth Clients. URIs must match protocol, host, port, and path.
 
 ### "Invalid client ID"
 
@@ -20,7 +20,7 @@ The client ID doesn't exist or was deleted.
 
 The code verifier sent during token exchange doesn't match the code challenge from authorization.
 
-**Fix:** This usually means the code verifier wasn't stored correctly between the authorization redirect and callback. If using the SDK, ensure you're calling `handleRedirectCallback()` in the same browser session that initiated login.
+**Fix:** The code verifier wasn't stored correctly between authorization redirect and callback. If using the SDK, call `handleRedirectCallback()` in the same browser session that initiated login.
 
 ### "DPoP proof invalid"
 
@@ -35,7 +35,7 @@ The DPoP proof header is missing, malformed, or signed with the wrong key.
 
 ### "Cannot query field X on type Y"
 
-The field doesn't exist on the type you're querying.
+The field doesn't exist on the queried type.
 
 **Fix:** Check your query against the schema in GraphiQL. Common causes:
 - Typo in field name
@@ -55,7 +55,7 @@ Type mismatch between your variable declaration and how it's used.
 
 The record you're trying to update or delete doesn't exist.
 
-**Fix:** Verify the record key (rkey) is correct. You can query for the record first to confirm it exists.
+**Fix:** Verify the record key (rkey). Query for the record first to confirm it exists.
 
 ## Jetstream Issues
 
@@ -85,7 +85,7 @@ Records created before you deployed Quickslice won't appear until backfilled.
 
 ### "Database is locked"
 
-SQLite can't acquire a write lock. Usually caused by long-running queries or concurrent access issues.
+SQLite can't acquire a write lock. Caused by long-running queries or concurrent access.
 
 **Fix:**
 - Ensure only one Quickslice instance writes to the database
@@ -134,7 +134,7 @@ Returns `null` if not authenticated. Returns user info if authenticated.
 
 ### Inspect the GraphQL schema
 
-Use GraphiQL at `/graphiql` to explore available types, queries, and mutations. The Docs panel shows all fields and their types.
+Use GraphiQL at `/graphiql` to explore types, queries, and mutations. The Docs panel shows all fields and types.
 
 ### Check Lexicon registration
 

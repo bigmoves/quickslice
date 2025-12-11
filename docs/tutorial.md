@@ -43,11 +43,11 @@ Every AT Protocol app starts with Lexicons. Here's the Lexicon for a status reco
 }
 ```
 
-When you import this Lexicon into Quickslice, several things happen automatically:
+Importing this Lexicon into Quickslice triggers three automatic steps:
 
-1. **Jetstream registration**: Quickslice starts tracking `xyz.statusphere.status` records from the network
-2. **Database schema**: A normalized table is created with proper columns and indexes
-3. **GraphQL types**: Query, mutation, and subscription types are generated
+1. **Jetstream registration**: Quickslice tracks `xyz.statusphere.status` records from the network
+2. **Database schema**: Quickslice creates a normalized table with proper columns and indexes
+3. **GraphQL types**: Quickslice generates query, mutation, and subscription types
 
 | Without Quickslice | With Quickslice |
 |---|---|
@@ -59,7 +59,7 @@ When you import this Lexicon into Quickslice, several things happen automaticall
 
 ## Step 2: Querying Status Records
 
-Once records are indexed, you can query them with GraphQL. Quickslice generates a query for each Lexicon type using Relay-style connections:
+Query indexed records with GraphQL. Quickslice generates a query for each Lexicon type using Relay-style connections:
 
 ```graphql
 query GetStatuses {
@@ -79,7 +79,7 @@ query GetStatuses {
 }
 ```
 
-The `edges` and `nodes` pattern comes from [Relay](https://relay.dev/graphql/connections.htm), a GraphQL specification for paginated data. Each `edge` contains a `node` (the actual record) and a `cursor` for pagination.
+The `edges` and `nodes` pattern comes from [Relay](https://relay.dev/graphql/connections.htm), a GraphQL pagination specification. Each `edge` contains a `node` (the record) and a `cursor` for pagination.
 
 You can filter with `where` clauses:
 
@@ -108,9 +108,7 @@ query RecentStatuses {
 
 ## Step 3: Joining Profile Data
 
-This is where Quickslice really shines. Every status record has a `did` field identifying its author. We want to show the author's display name alongside their status.
-
-In Bluesky, profile information lives in `app.bsky.actor.profile` records. With Quickslice, you can join directly from a status to its author's profile:
+Here Quickslice shines. Every status record has a `did` field identifying its author. In Bluesky, profile information lives in `app.bsky.actor.profile` records. Join directly from a status to its author's profile:
 
 ```graphql
 query StatusesWithProfiles {
@@ -129,12 +127,12 @@ query StatusesWithProfiles {
 }
 ```
 
-The `appBskyActorProfileByDid` field is a **DID join**. It follows the `did` on the status record to find the corresponding profile record authored by the same identity.
+The `appBskyActorProfileByDid` field is a **DID join**. It follows the `did` on the status record to find the profile authored by that identity.
 
-Behind the scenes, Quickslice:
-- Collects all DIDs from the status records
+Quickslice:
+- Collects DIDs from the status records
 - Batches them into a single database query (DataLoader pattern)
-- Joins the profile data efficiently
+- Joins profile data efficiently
 
 | Without Quickslice | With Quickslice |
 |---|---|
@@ -146,7 +144,7 @@ Behind the scenes, Quickslice:
 
 ### Other Join Types
 
-DID joins are just one option. Quickslice also supports:
+Quickslice also supports:
 
 - **Forward joins**: Follow a URI or strong ref to another record
 - **Reverse joins**: Find all records that reference a given record
@@ -155,7 +153,7 @@ See the [Joins Guide](guides/joins.md) for complete documentation.
 
 ## Step 4: Writing a Status (Mutations)
 
-When a user wants to set their status, your app calls a mutation:
+To set a user's status, call a mutation:
 
 ```graphql
 mutation CreateStatus($status: String!, $createdAt: DateTime!) {
@@ -169,11 +167,11 @@ mutation CreateStatus($status: String!, $createdAt: DateTime!) {
 }
 ```
 
-When this mutation runs, Quickslice:
+Quickslice:
 
-1. **Writes to the user's PDS**: The record is created in their personal data repository
-2. **Optimistically indexes locally**: The record appears in queries immediately, without waiting for Jetstream
-3. **Handles OAuth**: The authenticated session is used to sign the write
+1. **Writes to the user's PDS**: Creates the record in their personal data repository
+2. **Indexes optimistically**: The record appears in queries immediately, before Jetstream confirmation
+3. **Handles OAuth**: Uses the authenticated session to sign the write
 
 | Without Quickslice | With Quickslice |
 |---|---|
@@ -185,7 +183,7 @@ When this mutation runs, Quickslice:
 
 ## Step 5: Authentication
 
-Quickslice bridges AT Protocol OAuth. Your frontend initiates login, and Quickslice manages the authorization flow:
+Quickslice bridges AT Protocol OAuth. Your frontend initiates login; Quickslice manages the authorization flow:
 
 1. User enters their handle (e.g., `alice.bsky.social`)
 2. Your app redirects to Quickslice's OAuth endpoint
@@ -194,11 +192,11 @@ Quickslice bridges AT Protocol OAuth. Your frontend initiates login, and Quicksl
 5. PDS redirects back to Quickslice with an auth code
 6. Quickslice exchanges the code for tokens and establishes a session
 
-For authenticated queries and mutations, include the appropriate auth headers. The exact headers depend on which OAuth flow you're using (DPoP or Bearer token). See the [Authentication Guide](guides/authentication.md) for setup details.
+For authenticated queries and mutations, include auth headers. The exact headers depend on your OAuth flow (DPoP or Bearer token). See the [Authentication Guide](guides/authentication.md) for details.
 
 ## Step 6: Deploying to Railway
 
-The fastest way to deploy is with Railway:
+Deploy quickly with Railway:
 
 1. Click the deploy button in the [Quickstart Guide](guides/deployment.md)
 2. Generate an OAuth signing key with `goat key generate -t p256`
@@ -209,19 +207,19 @@ The fastest way to deploy is with Railway:
 
 See [Deployment Guide](guides/deployment.md) for detailed instructions.
 
-## What You Didn't Write
+## What Quickslice Handled
 
-By using Quickslice, you skipped writing:
+Quickslice handled:
 
-- **Jetstream connection**: Connecting to the firehose, filtering events, handling reconnection
-- **Record validation**: Checking incoming records against Lexicon schemas
-- **Database schema**: Designing tables, migrations, indexes
-- **Query API**: Endpoints for filtering, sorting, and pagination
-- **Batching**: Efficient resolution of related records
-- **Optimistic updates**: Indexing records before Jetstream confirmation
-- **OAuth flow**: Token exchange, session management, DPoP proofs
+- **Jetstream connection**: firehose connection, event filtering, reconnection
+- **Record validation**: schema checking against Lexicons
+- **Database schema**: tables, migrations, indexes
+- **Query API**: filtering, sorting, pagination endpoints
+- **Batching**: efficient related-record resolution
+- **Optimistic updates**: indexing before Jetstream confirmation
+- **OAuth flow**: token exchange, session management, DPoP proofs
 
-With Quickslice, you focus on your application logic instead of infrastructure.
+Focus on your application logic; Quickslice handles infrastructure.
 
 ## Next Steps
 

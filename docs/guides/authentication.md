@@ -1,6 +1,6 @@
 # Authentication
 
-Quickslice acts as an OAuth proxy between your app and users' Personal Data Servers (PDS). Your app never handles AT Protocol credentials directly.
+Quickslice proxies OAuth between your app and users' Personal Data Servers (PDS). Your app never handles AT Protocol credentials directly.
 
 ## How It Works
 
@@ -13,7 +13,7 @@ Quickslice acts as an OAuth proxy between your app and users' Personal Data Serv
 7. Quickslice redirects back to your app with a code
 8. Your app exchanges the code for an access token
 
-The access token authorizes mutations that write records to the user's repository.
+The access token authorizes mutations that write to the user's repository.
 
 ## Setting Up OAuth
 
@@ -43,8 +43,8 @@ Set the output as your `OAUTH_SIGNING_KEY` environment variable.
 
 | Type | Use Case | Secret |
 |------|----------|--------|
-| **Public** | Browser apps, mobile apps | No secret (can't be kept secure on client) |
-| **Confidential** | Server-side apps, backend services | Has secret (stored securely on server) |
+| **Public** | Browser apps, mobile apps | No secret (client cannot secure it) |
+| **Confidential** | Server-side apps, backend services | Secret (stored securely on server) |
 
 ## Using the Client SDK
 
@@ -112,7 +112,7 @@ await client.logout();
 
 ### With the SDK
 
-The SDK handles authentication headers automatically:
+The SDK adds authentication headers automatically:
 
 ```javascript
 // Public query (no auth needed)
@@ -133,7 +133,7 @@ const result = await client.mutate(`
 
 ### Without the SDK
 
-If you're not using the SDK, include the appropriate headers based on your OAuth flow:
+Without the SDK, include headers based on your OAuth flow:
 
 **DPoP flow** (public clients):
 ```
@@ -171,7 +171,7 @@ The SDK implements two security mechanisms for browser apps:
 
 **PKCE (Proof Key for Code Exchange)** prevents authorization code interception. Before redirecting, the SDK generates a random secret and sends only its hash to the server. When exchanging the code for tokens, the SDK proves it initiated the request.
 
-**DPoP (Demonstrating Proof-of-Possession)** binds tokens to a cryptographic key in your browser. Each request includes a signed proof. Even if an attacker steals your access token, they can't use it without the key.
+**DPoP (Demonstrating Proof-of-Possession)** binds tokens to a cryptographic key in your browser. Each request includes a signed proof. An attacker who steals your access token cannot use it without the key.
 
 ## OAuth Endpoints
 

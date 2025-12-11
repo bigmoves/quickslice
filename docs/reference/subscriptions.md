@@ -1,6 +1,6 @@
 # Subscriptions
 
-Subscriptions let your app receive real-time updates when records are created, updated, or deleted. Instead of polling for changes, the server pushes events to your client over a WebSocket connection.
+Subscriptions deliver real-time updates when records are created, updated, or deleted. The server pushes events over WebSocket instead of requiring polling.
 
 Connect to `/graphql` using the [`graphql-ws`](https://github.com/enisdenjo/graphql-ws/blob/master/PROTOCOL.md) protocol.
 

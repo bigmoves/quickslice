@@ -1,6 +1,6 @@
 # Queries
 
-Quickslice generates a GraphQL query for each record type Lexicon you import. Queries are public and don't require authentication.
+Quickslice generates a GraphQL query for each Lexicon record type. Queries are public; no authentication required.
 
 ## Relay Connections
 

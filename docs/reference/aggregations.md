@@ -1,8 +1,8 @@
 # Aggregations
 
-All record types have a corresponding aggregation query: `{collectionName}Aggregated`. For example, `fm.teal.alpha.feed.play` records can be aggregated with `fmTealAlphaFeedPlayAggregated`.
+Every record type has an aggregation query: `{collectionName}Aggregated`. For example, aggregate `fm.teal.alpha.feed.play` records with `fmTealAlphaFeedPlayAggregated`.
 
-Aggregation queries are public and do not require authentication.
+Aggregation queries are public; no authentication required.
 
 ## Basic Aggregation
 
@@ -64,7 +64,7 @@ query {
 
 ## Multiple Fields
 
-Group by multiple fields simultaneously. Get top tracks with their artists:
+Group by multiple fields. Get top tracks with their artists:
 
 ```graphql
 query {
@@ -141,7 +141,7 @@ query {
 
 ### Available Columns
 
-In addition to record fields, you can group by: `uri`, `cid`, `did`, `collection`, `indexedAt`, `actorHandle`
+Beyond record fields, group by: `uri`, `cid`, `did`, `collection`, `indexedAt`, `actorHandle`
 
 ### Validation
 

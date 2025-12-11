@@ -23,7 +23,7 @@ query PostsWithAuthors {
 }
 ```
 
-This works for any record type. The `appBskyActorProfileByDid` field is available on all records because every record has a `did` field.
+The `appBskyActorProfileByDid` field works on all records because every record has a `did` field.
 
 ## User Timelines
 
@@ -230,7 +230,7 @@ query MyProfile {
 
 ## Real-Time Updates
 
-Subscribe to new records and update your UI in real-time.
+Subscribe to new records and update your UI live.
 
 ```graphql
 subscription NewStatuses {
@@ -246,7 +246,7 @@ subscription NewStatuses {
 }
 ```
 
-Combine with an initial query to show existing data, then append new records as they arrive.
+Combine with an initial query to show existing data, then append new records as they arrive via subscription.
 
 ## Aggregations
 

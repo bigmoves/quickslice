@@ -1,10 +1,10 @@
 # MCP Server
 
-Quickslice provides an MCP (Model Context Protocol) server that lets AI assistants query your ATProto data directly.
+Quickslice provides an MCP (Model Context Protocol) server that lets AI assistants query ATProto data directly.
 
 ## Endpoint
 
-Any quickslice instance exposes MCP at `{EXTERNAL_BASE_URL}/mcp`. For example:
+Every Quickslice instance exposes MCP at `{EXTERNAL_BASE_URL}/mcp`. For example:
 
 ```
 https://xyzstatusphere.slices.network/mcp

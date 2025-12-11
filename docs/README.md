@@ -13,25 +13,24 @@ Building an AppView from scratch means writing a lot of infrastructure code:
 - OAuth session management and PDS writes
 - Efficient batching when resolving related records
 
-This adds up before you write any application logic. There are also a lot of patterns that are more or less the same that every AppView will need to implement.
+This adds up before you write any application logic. Every AppView also reimplements the same patterns.
 
 ## What Quickslice Does
 
 Quickslice handles all of that automatically:
 
 - **Connects to Jetstream** and tracks the record types defined in your Lexicons
-- **Indexes** relevant records into a database (SQLite, more soon)
+- **Indexes** relevant records into a database (SQLite; Postgres coming)
 - **Generates GraphQL** queries, mutations, and subscriptions from your Lexicon definitions
 - **Handles OAuth** and writes records back to the user's PDS
 - **Enables joins** by DID, URI, or strong reference, so you can query a status and its author's profile in one request
 
 ## When to Use It
 
-- You've setup tried and failed to build an AppView from scratch
-- You just want to tinker with Lexicon data structures and build a quick prototype
-- You've banged your head against OAuth for too long
-- You just want to ship your AppView already
-- The *sky* is the limit!
+- You want to skip the AppView boilerplate
+- You want to prototype Lexicon data structures quickly
+- You want OAuth handled for you
+- You want to ship your AppView now
 
 ## Next Steps
 

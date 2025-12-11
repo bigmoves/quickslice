@@ -19,10 +19,10 @@ mutation {
 }
 ```
 
-When you create a record, Quickslice:
+Quickslice:
 
 1. Writes the record to the user's PDS
-2. Indexes the record locally for immediate query availability
+2. Indexes locally for immediate query availability
 
 ### Custom Record Keys
 
@@ -79,7 +79,7 @@ mutation {
 
 ## Working with Blobs
 
-Records can include binary data like images. Upload the blob first, then reference it in your record.
+Records can include binary data like images. Upload the blob first, then reference it.
 
 ### Upload a Blob
 
@@ -96,7 +96,7 @@ mutation {
 }
 ```
 
-The `data` field accepts base64-encoded binary data. The response includes a `ref` (CID) to use in your record.
+The `data` field accepts base64-encoded binary data. The response includes a `ref` (CID) for use in your record.
 
 ### Use the Blob in a Record
 
@@ -137,7 +137,7 @@ Common mutation errors:
 
 ## Authentication
 
-Mutations require authentication. The headers you include depend on the OAuth flow:
+Mutations require authentication. Headers depend on the OAuth flow:
 
 **DPoP flow** (recommended for browser apps):
 ```
@@ -150,4 +150,4 @@ DPoP: <dpop_proof>
 Authorization: Bearer <access_token>
 ```
 
-See the [Authentication Guide](authentication.md) for details on each flow and how to obtain tokens.
+See the [Authentication Guide](authentication.md) for flow details and token acquisition.

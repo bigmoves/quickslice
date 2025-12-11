@@ -1,10 +1,10 @@
 # Joins
 
-AT Protocol data is organized into collections. A user's status records live in one collection, their profile in another. Quickslice generates joins that let you query across collections, so you can fetch a status and its author's profile in a single request.
+AT Protocol data lives in collections. A user's status records occupy one collection, their profile another. Quickslice generates joins that query across collections—fetch a status and its author's profile in one request.
 
 ## Join Types
 
-Quickslice generates three types of joins automatically:
+Quickslice generates three join types automatically:
 
 | Type | What it does | Field naming |
 |------|--------------|--------------|
@@ -14,7 +14,7 @@ Quickslice generates three types of joins automatically:
 
 ## Forward Joins
 
-Forward joins follow references from one record to another. When a record has a field containing an AT-URI or strong ref, Quickslice generates a `{fieldName}Resolved` field to fetch the referenced record.
+Forward joins follow references from one record to another. When a record has a field containing an AT-URI or strong ref, Quickslice generates a `{fieldName}Resolved` field that fetches the referenced record.
 
 ### Example: Resolving a Favorite's Subject
 
@@ -39,13 +39,13 @@ query {
 }
 ```
 
-Forward joins return a `Record` union type because the referenced record could be any type. Use inline fragments (`... on TypeName`) to access type-specific fields.
+Forward joins return a `Record` union type because the referenced record could be any type. Use inline fragments (`... on TypeName`) for type-specific fields.
 
 ## Reverse Joins
 
-Reverse joins work in the opposite direction: given a record, find all records that reference it. Quickslice analyzes your Lexicons and generates reverse join fields automatically.
+Reverse joins work oppositely: given a record, find all records that reference it. Quickslice analyzes your Lexicons and generates reverse join fields automatically.
 
-Reverse joins return paginated connections with support for filtering, sorting, and cursor-based pagination.
+Reverse joins return paginated connections supporting filtering, sorting, and cursors.
 
 ### Example: Comments on a Photo
 
@@ -106,7 +106,7 @@ query {
 
 ## DID Joins
 
-DID joins connect records by their author's identity. Every record has a `did` field identifying who created it. Quickslice generates `{CollectionName}ByDid` fields to find related records by the same author.
+DID joins connect records by author identity. Every record has a `did` field identifying its creator. Quickslice generates `{CollectionName}ByDid` fields to find related records by the same author.
 
 ### Example: Author Profile from a Status
 
@@ -131,7 +131,7 @@ query {
 
 ### Unique vs Non-Unique DID Joins
 
-Some collections have exactly one record per DID (like profiles with a `literal:self` key). These return a single object:
+Some collections have one record per DID (like profiles with a `literal:self` key). These return a single object:
 
 ```graphql
 appBskyActorProfileByDid {
@@ -245,11 +245,11 @@ query {
 
 ## How Batching Works
 
-Quickslice batches join resolution to avoid the N+1 query problem. When you query 100 photos with author profiles:
+Quickslice batches join resolution to avoid the N+1 query problem. When querying 100 photos with author profiles:
 
 1. Fetches 100 photos in one query
 2. Collects all unique DIDs from those photos
 3. Fetches all profiles in a single query: `WHERE did IN (...)`
 4. Maps profiles back to their photos
 
-This happens automatically for all join types.
+All join types batch automatically.
