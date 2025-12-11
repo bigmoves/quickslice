@@ -4,7 +4,7 @@
 /// - version (varint): CIDv0 or CIDv1
 /// - codec (varint): Content codec (0x71 = dag-cbor for AT Protocol)
 /// - multihash: hash_type (varint) + hash_len (varint) + digest (bytes)
-import car/varint
+import atproto_car/internal/varint
 import gleam/bit_array
 import gleam/result
 

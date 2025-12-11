@@ -4,8 +4,8 @@
 /// and reads block data on-demand when requested.
 ///
 /// Uses ETS for O(1) lookups and binary CID keys (no hex conversion).
-import car/cid.{type Cid}
-import car/varint
+import atproto_car/internal/cid.{type Cid}
+import atproto_car/internal/varint
 import gleam/result
 
 /// Opaque type for ETS table reference
@@ -25,13 +25,13 @@ pub type BlockStoreError {
 }
 
 /// ETS FFI functions
-@external(erlang, "car_ffi", "ets_new")
+@external(erlang, "blockstore_ffi", "ets_new")
 fn ets_new() -> EtsTable
 
-@external(erlang, "car_ffi", "ets_insert")
+@external(erlang, "blockstore_ffi", "ets_insert")
 fn ets_insert(table: EtsTable, key: BitArray, value: Int) -> Nil
 
-@external(erlang, "car_ffi", "ets_get")
+@external(erlang, "blockstore_ffi", "ets_get")
 fn ets_get(table: EtsTable, key: BitArray) -> Result(Int, Nil)
 
 /// Build a blockstore from CAR bytes (after header has been parsed)

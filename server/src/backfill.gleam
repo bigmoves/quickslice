@@ -1,5 +1,4 @@
-import car/car
-import car/cid
+import atproto_car
 import database/repositories/actors
 import database/repositories/config as config_repo
 import database/repositories/lexicons
@@ -210,7 +209,7 @@ fn fetch_repo_car(did: String, pds_url: String) -> Result(BitArray, String) {
 
 /// Convert a CAR record (with proper MST path) to a database Record type
 fn car_record_with_path_to_db_record(
-  car_record: car.RecordWithPath,
+  car_record: atproto_car.RecordWithPath,
   did: String,
 ) -> Record {
   let now =
@@ -224,10 +223,10 @@ fn car_record_with_path_to_db_record(
       <> car_record.collection
       <> "/"
       <> car_record.rkey,
-    cid: cid.to_string(car_record.cid),
+    cid: atproto_car.cid_to_string(car_record.cid),
     did: did,
     collection: car_record.collection,
-    json: car.record_to_json(car_record),
+    json: atproto_car.record_to_json(car_record),
     indexed_at: now,
   )
 }
@@ -336,7 +335,7 @@ fn backfill_repo_car_with_context(
 
       // Phase 2: Parse CAR and walk MST
       let parse_start = monotonic_now()
-      case car.extract_records_with_paths(car_bytes, collections) {
+      case atproto_car.extract_records_with_paths(car_bytes, collections) {
         Ok(car_records) -> {
           let parse_ms = elapsed_ms(parse_start)
 

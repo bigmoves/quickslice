@@ -1,10 +1,5 @@
--module(car_ffi).
--export([bytes_to_hex_lower/1, ets_new/0, ets_insert/3, ets_get/2, ets_size/1]).
-
-%% Convert binary to lowercase hex string using OTP 24+ binary:encode_hex
-%% This is O(n) vs O(n²) for string concatenation in a loop
-bytes_to_hex_lower(Bytes) ->
-    binary:encode_hex(Bytes, lowercase).
+-module(blockstore_ffi).
+-export([ets_new/0, ets_insert/3, ets_get/2]).
 
 %% Create a new ETS table for blockstore
 %% Returns an opaque reference to the table
@@ -24,7 +19,3 @@ ets_get(Table, Key) ->
         [{_, Value}] -> {ok, Value};
         [] -> {error, nil}
     end.
-
-%% Get the number of entries in the ETS table
-ets_size(Table) ->
-    ets:info(Table, size).

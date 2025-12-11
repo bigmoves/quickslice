@@ -3,6 +3,7 @@
 
 packages = [
   { name = "argv", version = "1.0.2", build_tools = ["gleam"], requirements = [], otp_app = "argv", source = "hex", outer_checksum = "BA1FF0929525DEBA1CE67256E5ADF77A7CDDFE729E3E3F57A5BDCAA031DED09D" },
+  { name = "atproto_car", version = "0.1.0", build_tools = ["gleam"], requirements = ["base32", "erl_cbor", "gleam_stdlib"], source = "local", path = "../atproto_car" },
   { name = "base32", version = "1.0.0", build_tools = ["rebar3"], requirements = [], otp_app = "base32", source = "hex", outer_checksum = "0449285348ED0C4CD83C7198E76C5FD5A0451C4EF18695B9FD43792A503E551A" },
   { name = "certifi", version = "2.15.0", build_tools = ["rebar3"], requirements = [], otp_app = "certifi", source = "hex", outer_checksum = "B147ED22CE71D72EAFDAD94F055165C1C182F61A2FF49DF28BCC71D1D5B94A60" },
   { name = "directories", version = "1.2.0", build_tools = ["gleam"], requirements = ["envoy", "gleam_stdlib", "platform", "simplifile"], otp_app = "directories", source = "hex", outer_checksum = "D13090CFCDF6759B87217E8DDD73A75903A700148A82C1D33799F333E249BF9E" },
@@ -30,7 +31,7 @@ packages = [
   { name = "gramps", version = "6.0.0", build_tools = ["gleam"], requirements = ["gleam_crypto", "gleam_erlang", "gleam_http", "gleam_stdlib"], otp_app = "gramps", source = "hex", outer_checksum = "8B7195978FBFD30B43DF791A8A272041B81E45D245314D7A41FC57237AA882A0" },
   { name = "group_registry", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_otp", "gleam_stdlib"], otp_app = "group_registry", source = "hex", outer_checksum = "BC798A53D6F2406DB94E27CB45C57052CB56B32ACF7CC16EA20F6BAEC7E36B90" },
   { name = "hackney", version = "1.25.0", build_tools = ["rebar3"], requirements = ["certifi", "idna", "metrics", "mimerl", "parse_trans", "ssl_verify_fun", "unicode_util_compat"], otp_app = "hackney", source = "hex", outer_checksum = "7209BFD75FD1F42467211FF8F59EA74D6F2A9E81CBCEE95A56711EE79FD6B1D4" },
-  { name = "honk", version = "1.2.0", build_tools = ["gleam"], requirements = ["argv", "gleam_json", "gleam_regexp", "gleam_stdlib", "gleam_time", "simplifile"], source = "local", path = "../../honk" },
+  { name = "honk", version = "1.2.0", build_tools = ["gleam"], requirements = ["argv", "gleam_json", "gleam_regexp", "gleam_stdlib", "gleam_time", "simplifile"], otp_app = "honk", source = "hex", outer_checksum = "1682706E9B16A58DA004655CD8154514E4B1013B0335EE109BD93BBDABB62A41" },
   { name = "houdini", version = "1.2.0", build_tools = ["gleam"], requirements = [], otp_app = "houdini", source = "hex", outer_checksum = "5DB1053F1AF828049C2B206D4403C18970ABEF5C18671CA3C2D2ED0DD64F6385" },
   { name = "hpack_erl", version = "0.3.0", build_tools = ["rebar3"], requirements = [], otp_app = "hpack", source = "hex", outer_checksum = "D6137D7079169D8C485C6962DFE261AF5B9EF60FBC557344511C1E65E3D95FB0" },
   { name = "idna", version = "6.1.1", build_tools = ["rebar3"], requirements = ["unicode_util_compat"], otp_app = "idna", source = "hex", outer_checksum = "92376EB7894412ED19AC475E4A86F7B413C1B9FBB5BD16DCCD57934157944CEA" },
@@ -56,6 +57,7 @@ packages = [
 
 [requirements]
 argv = { version = ">= 1.0.0 and < 2.0.0" }
+atproto_car = { path = "../atproto_car" }
 base32 = { version = ">= 1.0.0 and < 2.0.0" }
 dotenv_gleam = { version = ">= 2.0.1 and < 3.0.0" }
 envoy = { version = ">= 1.0.2 and < 2.0.0" }
@@ -72,7 +74,7 @@ gleam_time = { version = ">= 1.4.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
 goose = { version = ">= 2.0.0 and < 3.0.0" }
 group_registry = { version = ">= 1.0.0 and < 2.0.0" }
-honk = { path = "../../honk" }
+honk = { version = ">= 1.0.0 and < 2.0.0" }
 jose = { version = ">= 1.11.10 and < 2.0.0" }
 lexicon_graphql = { path = "../lexicon_graphql" }
 logging = { version = ">= 1.3.0 and < 2.0.0" }

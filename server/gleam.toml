@@ -14,6 +14,7 @@ version = "1.0.0"
 
 [dependencies]
 lexicon_graphql = { path = "../lexicon_graphql" }
+atproto_car = { path = "../atproto_car" }
 gleam_stdlib = ">= 0.60.0 and < 1.0.0"
 mist = ">= 5.0.3 and < 6.0.0"
 wisp = ">= 2.1.0 and < 3.0.0"
