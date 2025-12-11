@@ -15,9 +15,9 @@ import gleam/list
 import gleam/option
 import gleam/string
 import gleam/uri
+import handlers/admin_graphql as admin_graphql_handler
 import handlers/admin_oauth_authorize as admin_oauth_authorize_handler
 import handlers/admin_oauth_callback as admin_oauth_callback_handler
-import handlers/client_graphql as client_graphql_handler
 import handlers/graphiql as graphiql_handler
 import handlers/graphql as graphql_handler
 import handlers/graphql_ws as graphql_ws_handler
@@ -480,7 +480,7 @@ fn handle_request(
       )
     }
     ["admin", "graphql"] ->
-      client_graphql_handler.handle_client_graphql_request(
+      admin_graphql_handler.handle_admin_graphql_request(
         req,
         ctx.db,
         ctx.jetstream_consumer,

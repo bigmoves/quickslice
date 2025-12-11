@@ -1,9 +1,8 @@
-/// GraphQL HTTP handler for client statistics and activity API
+/// GraphQL HTTP handler for admin API
 ///
 /// This handler serves the /admin/graphql endpoint which provides
-/// stats and activity data to the client SPA using a separate schema
+/// stats, settings, and activity data to the admin SPA
 import backfill_state
-import client_schema
 import gleam/bit_array
 import gleam/dict
 import gleam/dynamic/decode
@@ -12,6 +11,7 @@ import gleam/http
 import gleam/json
 import gleam/list
 import gleam/option
+import graphql/admin/schema as admin_schema
 import jetstream_consumer
 import lib/oauth/did_cache
 import sqlight
@@ -20,8 +20,8 @@ import swell/schema as swell_schema
 import swell/value
 import wisp
 
-/// Handle GraphQL HTTP requests for client API
-pub fn handle_client_graphql_request(
+/// Handle GraphQL HTTP requests for admin API
+pub fn handle_admin_graphql_request(
   req: wisp.Request,
   db: sqlight.Connection,
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
@@ -123,7 +123,7 @@ fn execute_query(
 ) -> wisp.Response {
   // Build the schema
   let graphql_schema =
-    client_schema.build_schema(
+    admin_schema.build_schema(
       db,
       req,
       jetstream_subject,
