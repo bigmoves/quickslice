@@ -11,7 +11,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import graphql/lexicon/schema as lexicon_schema
-import graphql_ws
+import graphql/ws
 import lib/oauth/did_cache
 import logging
 import mist.{
@@ -282,7 +282,7 @@ fn handle_ws_message(
     }
     mist.Custom(websocket_ffi.SubscriptionData(id, data)) -> {
       // Handle subscription data from listener processes
-      let next_msg = graphql_ws.format_message(graphql_ws.Next(id, data))
+      let next_msg = ws.format_message(ws.Next(id, data))
       let _ = mist.send_text_frame(conn, next_msg)
       mist.continue(state)
     }
@@ -291,16 +291,16 @@ fn handle_ws_message(
 
 /// Handle text messages (GraphQL-WS protocol)
 fn handle_text_message(state: State, conn: WebsocketConnection, text: String) {
-  case graphql_ws.parse_message(text) {
-    Ok(graphql_ws.ConnectionInit(_payload)) -> {
+  case ws.parse_message(text) {
+    Ok(ws.ConnectionInit(_payload)) -> {
       // Send connection_ack
-      let ack_msg = graphql_ws.format_message(graphql_ws.ConnectionAck)
+      let ack_msg = ws.format_message(ws.ConnectionAck)
       let _ = mist.send_text_frame(conn, ack_msg)
       logging.log(logging.Info, "[websocket] Connection initialized")
       mist.continue(state)
     }
 
-    Ok(graphql_ws.Subscribe(id, query, variables_opt)) -> {
+    Ok(ws.Subscribe(id, query, variables_opt)) -> {
       // Check per-connection subscription limit
       let connection_count = dict.size(state.subscriptions)
       case connection_count >= max_subscriptions_per_connection {
@@ -311,7 +311,7 @@ fn handle_text_message(state: State, conn: WebsocketConnection, text: String) {
               <> string.inspect(connection_count),
           )
           let error_msg =
-            graphql_ws.format_message(graphql_ws.ErrorMessage(
+            ws.format_message(ws.ErrorMessage(
               id,
               "Maximum subscriptions per connection exceeded ("
                 <> string.inspect(max_subscriptions_per_connection)
@@ -331,7 +331,7 @@ fn handle_text_message(state: State, conn: WebsocketConnection, text: String) {
                   <> string.inspect(global_count),
               )
               let error_msg =
-                graphql_ws.format_message(graphql_ws.ErrorMessage(
+                ws.format_message(ws.ErrorMessage(
                   id,
                   "Global subscription limit exceeded",
                 ))
@@ -347,7 +347,7 @@ fn handle_text_message(state: State, conn: WebsocketConnection, text: String) {
                     "[websocket] Invalid subscription query: " <> err,
                   )
                   let error_msg =
-                    graphql_ws.format_message(graphql_ws.ErrorMessage(
+                    ws.format_message(ws.ErrorMessage(
                       id,
                       "Invalid subscription query: " <> err,
                     ))
@@ -405,7 +405,7 @@ fn handle_text_message(state: State, conn: WebsocketConnection, text: String) {
       }
     }
 
-    Ok(graphql_ws.Complete(id)) -> {
+    Ok(ws.Complete(id)) -> {
       // Client wants to stop subscription
       case dict.get(state.subscriptions, id) {
         Ok(info) -> {
@@ -435,14 +435,14 @@ fn handle_text_message(state: State, conn: WebsocketConnection, text: String) {
       }
     }
 
-    Ok(graphql_ws.Ping) -> {
+    Ok(ws.Ping) -> {
       // Respond with pong
-      let pong_msg = graphql_ws.format_message(graphql_ws.Pong)
+      let pong_msg = ws.format_message(ws.Pong)
       let _ = mist.send_text_frame(conn, pong_msg)
       mist.continue(state)
     }
 
-    Ok(graphql_ws.Pong) -> {
+    Ok(ws.Pong) -> {
       // Client responded to our ping, just continue
       mist.continue(state)
     }

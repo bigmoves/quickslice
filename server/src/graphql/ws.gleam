@@ -94,14 +94,11 @@ pub fn parse_message(json_str: String) -> Result(Message, String) {
 /// Format a GraphQL-WS message as JSON string
 pub fn format_message(message: Message) -> String {
   case message {
-    ConnectionAck -> {
-      "{\"type\":\"connection_ack\"}"
-    }
+    ConnectionAck -> "{\"type\":\"connection_ack\"}"
 
-    Next(id, data) -> {
+    Next(id, data) ->
       // data is already a JSON string containing the GraphQL response
       "{\"id\":\"" <> id <> "\",\"type\":\"next\",\"payload\":" <> data <> "}"
-    }
 
     ErrorMessage(id, msg) -> {
       let escaped_msg = escape_json_string(msg)
@@ -112,27 +109,27 @@ pub fn format_message(message: Message) -> String {
       <> "\"}]}"
     }
 
-    Complete(id) -> {
-      "{\"id\":\"" <> id <> "\",\"type\":\"complete\"}"
-    }
+    Complete(id) -> "{\"id\":\"" <> id <> "\",\"type\":\"complete\"}"
 
-    Pong -> {
-      "{\"type\":\"pong\"}"
-    }
+    Pong -> "{\"type\":\"pong\"}"
+
+    Ping -> "{\"type\":\"ping\"}"
 
     // These are client messages, shouldn't normally be formatted by server
-    ConnectionInit(_) -> {
-      "{\"type\":\"connection_init\"}"
-    }
+    ConnectionInit(_) -> "{\"type\":\"connection_init\"}"
 
-    Subscribe(id, _, _) -> {
-      "{\"id\":\"" <> id <> "\",\"type\":\"subscribe\"}"
-    }
-
-    Ping -> {
-      "{\"type\":\"ping\"}"
-    }
+    Subscribe(id, _, _) -> "{\"id\":\"" <> id <> "\",\"type\":\"subscribe\"}"
   }
+}
+
+// Helper to escape JSON strings
+fn escape_json_string(str: String) -> String {
+  str
+  |> string.replace("\\", "\\\\")
+  |> string.replace("\"", "\\\"")
+  |> string.replace("\n", "\\n")
+  |> string.replace("\r", "\\r")
+  |> string.replace("\t", "\\t")
 }
 
 // Helper to extract payload field as dict of strings
@@ -160,14 +157,4 @@ fn extract_variables_from_json(json_str: String) -> Option(String) {
   json.parse(json_str, vars_decoder)
   |> result.map(Some)
   |> result.unwrap(None)
-}
-
-// Helper to escape JSON strings
-fn escape_json_string(str: String) -> String {
-  str
-  |> string.replace("\\", "\\\\")
-  |> string.replace("\"", "\\\"")
-  |> string.replace("\n", "\\n")
-  |> string.replace("\r", "\\r")
-  |> string.replace("\t", "\\t")
 }
