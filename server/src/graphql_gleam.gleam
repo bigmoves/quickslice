@@ -3,7 +3,6 @@
 /// This module provides GraphQL schema building and query execution
 import atproto_auth
 import backfill
-import cursor
 import database/queries/aggregates
 import database/queries/pagination
 import database/repositories/actors
@@ -20,6 +19,7 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
+import graphql/where_converter
 import lexicon_graphql
 import lexicon_graphql/input/aggregate
 import lexicon_graphql/query/dataloader
@@ -30,7 +30,6 @@ import sqlight
 import swell/executor
 import swell/schema
 import swell/value
-import where_converter
 
 /// Build a GraphQL schema from database lexicons
 ///
@@ -117,8 +116,8 @@ pub fn build_schema_from_db(
                 let graphql_value = record_to_graphql_value(record, db)
                 // Generate cursor for this record
                 let record_cursor =
-                  cursor.generate_cursor_from_record(
-                    pagination.record_to_record_like(record),
+                  pagination.generate_cursor_from_record(
+                    record,
                     pagination_params.sort_by,
                   )
                 #(graphql_value, record_cursor)
@@ -280,10 +279,7 @@ pub fn build_schema_from_db(
                   list.map(record_list, fn(record) {
                     let graphql_value = record_to_graphql_value(record, db)
                     let cursor =
-                      cursor.generate_cursor_from_record(
-                        pagination.record_to_record_like(record),
-                        db_sort_by,
-                      )
+                      pagination.generate_cursor_from_record(record, db_sort_by)
                     #(graphql_value, cursor)
                   })
 
@@ -325,10 +321,7 @@ pub fn build_schema_from_db(
                   list.map(record_list, fn(record) {
                     let graphql_value = record_to_graphql_value(record, db)
                     let cursor =
-                      cursor.generate_cursor_from_record(
-                        pagination.record_to_record_like(record),
-                        db_sort_by,
-                      )
+                      pagination.generate_cursor_from_record(record, db_sort_by)
                     #(graphql_value, cursor)
                   })
 

@@ -1,3 +1,4 @@
+import database/queries/where_clause
 import database/repositories/records
 import database/schema/tables
 import gleam/dict
@@ -9,7 +10,6 @@ import gleam/string
 import gleeunit
 import gleeunit/should
 import sqlight
-import where_clause
 
 pub fn main() {
   gleeunit.main()

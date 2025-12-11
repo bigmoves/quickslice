@@ -1,6 +1,7 @@
 /// Edge case and error handling tests for where clause functionality
 ///
 /// Tests various edge cases, error conditions, and potential SQL injection attempts
+import database/queries/where_clause
 import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
@@ -10,7 +11,6 @@ import gleeunit/should
 import lexicon_graphql/input/where as where_input
 import sqlight
 import swell/value
-import where_clause
 
 pub fn main() {
   gleeunit.main()

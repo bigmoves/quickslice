@@ -1,3 +1,4 @@
+import database/queries/where_clause
 import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
@@ -5,7 +6,6 @@ import gleam/string
 import gleeunit
 import gleeunit/should
 import sqlight
-import where_clause
 
 pub fn main() {
   gleeunit.main()

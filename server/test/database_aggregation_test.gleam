@@ -1,4 +1,5 @@
 import database/queries/aggregates
+import database/queries/where_clause
 import database/schema/tables
 import database/types
 import gleam/dict
@@ -8,7 +9,6 @@ import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
 import sqlight
-import where_clause
 
 pub fn main() {
   gleeunit.main()

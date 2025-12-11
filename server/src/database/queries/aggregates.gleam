@@ -1,3 +1,4 @@
+import database/queries/where_clause
 import database/types.{
   type DateInterval, type GroupByField, Day, Hour, Month, SimpleField,
   TruncatedField, Week,
@@ -11,7 +12,6 @@ import gleam/result
 import gleam/string
 import lexicon_graphql/output/aggregate
 import sqlight
-import where_clause
 
 // ===== Aggregation Support =====
 

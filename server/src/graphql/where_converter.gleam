@@ -2,12 +2,12 @@
 ///
 /// This module bridges the gap between the GraphQL layer (lexicon_graphql/input/where)
 /// and the database layer (where_clause with sqlight types).
+import database/queries/where_clause
 import gleam/dict
 import gleam/list
 import gleam/option.{type Option}
 import lexicon_graphql/input/where
 import sqlight
-import where_clause
 
 /// Convert a where.WhereValue to a sqlight.Value
 fn convert_value(value: where.WhereValue) -> sqlight.Value {

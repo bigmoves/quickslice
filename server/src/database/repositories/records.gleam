@@ -1,5 +1,5 @@
-import cursor
 import database/queries/pagination
+import database/queries/where_clause
 import database/types.{
   type CollectionStat, type InsertResult, type Record, CollectionStat, Inserted,
   Record, Skipped,
@@ -12,7 +12,6 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import sqlight
-import where_clause
 
 // ===== Helper Functions =====
 
@@ -550,10 +549,10 @@ pub fn get_by_collection_paginated(
   // Add cursor condition if present
   let #(final_where_parts, final_bind_values) = case cursor_opt {
     Some(cursor_str) -> {
-      case cursor.decode_cursor(cursor_str, sort_by) {
+      case pagination.decode_cursor(cursor_str, sort_by) {
         Ok(decoded_cursor) -> {
           let #(cursor_where, cursor_params) =
-            cursor.build_cursor_where_clause(
+            pagination.build_cursor_where_clause(
               decoded_cursor,
               sort_by,
               !is_forward,
@@ -626,8 +625,7 @@ pub fn get_by_collection_paginated(
   // Generate next cursor if there are more results
   let next_cursor = case has_more, list.last(final_records) {
     True, Ok(last_record) -> {
-      let record_like = pagination.record_to_record_like(last_record)
-      Some(cursor.generate_cursor_from_record(record_like, sort_by))
+      Some(pagination.generate_cursor_from_record(last_record, sort_by))
     }
     _, _ -> None
   }
@@ -708,10 +706,10 @@ pub fn get_by_collection_paginated_with_where(
   // Add cursor condition if present
   let #(final_where_parts, final_bind_values) = case cursor_opt {
     Some(cursor_str) -> {
-      case cursor.decode_cursor(cursor_str, sort_by) {
+      case pagination.decode_cursor(cursor_str, sort_by) {
         Ok(decoded_cursor) -> {
           let #(cursor_where, cursor_params) =
-            cursor.build_cursor_where_clause(
+            pagination.build_cursor_where_clause(
               decoded_cursor,
               sort_by,
               !is_forward,
@@ -784,8 +782,7 @@ pub fn get_by_collection_paginated_with_where(
   // Generate next cursor if there are more results
   let next_cursor = case has_more, list.last(final_records) {
     True, Ok(last_record) -> {
-      let record_like = pagination.record_to_record_like(last_record)
-      Some(cursor.generate_cursor_from_record(record_like, sort_by))
+      Some(pagination.generate_cursor_from_record(last_record, sort_by))
     }
     _, _ -> None
   }
@@ -958,10 +955,10 @@ pub fn get_by_reference_field_paginated(
   // Add cursor condition if present
   let #(final_where_parts, final_bind_values) = case cursor_opt {
     Some(cursor_str) -> {
-      case cursor.decode_cursor(cursor_str, sort_by) {
+      case pagination.decode_cursor(cursor_str, sort_by) {
         Ok(decoded_cursor) -> {
           let #(cursor_where, cursor_params) =
-            cursor.build_cursor_where_clause(
+            pagination.build_cursor_where_clause(
               decoded_cursor,
               sort_by,
               !is_forward,
@@ -1037,8 +1034,7 @@ pub fn get_by_reference_field_paginated(
   // Generate next cursor if there are more results
   let next_cursor = case has_more, list.last(final_records) {
     True, Ok(last_record) -> {
-      let record_like = pagination.record_to_record_like(last_record)
-      Some(cursor.generate_cursor_from_record(record_like, sort_by))
+      Some(pagination.generate_cursor_from_record(last_record, sort_by))
     }
     _, _ -> None
   }
@@ -1183,10 +1179,10 @@ pub fn get_by_dids_and_collection_paginated(
   // Add cursor condition if present
   let #(final_where_parts, final_bind_values) = case cursor_opt {
     Some(cursor_str) -> {
-      case cursor.decode_cursor(cursor_str, sort_by) {
+      case pagination.decode_cursor(cursor_str, sort_by) {
         Ok(decoded_cursor) -> {
           let #(cursor_where, cursor_params) =
-            cursor.build_cursor_where_clause(
+            pagination.build_cursor_where_clause(
               decoded_cursor,
               sort_by,
               !is_forward,
@@ -1262,8 +1258,7 @@ pub fn get_by_dids_and_collection_paginated(
   // Generate next cursor if there are more results
   let next_cursor = case has_more, list.last(final_records) {
     True, Ok(last_record) -> {
-      let record_like = pagination.record_to_record_like(last_record)
-      Some(cursor.generate_cursor_from_record(record_like, sort_by))
+      Some(pagination.generate_cursor_from_record(last_record, sort_by))
     }
     _, _ -> None
   }

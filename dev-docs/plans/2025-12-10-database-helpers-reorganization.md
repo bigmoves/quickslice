@@ -1,3 +1,144 @@
+# Database Helpers Reorganization Implementation Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** Reorganize vestigial database helpers (`cursor`, `where_clause`, `where_converter`) from `src/` root into proper layered locations with consolidation.
+
+**Architecture:**
+- Merge `cursor.gleam` into `database/queries/pagination.gleam` (both handle pagination concerns)
+- Move `where_clause.gleam` to `database/queries/where_clause.gleam` (pure SQL builder)
+- Move `where_converter.gleam` to `graphql/where_converter.gleam` (GraphQL→SQL bridge belongs in GraphQL layer)
+
+**Tech Stack:** Gleam, SQLite (sqlight)
+
+---
+
+## Summary of Changes
+
+| Old Location | New Location | Action |
+|--------------|--------------|--------|
+| `src/cursor.gleam` | `src/database/queries/pagination.gleam` | Merge into existing file |
+| `src/where_clause.gleam` | `src/database/queries/where_clause.gleam` | Move |
+| `src/where_converter.gleam` | `src/graphql/where_converter.gleam` | Move (new graphql/ folder) |
+
+### Files That Need Import Updates
+
+**For `cursor` → `database/queries/pagination`:**
+- `src/graphql_gleam.gleam` (lines 6, 120, 283, 328)
+- `src/database/repositories/records.gleam` (lines 1, 553, 556, 630, 711, 714, 788, 961, 964, 1041, 1186, 1189, 1266)
+- `test/cursor_test.gleam` → rename to `test/pagination_test.gleam`
+
+**For `where_clause` → `database/queries/where_clause`:**
+- `src/where_converter.gleam` (line 10) - will become `graphql/where_converter`
+- `src/database/queries/aggregates.gleam` (line 14)
+- `src/database/repositories/records.gleam` (line 15)
+- `test/where_clause_test.gleam`
+- `test/where_sql_builder_test.gleam`
+- `test/where_integration_test.gleam`
+- `test/where_edge_cases_test.gleam`
+- `test/database_aggregation_test.gleam`
+
+**For `where_converter` → `graphql/where_converter`:**
+- `src/graphql_gleam.gleam` (line 33)
+- `test/graphql_where_integration_test.gleam` (line 15)
+
+---
+
+## Task 1: Move where_clause.gleam to database/queries/
+
+**Files:**
+- Move: `src/where_clause.gleam` → `src/database/queries/where_clause.gleam`
+
+**Step 1: Copy the file to new location**
+
+```bash
+cp server/src/where_clause.gleam server/src/database/queries/where_clause.gleam
+```
+
+**Step 2: Verify file exists at new location**
+
+```bash
+ls -la server/src/database/queries/where_clause.gleam
+```
+
+Expected: File exists
+
+**Step 3: Delete old file**
+
+```bash
+rm server/src/where_clause.gleam
+```
+
+**Step 4: Run build to see what breaks**
+
+```bash
+cd server && gleam build
+```
+
+Expected: FAIL with import errors (this is expected - we'll fix in Task 4)
+
+---
+
+## Task 2: Move where_converter.gleam to graphql/
+
+**Files:**
+- Create: `src/graphql/` directory
+- Move: `src/where_converter.gleam` → `src/graphql/where_converter.gleam`
+
+**Step 1: Create graphql directory**
+
+```bash
+mkdir -p server/src/graphql
+```
+
+**Step 2: Copy the file to new location**
+
+```bash
+cp server/src/where_converter.gleam server/src/graphql/where_converter.gleam
+```
+
+**Step 3: Update internal import in graphql/where_converter.gleam**
+
+Change line 10 from:
+```gleam
+import where_clause
+```
+
+To:
+```gleam
+import database/queries/where_clause
+```
+
+**Step 4: Delete old file**
+
+```bash
+rm server/src/where_converter.gleam
+```
+
+**Step 5: Run build to see what breaks**
+
+```bash
+cd server && gleam build
+```
+
+Expected: FAIL with import errors (this is expected - we'll fix in Task 4)
+
+---
+
+## Task 3: Merge cursor.gleam into pagination.gleam
+
+**Files:**
+- Merge: `src/cursor.gleam` → `src/database/queries/pagination.gleam`
+- Delete: `src/cursor.gleam`
+
+**Step 1: Create the merged pagination.gleam**
+
+Replace `server/src/database/queries/pagination.gleam` with the merged content below. This combines:
+- All cursor types and functions
+- Existing pagination helpers
+- Eliminates `RecordLike` type by using `Record` directly
+
+```gleam
 /// Pagination utilities including cursor encoding/decoding and ORDER BY building.
 ///
 /// Cursors encode the position in a result set as base64(field1|field2|...|cid)
@@ -406,3 +547,258 @@ pub fn build_order_by(
     False -> string.join(order_parts, ", ")
   }
 }
+```
+
+**Step 2: Delete old cursor.gleam**
+
+```bash
+rm server/src/cursor.gleam
+```
+
+**Step 3: Run build to see what breaks**
+
+```bash
+cd server && gleam build
+```
+
+Expected: FAIL with import errors (we'll fix in Task 4)
+
+---
+
+## Task 4: Update All Imports
+
+**Files to modify:**
+- `src/graphql_gleam.gleam`
+- `src/database/repositories/records.gleam`
+- `src/database/queries/aggregates.gleam`
+- `test/cursor_test.gleam` (rename to `test/pagination_test.gleam`)
+- `test/where_clause_test.gleam`
+- `test/where_sql_builder_test.gleam`
+- `test/where_integration_test.gleam`
+- `test/where_edge_cases_test.gleam`
+- `test/database_aggregation_test.gleam`
+- `test/graphql_where_integration_test.gleam`
+
+**Step 1: Update graphql_gleam.gleam**
+
+Change line 6 from:
+```gleam
+import cursor
+```
+To:
+```gleam
+import database/queries/pagination
+```
+
+Change line 33 from:
+```gleam
+import where_converter
+```
+To:
+```gleam
+import graphql/where_converter
+```
+
+Update all usages of `cursor.` to `pagination.`:
+- Line 120: `cursor.generate_cursor_from_record` → `pagination.generate_cursor_from_record`
+- Line 283: `cursor.generate_cursor_from_record` → `pagination.generate_cursor_from_record`
+- Line 328: `cursor.generate_cursor_from_record` → `pagination.generate_cursor_from_record`
+
+Remove the now-unnecessary `record_to_record_like` conversion since `pagination` now works directly with `Record`:
+- Line 121: `pagination.record_to_record_like(record)` → `record`
+- Similar for lines 284 and 329
+
+**Step 2: Update database/repositories/records.gleam**
+
+Change line 1 from:
+```gleam
+import cursor
+```
+To:
+```gleam
+import database/queries/pagination
+```
+
+Change line 15 from:
+```gleam
+import where_clause
+```
+To:
+```gleam
+import database/queries/where_clause
+```
+
+Update all `cursor.` references to `pagination.`:
+- Line 553: `cursor.decode_cursor` → `pagination.decode_cursor`
+- Line 556: `cursor.build_cursor_where_clause` → `pagination.build_cursor_where_clause`
+- Line 630: `cursor.generate_cursor_from_record` → `pagination.generate_cursor_from_record`
+- And similar for lines 711, 714, 788, 961, 964, 1041, 1186, 1189, 1266
+
+Remove `record_to_record_like` calls - pass `Record` directly.
+
+**Step 3: Update database/queries/aggregates.gleam**
+
+Change line 14 from:
+```gleam
+import where_clause
+```
+To:
+```gleam
+import database/queries/where_clause
+```
+
+**Step 4: Rename and update cursor_test.gleam**
+
+```bash
+mv server/test/cursor_test.gleam server/test/pagination_test.gleam
+```
+
+Update imports in `test/pagination_test.gleam`:
+
+Change line 1 from:
+```gleam
+import cursor
+```
+To:
+```gleam
+import database/queries/pagination
+import database/types.{Record}
+```
+
+Update all `cursor.` to `pagination.` and `cursor.RecordLike` to `Record`:
+
+```gleam
+// Change all occurrences of cursor.RecordLike to Record
+// Change all occurrences of cursor. to pagination.
+```
+
+**Step 5: Update where_clause_test.gleam**
+
+Change line 7 from:
+```gleam
+import where_clause
+```
+To:
+```gleam
+import database/queries/where_clause
+```
+
+**Step 6: Update where_sql_builder_test.gleam**
+
+Change line 8 from:
+```gleam
+import where_clause
+```
+To:
+```gleam
+import database/queries/where_clause
+```
+
+**Step 7: Update where_integration_test.gleam**
+
+Change line 12 from:
+```gleam
+import where_clause
+```
+To:
+```gleam
+import database/queries/where_clause
+```
+
+**Step 8: Update where_edge_cases_test.gleam**
+
+Change line 13 from:
+```gleam
+import where_clause
+```
+To:
+```gleam
+import database/queries/where_clause
+```
+
+**Step 9: Update database_aggregation_test.gleam**
+
+Change line 11 from:
+```gleam
+import where_clause
+```
+To:
+```gleam
+import database/queries/where_clause
+```
+
+**Step 10: Update graphql_where_integration_test.gleam**
+
+Change line 15 from:
+```gleam
+import where_converter
+```
+To:
+```gleam
+import graphql/where_converter
+```
+
+**Step 11: Run build to verify**
+
+```bash
+cd server && gleam build
+```
+
+Expected: PASS
+
+**Step 12: Run tests to verify**
+
+```bash
+cd server && gleam test
+```
+
+Expected: All tests pass
+
+**Step 13: Commit**
+
+```bash
+git add -A
+git commit -m "refactor: reorganize database helpers into proper layers
+
+- Merge cursor.gleam into database/queries/pagination.gleam
+- Move where_clause.gleam to database/queries/where_clause.gleam
+- Move where_converter.gleam to graphql/where_converter.gleam
+- Update all imports across codebase
+- Rename cursor_test.gleam to pagination_test.gleam
+
+This establishes cleaner layering:
+- database/queries/ for pure SQL building
+- graphql/ for GraphQL-specific adapters"
+```
+
+---
+
+## Final Verification
+
+After all tasks complete:
+
+```bash
+cd server && gleam build && gleam test
+```
+
+Expected: Build succeeds, all tests pass.
+
+### New File Structure
+
+```
+server/src/
+├── database/
+│   └── queries/
+│       ├── aggregates.gleam      (updated import)
+│       ├── pagination.gleam      (merged: cursor + pagination)
+│       └── where_clause.gleam    (moved from src/)
+├── graphql/
+│   └── where_converter.gleam     (moved from src/, new folder)
+└── graphql_gleam.gleam           (updated imports)
+```
+
+### Future Opportunity
+
+The new `graphql/` folder sets up for consolidating other GraphQL-related code:
+- `graphql_gleam.gleam` could move to `graphql/resolver.gleam` or similar
+- Other GraphQL utilities could be grouped here
