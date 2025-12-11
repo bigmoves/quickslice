@@ -49,10 +49,8 @@ packages = [
   { name = "ssl_verify_fun", version = "1.1.7", build_tools = ["mix", "rebar3", "make"], requirements = [], otp_app = "ssl_verify_fun", source = "hex", outer_checksum = "FE4C190E8F37401D30167C8C405EDA19469F34577987C76DDE613E838BBC67F8" },
   { name = "swell", version = "2.1.1", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "swell", source = "hex", outer_checksum = "64CFC91A6851487D07E85B02D8405F5EA06EAA74C6742915F5A78531D6237F16" },
   { name = "telemetry", version = "1.3.0", build_tools = ["rebar3"], requirements = [], otp_app = "telemetry", source = "hex", outer_checksum = "7015FC8919DBE63764F4B4B87A95B7C0996BD539E0D499BE6EC9D7F3875B79E6" },
-  { name = "thoas", version = "1.2.1", build_tools = ["rebar3"], requirements = [], otp_app = "thoas", source = "hex", outer_checksum = "E38697EDFFD6E91BD12CEA41B155115282630075C2A727E7A6B2947F5408B86A" },
   { name = "unicode_util_compat", version = "0.7.1", build_tools = ["rebar3"], requirements = [], otp_app = "unicode_util_compat", source = "hex", outer_checksum = "B3A917854CE3AE233619744AD1E0102E05673136776FB2FA76234F3E03B23642" },
   { name = "wisp", version = "2.1.0", build_tools = ["gleam"], requirements = ["directories", "exception", "filepath", "gleam_crypto", "gleam_erlang", "gleam_http", "gleam_json", "gleam_stdlib", "houdini", "logging", "marceau", "mist", "simplifile"], otp_app = "wisp", source = "hex", outer_checksum = "362BDDD11BF48EB38CDE51A73BC7D1B89581B395CA998E3F23F11EC026151C54" },
-  { name = "wisp_flash", version = "2.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "wisp"], otp_app = "wisp_flash", source = "hex", outer_checksum = "C67A295E42030EEB8A7D31CD64971790EC010FA2644CBDC0835BF88D97DE998D" },
 ]
 
 [requirements]
@@ -82,6 +80,4 @@ mist = { version = ">= 5.0.3 and < 6.0.0" }
 simplifile = { version = ">= 2.0.0 and < 3.0.0" }
 sqlight = { version = ">= 1.0.0 and < 2.0.0" }
 swell = { version = ">= 2.0.0 and < 3.0.0" }
-thoas = { version = ">= 1.0.0 and < 2.0.0" }
 wisp = { version = ">= 2.1.0 and < 3.0.0" }
-wisp_flash = { version = ">= 2.0.0 and < 3.0.0" }
