@@ -1,9 +1,52 @@
+// server/src/database/connection.gleam
+
+import database/executor.{type DbError, type Executor, ConnectionError}
 import database/schema/migrations
+import database/sqlite/connection as sqlite_connection
 import gleam/result
+import gleam/string
 import logging
 import sqlight
 
-/// Opens a connection to the SQLite database
+/// Supported database backends
+pub type Backend {
+  SQLite
+  PostgreSQL
+}
+
+/// Parse DATABASE_URL and connect to the appropriate backend (new API)
+///
+/// Supported URL formats:
+/// - SQLite: "sqlite:./path/to/db.sqlite", "./path/to/db.sqlite", "file:./path"
+/// - PostgreSQL: "postgres://user:pass@host:port/db", "postgresql://..."
+pub fn connect_executor(url: String) -> Result(Executor, DbError) {
+  case detect_backend(url) {
+    SQLite -> sqlite_connection.connect(url)
+    PostgreSQL ->
+      Error(ConnectionError(
+        "PostgreSQL support not yet implemented. Use SQLite for now.",
+      ))
+  }
+}
+
+/// Detect the database backend from a URL
+pub fn detect_backend(url: String) -> Backend {
+  let url_lower = string.lowercase(url)
+
+  case
+    string.starts_with(url_lower, "postgres://")
+    || string.starts_with(url_lower, "postgresql://")
+  {
+    True -> PostgreSQL
+    False -> SQLite
+  }
+}
+
+// ===== Legacy SQLite-specific API (for backward compatibility) =====
+// These functions will be removed after migrating all callers to Executor
+
+/// Opens a connection to the SQLite database (legacy API)
+/// @deprecated Use connect_executor instead
 pub fn connect(path: String) -> Result(sqlight.Connection, sqlight.Error) {
   use conn <- result.try(sqlight.open(path))
 
@@ -23,7 +66,8 @@ pub fn connect(path: String) -> Result(sqlight.Connection, sqlight.Error) {
   Ok(conn)
 }
 
-/// Initializes the database with all required tables using the migration system
+/// Initializes the database with all required tables (legacy API)
+/// @deprecated Use connect_executor + dbmate migrations instead
 pub fn initialize(path: String) -> Result(sqlight.Connection, sqlight.Error) {
   use conn <- result.try(connect(path))
 
