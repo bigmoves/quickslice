@@ -1,17 +1,14 @@
 import activity_cleanup
-import argv
 import backfill
 import backfill_state
 import database/connection
 import database/repositories/config as config_repo
-import database/repositories/lexicons
 import dotenv_gleam
 import envoy
 import gleam/erlang/process
 import gleam/http as gleam_http
 import gleam/http/request
 import gleam/int
-import gleam/list
 import gleam/option
 import gleam/string
 import gleam/uri
@@ -62,113 +59,6 @@ pub type Context {
 }
 
 pub fn main() {
-  // Check for CLI arguments
-  case argv.load().arguments {
-    ["backfill"] -> run_backfill_command()
-    _ -> start_server_normally()
-  }
-}
-
-fn run_backfill_command() {
-  logging.log(
-    logging.Info,
-    "Starting backfill for record-type lexicon collections",
-  )
-  logging.log(logging.Info, "")
-
-  // Get database URL from environment variable or use default
-  let database_url = case envoy.get("DATABASE_URL") {
-    Ok(url) -> url
-    Error(_) -> "quickslice.db"
-  }
-
-  // Initialize the database
-  let assert Ok(db) = connection.initialize(database_url)
-
-  // Get domain authority from database
-  let domain_authority = case config_repo.get(db, "domain_authority") {
-    Ok(authority) -> authority
-    Error(_) -> {
-      logging.log(
-        logging.Warning,
-        "No domain_authority configured. All collections will be treated as external.",
-      )
-      ""
-    }
-  }
-
-  // Get all record-type lexicons
-  logging.log(logging.Info, "Fetching record-type lexicons from database...")
-  case lexicons.get_record_types(db) {
-    Ok(lexicons) -> {
-      case lexicons {
-        [] -> {
-          logging.log(
-            logging.Warning,
-            "No record-type lexicons found in database",
-          )
-          logging.log(
-            logging.Info,
-            "   Hint: Run 'gleam run -- import priv/lexicons' to import lexicons first",
-          )
-        }
-        _ -> {
-          // Separate lexicons by domain authority
-          let #(local_lexicons, external_lexicons) =
-            lexicons
-            |> list.partition(fn(lex) {
-              backfill.nsid_matches_domain_authority(lex.id, domain_authority)
-            })
-
-          let collections = list.map(local_lexicons, fn(lex) { lex.id })
-          let external_collections =
-            list.map(external_lexicons, fn(lex) { lex.id })
-
-          logging.log(
-            logging.Info,
-            "Found "
-              <> int.to_string(list.length(collections))
-              <> " local collection(s):",
-          )
-          list.each(collections, fn(col) {
-            logging.log(logging.Info, "  - " <> col)
-          })
-
-          case external_collections {
-            [] -> Nil
-            _ -> {
-              logging.log(logging.Info, "")
-              logging.log(
-                logging.Info,
-                "Found "
-                  <> int.to_string(list.length(external_collections))
-                  <> " external collection(s):",
-              )
-              list.each(external_collections, fn(col) {
-                logging.log(logging.Info, "  - " <> col)
-              })
-            }
-          }
-
-          logging.log(logging.Info, "")
-          let config = backfill.default_config(db)
-          backfill.backfill_collections(
-            [],
-            collections,
-            external_collections,
-            config,
-            db,
-          )
-        }
-      }
-    }
-    Error(_) -> {
-      logging.log(logging.Error, "Failed to fetch lexicons from database")
-    }
-  }
-}
-
-fn start_server_normally() {
   // Initialize logging
   logging.configure()
   logging.set_level(logging.Info)
