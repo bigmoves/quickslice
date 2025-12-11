@@ -1,97 +1,78 @@
 /// OAuth ATP request repository operations
+import database/executor.{type DbError, type Executor, Int as DbInt, Text}
 import database/types.{type OAuthAtpRequest, OAuthAtpRequest}
 import gleam/dynamic/decode
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
-import sqlight
 
 /// Insert a new ATP request
-pub fn insert(
-  conn: sqlight.Connection,
-  req: OAuthAtpRequest,
-) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
-    INSERT INTO oauth_atp_request (
+pub fn insert(exec: Executor, req: OAuthAtpRequest) -> Result(Nil, DbError) {
+  let p1 = executor.placeholder(exec, 1)
+  let p2 = executor.placeholder(exec, 2)
+  let p3 = executor.placeholder(exec, 3)
+  let p4 = executor.placeholder(exec, 4)
+  let p5 = executor.placeholder(exec, 5)
+  let p6 = executor.placeholder(exec, 6)
+  let p7 = executor.placeholder(exec, 7)
+  let p8 = executor.placeholder(exec, 8)
+
+  let sql = "INSERT INTO oauth_atp_request (
       oauth_state, authorization_server, nonce, pkce_verifier,
       signing_public_key, dpop_private_key, created_at, expires_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  "
+    ) VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> ", " <> p6 <> ", " <> p7 <> ", " <> p8 <> ")"
 
   let params = [
-    sqlight.text(req.oauth_state),
-    sqlight.text(req.authorization_server),
-    sqlight.text(req.nonce),
-    sqlight.text(req.pkce_verifier),
-    sqlight.text(req.signing_public_key),
-    sqlight.text(req.dpop_private_key),
-    sqlight.int(req.created_at),
-    sqlight.int(req.expires_at),
+    Text(req.oauth_state),
+    Text(req.authorization_server),
+    Text(req.nonce),
+    Text(req.pkce_verifier),
+    Text(req.signing_public_key),
+    Text(req.dpop_private_key),
+    DbInt(req.created_at),
+    DbInt(req.expires_at),
   ]
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: params,
-    expecting: decode.dynamic,
-  ))
-  Ok(Nil)
+  executor.exec(exec, sql, params)
 }
 
 /// Get an ATP request by oauth_state
 pub fn get(
-  conn: sqlight.Connection,
+  exec: Executor,
   oauth_state: String,
-) -> Result(Option(OAuthAtpRequest), sqlight.Error) {
-  let sql =
-    "SELECT oauth_state, authorization_server, nonce, pkce_verifier,
+) -> Result(Option(OAuthAtpRequest), DbError) {
+  let sql = "SELECT oauth_state, authorization_server, nonce, pkce_verifier,
             signing_public_key, dpop_private_key, created_at, expires_at
-     FROM oauth_atp_request WHERE oauth_state = ?"
+     FROM oauth_atp_request WHERE oauth_state = " <> executor.placeholder(
+      exec,
+      1,
+    )
 
-  use rows <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(oauth_state)],
-    expecting: decoder(),
-  ))
-
-  case list.first(rows) {
-    Ok(req) -> Ok(Some(req))
-    Error(_) -> Ok(None)
+  case executor.query(exec, sql, [Text(oauth_state)], decoder()) {
+    Ok(rows) ->
+      case list.first(rows) {
+        Ok(req) -> Ok(Some(req))
+        Error(_) -> Ok(None)
+      }
+    Error(err) -> Error(err)
   }
 }
 
 /// Delete an ATP request
-pub fn delete(
-  conn: sqlight.Connection,
-  oauth_state: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql = "DELETE FROM oauth_atp_request WHERE oauth_state = ?"
+pub fn delete(exec: Executor, oauth_state: String) -> Result(Nil, DbError) {
+  let sql =
+    "DELETE FROM oauth_atp_request WHERE oauth_state = "
+    <> executor.placeholder(exec, 1)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(oauth_state)],
-    expecting: decode.dynamic,
-  ))
-  Ok(Nil)
+  executor.exec(exec, sql, [Text(oauth_state)])
 }
 
 /// Delete expired ATP requests
-pub fn delete_expired(
-  conn: sqlight.Connection,
-  now: Int,
-) -> Result(Int, sqlight.Error) {
-  let sql = "DELETE FROM oauth_atp_request WHERE expires_at <= ?"
+pub fn delete_expired(exec: Executor, now: Int) -> Result(Nil, DbError) {
+  let sql =
+    "DELETE FROM oauth_atp_request WHERE expires_at <= "
+    <> executor.placeholder(exec, 1)
 
-  use rows <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.int(now)],
-    expecting: decode.dynamic,
-  ))
-  Ok(list.length(rows))
+  executor.exec(exec, sql, [DbInt(now)])
 }
 
 /// Decode ATP request from database row

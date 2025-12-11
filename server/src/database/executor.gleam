@@ -3,6 +3,7 @@
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode.{type Decoder}
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/string
 
 /// Unified error type for all database operations
@@ -154,5 +155,30 @@ pub fn placeholders(exec: Executor, count: Int, start_index: Int) -> String {
       |> list.map(fn(i) { placeholder(exec, i) })
       |> string.join(", ")
     }
+  }
+}
+
+/// Convert an optional text value to a Value (Text or Null)
+pub fn nullable_text(value: Option(String)) -> Value {
+  case value {
+    Some(s) -> Text(s)
+    None -> Null
+  }
+}
+
+/// Convert an optional int value to a Value (Int or Null)
+pub fn nullable_int(value: Option(Int)) -> Value {
+  case value {
+    Some(i) -> Int(i)
+    None -> Null
+  }
+}
+
+/// Convert a boolean to a Value
+/// For cross-database compatibility, use Int(1)/Int(0)
+pub fn bool_value(value: Bool) -> Value {
+  case value {
+    True -> Int(1)
+    False -> Int(0)
   }
 }

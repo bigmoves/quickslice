@@ -1,4 +1,5 @@
 /// OAuth client repository operations
+import database/executor.{type DbError, type Executor, Int as DbInt, Text}
 import database/types.{type OAuthClient, OAuthClient}
 import gleam/dynamic/decode
 import gleam/json
@@ -7,23 +8,34 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import lib/oauth/token_generator
 import logging
-import sqlight
 
 /// Insert a new OAuth client
-pub fn insert(
-  conn: sqlight.Connection,
-  client: OAuthClient,
-) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
-    INSERT INTO oauth_client (
+pub fn insert(exec: Executor, client: OAuthClient) -> Result(Nil, DbError) {
+  let p1 = executor.placeholder(exec, 1)
+  let p2 = executor.placeholder(exec, 2)
+  let p3 = executor.placeholder(exec, 3)
+  let p4 = executor.placeholder(exec, 4)
+  let p5 = executor.placeholder(exec, 5)
+  let p6 = executor.placeholder(exec, 6)
+  let p7 = executor.placeholder(exec, 7)
+  let p8 = executor.placeholder(exec, 8)
+  let p9 = executor.placeholder(exec, 9)
+  let p10 = executor.placeholder(exec, 10)
+  let p11 = executor.placeholder(exec, 11)
+  let p12 = executor.placeholder(exec, 12)
+  let p13 = executor.placeholder(exec, 13)
+  let p14 = executor.placeholder(exec, 14)
+  let p15 = executor.placeholder(exec, 15)
+  let p16 = executor.placeholder(exec, 16)
+  let p17 = executor.placeholder(exec, 17)
+
+  let sql = "INSERT INTO oauth_client (
       client_id, client_secret, client_name, redirect_uris,
       grant_types, response_types, scope, token_endpoint_auth_method,
       client_type, created_at, updated_at, metadata,
       access_token_expiration, refresh_token_expiration,
       require_redirect_exact, registration_access_token, jwks
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  "
+    ) VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> ", " <> p6 <> ", " <> p7 <> ", " <> p8 <> ", " <> p9 <> ", " <> p10 <> ", " <> p11 <> ", " <> p12 <> ", " <> p13 <> ", " <> p14 <> ", " <> p15 <> ", " <> p16 <> ", " <> p17 <> ")"
 
   let redirect_uris_json =
     json.to_string(json.array(client.redirect_uris, json.string))
@@ -41,66 +53,52 @@ pub fn insert(
     )
 
   let params = [
-    sqlight.text(client.client_id),
-    sqlight.nullable(sqlight.text, client.client_secret),
-    sqlight.text(client.client_name),
-    sqlight.text(redirect_uris_json),
-    sqlight.text(grant_types_json),
-    sqlight.text(response_types_json),
-    sqlight.nullable(sqlight.text, client.scope),
-    sqlight.text(types.client_auth_method_to_string(
-      client.token_endpoint_auth_method,
-    )),
-    sqlight.text(types.client_type_to_string(client.client_type)),
-    sqlight.int(client.created_at),
-    sqlight.int(client.updated_at),
-    sqlight.text(client.metadata),
-    sqlight.int(client.access_token_expiration),
-    sqlight.int(client.refresh_token_expiration),
-    sqlight.bool(client.require_redirect_exact),
-    sqlight.nullable(sqlight.text, client.registration_access_token),
-    sqlight.nullable(sqlight.text, client.jwks),
+    Text(client.client_id),
+    executor.nullable_text(client.client_secret),
+    Text(client.client_name),
+    Text(redirect_uris_json),
+    Text(grant_types_json),
+    Text(response_types_json),
+    executor.nullable_text(client.scope),
+    Text(types.client_auth_method_to_string(client.token_endpoint_auth_method)),
+    Text(types.client_type_to_string(client.client_type)),
+    DbInt(client.created_at),
+    DbInt(client.updated_at),
+    Text(client.metadata),
+    DbInt(client.access_token_expiration),
+    DbInt(client.refresh_token_expiration),
+    executor.bool_value(client.require_redirect_exact),
+    executor.nullable_text(client.registration_access_token),
+    executor.nullable_text(client.jwks),
   ]
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: params,
-    expecting: decode.dynamic,
-  ))
-  Ok(Nil)
+  executor.exec(exec, sql, params)
 }
 
 /// Get an OAuth client by client_id
 pub fn get(
-  conn: sqlight.Connection,
+  exec: Executor,
   client_id: String,
-) -> Result(Option(OAuthClient), sqlight.Error) {
-  let sql =
-    "SELECT client_id, client_secret, client_name, redirect_uris,
+) -> Result(Option(OAuthClient), DbError) {
+  let sql = "SELECT client_id, client_secret, client_name, redirect_uris,
             grant_types, response_types, scope, token_endpoint_auth_method,
             client_type, created_at, updated_at, metadata,
             access_token_expiration, refresh_token_expiration,
             require_redirect_exact, registration_access_token, jwks
-     FROM oauth_client WHERE client_id = ?"
+     FROM oauth_client WHERE client_id = " <> executor.placeholder(exec, 1)
 
-  use rows <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(client_id)],
-    expecting: decoder(),
-  ))
-
-  case list.first(rows) {
-    Ok(client) -> Ok(Some(client))
-    Error(_) -> Ok(None)
+  case executor.query(exec, sql, [Text(client_id)], decoder()) {
+    Ok(rows) ->
+      case list.first(rows) {
+        Ok(client) -> Ok(Some(client))
+        Error(_) -> Ok(None)
+      }
+    Error(err) -> Error(err)
   }
 }
 
 /// Get all OAuth clients (excludes internal 'admin' client)
-pub fn get_all(
-  conn: sqlight.Connection,
-) -> Result(List(OAuthClient), sqlight.Error) {
+pub fn get_all(exec: Executor) -> Result(List(OAuthClient), DbError) {
   let sql =
     "SELECT client_id, client_secret, client_name, redirect_uris,
             grant_types, response_types, scope, token_endpoint_auth_method,
@@ -110,32 +108,41 @@ pub fn get_all(
      FROM oauth_client WHERE client_id != 'admin'
      ORDER BY created_at DESC"
 
-  sqlight.query(sql, on: conn, with: [], expecting: decoder())
+  executor.query(exec, sql, [], decoder())
 }
 
 /// Update an existing OAuth client
-pub fn update(
-  conn: sqlight.Connection,
-  client: OAuthClient,
-) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
-    UPDATE oauth_client SET
-      client_secret = ?,
-      client_name = ?,
-      redirect_uris = ?,
-      grant_types = ?,
-      response_types = ?,
-      scope = ?,
-      token_endpoint_auth_method = ?,
-      updated_at = ?,
-      metadata = ?,
-      access_token_expiration = ?,
-      refresh_token_expiration = ?,
-      require_redirect_exact = ?,
-      jwks = ?
-    WHERE client_id = ?
-  "
+pub fn update(exec: Executor, client: OAuthClient) -> Result(Nil, DbError) {
+  let p1 = executor.placeholder(exec, 1)
+  let p2 = executor.placeholder(exec, 2)
+  let p3 = executor.placeholder(exec, 3)
+  let p4 = executor.placeholder(exec, 4)
+  let p5 = executor.placeholder(exec, 5)
+  let p6 = executor.placeholder(exec, 6)
+  let p7 = executor.placeholder(exec, 7)
+  let p8 = executor.placeholder(exec, 8)
+  let p9 = executor.placeholder(exec, 9)
+  let p10 = executor.placeholder(exec, 10)
+  let p11 = executor.placeholder(exec, 11)
+  let p12 = executor.placeholder(exec, 12)
+  let p13 = executor.placeholder(exec, 13)
+  let p14 = executor.placeholder(exec, 14)
+
+  let sql = "UPDATE oauth_client SET
+      client_secret = " <> p1 <> ",
+      client_name = " <> p2 <> ",
+      redirect_uris = " <> p3 <> ",
+      grant_types = " <> p4 <> ",
+      response_types = " <> p5 <> ",
+      scope = " <> p6 <> ",
+      token_endpoint_auth_method = " <> p7 <> ",
+      updated_at = " <> p8 <> ",
+      metadata = " <> p9 <> ",
+      access_token_expiration = " <> p10 <> ",
+      refresh_token_expiration = " <> p11 <> ",
+      require_redirect_exact = " <> p12 <> ",
+      jwks = " <> p13 <> "
+    WHERE client_id = " <> p14
 
   let redirect_uris_json =
     json.to_string(json.array(client.redirect_uris, json.string))
@@ -153,55 +160,38 @@ pub fn update(
     )
 
   let params = [
-    sqlight.nullable(sqlight.text, client.client_secret),
-    sqlight.text(client.client_name),
-    sqlight.text(redirect_uris_json),
-    sqlight.text(grant_types_json),
-    sqlight.text(response_types_json),
-    sqlight.nullable(sqlight.text, client.scope),
-    sqlight.text(types.client_auth_method_to_string(
-      client.token_endpoint_auth_method,
-    )),
-    sqlight.int(client.updated_at),
-    sqlight.text(client.metadata),
-    sqlight.int(client.access_token_expiration),
-    sqlight.int(client.refresh_token_expiration),
-    sqlight.bool(client.require_redirect_exact),
-    sqlight.nullable(sqlight.text, client.jwks),
-    sqlight.text(client.client_id),
+    executor.nullable_text(client.client_secret),
+    Text(client.client_name),
+    Text(redirect_uris_json),
+    Text(grant_types_json),
+    Text(response_types_json),
+    executor.nullable_text(client.scope),
+    Text(types.client_auth_method_to_string(client.token_endpoint_auth_method)),
+    DbInt(client.updated_at),
+    Text(client.metadata),
+    DbInt(client.access_token_expiration),
+    DbInt(client.refresh_token_expiration),
+    executor.bool_value(client.require_redirect_exact),
+    executor.nullable_text(client.jwks),
+    Text(client.client_id),
   ]
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: params,
-    expecting: decode.dynamic,
-  ))
-  Ok(Nil)
+  executor.exec(exec, sql, params)
 }
 
 /// Delete an OAuth client
-pub fn delete(
-  conn: sqlight.Connection,
-  client_id: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql = "DELETE FROM oauth_client WHERE client_id = ?"
+pub fn delete(exec: Executor, client_id: String) -> Result(Nil, DbError) {
+  let sql =
+    "DELETE FROM oauth_client WHERE client_id = "
+    <> executor.placeholder(exec, 1)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(client_id)],
-    expecting: decode.dynamic,
-  ))
-  Ok(Nil)
+  executor.exec(exec, sql, [Text(client_id)])
 }
 
 /// Ensure the internal "admin" client exists for admin UI tokens
 /// Call this at startup after migrations
-pub fn ensure_admin_client(
-  conn: sqlight.Connection,
-) -> Result(Nil, sqlight.Error) {
-  case get(conn, "admin") {
+pub fn ensure_admin_client(exec: Executor) -> Result(Nil, DbError) {
+  case get(exec, "admin") {
     Ok(Some(_)) -> {
       // Admin client already exists
       Ok(Nil)
@@ -231,7 +221,7 @@ pub fn ensure_admin_client(
           registration_access_token: None,
           jwks: None,
         )
-      case insert(conn, admin_client) {
+      case insert(exec, admin_client) {
         Ok(_) -> {
           logging.log(logging.Info, "Created internal 'admin' OAuth client")
           Ok(Nil)

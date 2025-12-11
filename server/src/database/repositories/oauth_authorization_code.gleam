@@ -1,126 +1,104 @@
 /// OAuth authorization code repository operations
+import database/executor.{type DbError, type Executor, Int as DbInt, Text}
 import database/types.{
   type OAuthAuthorizationCode, OAuthAuthorizationCode, Plain, S256,
 }
 import gleam/dynamic/decode
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
-import sqlight
 
 /// Insert a new authorization code
 pub fn insert(
-  conn: sqlight.Connection,
+  exec: Executor,
   code: OAuthAuthorizationCode,
-) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
-    INSERT INTO oauth_authorization_code (
+) -> Result(Nil, DbError) {
+  let p1 = executor.placeholder(exec, 1)
+  let p2 = executor.placeholder(exec, 2)
+  let p3 = executor.placeholder(exec, 3)
+  let p4 = executor.placeholder(exec, 4)
+  let p5 = executor.placeholder(exec, 5)
+  let p6 = executor.placeholder(exec, 6)
+  let p7 = executor.placeholder(exec, 7)
+  let p8 = executor.placeholder(exec, 8)
+  let p9 = executor.placeholder(exec, 9)
+  let p10 = executor.placeholder(exec, 10)
+  let p11 = executor.placeholder(exec, 11)
+  let p12 = executor.placeholder(exec, 12)
+  let p13 = executor.placeholder(exec, 13)
+
+  let sql = "INSERT INTO oauth_authorization_code (
       code, client_id, user_id, session_id, session_iteration, redirect_uri, scope,
       code_challenge, code_challenge_method, nonce, created_at, expires_at, used
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  "
+    ) VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> ", " <> p6 <> ", " <> p7 <> ", " <> p8 <> ", " <> p9 <> ", " <> p10 <> ", " <> p11 <> ", " <> p12 <> ", " <> p13 <> ")"
 
   let params = [
-    sqlight.text(code.code),
-    sqlight.text(code.client_id),
-    sqlight.text(code.user_id),
-    sqlight.nullable(sqlight.text, code.session_id),
-    sqlight.nullable(sqlight.int, code.session_iteration),
-    sqlight.text(code.redirect_uri),
-    sqlight.nullable(sqlight.text, code.scope),
-    sqlight.nullable(sqlight.text, code.code_challenge),
-    sqlight.nullable(
-      sqlight.text,
-      option.map(
-        code.code_challenge_method,
-        types.code_challenge_method_to_string,
-      ),
-    ),
-    sqlight.nullable(sqlight.text, code.nonce),
-    sqlight.int(code.created_at),
-    sqlight.int(code.expires_at),
-    sqlight.bool(code.used),
+    Text(code.code),
+    Text(code.client_id),
+    Text(code.user_id),
+    executor.nullable_text(code.session_id),
+    executor.nullable_int(code.session_iteration),
+    Text(code.redirect_uri),
+    executor.nullable_text(code.scope),
+    executor.nullable_text(code.code_challenge),
+    executor.nullable_text(option.map(
+      code.code_challenge_method,
+      types.code_challenge_method_to_string,
+    )),
+    executor.nullable_text(code.nonce),
+    DbInt(code.created_at),
+    DbInt(code.expires_at),
+    executor.bool_value(code.used),
   ]
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: params,
-    expecting: decode.dynamic,
-  ))
-  Ok(Nil)
+  executor.exec(exec, sql, params)
 }
 
 /// Get an authorization code by code value
 pub fn get(
-  conn: sqlight.Connection,
+  exec: Executor,
   code_value: String,
-) -> Result(Option(OAuthAuthorizationCode), sqlight.Error) {
+) -> Result(Option(OAuthAuthorizationCode), DbError) {
   let sql =
     "SELECT code, client_id, user_id, session_id, session_iteration, redirect_uri, scope,
             code_challenge, code_challenge_method, nonce, created_at, expires_at, used
-     FROM oauth_authorization_code WHERE code = ?"
+     FROM oauth_authorization_code WHERE code = "
+    <> executor.placeholder(exec, 1)
 
-  use rows <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(code_value)],
-    expecting: decoder(),
-  ))
-
-  case list.first(rows) {
-    Ok(code) -> Ok(Some(code))
-    Error(_) -> Ok(None)
+  case executor.query(exec, sql, [Text(code_value)], decoder()) {
+    Ok(rows) ->
+      case list.first(rows) {
+        Ok(code) -> Ok(Some(code))
+        Error(_) -> Ok(None)
+      }
+    Error(err) -> Error(err)
   }
 }
 
 /// Mark an authorization code as used
-pub fn mark_used(
-  conn: sqlight.Connection,
-  code_value: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql = "UPDATE oauth_authorization_code SET used = 1 WHERE code = ?"
+pub fn mark_used(exec: Executor, code_value: String) -> Result(Nil, DbError) {
+  let sql =
+    "UPDATE oauth_authorization_code SET used = 1 WHERE code = "
+    <> executor.placeholder(exec, 1)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(code_value)],
-    expecting: decode.dynamic,
-  ))
-  Ok(Nil)
+  executor.exec(exec, sql, [Text(code_value)])
 }
 
 /// Delete an authorization code
-pub fn delete(
-  conn: sqlight.Connection,
-  code_value: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql = "DELETE FROM oauth_authorization_code WHERE code = ?"
+pub fn delete(exec: Executor, code_value: String) -> Result(Nil, DbError) {
+  let sql =
+    "DELETE FROM oauth_authorization_code WHERE code = "
+    <> executor.placeholder(exec, 1)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(code_value)],
-    expecting: decode.dynamic,
-  ))
-  Ok(Nil)
+  executor.exec(exec, sql, [Text(code_value)])
 }
 
 /// Delete expired authorization codes
-pub fn delete_expired(
-  conn: sqlight.Connection,
-  now: Int,
-) -> Result(Int, sqlight.Error) {
-  let sql = "DELETE FROM oauth_authorization_code WHERE expires_at <= ?"
+pub fn delete_expired(exec: Executor, now: Int) -> Result(Nil, DbError) {
+  let sql =
+    "DELETE FROM oauth_authorization_code WHERE expires_at <= "
+    <> executor.placeholder(exec, 1)
 
-  use rows <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.int(now)],
-    expecting: decode.dynamic,
-  ))
-  Ok(list.length(rows))
+  executor.exec(exec, sql, [DbInt(now)])
 }
 
 /// Decode authorization code from database row

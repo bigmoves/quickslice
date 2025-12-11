@@ -1,73 +1,66 @@
 /// OAuth DPoP JTI replay protection repository
 /// Tracks used JTI values to prevent replay attacks
+import database/executor.{type DbError, type Executor, Int as DbInt, Text}
 import gleam/dynamic/decode
-import gleam/list
-import gleam/result
-import sqlight
 
 /// Check if a JTI has been used and mark it as used atomically
 /// Returns Ok(True) if the JTI was successfully recorded (not previously used)
 /// Returns Ok(False) if the JTI was already used (replay attack)
 pub fn use_jti(
-  conn: sqlight.Connection,
+  exec: Executor,
   jti: String,
   created_at: Int,
-) -> Result(Bool, sqlight.Error) {
-  // Try to insert - will fail if JTI already exists due to PRIMARY KEY constraint
-  let sql =
-    "INSERT OR IGNORE INTO oauth_dpop_jti (jti, created_at) VALUES (?, ?)"
+) -> Result(Bool, DbError) {
+  let p1 = executor.placeholder(exec, 1)
+  let p2 = executor.placeholder(exec, 2)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(jti), sqlight.int(created_at)],
-    expecting: decode.dynamic,
-  ))
+  // Use dialect-specific insert-or-ignore syntax
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "INSERT OR IGNORE INTO oauth_dpop_jti (jti, created_at) VALUES ("
+      <> p1
+      <> ", "
+      <> p2
+      <> ")"
+    executor.PostgreSQL ->
+      "INSERT INTO oauth_dpop_jti (jti, created_at) VALUES ("
+      <> p1
+      <> ", "
+      <> p2
+      <> ") ON CONFLICT (jti) DO NOTHING"
+  }
 
-  // Check if insert succeeded by checking changes
-  let check_sql = "SELECT changes()"
-  use changes_rows <- result.try(sqlight.query(
-    check_sql,
-    on: conn,
-    with: [],
-    expecting: decode.at([0], decode.int),
-  ))
+  case executor.exec(exec, sql, [Text(jti), DbInt(created_at)]) {
+    Ok(_) -> {
+      // Check if the insert succeeded by trying to select the row we just inserted
+      // and verifying it has our created_at value
+      let check_sql =
+        "SELECT created_at FROM oauth_dpop_jti WHERE jti = "
+        <> executor.placeholder(exec, 1)
 
-  case list.first(changes_rows) {
-    Ok(1) -> Ok(True)
-    // Insert succeeded, JTI was new
-    Ok(0) -> Ok(False)
-    // Insert ignored, JTI was duplicate
-    _ -> Ok(False)
+      let check_decoder = {
+        use ts <- decode.field(0, decode.int)
+        decode.success(ts)
+      }
+
+      case executor.query(exec, check_sql, [Text(jti)], check_decoder) {
+        Ok([stored_ts]) ->
+          // If our timestamp matches, we were the one who inserted it
+          Ok(stored_ts == created_at)
+        Ok(_) -> Ok(False)
+        Error(_) -> Ok(False)
+      }
+    }
+    Error(_) -> Ok(False)
   }
 }
 
 /// Delete expired JTI entries
 /// Should be called periodically to clean up old entries
-pub fn delete_expired(
-  conn: sqlight.Connection,
-  before: Int,
-) -> Result(Int, sqlight.Error) {
-  let sql = "DELETE FROM oauth_dpop_jti WHERE created_at < ?"
+pub fn delete_expired(exec: Executor, before: Int) -> Result(Nil, DbError) {
+  let sql =
+    "DELETE FROM oauth_dpop_jti WHERE created_at < "
+    <> executor.placeholder(exec, 1)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.int(before)],
-    expecting: decode.dynamic,
-  ))
-
-  // Get count of deleted rows
-  let check_sql = "SELECT changes()"
-  use changes_rows <- result.try(sqlight.query(
-    check_sql,
-    on: conn,
-    with: [],
-    expecting: decode.at([0], decode.int),
-  ))
-
-  case list.first(changes_rows) {
-    Ok(count) -> Ok(count)
-    Error(_) -> Ok(0)
-  }
+  executor.exec(exec, sql, [DbInt(before)])
 }
