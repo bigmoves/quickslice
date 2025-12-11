@@ -1,6 +1,7 @@
 // server/src/database/connection.gleam
 
-import database/executor.{type DbError, type Executor, ConnectionError}
+import database/executor.{type DbError, type Executor}
+import database/postgres/connection as postgres_connection
 import database/schema/migrations
 import database/sqlite/connection as sqlite_connection
 import gleam/result
@@ -22,10 +23,7 @@ pub type Backend {
 pub fn connect_executor(url: String) -> Result(Executor, DbError) {
   case detect_backend(url) {
     SQLite -> sqlite_connection.connect(url)
-    PostgreSQL ->
-      Error(ConnectionError(
-        "PostgreSQL support not yet implemented. Use SQLite for now.",
-      ))
+    PostgreSQL -> postgres_connection.connect(url)
   }
 }
 
