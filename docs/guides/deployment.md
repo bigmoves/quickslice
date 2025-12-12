@@ -6,7 +6,7 @@ Deploy Quickslice to production. Railway with one-click deploy is fastest.
 
 ### 1. Deploy
 
-Click the button to create a new Quickslice instance:
+Click the button to deploy Quickslice with SQLite:
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/quickslice?referralCode=Ofii6e&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
@@ -203,3 +203,11 @@ BACKFILL_MAX_HTTP_CONCURRENT=30
 **Recommendations:**
 - Use SSD-backed volumes for SQLite performance
 - Monitor database size and scale volume as needed
+
+## PostgreSQL Deployment
+
+For deployments requiring a full database server, use the PostgreSQL template:
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/GRtFyd?referralCode=Ofii6e&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
+This template provisions a PostgreSQL database alongside Quickslice. The `DATABASE_URL` is automatically configured.
