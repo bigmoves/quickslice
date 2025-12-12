@@ -55,7 +55,7 @@ jobs:
       - name: Run tests (with PostgreSQL)
         working-directory: server
         env:
-          POSTGRES_TEST_URL: postgres://quickslice:quickslice@localhost:5432/quickslice_test
+          POSTGRES_TEST_URL: postgres://quickslice:quickslice@localhost:5432/quickslice_test?sslmode=disable
         run: gleam test
 
   lint:
