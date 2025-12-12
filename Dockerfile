@@ -51,8 +51,10 @@ RUN cd /build/server \
 FROM ghcr.io/gleam-lang/gleam:${GLEAM_VERSION}-erlang-alpine
 
 # Install runtime dependencies and dbmate for migrations
+ARG TARGETARCH
 RUN apk add --no-cache sqlite-libs sqlite libpq curl \
-    && curl -fsSL -o /usr/local/bin/dbmate https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-amd64 \
+    && DBMATE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") \
+    && curl -fsSL -o /usr/local/bin/dbmate https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-${DBMATE_ARCH} \
     && chmod +x /usr/local/bin/dbmate
 
 # Copy the compiled server code from the builder stage
