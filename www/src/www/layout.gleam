@@ -223,10 +223,13 @@ fn sidebar(current_path: String, pages: List(DocPage)) -> Element(Nil) {
       html.span([attribute.class("sidebar-version")], [html.text(version)]),
     ]),
     html.a(
-      [attribute.href("https://tangled.sh"), attribute.class("tangled-link")],
+      [
+        attribute.href("https://tangled.org/slices.network/quickslice"),
+        attribute.class("tangled-link"),
+      ],
       [
         tangled_logo(),
-        html.span([], [html.text("tangled.sh")]),
+        html.span([], [html.text("tangled.org")]),
       ],
     ),
     html.div([attribute.class("search-container")], [
