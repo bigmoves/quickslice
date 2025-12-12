@@ -67,7 +67,7 @@ Query indexed records with GraphQL. Quickslice generates a query for each Lexico
 query GetStatuses {
   xyzStatusphereStatus(
     first: 20
-    sortBy: [{ field: "createdAt", direction: DESC }]
+    sortBy: [{ field: createdAt, direction: DESC }]
   ) {
     edges {
       node {

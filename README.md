@@ -53,7 +53,7 @@ query {
   xyzStatusphereStatus(
     first: 50
     sortBy: [
-      { field: "createdAt", direction: DESC }
+      { field: createdAt, direction: DESC }
     ]
     where: {
       status: { contains: "👍" }

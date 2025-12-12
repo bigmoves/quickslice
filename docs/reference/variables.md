@@ -68,7 +68,7 @@ query GetFilteredStatuses(
     where: { status: { eq: $emoji } }
     first: $pageSize
     after: $cursor
-    sortBy: [{ field: "createdAt", direction: DESC }]
+    sortBy: [{ field: createdAt, direction: DESC }]
   ) {
     edges {
       node {
