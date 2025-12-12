@@ -19,6 +19,7 @@ CREATE INDEX IF NOT EXISTS idx_record_collection ON record(collection);
 CREATE INDEX IF NOT EXISTS idx_record_did_collection ON record(did, collection);
 CREATE INDEX IF NOT EXISTS idx_record_indexed_at ON record(indexed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_record_cid ON record(cid);
+CREATE INDEX IF NOT EXISTS idx_record_json_gin ON record USING GIN(json);
 
 -- Actor table for AT Protocol actors (users)
 CREATE TABLE IF NOT EXISTS actor (
