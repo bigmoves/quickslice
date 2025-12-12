@@ -46,7 +46,7 @@ packages = [
   { name = "opentelemetry_api", version = "1.5.0", build_tools = ["rebar3", "mix"], requirements = [], otp_app = "opentelemetry_api", source = "hex", outer_checksum = "F53EC8A1337AE4A487D43AC89DA4BD3A3C99DDF576655D071DEED8B56A2D5DDA" },
   { name = "parse_trans", version = "3.4.1", build_tools = ["rebar3"], requirements = [], otp_app = "parse_trans", source = "hex", outer_checksum = "620A406CE75DADA827B82E453C19CF06776BE266F5A67CFF34E1EF2CBB60E49A" },
   { name = "pg_types", version = "0.6.0", build_tools = ["rebar3"], requirements = [], otp_app = "pg_types", source = "hex", outer_checksum = "9949A4849DD13408FA249AB7B745E0D2DFDB9532AEE2B9722326E33CD082A778" },
-  { name = "pgo", version = "0.18.0", build_tools = ["rebar3"], requirements = ["backoff", "opentelemetry_api"], otp_app = "pgo", source = "hex", outer_checksum = "1787F785CB504D06EF529E949FE22E1C644EB3B26A94727034C687DDD9C03757" },
+  { name = "pgo", version = "0.19.0", build_tools = ["rebar3"], requirements = ["backoff", "opentelemetry_api", "pg_types"], otp_app = "pgo", source = "hex", outer_checksum = "F9FCA1227368DDBE5209FE87FB28B539F87B91D36207C6AC1A05F82F50899A85" },
   { name = "platform", version = "1.0.0", build_tools = ["gleam"], requirements = [], otp_app = "platform", source = "hex", outer_checksum = "8339420A95AD89AAC0F82F4C3DB8DD401041742D6C3F46132A8739F6AEB75391" },
   { name = "pog", version = "4.1.0", build_tools = ["gleam"], requirements = ["exception", "gleam_erlang", "gleam_otp", "gleam_stdlib", "gleam_time", "pgo"], otp_app = "pog", source = "hex", outer_checksum = "E4AFBA39A5FAA2E77291836C9683ADE882E65A06AB28CA7D61AE7A3AD61EBBD5" },
   { name = "simplifile", version = "2.3.1", build_tools = ["gleam"], requirements = ["filepath", "gleam_stdlib"], otp_app = "simplifile", source = "hex", outer_checksum = "957E0E5B75927659F1D2A1B7B75D7B9BA96FAA8D0C53EA71C4AD9CD0C6B848F6" },
@@ -55,7 +55,7 @@ packages = [
   { name = "swell", version = "2.1.1", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "swell", source = "hex", outer_checksum = "64CFC91A6851487D07E85B02D8405F5EA06EAA74C6742915F5A78531D6237F16" },
   { name = "telemetry", version = "1.3.0", build_tools = ["rebar3"], requirements = [], otp_app = "telemetry", source = "hex", outer_checksum = "7015FC8919DBE63764F4B4B87A95B7C0996BD539E0D499BE6EC9D7F3875B79E6" },
   { name = "unicode_util_compat", version = "0.7.1", build_tools = ["rebar3"], requirements = [], otp_app = "unicode_util_compat", source = "hex", outer_checksum = "B3A917854CE3AE233619744AD1E0102E05673136776FB2FA76234F3E03B23642" },
-  { name = "wisp", version = "2.1.0", build_tools = ["gleam"], requirements = ["directories", "exception", "filepath", "gleam_crypto", "gleam_erlang", "gleam_http", "gleam_json", "gleam_stdlib", "houdini", "logging", "marceau", "mist", "simplifile"], otp_app = "wisp", source = "hex", outer_checksum = "362BDDD11BF48EB38CDE51A73BC7D1B89581B395CA998E3F23F11EC026151C54" },
+  { name = "wisp", version = "2.1.1", build_tools = ["gleam"], requirements = ["directories", "exception", "filepath", "gleam_crypto", "gleam_erlang", "gleam_http", "gleam_json", "gleam_stdlib", "houdini", "logging", "marceau", "mist", "simplifile"], otp_app = "wisp", source = "hex", outer_checksum = "46E2E31DECD61A3748CF6CB317D9AC432BBC8D8A6E65655A9E787BDC69389DE0" },
 ]
 
 [requirements]
