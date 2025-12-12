@@ -6,6 +6,8 @@ Along the way, we'll show what you'd write manually versus what Quickslice handl
 
 **Try it live:** A working example is running at [StackBlitz](https://stackblitz.com/edit/stackblitz-starters-g3uwhweu?file=index.html), connected to a slice at [xyzstatusphere.slices.network](https://xyzstatusphere.slices.network) with the `xyz.statusphere.status` lexicon.
 
+NOTE: For the StackBliz example, OAuth will only work if you open the preview in a new tab and login from there 🫠.
+
 ## What We're Building
 
 Statusphere lets users:
