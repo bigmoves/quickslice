@@ -40,6 +40,16 @@ jobs:
       - name: Install SQLite
         run: sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
 
+      - name: Cache Gleam build
+        uses: actions/cache@v4
+        with:
+          path: |
+            server/build
+            ~/.cache/rebar3
+          key: gleam-build-${{ runner.os }}-otp28-${{ hashFiles('server/gleam.toml', 'server/manifest.toml') }}
+          restore-keys: |
+            gleam-build-${{ runner.os }}-otp28-
+
       - name: Download dependencies
         working-directory: server
         run: gleam deps download
