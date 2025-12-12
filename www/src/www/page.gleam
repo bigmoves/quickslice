@@ -2,6 +2,7 @@
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/regexp
+import gleam/string
 import lustre/element.{type Element}
 import mork
 import www/config.{type DocPage}
@@ -10,17 +11,21 @@ import www/layout.{type Heading}
 
 /// Render a doc page to a full HTML element
 pub fn render(page: DocPage, all_pages: List(DocPage)) -> Element(Nil) {
-  let html_content =
+  let html_before_anchors =
     mork.configure()
     |> mork.tables(True)
     |> mork.heading_ids(True)
     |> mork.parse_with_options(page.content)
     |> mork.to_html
     |> transform_links
+
+  // Extract headings BEFORE adding anchor links (regex expects clean headings)
+  let headings = extract_headings(html_before_anchors)
+
+  let html_content =
+    html_before_anchors
     |> add_header_anchors
     |> highlighter.highlight_html
-
-  let headings = extract_headings(html_content)
 
   layout.wrap(page, all_pages, html_content, headings)
 }
@@ -40,7 +45,7 @@ fn extract_headings(html: String) -> List(Heading) {
             _ -> 3
           },
           id: id,
-          text: text,
+          text: decode_html_entities(text),
         ))
       _ -> None
     }
@@ -51,6 +56,17 @@ fn extract_headings(html: String) -> List(Heading) {
       None -> Error(Nil)
     }
   })
+}
+
+/// Decode common HTML entities back to plain text
+fn decode_html_entities(text: String) -> String {
+  text
+  |> string.replace("&quot;", "\"")
+  |> string.replace("&amp;", "&")
+  |> string.replace("&lt;", "<")
+  |> string.replace("&gt;", ">")
+  |> string.replace("&#39;", "'")
+  |> string.replace("&apos;", "'")
 }
 
 /// Add anchor links to h2 and h3 headings for direct linking

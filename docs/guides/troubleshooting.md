@@ -77,7 +77,7 @@ Records created before you deployed Quickslice won't appear until backfilled.
 ### Backfill stuck or slow
 
 **Check:**
-1. Memory usage - backfill is memory-intensive. See [Deployment Guide](deployment.md) for tuning.
+1. Memory usage - backfill is memory-intensive. See [Deployment Guide](guides/deployment.md) for tuning.
 2. Network connectivity to PDS endpoints
 3. Logs for specific PDS errors
 

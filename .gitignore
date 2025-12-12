@@ -15,3 +15,6 @@ tmp
 .lustre
 build/
 node_modules/
+
+# Git worktrees
+.worktrees/
