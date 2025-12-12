@@ -34,7 +34,7 @@ jobs:
         uses: erlef/setup-beam@v1
         with:
           otp-version: "26.0"
-          gleam-version: "1.6.0"
+          gleam-version: "1.13.0"
           rebar3-version: "3"
 
       - name: Install SQLite
@@ -68,7 +68,7 @@ jobs:
         uses: erlef/setup-beam@v1
         with:
           otp-version: "26.0"
-          gleam-version: "1.6.0"
+          gleam-version: "1.13.0"
           rebar3-version: "3"
 
       - name: Install SQLite
