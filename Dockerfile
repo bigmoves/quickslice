@@ -3,14 +3,15 @@ ARG GLEAM_VERSION=v1.13.0
 # Build stage - compile the application
 FROM ghcr.io/gleam-lang/gleam:${GLEAM_VERSION}-erlang-alpine AS builder
 
-# Install build dependencies
+# Install build dependencies (including PostgreSQL client for multi-database support)
 RUN apk add --no-cache \
     bash \
     git \
     nodejs \
     npm \
     build-base \
-    sqlite-dev
+    sqlite-dev \
+    postgresql-dev
 
 # Configure git for non-interactive use
 ENV GIT_TERMINAL_PROMPT=0
@@ -18,6 +19,7 @@ ENV GIT_TERMINAL_PROMPT=0
 # Add local dependencies first (these change less frequently)
 COPY ./lexicon_graphql /build/lexicon_graphql
 COPY ./client /build/client
+COPY ./atproto_car /build/atproto_car
 
 # Add server code
 COPY ./server /build/server
@@ -48,11 +50,18 @@ RUN cd /build/server \
 # Runtime stage - slim image with only what's needed to run
 FROM ghcr.io/gleam-lang/gleam:${GLEAM_VERSION}-erlang-alpine
 
-# Install runtime dependencies
-RUN apk add --no-cache sqlite-libs sqlite
+# Install runtime dependencies and dbmate for migrations
+RUN apk add --no-cache sqlite-libs sqlite libpq curl \
+    && curl -fsSL -o /usr/local/bin/dbmate https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-amd64 \
+    && chmod +x /usr/local/bin/dbmate
 
 # Copy the compiled server code from the builder stage
 COPY --from=builder /build/server/build/erlang-shipment /app
+
+# Copy database migrations and config
+COPY --from=builder /build/server/db /app/db
+COPY --from=builder /build/server/.dbmate.yml /app/.dbmate.yml
+COPY --from=builder /build/server/docker-entrypoint.sh /app/docker-entrypoint.sh
 
 # Set up the entrypoint
 WORKDIR /app
@@ -68,4 +77,4 @@ ENV PORT=8080
 EXPOSE $PORT
 
 # Run the server
-CMD ["./entrypoint.sh", "run"]
+CMD ["/app/docker-entrypoint.sh", "run"]

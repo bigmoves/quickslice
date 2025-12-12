@@ -1,10 +1,10 @@
+import database/executor.{Int, Text}
 import database/queries/where_clause
 import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
-import sqlight
 
 pub fn main() {
   gleeunit.main()
@@ -42,7 +42,7 @@ pub fn is_condition_empty_true_test() {
 pub fn is_condition_empty_false_with_eq_test() {
   let condition =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("value")),
+      eq: Some(Text("value")),
       in_values: None,
       contains: None,
       gt: None,
@@ -82,7 +82,7 @@ pub fn is_clause_empty_true_test() {
 pub fn is_clause_empty_false_with_conditions_test() {
   let condition =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("value")),
+      eq: Some(Text("value")),
       in_values: None,
       contains: None,
       gt: None,
@@ -132,16 +132,16 @@ pub fn condition_with_multiple_operators_test() {
       eq: None,
       in_values: None,
       contains: None,
-      gt: Some(sqlight.int(10)),
+      gt: Some(Int(10)),
       gte: None,
-      lt: Some(sqlight.int(100)),
+      lt: Some(Int(100)),
       lte: None,
       is_null: None,
       is_numeric: False,
     )
 
-  condition.gt |> should.equal(Some(sqlight.int(10)))
-  condition.lt |> should.equal(Some(sqlight.int(100)))
+  condition.gt |> should.equal(Some(Int(10)))
+  condition.lt |> should.equal(Some(Int(100)))
   where_clause.is_condition_empty(condition) |> should.be_false
 }
 

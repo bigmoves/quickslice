@@ -6,17 +6,16 @@
 /// - Error handling
 /// - Response formatting
 import database/repositories/lexicons
-import database/schema/tables
 import gleam/json
 import gleam/list
 import gleam/option
 import gleeunit/should
 import lexicon_graphql
 import lexicon_graphql/schema/database
-import sqlight
 import swell/executor
 import swell/schema
 import swell/value
+import test_helpers
 
 // Helper to create a status lexicon JSON
 fn create_status_lexicon() -> String {
@@ -304,14 +303,14 @@ fn mock_delete_resolver_factory(_collection: String) -> schema.Resolver {
 // Test: Create mutation without authentication should fail
 pub fn create_mutation_without_auth_fails_test() {
   // Setup: Create in-memory database with test lexicons
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
 
   let status_lexicon = create_status_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(exec, "xyz.statusphere.status", status_lexicon)
 
-  let assert Ok(lexicon_records) = lexicons.get_all(db)
+  let assert Ok(lexicon_records) = lexicons.get_all(exec)
   let parsed_lexicons =
     lexicon_records
     |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
@@ -357,14 +356,14 @@ pub fn create_mutation_without_auth_fails_test() {
 // Test: Create mutation with authentication should succeed
 pub fn create_mutation_with_auth_succeeds_test() {
   // Setup
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
 
   let status_lexicon = create_status_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(exec, "xyz.statusphere.status", status_lexicon)
 
-  let assert Ok(lexicon_records) = lexicons.get_all(db)
+  let assert Ok(lexicon_records) = lexicons.get_all(exec)
   let parsed_lexicons =
     lexicon_records
     |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
@@ -426,14 +425,14 @@ pub fn create_mutation_with_auth_succeeds_test() {
 // Test: Update mutation with authentication should succeed
 pub fn update_mutation_with_auth_succeeds_test() {
   // Setup
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
 
   let status_lexicon = create_status_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(exec, "xyz.statusphere.status", status_lexicon)
 
-  let assert Ok(lexicon_records) = lexicons.get_all(db)
+  let assert Ok(lexicon_records) = lexicons.get_all(exec)
   let parsed_lexicons =
     lexicon_records
     |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
@@ -494,14 +493,14 @@ pub fn update_mutation_with_auth_succeeds_test() {
 // Test: Delete mutation with authentication should succeed
 pub fn delete_mutation_with_auth_succeeds_test() {
   // Setup
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
 
   let status_lexicon = create_status_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(exec, "xyz.statusphere.status", status_lexicon)
 
-  let assert Ok(lexicon_records) = lexicons.get_all(db)
+  let assert Ok(lexicon_records) = lexicons.get_all(exec)
   let parsed_lexicons =
     lexicon_records
     |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
@@ -562,14 +561,14 @@ pub fn delete_mutation_with_auth_succeeds_test() {
 // Test: Update mutation without rkey should fail
 pub fn update_mutation_without_rkey_fails_test() {
   // Setup
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
 
   let status_lexicon = create_status_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(exec, "xyz.statusphere.status", status_lexicon)
 
-  let assert Ok(lexicon_records) = lexicons.get_all(db)
+  let assert Ok(lexicon_records) = lexicons.get_all(exec)
   let parsed_lexicons =
     lexicon_records
     |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
@@ -611,14 +610,14 @@ pub fn update_mutation_without_rkey_fails_test() {
 // Test: Delete mutation without rkey should fail
 pub fn delete_mutation_without_rkey_fails_test() {
   // Setup
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
 
   let status_lexicon = create_status_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "xyz.statusphere.status", status_lexicon)
+    lexicons.insert(exec, "xyz.statusphere.status", status_lexicon)
 
-  let assert Ok(lexicon_records) = lexicons.get_all(db)
+  let assert Ok(lexicon_records) = lexicons.get_all(exec)
   let parsed_lexicons =
     lexicon_records
     |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })
@@ -805,19 +804,19 @@ pub fn test_upload_blob_mutation_requires_auth() {
 // Test: Mutation with lexicon ref should validate correctly
 pub fn mutation_with_lexicon_ref_validates_test() {
   // Setup: Create in-memory database with both lexicons
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
 
   // Insert BOTH lexicons - the profile AND the referenced location
   let location_lexicon = create_location_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "community.lexicon.location.hthree", location_lexicon)
+    lexicons.insert(exec, "community.lexicon.location.hthree", location_lexicon)
 
   let profile_lexicon = create_profile_with_ref_lexicon()
   let assert Ok(_) =
-    lexicons.insert(db, "org.atmosphereconf.profile", profile_lexicon)
+    lexicons.insert(exec, "org.atmosphereconf.profile", profile_lexicon)
 
-  let assert Ok(lexicon_records) = lexicons.get_all(db)
+  let assert Ok(lexicon_records) = lexicons.get_all(exec)
   let parsed_lexicons =
     lexicon_records
     |> list.filter_map(fn(lex) { lexicon_graphql.parse_lexicon(lex.json) })

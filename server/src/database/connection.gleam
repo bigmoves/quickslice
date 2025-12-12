@@ -1,35 +1,47 @@
-import database/schema/migrations
-import gleam/result
-import logging
-import sqlight
+// server/src/database/connection.gleam
 
-/// Opens a connection to the SQLite database
-pub fn connect(path: String) -> Result(sqlight.Connection, sqlight.Error) {
-  use conn <- result.try(sqlight.open(path))
+import database/executor.{type DbError, type Executor}
+import database/postgres/connection as postgres_connection
+import database/sqlite/connection as sqlite_connection
+import gleam/string
 
-  // Enable WAL mode for better concurrency
-  use _ <- result.try(sqlight.exec("PRAGMA journal_mode = WAL", conn))
-
-  // Performance tuning - safe with WAL mode
-  use _ <- result.try(sqlight.exec("PRAGMA synchronous = NORMAL", conn))
-  use _ <- result.try(sqlight.exec("PRAGMA cache_size = -64000", conn))
-  use _ <- result.try(sqlight.exec("PRAGMA mmap_size = 268435456", conn))
-  use _ <- result.try(sqlight.exec("PRAGMA temp_store = MEMORY", conn))
-  use _ <- result.try(sqlight.exec("PRAGMA busy_timeout = 5000", conn))
-
-  // Enable foreign key constraints
-  use _ <- result.try(sqlight.exec("PRAGMA foreign_keys = ON", conn))
-
-  Ok(conn)
+/// Supported database backends
+pub type Backend {
+  SQLite
+  PostgreSQL
 }
 
-/// Initializes the database with all required tables using the migration system
-pub fn initialize(path: String) -> Result(sqlight.Connection, sqlight.Error) {
-  use conn <- result.try(connect(path))
+/// Parse DATABASE_URL and connect to the appropriate backend.
+///
+/// Note: This function connects to the database but does NOT run migrations.
+/// Schema migrations should be run externally using dbmate before starting
+/// the application:
+///
+/// ```sh
+/// DATABASE_URL=sqlite:data/quickslice.db dbmate up
+/// # or
+/// DATABASE_URL=postgres://localhost/quickslice dbmate --migrations-dir ./db/migrations_postgres up
+/// ```
+///
+/// Supported URL formats:
+/// - SQLite: "sqlite:./path/to/db.sqlite", "./path/to/db.sqlite", "file:./path"
+/// - PostgreSQL: "postgres://user:pass@host:port/db", "postgresql://..."
+pub fn connect(url: String) -> Result(Executor, DbError) {
+  case detect_backend(url) {
+    SQLite -> sqlite_connection.connect(url)
+    PostgreSQL -> postgres_connection.connect(url)
+  }
+}
 
-  // Run any pending migrations
-  use _ <- result.try(migrations.run_migrations(conn))
+/// Detect the database backend from a URL
+pub fn detect_backend(url: String) -> Backend {
+  let url_lower = string.lowercase(url)
 
-  logging.log(logging.Info, "Database initialized at: " <> path)
-  Ok(conn)
+  case
+    string.starts_with(url_lower, "postgres://")
+    || string.starts_with(url_lower, "postgresql://")
+  {
+    True -> PostgreSQL
+    False -> SQLite
+  }
 }

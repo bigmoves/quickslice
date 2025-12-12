@@ -3,4 +3,5 @@
 /build
 erl_crash.dump
 *.db*
+!.dbmate.yml
 .env

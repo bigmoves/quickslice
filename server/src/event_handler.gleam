@@ -1,5 +1,6 @@
 import actor_validator
 import backfill
+import database/executor.{type Executor}
 import database/repositories/actors
 import database/repositories/jetstream_activity
 import database/repositories/lexicons
@@ -17,7 +18,6 @@ import honk
 import honk/errors
 import logging
 import pubsub
-import sqlight
 import stats_pubsub
 
 /// Convert a Dynamic value (Erlang term) to JSON string
@@ -92,7 +92,7 @@ fn serialize_commit_event(
 
 /// Handle a commit event (create, update, or delete)
 pub fn handle_commit_event(
-  db: sqlight.Connection,
+  db: Executor,
   did: String,
   time_us: Int,
   commit: goose.CommitData,
@@ -653,10 +653,7 @@ pub fn handle_commit_event(
 }
 
 /// Handle an identity event (update actor handle)
-pub fn handle_identity_event(
-  db: sqlight.Connection,
-  identity: goose.IdentityData,
-) -> Nil {
+pub fn handle_identity_event(db: Executor, identity: goose.IdentityData) -> Nil {
   case actors.upsert(db, identity.did, identity.handle) {
     Ok(_) -> {
       logging.log(
@@ -681,10 +678,7 @@ pub fn handle_identity_event(
 }
 
 /// Handle an account event
-pub fn handle_account_event(
-  _db: sqlight.Connection,
-  account: goose.AccountData,
-) -> Nil {
+pub fn handle_account_event(_db: Executor, account: goose.AccountData) -> Nil {
   // For now, just log account events - we could extend this in the future
   let status = case account.active {
     True -> "active"

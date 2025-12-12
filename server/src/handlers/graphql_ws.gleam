@@ -1,6 +1,7 @@
 /// GraphQL WebSocket Handler
 ///
 /// Handles WebSocket connections for GraphQL subscriptions using the graphql-ws protocol
+import database/executor.{type Executor}
 import database/repositories/actors
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
@@ -19,8 +20,7 @@ import mist.{
   type WebsocketMessage,
 }
 import pubsub
-import sqlight
-import swell/executor
+import swell/executor as swell_executor
 import swell/parser
 import swell/schema
 import swell/value
@@ -45,7 +45,7 @@ fn get_global_subscription_count() -> Int
 /// Similar to record_to_graphql_value but for subscription events
 fn event_to_graphql_value(
   event: pubsub.RecordEvent,
-  db: sqlight.Connection,
+  db: Executor,
 ) -> value.Value {
   // Parse the record JSON value
   let value_object = case lexicon_schema.parse_json_to_value(event.value) {
@@ -78,7 +78,7 @@ fn execute_subscription_query(
   variables: Dict(String, value.Value),
   graphql_schema: schema.Schema,
   event: pubsub.RecordEvent,
-  db: sqlight.Connection,
+  db: Executor,
 ) -> Result(String, String) {
   // Convert event to GraphQL value
   let event_value = event_to_graphql_value(event, db)
@@ -88,7 +88,7 @@ fn execute_subscription_query(
 
   // Execute the subscription query directly
   // The executor now natively supports subscription operations
-  use response <- result.try(executor.execute(query, graphql_schema, ctx))
+  use response <- result.try(swell_executor.execute(query, graphql_schema, ctx))
 
   // Format the response as JSON
   Ok(lexicon_schema.format_response(response))
@@ -166,7 +166,7 @@ pub type SubscriptionInfo {
 /// State for WebSocket connection
 pub type State {
   State(
-    db: sqlight.Connection,
+    db: Executor,
     // Map of subscription ID -> subscription info
     subscriptions: Dict(String, SubscriptionInfo),
     // The WebSocket connection for sending frames
@@ -181,7 +181,7 @@ pub type State {
 /// Handle WebSocket connection request (called from Mist handler)
 pub fn handle_websocket(
   req: Request(Connection),
-  db: sqlight.Connection,
+  db: Executor,
   did_cache: Subject(did_cache.Message),
   signing_key: Option(String),
   atp_client_id: String,
@@ -492,7 +492,7 @@ fn process_event(
   subscription_field: String,
   query: String,
   variables: Dict(String, value.Value),
-  db: sqlight.Connection,
+  db: Executor,
   graphql_schema: schema.Schema,
 ) -> Nil {
   case event_matches_subscription(event, subscription_field) {
@@ -530,7 +530,7 @@ fn event_loop(
   subscription_field: String,
   query: String,
   variables: Dict(String, value.Value),
-  db: sqlight.Connection,
+  db: Executor,
   graphql_schema: schema.Schema,
 ) -> Nil {
   // Wait for next event
@@ -568,7 +568,7 @@ fn subscription_listener(
   query: String,
   subscription_field: String,
   variables: Dict(String, value.Value),
-  db: sqlight.Connection,
+  db: Executor,
   graphql_schema: schema.Schema,
 ) -> Nil {
   // Subscribe to PubSub from this process

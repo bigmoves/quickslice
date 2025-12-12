@@ -2,21 +2,21 @@
 ///
 /// Tests that SQL ORDER BY clauses are generated correctly and
 /// that sorting works properly with the database
+import database/executor.{type Executor}
 import database/repositories/records
-import database/schema/tables
 import database/types
 import gleam/list
 import gleam/option.{None, Some}
 import gleeunit/should
-import sqlight
+import test_helpers
 
 // Helper to create test database with records
-fn create_test_db_with_records() -> sqlight.Connection {
+fn create_test_db_with_records() -> Executor {
   // Create in-memory database
-  let assert Ok(conn) = sqlight.open(":memory:")
+  let assert Ok(exec) = test_helpers.create_test_db()
 
   // Create schema using the database module
-  let assert Ok(_) = tables.create_record_table(conn)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   // Insert test records with different dates
   let records = [
@@ -70,20 +70,20 @@ fn create_test_db_with_records() -> sqlight.Connection {
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES ('" <> uri <> "', '" <> cid <> "', '" <> did <> "', '" <> collection <> "', '" <> json <> "', '" <> indexed_at <> "')"
 
-    let assert Ok(_) = sqlight.exec(insert_sql, conn)
+    let assert Ok(_) = executor.exec(exec, insert_sql, [])
     Nil
   })
 
-  conn
+  exec
 }
 
 // Test: Sort by indexedAt DESC (default)
 pub fn test_sort_by_indexed_at_desc() {
-  let conn = create_test_db_with_records()
+  let exec = create_test_db_with_records()
 
   let result =
     records.get_by_collection_paginated(
-      conn,
+      exec,
       "xyz.statusphere.status",
       Some(10),
       None,
@@ -116,11 +116,11 @@ pub fn test_sort_by_indexed_at_desc() {
 
 // Test: Sort by indexedAt ASC
 pub fn test_sort_by_indexed_at_asc() {
-  let conn = create_test_db_with_records()
+  let exec = create_test_db_with_records()
 
   let result =
     records.get_by_collection_paginated(
-      conn,
+      exec,
       "xyz.statusphere.status",
       Some(10),
       None,
@@ -153,11 +153,11 @@ pub fn test_sort_by_indexed_at_asc() {
 
 // Test: Sort by JSON field (createdAt) DESC with NULLS LAST
 pub fn test_sort_by_json_field_desc_nulls_last() {
-  let conn = create_test_db_with_records()
+  let exec = create_test_db_with_records()
 
   let result =
     records.get_by_collection_paginated(
-      conn,
+      exec,
       "xyz.statusphere.status",
       Some(10),
       None,
@@ -194,11 +194,11 @@ pub fn test_sort_by_json_field_desc_nulls_last() {
 
 // Test: Sort by JSON field (createdAt) ASC with NULLS LAST
 pub fn test_sort_by_json_field_asc_nulls_last() {
-  let conn = create_test_db_with_records()
+  let exec = create_test_db_with_records()
 
   let result =
     records.get_by_collection_paginated(
-      conn,
+      exec,
       "xyz.statusphere.status",
       Some(10),
       None,
@@ -233,12 +233,12 @@ pub fn test_sort_by_json_field_asc_nulls_last() {
 
 // Test: Pagination with sorting (first N records)
 pub fn test_pagination_with_sorting() {
-  let conn = create_test_db_with_records()
+  let exec = create_test_db_with_records()
 
   // Get first 2 records sorted by createdAt DESC
   let result =
     records.get_by_collection_paginated(
-      conn,
+      exec,
       "xyz.statusphere.status",
       Some(2),
       None,
@@ -270,11 +270,11 @@ pub fn test_pagination_with_sorting() {
 
 // Test: Invalid date strings are treated as NULL
 pub fn test_invalid_dates_treated_as_null() {
-  let conn = create_test_db_with_records()
+  let exec = create_test_db_with_records()
 
   let result =
     records.get_by_collection_paginated(
-      conn,
+      exec,
       "xyz.statusphere.status",
       Some(10),
       None,
@@ -311,12 +311,12 @@ pub fn test_invalid_dates_treated_as_null() {
 
 // Test: Cursor-based pagination works correctly
 pub fn test_cursor_pagination() {
-  let conn = create_test_db_with_records()
+  let exec = create_test_db_with_records()
 
   // Get first page of 2 records
   let first_page =
     records.get_by_collection_paginated(
-      conn,
+      exec,
       "xyz.statusphere.status",
       Some(2),
       None,
@@ -342,7 +342,7 @@ pub fn test_cursor_pagination() {
           // Now get second page using the cursor
           let second_page =
             records.get_by_collection_paginated(
-              conn,
+              exec,
               "xyz.statusphere.status",
               Some(2),
               Some(end_cursor),
@@ -386,12 +386,12 @@ pub fn test_cursor_pagination() {
 
 // Test: Cursor pagination with no next page
 pub fn test_cursor_pagination_last_page() {
-  let conn = create_test_db_with_records()
+  let exec = create_test_db_with_records()
 
   // Get first 4 records, leaving only 1
   let first_page =
     records.get_by_collection_paginated(
-      conn,
+      exec,
       "xyz.statusphere.status",
       Some(4),
       None,
@@ -408,7 +408,7 @@ pub fn test_cursor_pagination_last_page() {
       // Get last page
       let last_page =
         records.get_by_collection_paginated(
-          conn,
+          exec,
           "xyz.statusphere.status",
           Some(2),
           Some(end_cursor),

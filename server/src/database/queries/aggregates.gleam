@@ -1,3 +1,4 @@
+import database/executor.{type DbError, type Dialect, type Executor, Text}
 import database/queries/where_clause
 import database/types.{
   type DateInterval, type GroupByField, Day, Hour, Month, SimpleField,
@@ -11,28 +12,29 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import lexicon_graphql/output/aggregate
-import sqlight
 
 // ===== Aggregation Support =====
 
 /// Get aggregated records grouped by specified fields
 pub fn get_aggregated_records(
-  conn: sqlight.Connection,
+  exec: Executor,
   collection: String,
   group_by: List(GroupByField),
   where: Option(where_clause.WhereClause),
   order_by_count_desc: Bool,
   limit: Int,
-) -> Result(List(aggregate.AggregateResult), sqlight.Error) {
+) -> Result(List(aggregate.AggregateResult), DbError) {
+  let dialect = executor.dialect(exec)
+
   // Build SELECT clause with grouped fields
   let select_parts =
     group_by
     |> list.index_map(fn(field, index) {
       let field_name = "field_" <> int.to_string(index)
       case field {
-        SimpleField(f) -> build_field_select(f, field_name)
+        SimpleField(f) -> build_field_select(dialect, f, field_name)
         TruncatedField(f, interval) ->
-          build_date_truncate_select(f, interval, field_name)
+          build_date_truncate_select(dialect, f, interval, field_name)
       }
     })
     |> list.append(["COUNT(*) as count"])
@@ -56,9 +58,13 @@ pub fn get_aggregated_records(
     False -> "record"
   }
 
-  // Build WHERE clause parts - start with collection filter
-  let mut_where_parts = ["record.collection = ?"]
-  let mut_bind_values = [sqlight.text(collection)]
+  // Build WHERE clause parts - start with collection filter (dialect-aware placeholder)
+  let collection_placeholder = case executor.dialect(exec) {
+    executor.SQLite -> "?"
+    executor.PostgreSQL -> "$1"
+  }
+  let mut_where_parts = ["record.collection = " <> collection_placeholder]
+  let mut_bind_values = [Text(collection)]
 
   // Add where clause conditions if provided
   // Note: Always use table prefix (True) because the FROM clause uses "record" as the table name
@@ -68,7 +74,7 @@ pub fn get_aggregated_records(
         True -> #(mut_where_parts, mut_bind_values)
         False -> {
           let #(where_sql, where_params) =
-            where_clause.build_where_sql(wc, True)
+            where_clause.build_where_sql(exec, wc, True)
           let new_where = list.append(mut_where_parts, [where_sql])
           let new_binds = list.append(mut_bind_values, where_params)
           #(new_where, new_binds)
@@ -100,7 +106,7 @@ pub fn get_aggregated_records(
   let decoder = decode.list(decode.dynamic)
 
   // Execute query and map results
-  sqlight.query(sql, on: conn, with: bind_values, expecting: decoder)
+  executor.query(exec, sql, bind_values, decoder)
   |> result.map(fn(rows) {
     rows
     |> list.map(fn(row_values) {
@@ -127,29 +133,64 @@ pub fn get_aggregated_records(
 }
 
 /// Build SELECT expression for a field (table column or JSON field)
-fn build_field_select(field: String, alias: String) -> String {
+fn build_field_select(dialect: Dialect, field: String, alias: String) -> String {
   case is_table_column_for_aggregate(field) {
     True -> "record." <> field <> " as " <> alias
-    False -> "json_extract(record.json, '$." <> field <> "') as " <> alias
+    False -> {
+      // Use dialect-specific JSON extraction
+      case dialect {
+        executor.SQLite ->
+          "json_extract(record.json, '$." <> field <> "') as " <> alias
+        executor.PostgreSQL -> "record.json->>'" <> field <> "' as " <> alias
+      }
+    }
   }
 }
 
 /// Build SELECT expression for date truncation
 fn build_date_truncate_select(
+  dialect: Dialect,
   field: String,
   interval: DateInterval,
   alias: String,
 ) -> String {
   let field_ref = case is_table_column_for_aggregate(field) {
     True -> "record." <> field
-    False -> "json_extract(record.json, '$." <> field <> "')"
+    False -> {
+      case dialect {
+        executor.SQLite -> "json_extract(record.json, '$." <> field <> "')"
+        executor.PostgreSQL -> "record.json->>'" <> field <> "'"
+      }
+    }
   }
 
-  case interval {
-    Hour -> "strftime('%Y-%m-%d %H:00:00', " <> field_ref <> ") as " <> alias
-    Day -> "strftime('%Y-%m-%d', " <> field_ref <> ") as " <> alias
-    Week -> "strftime('%Y-W%W', " <> field_ref <> ") as " <> alias
-    Month -> "strftime('%Y-%m', " <> field_ref <> ") as " <> alias
+  // Use dialect-specific date truncation
+  case dialect {
+    executor.SQLite ->
+      case interval {
+        Hour ->
+          "strftime('%Y-%m-%d %H:00:00', " <> field_ref <> ") as " <> alias
+        Day -> "strftime('%Y-%m-%d', " <> field_ref <> ") as " <> alias
+        Week -> "strftime('%Y-W%W', " <> field_ref <> ") as " <> alias
+        Month -> "strftime('%Y-%m', " <> field_ref <> ") as " <> alias
+      }
+    executor.PostgreSQL ->
+      case interval {
+        Hour ->
+          "TO_CHAR(("
+          <> field_ref
+          <> ")::timestamp, 'YYYY-MM-DD HH24:00:00') as "
+          <> alias
+        Day ->
+          "TO_CHAR((" <> field_ref <> ")::timestamp, 'YYYY-MM-DD') as " <> alias
+        Week ->
+          "TO_CHAR(("
+          <> field_ref
+          <> ")::timestamp, 'YYYY-\"W\"IW') as "
+          <> alias
+        Month ->
+          "TO_CHAR((" <> field_ref <> ")::timestamp, 'YYYY-MM') as " <> alias
+      }
   }
 }
 

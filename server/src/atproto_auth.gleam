@@ -1,3 +1,4 @@
+import database/executor.{type Executor}
 import database/repositories/oauth_access_tokens
 import database/repositories/oauth_atp_sessions
 import gleam/erlang/process.{type Subject}
@@ -8,7 +9,6 @@ import lib/oauth/atproto/bridge
 import lib/oauth/atproto/did_resolver
 import lib/oauth/did_cache
 import lib/oauth/token_generator
-import sqlight
 
 /// UserInfo response from OAuth provider
 pub type UserInfo {
@@ -79,7 +79,7 @@ fn list_find(
 
 /// Verify token from local database and return user info
 pub fn verify_token(
-  conn: sqlight.Connection,
+  conn: Executor,
   token: String,
 ) -> Result(UserInfo, AuthError) {
   // Look up token in database
@@ -111,7 +111,7 @@ pub fn verify_token(
 
 /// Get ATP session from local database, refreshing if needed
 pub fn get_atp_session(
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: Subject(did_cache.Message),
   token: String,
   signing_key: Option(String),

@@ -1,9 +1,9 @@
+import database/executor.{type Executor}
 import database/repositories/jetstream_activity
 import gleam/erlang/process
 import gleam/otp/actor
 import gleam/string
 import logging
-import sqlight
 
 /// Message types for the cleanup actor
 pub type Message {
@@ -12,14 +12,12 @@ pub type Message {
 }
 
 type State {
-  State(db: sqlight.Connection, self: process.Subject(Message))
+  State(db: Executor, self: process.Subject(Message))
 }
 
 /// Start the cleanup scheduler
 /// Returns a Subject that can be used to send messages to the scheduler
-pub fn start(
-  db: sqlight.Connection,
-) -> Result(process.Subject(Message), actor.StartError) {
+pub fn start(db: Executor) -> Result(process.Subject(Message), actor.StartError) {
   let initial_state = State(db: db, self: process.new_subject())
 
   let result =

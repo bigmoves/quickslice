@@ -1,6 +1,7 @@
 /// ATP Session API endpoint
 /// GET /api/atp/sessions/:session_id
 /// Returns ATP session data for authenticated clients
+import database/executor.{type Executor}
 import database/repositories/oauth_access_tokens
 import database/repositories/oauth_atp_sessions
 import gleam/http/request
@@ -8,13 +9,12 @@ import gleam/json
 import gleam/option.{None, Some}
 import gleam/string
 import lib/oauth/token_generator
-import sqlight
 import wisp
 
 /// Handle GET /api/atp/sessions/:session_id
 pub fn handle(
   req: wisp.Request,
-  conn: sqlight.Connection,
+  conn: Executor,
   session_id: String,
 ) -> wisp.Response {
   // Extract Bearer token from Authorization header

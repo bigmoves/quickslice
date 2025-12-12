@@ -1,12 +1,12 @@
+import database/executor.{type Executor}
 import database/repositories/lexicons
 import gleam/dynamic/decode
 import gleam/json
 import gleam/list
 import gleam/result
-import sqlight
 
 /// List all lexicons with summary info
-pub fn list_lexicons(db: sqlight.Connection) -> Result(json.Json, String) {
+pub fn list_lexicons(db: Executor) -> Result(json.Json, String) {
   use lexicon_list <- result.try(
     lexicons.get_all(db)
     |> result.map_error(fn(_) { "Failed to fetch lexicons" }),
@@ -28,10 +28,7 @@ pub fn list_lexicons(db: sqlight.Connection) -> Result(json.Json, String) {
 }
 
 /// Get a single lexicon by NSID
-pub fn get_lexicon(
-  db: sqlight.Connection,
-  nsid: String,
-) -> Result(json.Json, String) {
+pub fn get_lexicon(db: Executor, nsid: String) -> Result(json.Json, String) {
   use lexicon_list <- result.try(
     lexicons.get(db, nsid)
     |> result.map_error(fn(_) { "Failed to fetch lexicon" }),

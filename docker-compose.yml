@@ -5,9 +5,15 @@ services:
     image: ghcr.io/bigmoves/quickslice:latest
     ports:
       - "8080:8080"
+    volumes:
+      - quickslice-data:/data
     environment:
       - HOST=0.0.0.0
       - PORT=8080
+      # Database configuration - supports SQLite or PostgreSQL
+      # SQLite (default): sqlite:/data/quickslice.db
+      # PostgreSQL: postgres://user:pass@postgres:5432/quickslice
+      - DATABASE_URL=sqlite:/data/quickslice.db
       - JETSTREAM_URL=wss://jetstream2.us-west.bsky.network/subscribe
       # NOTE: Do NOT use in production - generate your own secure key
       - SECRET_KEY_BASE=Xdb/9oovpIzYRKPjfTm45QSWYyYJi35GY3n4475SBVmcyxHS9tMoFJcOwPGfA0xW
@@ -22,3 +28,21 @@ services:
       - BACKFILL_PDS_CONCURRENCY=6
       - BACKFILL_MAX_HTTP_CONCURRENT=100
     restart: on-failure:5
+
+  # Optional: PostgreSQL database service
+  # Uncomment to use PostgreSQL instead of SQLite
+  # Then set DATABASE_URL=postgres://quickslice:quickslice@postgres:5432/quickslice
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=quickslice
+      - POSTGRES_PASSWORD=quickslice
+      - POSTGRES_DB=quickslice
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  quickslice-data:
+  postgres-data:

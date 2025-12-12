@@ -1,83 +1,56 @@
 /// OAuth DPoP nonce repository operations
+import database/executor.{type DbError, type Executor, Int as DbInt, Text}
 import database/types.{type OAuthDpopNonce, OAuthDpopNonce}
 import gleam/dynamic/decode
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
-import sqlight
 
 /// Insert a new DPoP nonce
-pub fn insert(
-  conn: sqlight.Connection,
-  nonce: OAuthDpopNonce,
-) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
-    INSERT INTO oauth_dpop_nonce (nonce, expires_at)
-    VALUES (?, ?)
-  "
+pub fn insert(exec: Executor, nonce: OAuthDpopNonce) -> Result(Nil, DbError) {
+  let p1 = executor.placeholder(exec, 1)
+  let p2 = executor.placeholder(exec, 2)
 
-  let params = [sqlight.text(nonce.nonce), sqlight.int(nonce.expires_at)]
+  let sql = "INSERT INTO oauth_dpop_nonce (nonce, expires_at)
+     VALUES (" <> p1 <> ", " <> p2 <> ")"
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: params,
-    expecting: decode.dynamic,
-  ))
-  Ok(Nil)
+  executor.exec(exec, sql, [Text(nonce.nonce), DbInt(nonce.expires_at)])
 }
 
 /// Get a DPoP nonce by value
 pub fn get(
-  conn: sqlight.Connection,
+  exec: Executor,
   nonce_value: String,
-) -> Result(Option(OAuthDpopNonce), sqlight.Error) {
-  let sql = "SELECT nonce, expires_at FROM oauth_dpop_nonce WHERE nonce = ?"
+) -> Result(Option(OAuthDpopNonce), DbError) {
+  let sql =
+    "SELECT nonce, expires_at FROM oauth_dpop_nonce WHERE nonce = "
+    <> executor.placeholder(exec, 1)
 
-  use rows <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(nonce_value)],
-    expecting: decoder(),
-  ))
-
-  case list.first(rows) {
-    Ok(nonce) -> Ok(Some(nonce))
-    Error(_) -> Ok(None)
+  case executor.query(exec, sql, [Text(nonce_value)], decoder()) {
+    Ok(rows) ->
+      case list.first(rows) {
+        Ok(nonce) -> Ok(Some(nonce))
+        Error(_) -> Ok(None)
+      }
+    Error(err) -> Error(err)
   }
 }
 
 /// Delete a DPoP nonce
-pub fn delete(
-  conn: sqlight.Connection,
-  nonce_value: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql = "DELETE FROM oauth_dpop_nonce WHERE nonce = ?"
+pub fn delete(exec: Executor, nonce_value: String) -> Result(Nil, DbError) {
+  let sql =
+    "DELETE FROM oauth_dpop_nonce WHERE nonce = "
+    <> executor.placeholder(exec, 1)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(nonce_value)],
-    expecting: decode.dynamic,
-  ))
-  Ok(Nil)
+  executor.exec(exec, sql, [Text(nonce_value)])
 }
 
 /// Delete expired DPoP nonces
-pub fn delete_expired(
-  conn: sqlight.Connection,
-  now: Int,
-) -> Result(Int, sqlight.Error) {
-  let sql = "DELETE FROM oauth_dpop_nonce WHERE expires_at <= ?"
+pub fn delete_expired(exec: Executor, now: Int) -> Result(Nil, DbError) {
+  let sql =
+    "DELETE FROM oauth_dpop_nonce WHERE expires_at <= "
+    <> executor.placeholder(exec, 1)
 
-  use rows <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.int(now)],
-    expecting: decode.dynamic,
-  ))
-  Ok(list.length(rows))
+  executor.exec(exec, sql, [DbInt(now)])
 }
 
 /// Decode DPoP nonce from database row

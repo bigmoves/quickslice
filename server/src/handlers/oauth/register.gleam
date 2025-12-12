@@ -1,5 +1,6 @@
 /// Client registration endpoint
 /// POST /oauth/register
+import database/executor.{type Executor}
 import database/repositories/oauth_clients
 import database/types.{
   type GrantType, AuthNone, AuthorizationCode, ClientSecretBasic,
@@ -16,7 +17,6 @@ import gleam/result
 import lib/oauth/scopes/validator as scope_validator
 import lib/oauth/types/error
 import lib/oauth/validator
-import sqlight
 import wisp
 
 /// Registration request parsed from JSON
@@ -48,7 +48,7 @@ pub type RegistrationResponse {
 }
 
 /// Handle POST /oauth/register
-pub fn handle(req: wisp.Request, conn: sqlight.Connection) -> wisp.Response {
+pub fn handle(req: wisp.Request, conn: Executor) -> wisp.Response {
   use body <- wisp.require_string_body(req)
 
   case parse_and_register(body, conn) {
@@ -76,7 +76,7 @@ pub fn handle(req: wisp.Request, conn: sqlight.Connection) -> wisp.Response {
 
 fn parse_and_register(
   body: String,
-  conn: sqlight.Connection,
+  conn: Executor,
 ) -> Result(RegistrationResponse, #(Int, String, String)) {
   // Parse JSON request
   use req <- result.try(

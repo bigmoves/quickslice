@@ -3,6 +3,7 @@
 /// Public API for building and executing the lexicon-driven GraphQL schema.
 /// External code should import this module for all lexicon GraphQL operations.
 import backfill
+import database/executor.{type Executor}
 import database/repositories/config as config_repo
 import database/repositories/lexicons
 import gleam/dict
@@ -19,8 +20,7 @@ import graphql/lexicon/mutations
 import lexicon_graphql
 import lexicon_graphql/schema/database
 import lib/oauth/did_cache
-import sqlight
-import swell/executor
+import swell/executor as swell_executor
 import swell/schema
 import swell/value
 
@@ -29,7 +29,7 @@ import swell/value
 /// This is exposed for WebSocket subscriptions to build the schema once
 /// and reuse it for multiple subscription executions.
 pub fn build_schema_from_db(
-  db: sqlight.Connection,
+  db: Executor,
   did_cache: Subject(did_cache.Message),
   signing_key: option.Option(String),
   atp_client_id: String,
@@ -140,7 +140,7 @@ pub fn build_schema_from_db(
 /// This fetches lexicons, builds a schema with database resolvers,
 /// executes the query, and returns the result as JSON.
 pub fn execute_query_with_db(
-  db: sqlight.Connection,
+  db: Executor,
   query_string: String,
   variables_json_str: String,
   auth_token: Result(String, Nil),
@@ -180,15 +180,19 @@ pub fn execute_query_with_db(
   let ctx = schema.context_with_variables(ctx_data, variables_dict)
 
   // Execute the query
-  use response <- result.try(executor.execute(query_string, graphql_schema, ctx))
+  use response <- result.try(swell_executor.execute(
+    query_string,
+    graphql_schema,
+    ctx,
+  ))
 
   // Format the response as JSON
   Ok(format_response(response))
 }
 
-/// Format an executor.Response as JSON string
+/// Format a swell_executor.Response as JSON string
 /// Per GraphQL spec, only include "errors" field when there are actual errors
-pub fn format_response(response: executor.Response) -> String {
+pub fn format_response(response: swell_executor.Response) -> String {
   let data_json = value_to_json(response.data)
 
   case response.errors {

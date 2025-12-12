@@ -1,3 +1,4 @@
+import database/executor.{type Executor}
 import gleam/bit_array
 import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
@@ -12,13 +13,12 @@ import lib/mcp/tools/graphql as graphql_tools
 import lib/mcp/tools/lexicons as lexicon_tools
 import lib/mcp/tools/oauth as oauth_tools
 import lib/oauth/did_cache
-import sqlight
 import wisp
 
 /// Context for MCP requests
 pub type McpContext {
   McpContext(
-    db: sqlight.Connection,
+    db: Executor,
     external_base_url: String,
     did_cache: Subject(did_cache.Message),
     signing_key: Option(String),

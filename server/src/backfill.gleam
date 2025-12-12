@@ -1,4 +1,5 @@
 import atproto_car
+import database/executor.{type Executor}
 import database/repositories/actors
 import database/repositories/config as config_repo
 import database/repositories/lexicons
@@ -26,7 +27,6 @@ import honk
 import honk/errors
 import lib/oauth/did_cache
 import logging
-import sqlight
 
 /// Opaque type for monotonic time
 pub type MonotonicTime
@@ -58,7 +58,7 @@ pub type BackfillConfig {
 }
 
 /// Creates a default backfill configuration
-pub fn default_config(db: sqlight.Connection) -> BackfillConfig {
+pub fn default_config(db: Executor) -> BackfillConfig {
   // Get PLC directory URL from database config
   let plc_url = config_repo.get_plc_directory_url(db)
 
@@ -123,7 +123,7 @@ pub fn default_config(db: sqlight.Connection) -> BackfillConfig {
 /// Creates a backfill configuration with a DID cache
 pub fn config_with_cache(
   cache: Subject(did_cache.Message),
-  db: sqlight.Connection,
+  db: Executor,
 ) -> BackfillConfig {
   let config = default_config(db)
   BackfillConfig(..config, did_cache: Some(cache))
@@ -262,9 +262,7 @@ fn validate_record(
 
 /// Load lexicons and build validation context
 /// Returns None on error (validation will be skipped)
-fn load_validation_context(
-  conn: sqlight.Connection,
-) -> Option(honk.ValidationContext) {
+fn load_validation_context(conn: Executor) -> Option(honk.ValidationContext) {
   case lexicons.get_all(conn) {
     Error(_) -> {
       logging.log(
@@ -303,7 +301,7 @@ fn backfill_repo_car(
   did: String,
   pds_url: String,
   collections: List(String),
-  conn: sqlight.Connection,
+  conn: Executor,
 ) -> Int {
   // Load validation context - this path is used for single-repo backfills (e.g., new actor sync)
   let validation_ctx = load_validation_context(conn)
@@ -321,7 +319,7 @@ fn backfill_repo_car_with_context(
   did: String,
   pds_url: String,
   collections: List(String),
-  conn: sqlight.Connection,
+  conn: Executor,
   validation_ctx: Option(honk.ValidationContext),
 ) -> Int {
   let total_start = monotonic_now()
@@ -434,9 +432,7 @@ pub fn nsid_matches_domain_authority(
 
 /// Get local and external collection IDs from configured lexicons
 /// Returns #(local_collection_ids, external_collection_ids)
-pub fn get_collection_ids(
-  conn: sqlight.Connection,
-) -> #(List(String), List(String)) {
+pub fn get_collection_ids(conn: Executor) -> #(List(String), List(String)) {
   let domain_authority = case config_repo.get(conn, "domain_authority") {
     Ok(authority) -> authority
     Error(_) -> ""
@@ -717,7 +713,7 @@ fn fetch_repo_car_worker(
   repo: String,
   pds: String,
   collections: List(String),
-  conn: sqlight.Connection,
+  conn: Executor,
   validation_ctx: Option(honk.ValidationContext),
   reply_to: Subject(Int),
 ) -> Nil {
@@ -731,7 +727,7 @@ fn rescue_car_backfill(
   repo: String,
   pds: String,
   collections: List(String),
-  conn: sqlight.Connection,
+  conn: Executor,
   validation_ctx: Option(honk.ValidationContext),
 ) -> Int {
   case
@@ -769,7 +765,7 @@ fn pds_worker_car(
   repos: List(String),
   collections: List(String),
   max_concurrent: Int,
-  conn: sqlight.Connection,
+  conn: Executor,
   validation_ctx: Option(honk.ValidationContext),
   timeout_ms: Int,
   reply_to: Subject(Int),
@@ -834,7 +830,7 @@ fn sliding_window_car(
   in_flight: Int,
   pds_url: String,
   collections: List(String),
-  conn: sqlight.Connection,
+  conn: Executor,
   validation_ctx: Option(honk.ValidationContext),
   timeout_ms: Int,
   total: Int,
@@ -919,7 +915,7 @@ fn sliding_window_pds(
   in_flight: Int,
   collections: List(String),
   max_concurrent_per_pds: Int,
-  conn: sqlight.Connection,
+  conn: Executor,
   validation_ctx: Option(honk.ValidationContext),
   timeout_ms: Int,
   total: Int,
@@ -1029,7 +1025,7 @@ pub fn get_records_for_repos_car(
   collections: List(String),
   atp_data: List(AtprotoData),
   config: BackfillConfig,
-  conn: sqlight.Connection,
+  conn: Executor,
 ) -> Int {
   // Build validation context ONCE for all repos
   let validation_ctx = load_validation_context(conn)
@@ -1122,7 +1118,7 @@ pub fn get_records_for_repos_car(
 }
 
 /// Index records into the database using batch inserts
-pub fn index_records(records: List(Record), conn: sqlight.Connection) -> Nil {
+pub fn index_records(records: List(Record), conn: Executor) -> Nil {
   case records.batch_insert(conn, records) {
     Ok(_) -> Nil
     Error(err) -> {
@@ -1135,10 +1131,7 @@ pub fn index_records(records: List(Record), conn: sqlight.Connection) -> Nil {
 }
 
 /// Index actors into the database using batch upsert for efficiency
-pub fn index_actors(
-  atp_data: List(AtprotoData),
-  conn: sqlight.Connection,
-) -> Nil {
+pub fn index_actors(atp_data: List(AtprotoData), conn: Executor) -> Nil {
   // Convert AtprotoData to tuples for batch upsert
   let actor_tuples =
     atp_data
@@ -1158,7 +1151,7 @@ pub fn index_actors(
 /// Backfill all collections (primary and external) for a newly discovered actor
 /// This is called when a new actor is created via Jetstream or GraphQL mutations
 pub fn backfill_collections_for_actor(
-  db: sqlight.Connection,
+  db: Executor,
   did: String,
   collection_ids: List(String),
   external_collection_ids: List(String),
@@ -1211,7 +1204,7 @@ pub fn backfill_collections_for_actor(
 /// Fetch repos that have records for a specific collection from the relay with pagination
 fn fetch_repos_for_collection(
   collection: String,
-  db: sqlight.Connection,
+  db: Executor,
 ) -> Result(List(String), String) {
   fetch_repos_paginated(collection, None, [], db)
 }
@@ -1221,7 +1214,7 @@ fn fetch_repos_paginated(
   collection: String,
   cursor: Option(String),
   acc: List(String),
-  db: sqlight.Connection,
+  db: Executor,
 ) -> Result(List(String), String) {
   // Get relay URL from database config
   let relay_url = config_repo.get_relay_url(db)
@@ -1325,7 +1318,7 @@ pub fn backfill_collections(
   collections: List(String),
   external_collections: List(String),
   config: BackfillConfig,
-  conn: sqlight.Connection,
+  conn: Executor,
 ) -> Nil {
   logging.log(logging.Info, "")
   logging.log(logging.Info, "[backfill] Starting backfill operation")
@@ -1357,7 +1350,7 @@ fn run_backfill(
   collections: List(String),
   external_collections: List(String),
   config: BackfillConfig,
-  conn: sqlight.Connection,
+  conn: Executor,
 ) -> Nil {
   case external_collections {
     [] -> Nil

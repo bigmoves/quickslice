@@ -1,3 +1,4 @@
+import database/executor.{type DbError, type Executor, type Value, Text}
 import database/queries/pagination
 import database/queries/where_clause
 import database/types.{
@@ -11,20 +12,42 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
-import sqlight
+
+// ===== Column Selection Helpers =====
+
+/// Returns the columns to select for Record queries
+/// SQLite: both are TEXT
+fn record_columns(exec: Executor) -> String {
+  case executor.dialect(exec) {
+    executor.SQLite -> "uri, cid, did, collection, json, indexed_at"
+    executor.PostgreSQL ->
+      "uri, cid, did, collection, json::text, indexed_at::text"
+  }
+}
+
+/// Returns the prefixed columns to select for Record queries (for JOINs)
+fn record_columns_prefixed(exec: Executor) -> String {
+  case executor.dialect(exec) {
+    executor.SQLite ->
+      "record.uri, record.cid, record.did, record.collection, record.json, record.indexed_at"
+    executor.PostgreSQL ->
+      "record.uri, record.cid, record.did, record.collection, record.json::text, record.indexed_at::text"
+  }
+}
 
 // ===== Helper Functions =====
 
 /// Gets existing URIs and their CIDs from the database
 /// Returns a Dict mapping URI -> CID for records that exist
 fn get_existing_cids(
-  conn: sqlight.Connection,
+  exec: Executor,
   uris: List(String),
-) -> Result(Dict(String, String), sqlight.Error) {
+) -> Result(Dict(String, String), DbError) {
   case uris {
     [] -> Ok(dict.new())
     _ -> {
-      // Process in batches to avoid SQL parameter limits (max 999 params)
+      // Process in batches to avoid SQL parameter limits
+      // SQLite: max 999, PostgreSQL: max 65535
       let batch_size = 900
       let batches = list.sized_chunk(uris, batch_size)
 
@@ -32,18 +55,13 @@ fn get_existing_cids(
       use accumulated_dict <- result.try(
         list.try_fold(batches, dict.new(), fn(acc_dict, batch) {
           // Build placeholders for SQL IN clause
-          let placeholders =
-            list.map(batch, fn(_) { "?" })
-            |> string.join(", ")
+          let placeholders = executor.placeholders(exec, list.length(batch), 1)
 
-          let sql = "
-            SELECT uri, cid
-            FROM record
-            WHERE uri IN (" <> placeholders <> ")
-          "
+          let sql =
+            "SELECT uri, cid FROM record WHERE uri IN (" <> placeholders <> ")"
 
-          // Convert URIs to sqlight.Value list
-          let params = list.map(batch, sqlight.text)
+          // Convert URIs to Value list
+          let params = list.map(batch, Text)
 
           let decoder = {
             use uri <- decode.field(0, decode.string)
@@ -51,12 +69,7 @@ fn get_existing_cids(
             decode.success(#(uri, cid))
           }
 
-          use results <- result.try(sqlight.query(
-            sql,
-            on: conn,
-            with: params,
-            expecting: decoder,
-          ))
+          use results <- result.try(executor.query(exec, sql, params, decoder))
 
           // Merge with accumulated dictionary
           let batch_dict = dict.from_list(results)
@@ -72,13 +85,13 @@ fn get_existing_cids(
 /// Gets existing CIDs from the database (checks if any CID exists, regardless of URI)
 /// Returns a list of CIDs that exist in the database
 fn get_existing_cids_batch(
-  conn: sqlight.Connection,
+  exec: Executor,
   cids: List(String),
-) -> Result(List(String), sqlight.Error) {
+) -> Result(List(String), DbError) {
   case cids {
     [] -> Ok([])
     _ -> {
-      // Process in batches to avoid SQL parameter limits (max 999 params)
+      // Process in batches to avoid SQL parameter limits
       let batch_size = 900
       let batches = list.sized_chunk(cids, batch_size)
 
@@ -86,26 +99,21 @@ fn get_existing_cids_batch(
       use all_results <- result.try(
         list.try_fold(batches, [], fn(acc_results, batch) {
           // Build placeholders for SQL IN clause
-          let placeholders =
-            list.map(batch, fn(_) { "?" })
-            |> string.join(", ")
+          let placeholders = executor.placeholders(exec, list.length(batch), 1)
 
-          let sql = "
-            SELECT cid
-            FROM record
-            WHERE cid IN (" <> placeholders <> ")
-          "
+          let sql =
+            "SELECT cid FROM record WHERE cid IN (" <> placeholders <> ")"
 
           let cid_decoder = {
             use cid <- decode.field(0, decode.string)
             decode.success(cid)
           }
 
-          use results <- result.try(sqlight.query(
+          use results <- result.try(executor.query(
+            exec,
             sql,
-            on: conn,
-            with: list.map(batch, sqlight.text),
-            expecting: cid_decoder,
+            list.map(batch, Text),
+            cid_decoder,
           ))
 
           // Append to accumulated results
@@ -124,15 +132,15 @@ fn get_existing_cids_batch(
 /// Skips insertion if the CID already exists in the database (for any URI)
 /// Also skips update if the URI exists with the same CID (content unchanged)
 pub fn insert(
-  conn: sqlight.Connection,
+  exec: Executor,
   uri: String,
   cid: String,
   did: String,
   collection: String,
   json: String,
-) -> Result(InsertResult, sqlight.Error) {
+) -> Result(InsertResult, DbError) {
   // Check if this CID already exists in the database
-  use existing_cids <- result.try(get_existing_cids(conn, [uri]))
+  use existing_cids <- result.try(get_existing_cids(exec, [uri]))
 
   case dict.get(existing_cids, uri) {
     // URI exists with same CID - skip update (content unchanged)
@@ -140,28 +148,38 @@ pub fn insert(
     // URI exists with different CID - proceed with update
     // URI doesn't exist - proceed with insert
     _ -> {
-      let sql =
-        "
-        INSERT INTO record (uri, cid, did, collection, json)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(uri) DO UPDATE SET
-          cid = excluded.cid,
-          json = excluded.json,
-          indexed_at = datetime('now')
-      "
+      let p1 = executor.placeholder(exec, 1)
+      let p2 = executor.placeholder(exec, 2)
+      let p3 = executor.placeholder(exec, 3)
+      let p4 = executor.placeholder(exec, 4)
+      let p5 = executor.placeholder(exec, 5)
 
-      use _ <- result.try(sqlight.query(
-        sql,
-        on: conn,
-        with: [
-          sqlight.text(uri),
-          sqlight.text(cid),
-          sqlight.text(did),
-          sqlight.text(collection),
-          sqlight.text(json),
-        ],
-        expecting: decode.string,
-      ))
+      // Use dialect-specific UPSERT syntax
+      let sql = case executor.dialect(exec) {
+        executor.SQLite -> "INSERT INTO record (uri, cid, did, collection, json)
+         VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> ")
+         ON CONFLICT(uri) DO UPDATE SET
+           cid = excluded.cid,
+           json = excluded.json,
+           indexed_at = datetime('now')"
+        executor.PostgreSQL ->
+          "INSERT INTO record (uri, cid, did, collection, json)
+         VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> "::jsonb)
+         ON CONFLICT(uri) DO UPDATE SET
+           cid = EXCLUDED.cid,
+           json = EXCLUDED.json,
+           indexed_at = NOW()"
+      }
+
+      use _ <- result.try(
+        executor.exec(exec, sql, [
+          Text(uri),
+          Text(cid),
+          Text(did),
+          Text(collection),
+          Text(json),
+        ]),
+      )
       Ok(Inserted)
     }
   }
@@ -171,9 +189,9 @@ pub fn insert(
 /// More efficient than individual inserts for large datasets
 /// Filters out records where CID already exists or is unchanged
 pub fn batch_insert(
-  conn: sqlight.Connection,
+  exec: Executor,
   records: List(Record),
-) -> Result(Nil, sqlight.Error) {
+) -> Result(Nil, DbError) {
   case records {
     [] -> Ok(Nil)
     _ -> {
@@ -181,7 +199,7 @@ pub fn batch_insert(
       let uris = list.map(records, fn(record) { record.uri })
 
       // Fetch existing CIDs for these URIs (batched to avoid SQL parameter limits)
-      use existing_cids <- result.try(get_existing_cids(conn, uris))
+      use existing_cids <- result.try(get_existing_cids(exec, uris))
 
       // Get all CIDs that already exist in the database (for any URI)
       // Check in batches to avoid exceeding SQL parameter limits
@@ -190,7 +208,7 @@ pub fn batch_insert(
         |> list.unique()
 
       use existing_cids_in_db <- result.try(get_existing_cids_batch(
-        conn,
+        exec,
         all_incoming_cids,
       ))
 
@@ -225,44 +243,60 @@ pub fn batch_insert(
         [] -> Ok(Nil)
         _ -> {
           // Process records in smaller batches to avoid SQL parameter limits
-          // SQLite has a default limit of 999 parameters
-          // Each record uses 5 parameters, so we can safely do 100 records at a time (500 params)
+          // Each record uses 5 parameters, so we can safely do 100 records at a time
           let batch_size = 100
 
           list.sized_chunk(filtered_records, batch_size)
           |> list.try_each(fn(batch) {
-            // Build the SQL with multiple value sets
+            // Build the SQL with multiple value sets using numbered placeholders
             let value_placeholders =
-              list.repeat("(?, ?, ?, ?, ?)", list.length(batch))
+              list.index_map(batch, fn(_, i) {
+                let base = i * 5
+                "("
+                <> executor.placeholder(exec, base + 1)
+                <> ", "
+                <> executor.placeholder(exec, base + 2)
+                <> ", "
+                <> executor.placeholder(exec, base + 3)
+                <> ", "
+                <> executor.placeholder(exec, base + 4)
+                <> ", "
+                <> executor.placeholder(exec, base + 5)
+                <> ")"
+              })
               |> string.join(", ")
 
-            let sql = "
-              INSERT INTO record (uri, cid, did, collection, json)
-              VALUES " <> value_placeholders <> "
-              ON CONFLICT(uri) DO UPDATE SET
-                cid = excluded.cid,
-                json = excluded.json,
-                indexed_at = datetime('now')
-            "
+            // Use dialect-specific UPSERT syntax
+            let sql = case executor.dialect(exec) {
+              executor.SQLite ->
+                "INSERT INTO record (uri, cid, did, collection, json)
+               VALUES " <> value_placeholders <> "
+               ON CONFLICT(uri) DO UPDATE SET
+                 cid = excluded.cid,
+                 json = excluded.json,
+                 indexed_at = datetime('now')"
+              executor.PostgreSQL ->
+                "INSERT INTO record (uri, cid, did, collection, json)
+               VALUES " <> value_placeholders <> "
+               ON CONFLICT(uri) DO UPDATE SET
+                 cid = EXCLUDED.cid,
+                 json = EXCLUDED.json,
+                 indexed_at = NOW()"
+            }
 
             // Flatten all record parameters into a single list
-            let params =
+            let params: List(Value) =
               list.flat_map(batch, fn(record) {
                 [
-                  sqlight.text(record.uri),
-                  sqlight.text(record.cid),
-                  sqlight.text(record.did),
-                  sqlight.text(record.collection),
-                  sqlight.text(record.json),
+                  Text(record.uri),
+                  Text(record.cid),
+                  Text(record.did),
+                  Text(record.collection),
+                  Text(record.json),
                 ]
               })
 
-            use _ <- result.try(sqlight.query(
-              sql,
-              on: conn,
-              with: params,
-              expecting: decode.string,
-            ))
+            use _ <- result.try(executor.exec(exec, sql, params))
             Ok(Nil)
           })
         }
@@ -272,152 +306,105 @@ pub fn batch_insert(
 }
 
 /// Gets a record by URI
-pub fn get(
-  conn: sqlight.Connection,
-  uri: String,
-) -> Result(List(Record), sqlight.Error) {
+pub fn get(exec: Executor, uri: String) -> Result(List(Record), DbError) {
   let sql =
-    "
-    SELECT uri, cid, did, collection, json, indexed_at
-    FROM record
-    WHERE uri = ?
-  "
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE uri = "
+    <> executor.placeholder(exec, 1)
 
-  let decoder = {
-    use uri <- decode.field(0, decode.string)
-    use cid <- decode.field(1, decode.string)
-    use did <- decode.field(2, decode.string)
-    use collection <- decode.field(3, decode.string)
-    use json <- decode.field(4, decode.string)
-    use indexed_at <- decode.field(5, decode.string)
-    decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
-  }
-
-  sqlight.query(sql, on: conn, with: [sqlight.text(uri)], expecting: decoder)
+  executor.query(exec, sql, [Text(uri)], record_decoder())
 }
 
 /// Gets all records for a specific DID
-pub fn get_by_did(
-  conn: sqlight.Connection,
-  did: String,
-) -> Result(List(Record), sqlight.Error) {
+pub fn get_by_did(exec: Executor, did: String) -> Result(List(Record), DbError) {
   let sql =
-    "
-    SELECT uri, cid, did, collection, json, indexed_at
-    FROM record
-    WHERE did = ?
-    ORDER BY indexed_at DESC
-  "
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE did = "
+    <> executor.placeholder(exec, 1)
+    <> " ORDER BY indexed_at DESC"
 
-  let decoder = {
-    use uri <- decode.field(0, decode.string)
-    use cid <- decode.field(1, decode.string)
-    use did <- decode.field(2, decode.string)
-    use collection <- decode.field(3, decode.string)
-    use json <- decode.field(4, decode.string)
-    use indexed_at <- decode.field(5, decode.string)
-    decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
-  }
-
-  sqlight.query(sql, on: conn, with: [sqlight.text(did)], expecting: decoder)
+  executor.query(exec, sql, [Text(did)], record_decoder())
 }
 
 /// Gets all records for a specific collection
 pub fn get_by_collection(
-  conn: sqlight.Connection,
+  exec: Executor,
   collection: String,
-) -> Result(List(Record), sqlight.Error) {
+) -> Result(List(Record), DbError) {
   let sql =
-    "
-    SELECT uri, cid, did, collection, json, indexed_at
-    FROM record
-    WHERE collection = ?
-    ORDER BY indexed_at DESC
-    LIMIT 100
-  "
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE collection = "
+    <> executor.placeholder(exec, 1)
+    <> " ORDER BY indexed_at DESC LIMIT 100"
 
-  let decoder = {
-    use uri <- decode.field(0, decode.string)
-    use cid <- decode.field(1, decode.string)
-    use did <- decode.field(2, decode.string)
-    use collection <- decode.field(3, decode.string)
-    use json <- decode.field(4, decode.string)
-    use indexed_at <- decode.field(5, decode.string)
-    decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
-  }
-
-  sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(collection)],
-    expecting: decoder,
-  )
+  executor.query(exec, sql, [Text(collection)], record_decoder())
 }
 
 /// Updates an existing record in the database
 pub fn update(
-  conn: sqlight.Connection,
+  exec: Executor,
   uri: String,
   cid: String,
   json: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
-    UPDATE record
-    SET cid = ?, json = ?, indexed_at = datetime('now')
-    WHERE uri = ?
-  "
+) -> Result(Nil, DbError) {
+  let p1 = executor.placeholder(exec, 1)
+  let p2 = executor.placeholder(exec, 2)
+  let p3 = executor.placeholder(exec, 3)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(cid), sqlight.text(json), sqlight.text(uri)],
-    expecting: decode.string,
-  ))
-  Ok(Nil)
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "UPDATE record SET cid = "
+      <> p1
+      <> ", json = "
+      <> p2
+      <> ", indexed_at = datetime('now') WHERE uri = "
+      <> p3
+    executor.PostgreSQL ->
+      "UPDATE record SET cid = "
+      <> p1
+      <> ", json = "
+      <> p2
+      <> "::jsonb, indexed_at = NOW() WHERE uri = "
+      <> p3
+  }
+
+  executor.exec(exec, sql, [Text(cid), Text(json), Text(uri)])
 }
 
 /// Deletes a record by URI (hard delete)
-pub fn delete(
-  conn: sqlight.Connection,
-  uri: String,
-) -> Result(Nil, sqlight.Error) {
-  let sql =
-    "
-    DELETE FROM record
-    WHERE uri = ?
-  "
+pub fn delete(exec: Executor, uri: String) -> Result(Nil, DbError) {
+  let sql = "DELETE FROM record WHERE uri = " <> executor.placeholder(exec, 1)
 
-  use _ <- result.try(sqlight.query(
-    sql,
-    on: conn,
-    with: [sqlight.text(uri)],
-    expecting: decode.string,
-  ))
-  Ok(Nil)
+  executor.exec(exec, sql, [Text(uri)])
 }
 
 /// Deletes all records from the database
-pub fn delete_all(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
-  let sql = "DELETE FROM record"
+pub fn delete_all(exec: Executor) -> Result(Nil, DbError) {
+  executor.exec(exec, "DELETE FROM record", [])
+}
 
-  sqlight.exec(sql, conn)
-  |> result.map(fn(_) { Nil })
+/// Common decoder for Record type
+fn record_decoder() -> decode.Decoder(Record) {
+  use uri <- decode.field(0, decode.string)
+  use cid <- decode.field(1, decode.string)
+  use did <- decode.field(2, decode.string)
+  use collection <- decode.field(3, decode.string)
+  use json <- decode.field(4, decode.string)
+  use indexed_at <- decode.field(5, decode.string)
+  decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
 }
 
 // ===== Statistics Functions =====
 
 /// Gets statistics for all collections (collection name and record count)
 pub fn get_collection_stats(
-  conn: sqlight.Connection,
-) -> Result(List(CollectionStat), sqlight.Error) {
+  exec: Executor,
+) -> Result(List(CollectionStat), DbError) {
   let sql =
-    "
-    SELECT collection, COUNT(*) as count
-    FROM record
-    GROUP BY collection
-    ORDER BY count DESC
-  "
+    "SELECT collection, COUNT(*) as count FROM record GROUP BY collection ORDER BY count DESC"
 
   let decoder = {
     use collection <- decode.field(0, decode.string)
@@ -425,23 +412,19 @@ pub fn get_collection_stats(
     decode.success(CollectionStat(collection:, count:))
   }
 
-  sqlight.query(sql, on: conn, with: [], expecting: decoder)
+  executor.query(exec, sql, [], decoder)
 }
 
 /// Gets the total number of records in the database
-pub fn get_count(conn: sqlight.Connection) -> Result(Int, sqlight.Error) {
-  let sql =
-    "
-    SELECT COUNT(*) as count
-    FROM record
-  "
+pub fn get_count(exec: Executor) -> Result(Int, DbError) {
+  let sql = "SELECT COUNT(*) as count FROM record"
 
   let decoder = {
     use count <- decode.field(0, decode.int)
     decode.success(count)
   }
 
-  case sqlight.query(sql, on: conn, with: [], expecting: decoder) {
+  case executor.query(exec, sql, [], decoder) {
     Ok([count]) -> Ok(count)
     Ok(_) -> Ok(0)
     Error(err) -> Error(err)
@@ -452,10 +435,10 @@ pub fn get_count(conn: sqlight.Connection) -> Result(Int, sqlight.Error) {
 
 /// Gets the total count of records for a collection with optional where clause
 pub fn get_collection_count_with_where(
-  conn: sqlight.Connection,
+  exec: Executor,
   collection: String,
   where: Option(where_clause.WhereClause),
-) -> Result(Int, sqlight.Error) {
+) -> Result(Int, DbError) {
   // Check if we need to join with actor table
   let needs_actor_join = case where {
     Some(wc) -> where_clause.requires_actor_join(wc)
@@ -469,8 +452,10 @@ pub fn get_collection_count_with_where(
   }
 
   // Build WHERE clause parts - start with collection filter
-  let mut_where_parts = ["record.collection = ?"]
-  let mut_bind_values = [sqlight.text(collection)]
+  let mut_where_parts = [
+    "record.collection = " <> executor.placeholder(exec, 1),
+  ]
+  let mut_bind_values: List(Value) = [Text(collection)]
 
   // Add where clause conditions if provided
   let #(where_parts, bind_values) = case where {
@@ -479,7 +464,7 @@ pub fn get_collection_count_with_where(
         True -> #(mut_where_parts, mut_bind_values)
         False -> {
           let #(where_sql, where_params) =
-            where_clause.build_where_sql(wc, needs_actor_join)
+            where_clause.build_where_sql(exec, wc, needs_actor_join)
           let new_where = list.append(mut_where_parts, [where_sql])
           let new_binds = list.append(mut_bind_values, where_params)
           #(new_where, new_binds)
@@ -490,10 +475,11 @@ pub fn get_collection_count_with_where(
   }
 
   // Build the SQL query
-  let sql = "
-    SELECT COUNT(*) as count
-    FROM " <> from_clause <> "
-    WHERE " <> string.join(where_parts, " AND ")
+  let sql =
+    "SELECT COUNT(*) as count FROM "
+    <> from_clause
+    <> " WHERE "
+    <> string.join(where_parts, " AND ")
 
   // Execute query
   let decoder = {
@@ -501,7 +487,7 @@ pub fn get_collection_count_with_where(
     decode.success(count)
   }
 
-  case sqlight.query(sql, on: conn, with: bind_values, expecting: decoder) {
+  case executor.query(exec, sql, bind_values, decoder) {
     Ok([count]) -> Ok(count)
     Ok(_) -> Ok(0)
     Error(err) -> Error(err)
@@ -513,14 +499,14 @@ pub fn get_collection_count_with_where(
 /// Supports both forward (first/after) and backward (last/before) pagination.
 /// Returns a tuple of (records, next_cursor, has_next_page, has_previous_page)
 pub fn get_by_collection_paginated(
-  conn: sqlight.Connection,
+  exec: Executor,
   collection: String,
   first: Option(Int),
   after: Option(String),
   last: Option(Int),
   before: Option(String),
   sort_by: Option(List(#(String, String))),
-) -> Result(#(List(Record), Option(String), Bool, Bool), sqlight.Error) {
+) -> Result(#(List(Record), Option(String), Bool, Bool), DbError) {
   // Validate pagination arguments
   let #(limit, is_forward, cursor_opt) = case first, last {
     Some(f), None -> #(f, True, after)
@@ -540,11 +526,11 @@ pub fn get_by_collection_paginated(
   }
 
   // Build the ORDER BY clause (no joins in this function, so no prefix needed)
-  let order_by_clause = pagination.build_order_by(sort_fields, False)
+  let order_by_clause = pagination.build_order_by(exec, sort_fields, False)
 
   // Build WHERE clause parts
-  let where_parts = ["collection = ?"]
-  let bind_values = [sqlight.text(collection)]
+  let where_parts = ["collection = " <> executor.placeholder(exec, 1)]
+  let bind_values: List(Value) = [Text(collection)]
 
   // Add cursor condition if present
   let #(final_where_parts, final_bind_values) = case cursor_opt {
@@ -553,6 +539,7 @@ pub fn get_by_collection_paginated(
         Ok(decoded_cursor) -> {
           let #(cursor_where, cursor_params) =
             pagination.build_cursor_where_clause(
+              exec,
               decoded_cursor,
               sort_by,
               !is_forward,
@@ -560,7 +547,7 @@ pub fn get_by_collection_paginated(
 
           let new_where = list.append(where_parts, [cursor_where])
           let new_binds =
-            list.append(bind_values, list.map(cursor_params, sqlight.text))
+            list.append(bind_values, list.map(cursor_params, Text))
           #(new_where, new_binds)
         }
         Error(_) -> #(where_parts, bind_values)
@@ -573,29 +560,22 @@ pub fn get_by_collection_paginated(
   let fetch_limit = limit + 1
 
   // Build the SQL query
-  let sql = "
-    SELECT uri, cid, did, collection, json, indexed_at
-    FROM record
-    WHERE " <> string.join(final_where_parts, " AND ") <> "
-    ORDER BY " <> order_by_clause <> "
-    LIMIT " <> int.to_string(fetch_limit)
+  let sql =
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE "
+    <> string.join(final_where_parts, " AND ")
+    <> " ORDER BY "
+    <> order_by_clause
+    <> " LIMIT "
+    <> int.to_string(fetch_limit)
 
   // Execute query
-  let decoder = {
-    use uri <- decode.field(0, decode.string)
-    use cid <- decode.field(1, decode.string)
-    use did <- decode.field(2, decode.string)
-    use collection <- decode.field(3, decode.string)
-    use json <- decode.field(4, decode.string)
-    use indexed_at <- decode.field(5, decode.string)
-    decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
-  }
-
-  use records <- result.try(sqlight.query(
+  use records <- result.try(executor.query(
+    exec,
     sql,
-    on: conn,
-    with: final_bind_values,
-    expecting: decoder,
+    final_bind_values,
+    record_decoder(),
   ))
 
   // Check if there are more results
@@ -637,7 +617,7 @@ pub fn get_by_collection_paginated(
 ///
 /// Same as get_by_collection_paginated but with an additional where_clause parameter
 pub fn get_by_collection_paginated_with_where(
-  conn: sqlight.Connection,
+  exec: Executor,
   collection: String,
   first: Option(Int),
   after: Option(String),
@@ -645,7 +625,7 @@ pub fn get_by_collection_paginated_with_where(
   before: Option(String),
   sort_by: Option(List(#(String, String))),
   where: Option(where_clause.WhereClause),
-) -> Result(#(List(Record), Option(String), Bool, Bool), sqlight.Error) {
+) -> Result(#(List(Record), Option(String), Bool, Bool), DbError) {
   // Validate pagination arguments
   let #(limit, is_forward, cursor_opt) = case first, last {
     Some(f), None -> #(f, True, after)
@@ -674,7 +654,7 @@ pub fn get_by_collection_paginated_with_where(
 
   // Build the ORDER BY clause (with table prefix if doing a join)
   let order_by_clause =
-    pagination.build_order_by(query_sort_fields, needs_actor_join)
+    pagination.build_order_by(exec, query_sort_fields, needs_actor_join)
 
   // Build FROM clause with optional LEFT JOIN
   let from_clause = case needs_actor_join {
@@ -683,8 +663,10 @@ pub fn get_by_collection_paginated_with_where(
   }
 
   // Build WHERE clause parts - start with collection filter
-  let mut_where_parts = ["record.collection = ?"]
-  let mut_bind_values = [sqlight.text(collection)]
+  let mut_where_parts = [
+    "record.collection = " <> executor.placeholder(exec, 1),
+  ]
+  let mut_bind_values: List(Value) = [Text(collection)]
 
   // Add where clause conditions if provided
   let #(where_parts, bind_values) = case where {
@@ -693,7 +675,7 @@ pub fn get_by_collection_paginated_with_where(
         True -> #(mut_where_parts, mut_bind_values)
         False -> {
           let #(where_sql, where_params) =
-            where_clause.build_where_sql(wc, needs_actor_join)
+            where_clause.build_where_sql(exec, wc, needs_actor_join)
           let new_where = list.append(mut_where_parts, [where_sql])
           let new_binds = list.append(mut_bind_values, where_params)
           #(new_where, new_binds)
@@ -710,6 +692,7 @@ pub fn get_by_collection_paginated_with_where(
         Ok(decoded_cursor) -> {
           let #(cursor_where, cursor_params) =
             pagination.build_cursor_where_clause(
+              exec,
               decoded_cursor,
               sort_by,
               !is_forward,
@@ -717,7 +700,7 @@ pub fn get_by_collection_paginated_with_where(
 
           let new_where = list.append(where_parts, [cursor_where])
           let new_binds =
-            list.append(bind_values, list.map(cursor_params, sqlight.text))
+            list.append(bind_values, list.map(cursor_params, Text))
           #(new_where, new_binds)
         }
         Error(_) -> #(where_parts, bind_values)
@@ -730,29 +713,24 @@ pub fn get_by_collection_paginated_with_where(
   let fetch_limit = limit + 1
 
   // Build the SQL query
-  let sql = "
-    SELECT record.uri, record.cid, record.did, record.collection, record.json, record.indexed_at
-    FROM " <> from_clause <> "
-    WHERE " <> string.join(final_where_parts, " AND ") <> "
-    ORDER BY " <> order_by_clause <> "
-    LIMIT " <> int.to_string(fetch_limit)
+  let sql =
+    "SELECT "
+    <> record_columns_prefixed(exec)
+    <> " FROM "
+    <> from_clause
+    <> " WHERE "
+    <> string.join(final_where_parts, " AND ")
+    <> " ORDER BY "
+    <> order_by_clause
+    <> " LIMIT "
+    <> int.to_string(fetch_limit)
 
   // Execute query
-  let decoder = {
-    use uri <- decode.field(0, decode.string)
-    use cid <- decode.field(1, decode.string)
-    use did <- decode.field(2, decode.string)
-    use collection <- decode.field(3, decode.string)
-    use json <- decode.field(4, decode.string)
-    use indexed_at <- decode.field(5, decode.string)
-    decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
-  }
-
-  use records <- result.try(sqlight.query(
+  use records <- result.try(executor.query(
+    exec,
     sql,
-    on: conn,
-    with: final_bind_values,
-    expecting: decoder,
+    final_bind_values,
+    record_decoder(),
   ))
 
   // Check if there are more results
@@ -793,37 +771,26 @@ pub fn get_by_collection_paginated_with_where(
 /// Get records by a list of URIs (for forward joins / DataLoader)
 /// Returns records in any order - caller must group them
 pub fn get_by_uris(
-  conn: sqlight.Connection,
+  exec: Executor,
   uris: List(String),
-) -> Result(List(Record), sqlight.Error) {
+) -> Result(List(Record), DbError) {
   case uris {
     [] -> Ok([])
     _ -> {
       // Build placeholders for SQL IN clause
-      let placeholders =
-        list.map(uris, fn(_) { "?" })
-        |> string.join(", ")
+      let placeholders = executor.placeholders(exec, list.length(uris), 1)
 
-      let sql = "
-        SELECT uri, cid, did, collection, json, indexed_at
-        FROM record
-        WHERE uri IN (" <> placeholders <> ")
-      "
+      let sql =
+        "SELECT "
+        <> record_columns(exec)
+        <> " FROM record WHERE uri IN ("
+        <> placeholders
+        <> ")"
 
-      // Convert URIs to sqlight.Value list
-      let params = list.map(uris, sqlight.text)
+      // Convert URIs to Value list
+      let params = list.map(uris, Text)
 
-      let decoder = {
-        use uri <- decode.field(0, decode.string)
-        use cid <- decode.field(1, decode.string)
-        use did <- decode.field(2, decode.string)
-        use collection <- decode.field(3, decode.string)
-        use json <- decode.field(4, decode.string)
-        use indexed_at <- decode.field(5, decode.string)
-        decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
-      }
-
-      sqlight.query(sql, on: conn, with: params, expecting: decoder)
+      executor.query(exec, sql, params, record_decoder())
     }
   }
 }
@@ -832,50 +799,50 @@ pub fn get_by_uris(
 /// Finds all records in a collection where a field references one of the parent URIs
 /// Note: This does a JSON field extraction, so it may be slow on large datasets
 pub fn get_by_reference_field(
-  conn: sqlight.Connection,
+  exec: Executor,
   collection: String,
   field_name: String,
   parent_uris: List(String),
-) -> Result(List(Record), sqlight.Error) {
+) -> Result(List(Record), DbError) {
   case parent_uris {
     [] -> Ok([])
     _ -> {
-      // Build placeholders for SQL IN clause
-      let placeholders =
-        list.map(parent_uris, fn(_) { "?" })
-        |> string.join(", ")
+      let uri_count = list.length(parent_uris)
+      // Placeholder 1 is collection
+      // Placeholders 2 to uri_count+1 are first set of URIs
+      // Placeholders uri_count+2 to 2*uri_count+1 are second set of URIs
+      let placeholders1 = executor.placeholders(exec, uri_count, 2)
+      let placeholders2 = executor.placeholders(exec, uri_count, uri_count + 2)
 
-      // Use SQLite JSON extraction to find records where field_name matches parent URIs
-      // This supports both simple string fields and strongRef objects with a "uri" field
-      let sql = "
-        SELECT uri, cid, did, collection, json, indexed_at
-        FROM record
-        WHERE collection = ?
-        AND (
-          json_extract(json, '$." <> field_name <> "') IN (" <> placeholders <> ")
-          OR json_extract(json, '$." <> field_name <> ".uri') IN (" <> placeholders <> ")
-        )
-      "
+      // Use dialect-specific JSON extraction
+      let json_field = executor.json_extract(exec, "json", field_name)
+      let json_uri_field =
+        executor.json_extract_path(exec, "json", [field_name, "uri"])
+
+      let sql =
+        "SELECT "
+        <> record_columns(exec)
+        <> " FROM record WHERE collection = "
+        <> executor.placeholder(exec, 1)
+        <> " AND ("
+        <> json_field
+        <> " IN ("
+        <> placeholders1
+        <> ") OR "
+        <> json_uri_field
+        <> " IN ("
+        <> placeholders2
+        <> "))"
 
       // Build params: collection + parent_uris twice (once for direct match, once for strongRef)
-      let params =
+      let params: List(Value) =
         list.flatten([
-          [sqlight.text(collection)],
-          list.map(parent_uris, sqlight.text),
-          list.map(parent_uris, sqlight.text),
+          [Text(collection)],
+          list.map(parent_uris, Text),
+          list.map(parent_uris, Text),
         ])
 
-      let decoder = {
-        use uri <- decode.field(0, decode.string)
-        use cid <- decode.field(1, decode.string)
-        use did <- decode.field(2, decode.string)
-        use collection <- decode.field(3, decode.string)
-        use json <- decode.field(4, decode.string)
-        use indexed_at <- decode.field(5, decode.string)
-        decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
-      }
-
-      sqlight.query(sql, on: conn, with: params, expecting: decoder)
+      executor.query(exec, sql, params, record_decoder())
     }
   }
 }
@@ -884,7 +851,7 @@ pub fn get_by_reference_field(
 /// Similar to get_by_reference_field but supports cursor-based pagination
 /// Returns: (records, next_cursor, has_next_page, has_previous_page, total_count)
 pub fn get_by_reference_field_paginated(
-  conn: sqlight.Connection,
+  exec: Executor,
   collection: String,
   field_name: String,
   parent_uri: String,
@@ -893,11 +860,8 @@ pub fn get_by_reference_field_paginated(
   last: Option(Int),
   before: Option(String),
   sort_by: Option(List(#(String, String))),
-  where_clause: Option(where_clause.WhereClause),
-) -> Result(
-  #(List(Record), Option(String), Bool, Bool, Option(Int)),
-  sqlight.Error,
-) {
+  wc: Option(where_clause.WhereClause),
+) -> Result(#(List(Record), Option(String), Bool, Bool, Option(Int)), DbError) {
   // Validate pagination arguments
   let #(limit, is_forward, cursor_opt) = case first, last {
     Some(f), None -> #(f, True, after)
@@ -919,28 +883,38 @@ pub fn get_by_reference_field_paginated(
   }
 
   // Build the ORDER BY clause
-  let order_by_clause = pagination.build_order_by(query_sort_fields, False)
+  let order_by_clause =
+    pagination.build_order_by(exec, query_sort_fields, False)
+
+  // Use dialect-specific JSON extraction
+  let json_field = executor.json_extract(exec, "json", field_name)
+  let json_uri_field =
+    executor.json_extract_path(exec, "json", [field_name, "uri"])
 
   // Build WHERE clause parts for reference field matching
   let base_where_parts = [
-    "collection = ?",
-    "(json_extract(json, '$."
-      <> field_name
-      <> "') = ? OR json_extract(json, '$."
-      <> field_name
-      <> ".uri') = ?)",
+    "collection = " <> executor.placeholder(exec, 1),
+    "("
+      <> json_field
+      <> " = "
+      <> executor.placeholder(exec, 2)
+      <> " OR "
+      <> json_uri_field
+      <> " = "
+      <> executor.placeholder(exec, 3)
+      <> ")",
   ]
-  let base_bind_values = [
-    sqlight.text(collection),
-    sqlight.text(parent_uri),
-    sqlight.text(parent_uri),
+  let base_bind_values: List(Value) = [
+    Text(collection),
+    Text(parent_uri),
+    Text(parent_uri),
   ]
 
   // Add where clause conditions if present
-  let #(with_where_parts, with_where_values) = case where_clause {
+  let #(with_where_parts, with_where_values) = case wc {
     Some(clause) -> {
       let #(where_sql, where_params) =
-        where_clause.build_where_sql(clause, False)
+        where_clause.build_where_sql(exec, clause, False)
       case where_sql {
         "" -> #(base_where_parts, base_bind_values)
         _ -> #(
@@ -959,6 +933,7 @@ pub fn get_by_reference_field_paginated(
         Ok(decoded_cursor) -> {
           let #(cursor_where, cursor_params) =
             pagination.build_cursor_where_clause(
+              exec,
               decoded_cursor,
               sort_by,
               !is_forward,
@@ -966,10 +941,7 @@ pub fn get_by_reference_field_paginated(
 
           let new_where = list.append(with_where_parts, [cursor_where])
           let new_binds =
-            list.append(
-              with_where_values,
-              list.map(cursor_params, sqlight.text),
-            )
+            list.append(with_where_values, list.map(cursor_params, Text))
           #(new_where, new_binds)
         }
         Error(_) -> #(with_where_parts, with_where_values)
@@ -982,29 +954,22 @@ pub fn get_by_reference_field_paginated(
   let fetch_limit = limit + 1
 
   // Build the SQL query
-  let sql = "
-    SELECT uri, cid, did, collection, json, indexed_at
-    FROM record
-    WHERE " <> string.join(final_where_parts, " AND ") <> "
-    ORDER BY " <> order_by_clause <> "
-    LIMIT " <> int.to_string(fetch_limit)
+  let sql =
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE "
+    <> string.join(final_where_parts, " AND ")
+    <> " ORDER BY "
+    <> order_by_clause
+    <> " LIMIT "
+    <> int.to_string(fetch_limit)
 
   // Execute query
-  let decoder = {
-    use uri <- decode.field(0, decode.string)
-    use cid <- decode.field(1, decode.string)
-    use did <- decode.field(2, decode.string)
-    use collection <- decode.field(3, decode.string)
-    use json <- decode.field(4, decode.string)
-    use indexed_at <- decode.field(5, decode.string)
-    decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
-  }
-
-  use records <- result.try(sqlight.query(
+  use records <- result.try(executor.query(
+    exec,
     sql,
-    on: conn,
-    with: final_bind_values,
-    expecting: decoder,
+    final_bind_values,
+    record_decoder(),
   ))
 
   // Check if there are more results
@@ -1050,12 +1015,7 @@ pub fn get_by_reference_field_paginated(
   }
 
   let total_count = case
-    sqlight.query(
-      count_sql,
-      on: conn,
-      with: with_where_values,
-      expecting: count_decoder,
-    )
+    executor.query(exec, count_sql, with_where_values, count_decoder)
   {
     Ok([count]) -> Some(count)
     _ -> None
@@ -1074,44 +1034,31 @@ pub fn get_by_reference_field_paginated(
 /// Finds all records in a specific collection that belong to any of the given DIDs
 /// Uses the idx_record_did_collection index for efficient lookup
 pub fn get_by_dids_and_collection(
-  conn: sqlight.Connection,
+  exec: Executor,
   dids: List(String),
   collection: String,
-) -> Result(List(Record), sqlight.Error) {
+) -> Result(List(Record), DbError) {
   case dids {
     [] -> Ok([])
     _ -> {
+      let did_count = list.length(dids)
       // Build placeholders for SQL IN clause
-      let placeholders =
-        list.map(dids, fn(_) { "?" })
-        |> string.join(", ")
+      let placeholders = executor.placeholders(exec, did_count, 1)
 
-      let sql = "
-        SELECT uri, cid, did, collection, json, indexed_at
-        FROM record
-        WHERE did IN (" <> placeholders <> ")
-        AND collection = ?
-        ORDER BY indexed_at DESC
-      "
+      let sql =
+        "SELECT "
+        <> record_columns(exec)
+        <> " FROM record WHERE did IN ("
+        <> placeholders
+        <> ") AND collection = "
+        <> executor.placeholder(exec, did_count + 1)
+        <> " ORDER BY indexed_at DESC"
 
       // Build params: DIDs + collection
-      let params =
-        list.flatten([
-          list.map(dids, sqlight.text),
-          [sqlight.text(collection)],
-        ])
+      let params: List(Value) =
+        list.flatten([list.map(dids, Text), [Text(collection)]])
 
-      let decoder = {
-        use uri <- decode.field(0, decode.string)
-        use cid <- decode.field(1, decode.string)
-        use did <- decode.field(2, decode.string)
-        use collection <- decode.field(3, decode.string)
-        use json <- decode.field(4, decode.string)
-        use indexed_at <- decode.field(5, decode.string)
-        decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
-      }
-
-      sqlight.query(sql, on: conn, with: params, expecting: decoder)
+      executor.query(exec, sql, params, record_decoder())
     }
   }
 }
@@ -1120,7 +1067,7 @@ pub fn get_by_dids_and_collection(
 /// Similar to get_by_dids_and_collection but for a single DID with cursor-based pagination
 /// Returns: (records, next_cursor, has_next_page, has_previous_page, total_count)
 pub fn get_by_dids_and_collection_paginated(
-  conn: sqlight.Connection,
+  exec: Executor,
   did: String,
   collection: String,
   first: Option(Int),
@@ -1128,11 +1075,8 @@ pub fn get_by_dids_and_collection_paginated(
   last: Option(Int),
   before: Option(String),
   sort_by: Option(List(#(String, String))),
-  where_clause: Option(where_clause.WhereClause),
-) -> Result(
-  #(List(Record), Option(String), Bool, Bool, Option(Int)),
-  sqlight.Error,
-) {
+  wc: Option(where_clause.WhereClause),
+) -> Result(#(List(Record), Option(String), Bool, Bool, Option(Int)), DbError) {
   // Validate pagination arguments
   let #(limit, is_forward, cursor_opt) = case first, last {
     Some(f), None -> #(f, True, after)
@@ -1154,17 +1098,21 @@ pub fn get_by_dids_and_collection_paginated(
   }
 
   // Build the ORDER BY clause
-  let order_by_clause = pagination.build_order_by(query_sort_fields, False)
+  let order_by_clause =
+    pagination.build_order_by(exec, query_sort_fields, False)
 
   // Build WHERE clause parts for DID and collection matching
-  let base_where_parts = ["did = ?", "collection = ?"]
-  let base_bind_values = [sqlight.text(did), sqlight.text(collection)]
+  let base_where_parts = [
+    "did = " <> executor.placeholder(exec, 1),
+    "collection = " <> executor.placeholder(exec, 2),
+  ]
+  let base_bind_values: List(Value) = [Text(did), Text(collection)]
 
   // Add where clause conditions if present
-  let #(with_where_parts, with_where_values) = case where_clause {
+  let #(with_where_parts, with_where_values) = case wc {
     Some(clause) -> {
       let #(where_sql, where_params) =
-        where_clause.build_where_sql(clause, False)
+        where_clause.build_where_sql(exec, clause, False)
       case where_sql {
         "" -> #(base_where_parts, base_bind_values)
         _ -> #(
@@ -1183,6 +1131,7 @@ pub fn get_by_dids_and_collection_paginated(
         Ok(decoded_cursor) -> {
           let #(cursor_where, cursor_params) =
             pagination.build_cursor_where_clause(
+              exec,
               decoded_cursor,
               sort_by,
               !is_forward,
@@ -1190,10 +1139,7 @@ pub fn get_by_dids_and_collection_paginated(
 
           let new_where = list.append(with_where_parts, [cursor_where])
           let new_binds =
-            list.append(
-              with_where_values,
-              list.map(cursor_params, sqlight.text),
-            )
+            list.append(with_where_values, list.map(cursor_params, Text))
           #(new_where, new_binds)
         }
         Error(_) -> #(with_where_parts, with_where_values)
@@ -1206,29 +1152,22 @@ pub fn get_by_dids_and_collection_paginated(
   let fetch_limit = limit + 1
 
   // Build the SQL query
-  let sql = "
-    SELECT uri, cid, did, collection, json, indexed_at
-    FROM record
-    WHERE " <> string.join(final_where_parts, " AND ") <> "
-    ORDER BY " <> order_by_clause <> "
-    LIMIT " <> int.to_string(fetch_limit)
+  let sql =
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE "
+    <> string.join(final_where_parts, " AND ")
+    <> " ORDER BY "
+    <> order_by_clause
+    <> " LIMIT "
+    <> int.to_string(fetch_limit)
 
   // Execute query
-  let decoder = {
-    use uri <- decode.field(0, decode.string)
-    use cid <- decode.field(1, decode.string)
-    use did <- decode.field(2, decode.string)
-    use collection <- decode.field(3, decode.string)
-    use json <- decode.field(4, decode.string)
-    use indexed_at <- decode.field(5, decode.string)
-    decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
-  }
-
-  use records <- result.try(sqlight.query(
+  use records <- result.try(executor.query(
+    exec,
     sql,
-    on: conn,
-    with: final_bind_values,
-    expecting: decoder,
+    final_bind_values,
+    record_decoder(),
   ))
 
   // Check if there are more results
@@ -1274,12 +1213,7 @@ pub fn get_by_dids_and_collection_paginated(
   }
 
   let total_count = case
-    sqlight.query(
-      count_sql,
-      on: conn,
-      with: with_where_values,
-      expecting: count_decoder,
-    )
+    executor.query(exec, count_sql, with_where_values, count_decoder)
   {
     Ok([count]) -> Some(count)
     _ -> None

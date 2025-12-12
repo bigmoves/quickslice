@@ -1,3 +1,4 @@
+import database/executor.{type Executor}
 import database/repositories/lexicons
 import gleam/dict
 import gleam/dynamic/decode
@@ -8,7 +9,6 @@ import gleam/string
 import honk
 import logging
 import simplifile
-import sqlight
 import zip_helper
 
 pub type ImportStats {
@@ -18,7 +18,7 @@ pub type ImportStats {
 /// Imports lexicons from a directory into the database
 pub fn import_lexicons_from_directory(
   directory: String,
-  db: sqlight.Connection,
+  db: Executor,
 ) -> Result(ImportStats, String) {
   // Scan directory for JSON files
   logging.log(logging.Info, "[import] Scanning directory recursively...")
@@ -237,7 +237,7 @@ fn format_validation_errors(
 
 /// Imports a single lexicon file (with validation)
 pub fn import_single_lexicon(
-  conn: sqlight.Connection,
+  conn: Executor,
   file_path: String,
 ) -> Result(String, String) {
   let file_name = case string.split(file_path, "/") |> list.last {
@@ -270,7 +270,7 @@ pub fn import_single_lexicon(
 /// Imports a lexicon that has already been validated
 /// Used when importing multiple lexicons that were validated together
 fn import_validated_lexicon(
-  conn: sqlight.Connection,
+  conn: Executor,
   file_path: String,
   json_content: String,
 ) -> Result(String, String) {
@@ -309,7 +309,7 @@ fn decode_base64(base64: String) -> BitArray
 /// Returns ImportStats on success, error message on failure
 pub fn import_lexicons_from_base64_zip(
   zip_base64: String,
-  db: sqlight.Connection,
+  db: Executor,
 ) -> Result(ImportStats, String) {
   // Decode base64 to binary
   let zip_binary = decode_base64(zip_base64)

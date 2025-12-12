@@ -7,7 +7,6 @@
 /// - Cursors work for pagination
 import database/repositories/lexicons
 import database/repositories/records
-import database/schema/tables
 import gleam/int
 import gleam/json
 import gleam/list
@@ -16,7 +15,7 @@ import gleam/string
 import gleeunit/should
 import graphql/lexicon/schema as lexicon_schema
 import lib/oauth/did_cache
-import sqlight
+import test_helpers
 
 // Helper to create a post lexicon JSON
 fn create_post_lexicon() -> String {
@@ -150,17 +149,17 @@ fn create_profile_lexicon() -> String {
 // Test: DID join with first:1 returns only 1 result
 pub fn did_join_first_one_test() {
   // Setup database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
-  let assert Ok(_) = tables.create_actor_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon()
-  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(exec, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile
   let profile_uri = "at://did:plc:author/app.bsky.actor.profile/self"
@@ -170,7 +169,7 @@ pub fn did_join_first_one_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       profile_uri,
       "cid_profile",
       "did:plc:author",
@@ -191,7 +190,7 @@ pub fn did_join_first_one_test() {
 
     let assert Ok(_) =
       records.insert(
-        db,
+        exec,
         post_uri,
         "cid_post" <> int.to_string(i),
         "did:plc:author",
@@ -230,7 +229,7 @@ pub fn did_join_first_one_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     lexicon_schema.execute_query_with_db(
-      db,
+      exec,
       query,
       "{}",
       Error(Nil),
@@ -269,17 +268,17 @@ pub fn did_join_first_one_test() {
 // Test: DID join with first:2 returns only 2 results
 pub fn did_join_first_two_test() {
   // Setup database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
-  let assert Ok(_) = tables.create_actor_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon()
-  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(exec, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile
   let profile_uri = "at://did:plc:author/app.bsky.actor.profile/self"
@@ -289,7 +288,7 @@ pub fn did_join_first_two_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       profile_uri,
       "cid_profile",
       "did:plc:author",
@@ -310,7 +309,7 @@ pub fn did_join_first_two_test() {
 
     let assert Ok(_) =
       records.insert(
-        db,
+        exec,
         post_uri,
         "cid_post" <> int.to_string(i),
         "did:plc:author",
@@ -349,7 +348,7 @@ pub fn did_join_first_two_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     lexicon_schema.execute_query_with_db(
-      db,
+      exec,
       query,
       "{}",
       Error(Nil),
@@ -384,16 +383,16 @@ pub fn did_join_first_two_test() {
 // Test: Reverse join with first:1 returns only 1 result
 pub fn reverse_join_first_one_test() {
   // Setup database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
-  let assert Ok(_) = tables.create_actor_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let like_lexicon = create_like_lexicon()
-  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
-  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.like", like_lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "app.bsky.feed.like", like_lexicon)
 
   // Insert a post
   let post_uri = "at://did:plc:author/app.bsky.feed.post/post1"
@@ -403,7 +402,7 @@ pub fn reverse_join_first_one_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       post_uri,
       "cid_post",
       "did:plc:author",
@@ -428,7 +427,7 @@ pub fn reverse_join_first_one_test() {
 
     let assert Ok(_) =
       records.insert(
-        db,
+        exec,
         like_uri,
         "cid_like" <> int.to_string(i),
         "did:plc:liker" <> int.to_string(i),
@@ -466,7 +465,7 @@ pub fn reverse_join_first_one_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     lexicon_schema.execute_query_with_db(
-      db,
+      exec,
       query,
       "{}",
       Error(Nil),
@@ -504,17 +503,17 @@ pub fn reverse_join_first_one_test() {
 // Test: DID join with no pagination args defaults to first:50
 pub fn did_join_default_pagination_test() {
   // Setup database
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = tables.create_lexicon_table(db)
-  let assert Ok(_) = tables.create_record_table(db)
-  let assert Ok(_) = tables.create_actor_table(db)
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
   // Insert lexicons
   let post_lexicon = create_post_lexicon()
   let profile_lexicon = create_profile_lexicon()
-  let assert Ok(_) = lexicons.insert(db, "app.bsky.feed.post", post_lexicon)
+  let assert Ok(_) = lexicons.insert(exec, "app.bsky.feed.post", post_lexicon)
   let assert Ok(_) =
-    lexicons.insert(db, "app.bsky.actor.profile", profile_lexicon)
+    lexicons.insert(exec, "app.bsky.actor.profile", profile_lexicon)
 
   // Insert a profile
   let profile_uri = "at://did:plc:author/app.bsky.actor.profile/self"
@@ -524,7 +523,7 @@ pub fn did_join_default_pagination_test() {
 
   let assert Ok(_) =
     records.insert(
-      db,
+      exec,
       profile_uri,
       "cid_profile",
       "did:plc:author",
@@ -545,7 +544,7 @@ pub fn did_join_default_pagination_test() {
 
     let assert Ok(_) =
       records.insert(
-        db,
+        exec,
         post_uri,
         "cid_post" <> int.to_string(i),
         "did:plc:author",
@@ -584,7 +583,7 @@ pub fn did_join_default_pagination_test() {
   let assert Ok(cache) = did_cache.start()
   let assert Ok(response_json) =
     lexicon_schema.execute_query_with_db(
-      db,
+      exec,
       query,
       "{}",
       Error(Nil),

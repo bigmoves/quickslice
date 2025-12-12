@@ -1,6 +1,7 @@
 /// Edge case and error handling tests for where clause functionality
 ///
 /// Tests various edge cases, error conditions, and potential SQL injection attempts
+import database/executor.{Int, Text}
 import database/queries/where_clause
 import gleam/dict
 import gleam/list
@@ -9,8 +10,8 @@ import gleam/string
 import gleeunit
 import gleeunit/should
 import lexicon_graphql/input/where as where_input
-import sqlight
 import swell/value
+import test_helpers
 
 pub fn main() {
   gleeunit.main()
@@ -19,16 +20,18 @@ pub fn main() {
 // ===== Empty/Nil Tests =====
 
 pub fn empty_where_clause_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   let clause =
     where_clause.WhereClause(conditions: dict.new(), and: None, or: None)
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("")
   list.length(params) |> should.equal(0)
 }
 
 pub fn all_conditions_none_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   let condition =
     where_clause.WhereCondition(
       eq: None,
@@ -48,7 +51,7 @@ pub fn all_conditions_none_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Should produce no SQL since all conditions are None
   sql |> should.equal("")
@@ -56,6 +59,7 @@ pub fn all_conditions_none_test() {
 }
 
 pub fn empty_in_list_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   let condition =
     where_clause.WhereCondition(
       eq: None,
@@ -75,7 +79,7 @@ pub fn empty_in_list_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Empty IN list should produce no SQL
   sql |> should.equal("")
@@ -83,20 +87,22 @@ pub fn empty_in_list_test() {
 }
 
 pub fn empty_and_clause_list_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   let clause =
     where_clause.WhereClause(conditions: dict.new(), and: Some([]), or: None)
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("")
   list.length(params) |> should.equal(0)
 }
 
 pub fn empty_or_clause_list_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   let clause =
     where_clause.WhereClause(conditions: dict.new(), and: None, or: Some([]))
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   sql |> should.equal("")
   list.length(params) |> should.equal(0)
@@ -105,6 +111,7 @@ pub fn empty_or_clause_list_test() {
 // ===== SQL Injection Prevention Tests =====
 
 pub fn sql_injection_in_string_value_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   // Try common SQL injection patterns - should be safely parameterized
   let malicious_strings = [
     "'; DROP TABLE records; --",
@@ -117,7 +124,7 @@ pub fn sql_injection_in_string_value_test() {
   list.each(malicious_strings, fn(malicious) {
     let condition =
       where_clause.WhereCondition(
-        eq: Some(sqlight.text(malicious)),
+        eq: Some(Text(malicious)),
         in_values: None,
         contains: None,
         gt: None,
@@ -134,7 +141,7 @@ pub fn sql_injection_in_string_value_test() {
         or: None,
       )
 
-    let #(sql, params) = where_clause.build_where_sql(clause, False)
+    let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
     // Should use parameterized query with json_extract for non-table columns
     sql |> should.equal("json_extract(json, '$.username') = ?")
@@ -148,6 +155,7 @@ pub fn sql_injection_in_string_value_test() {
 }
 
 pub fn sql_injection_in_contains_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   // Contains should also be parameterized
   let malicious = "'; DROP TABLE records; --"
 
@@ -170,7 +178,7 @@ pub fn sql_injection_in_contains_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Should use LIKE with parameterized value and json_extract for non-table fields
   sql
@@ -183,13 +191,14 @@ pub fn sql_injection_in_contains_test() {
 // ===== Type Edge Cases =====
 
 pub fn integer_boundary_values_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   // Test with very large and very small integers
   let large_int = 2_147_483_647
   let small_int = -2_147_483_648
 
   let condition_large =
     where_clause.WhereCondition(
-      eq: Some(sqlight.int(large_int)),
+      eq: Some(Int(large_int)),
       in_values: None,
       contains: None,
       gt: None,
@@ -202,7 +211,7 @@ pub fn integer_boundary_values_test() {
 
   let condition_small =
     where_clause.WhereCondition(
-      eq: Some(sqlight.int(small_int)),
+      eq: Some(Int(small_int)),
       in_values: None,
       contains: None,
       gt: None,
@@ -228,9 +237,9 @@ pub fn integer_boundary_values_test() {
     )
 
   let #(sql_large, params_large) =
-    where_clause.build_where_sql(clause_large, False)
+    where_clause.build_where_sql(exec, clause_large, False)
   let #(sql_small, params_small) =
-    where_clause.build_where_sql(clause_small, False)
+    where_clause.build_where_sql(exec, clause_small, False)
 
   // count is a JSON field, not a table column
   sql_large |> should.equal("json_extract(json, '$.count') = ?")
@@ -241,9 +250,10 @@ pub fn integer_boundary_values_test() {
 }
 
 pub fn empty_string_value_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   let condition =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("")),
+      eq: Some(Text("")),
       in_values: None,
       contains: None,
       gt: None,
@@ -260,7 +270,7 @@ pub fn empty_string_value_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Empty string is still valid - should use json_extract for non-table columns
   sql |> should.equal("json_extract(json, '$.name') = ?")
@@ -268,6 +278,7 @@ pub fn empty_string_value_test() {
 }
 
 pub fn unicode_string_value_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   // Test with various Unicode characters
   let unicode_strings = [
     "Hello 世界",
@@ -280,7 +291,7 @@ pub fn unicode_string_value_test() {
   list.each(unicode_strings, fn(unicode_str) {
     let condition =
       where_clause.WhereCondition(
-        eq: Some(sqlight.text(unicode_str)),
+        eq: Some(Text(unicode_str)),
         in_values: None,
         contains: None,
         gt: None,
@@ -297,7 +308,7 @@ pub fn unicode_string_value_test() {
         or: None,
       )
 
-    let #(sql, params) = where_clause.build_where_sql(clause, False)
+    let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
     sql |> should.equal("json_extract(json, '$.text') = ?")
     list.length(params) |> should.equal(1)
@@ -307,10 +318,11 @@ pub fn unicode_string_value_test() {
 // ===== Complex Nesting Edge Cases =====
 
 pub fn deeply_nested_and_clauses_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   // Create deeply nested AND clauses (5 levels)
   let inner_condition =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("value")),
+      eq: Some(Text("value")),
       in_values: None,
       contains: None,
       gt: None,
@@ -352,7 +364,7 @@ pub fn deeply_nested_and_clauses_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(level5, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, level5, False)
 
   // With single condition at each level, no extra parentheses needed
   // The implementation correctly doesn't add unnecessary parentheses for single conditions
@@ -361,10 +373,11 @@ pub fn deeply_nested_and_clauses_test() {
 }
 
 pub fn mixed_empty_and_non_empty_conditions_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   // Mix conditions with Some and None values
   let condition1 =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("value1")),
+      eq: Some(Text("value1")),
       in_values: None,
       contains: None,
       gt: None,
@@ -390,7 +403,7 @@ pub fn mixed_empty_and_non_empty_conditions_test() {
 
   let condition3 =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("value3")),
+      eq: Some(Text("value3")),
       in_values: None,
       contains: None,
       gt: None,
@@ -412,7 +425,7 @@ pub fn mixed_empty_and_non_empty_conditions_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Should only include non-empty conditions
   list.length(params) |> should.equal(2)
@@ -536,15 +549,16 @@ pub fn parse_mixed_types_in_in_list_test() {
 // ===== Multiple Operators on Same Field =====
 
 pub fn multiple_operators_same_field_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   // Test range query: gt AND lt on same field
   let condition =
     where_clause.WhereCondition(
       eq: None,
       in_values: None,
       contains: None,
-      gt: Some(sqlight.int(10)),
+      gt: Some(Int(10)),
       gte: None,
-      lt: Some(sqlight.int(100)),
+      lt: Some(Int(100)),
       lte: None,
       is_null: None,
       is_numeric: True,
@@ -556,7 +570,7 @@ pub fn multiple_operators_same_field_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Should combine both operators with json_extract and CAST for numeric comparison
   sql
@@ -567,11 +581,12 @@ pub fn multiple_operators_same_field_test() {
 }
 
 pub fn conflicting_operators_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   // eq and in on same field - both should be applied with AND
   let condition =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("exact")),
-      in_values: Some([sqlight.text("val1"), sqlight.text("val2")]),
+      eq: Some(Text("exact")),
+      in_values: Some([Text("val1"), Text("val2")]),
       contains: None,
       gt: None,
       gte: None,
@@ -587,7 +602,7 @@ pub fn conflicting_operators_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Should apply both (though logically this might not make sense)
   list.length(params) |> should.equal(3)
@@ -602,10 +617,11 @@ pub fn conflicting_operators_test() {
 // ===== Large IN Lists =====
 
 pub fn large_in_list_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   // Test with 100 items in IN list
   let large_list =
     list.range(1, 100)
-    |> list.map(fn(i) { sqlight.int(i) })
+    |> list.map(fn(i) { Int(i) })
 
   let condition =
     where_clause.WhereCondition(
@@ -626,7 +642,7 @@ pub fn large_in_list_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Should generate correct number of placeholders
   list.length(params) |> should.equal(100)
@@ -646,10 +662,11 @@ pub fn large_in_list_test() {
 // ===== Special Characters in Field Names =====
 
 pub fn field_name_with_json_path_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   // Test JSON path field names
   let condition =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("value")),
+      eq: Some(Text("value")),
       in_values: None,
       contains: None,
       gt: None,
@@ -666,7 +683,7 @@ pub fn field_name_with_json_path_test() {
       or: None,
     )
 
-  let #(sql, params) = where_clause.build_where_sql(clause, False)
+  let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
   // Should use json_extract for dotted field names
   sql
@@ -675,6 +692,7 @@ pub fn field_name_with_json_path_test() {
 }
 
 pub fn field_name_with_special_chars_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
   // Field names with underscores, numbers, etc.
   let special_field_names = [
     "field_with_underscore",
@@ -686,7 +704,7 @@ pub fn field_name_with_special_chars_test() {
   list.each(special_field_names, fn(field_name) {
     let condition =
       where_clause.WhereCondition(
-        eq: Some(sqlight.text("test")),
+        eq: Some(Text("test")),
         in_values: None,
         contains: None,
         gt: None,
@@ -703,7 +721,7 @@ pub fn field_name_with_special_chars_test() {
         or: None,
       )
 
-    let #(sql, params) = where_clause.build_where_sql(clause, False)
+    let #(sql, params) = where_clause.build_where_sql(exec, clause, False)
 
     // Should use json_extract even for non-dotted field names
     let expected = "json_extract(json, '$." <> field_name <> "') = ?"

@@ -1,5 +1,6 @@
 /// Admin OAuth callback handler
 /// GET /admin/oauth/callback - Handles ATP OAuth callback for admin login
+import database/executor.{type Executor}
 import database/repositories/admin_session
 import database/repositories/config as config_repo
 import database/repositories/oauth_access_tokens
@@ -20,13 +21,12 @@ import gleam/uri
 import lib/oauth/atproto/bridge
 import lib/oauth/did_cache
 import lib/oauth/token_generator
-import sqlight
 import wisp
 
 /// Handle GET /admin/oauth/callback
 pub fn handle(
   req: wisp.Request,
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: Subject(did_cache.Message),
   redirect_uri: String,
   client_id: String,
@@ -84,7 +84,7 @@ pub fn handle(
 
 fn process_callback(
   req: wisp.Request,
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: Subject(did_cache.Message),
   code: String,
   state: String,

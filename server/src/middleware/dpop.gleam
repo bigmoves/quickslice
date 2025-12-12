@@ -1,4 +1,5 @@
 /// DPoP validation middleware for protected resources
+import database/executor.{type Executor}
 import database/repositories/oauth_access_tokens
 import database/repositories/oauth_dpop_jti
 import gleam/http.{Delete, Get, Head, Options, Patch, Post, Put}
@@ -7,14 +8,13 @@ import gleam/option.{None, Some}
 import gleam/string
 import lib/oauth/dpop/validator
 import lib/oauth/token_generator
-import sqlight
 import wisp
 
 /// Validate DPoP-bound access token
 /// Returns the user_id if valid, or an error response
 pub fn validate_dpop_access(
   req: wisp.Request,
-  conn: sqlight.Connection,
+  db: Executor,
   resource_url: String,
 ) -> Result(String, wisp.Response) {
   // Extract Authorization header
@@ -23,8 +23,8 @@ pub fn validate_dpop_access(
     Ok(header) -> {
       // Parse "DPoP <token>" or "Bearer <token>"
       case string.split(header, " ") {
-        ["DPoP", token] -> validate_dpop_token(req, conn, token, resource_url)
-        ["Bearer", token] -> validate_bearer_token(conn, token)
+        ["DPoP", token] -> validate_dpop_token(req, db, token, resource_url)
+        ["Bearer", token] -> validate_bearer_token(db, token)
         _ -> Error(unauthorized("Invalid Authorization header format"))
       }
     }
@@ -33,7 +33,7 @@ pub fn validate_dpop_access(
 
 fn validate_dpop_token(
   req: wisp.Request,
-  conn: sqlight.Connection,
+  db: Executor,
   token: String,
   resource_url: String,
 ) -> Result(String, wisp.Response) {
@@ -47,12 +47,12 @@ fn validate_dpop_token(
         Error(reason) -> Error(unauthorized("Invalid DPoP proof: " <> reason))
         Ok(dpop_result) -> {
           // Check JTI for replay
-          case oauth_dpop_jti.use_jti(conn, dpop_result.jti, dpop_result.iat) {
+          case oauth_dpop_jti.use_jti(db, dpop_result.jti, dpop_result.iat) {
             Error(_) -> Error(server_error("Database error"))
             Ok(False) -> Error(unauthorized("DPoP proof replay detected"))
             Ok(True) -> {
               // Get the access token and verify JKT matches
-              case oauth_access_tokens.get(conn, token) {
+              case oauth_access_tokens.get(db, token) {
                 Error(_) -> Error(server_error("Database error"))
                 Ok(None) -> Error(unauthorized("Invalid access token"))
                 Ok(Some(access_token)) -> {
@@ -97,10 +97,10 @@ fn validate_dpop_token(
 }
 
 fn validate_bearer_token(
-  conn: sqlight.Connection,
+  db: Executor,
   token: String,
 ) -> Result(String, wisp.Response) {
-  case oauth_access_tokens.get(conn, token) {
+  case oauth_access_tokens.get(db, token) {
     Error(_) -> Error(server_error("Database error"))
     Ok(None) -> Error(unauthorized("Invalid access token"))
     Ok(Some(access_token)) -> {

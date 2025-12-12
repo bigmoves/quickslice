@@ -1,15 +1,13 @@
-import database/schema/migrations
+import database/sqlite/connection as db_connection
 import gleam/json
 import gleam/string
 import gleeunit/should
 import lib/mcp/tools/capabilities
-import sqlight
 
 pub fn get_server_capabilities_returns_version_test() {
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = migrations.run_migrations(db)
+  let assert Ok(exec) = db_connection.connect("sqlite::memory:")
 
-  let result = capabilities.get_server_capabilities(db)
+  let result = capabilities.get_server_capabilities(exec)
 
   result |> should.be_ok
   let assert Ok(json_result) = result
@@ -20,10 +18,9 @@ pub fn get_server_capabilities_returns_version_test() {
 }
 
 pub fn get_server_capabilities_returns_features_test() {
-  let assert Ok(db) = sqlight.open(":memory:")
-  let assert Ok(_) = migrations.run_migrations(db)
+  let assert Ok(exec) = db_connection.connect("sqlite::memory:")
 
-  let result = capabilities.get_server_capabilities(db)
+  let result = capabilities.get_server_capabilities(exec)
 
   result |> should.be_ok
   let assert Ok(json_result) = result

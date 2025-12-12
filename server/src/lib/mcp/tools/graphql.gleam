@@ -1,14 +1,14 @@
+import database/executor.{type Executor}
 import gleam/erlang/process.{type Subject}
 import gleam/json
 import gleam/option.{type Option}
 import gleam/result
 import graphql/lexicon/schema as lexicon_schema
 import lib/oauth/did_cache
-import sqlight
 
 /// Execute a GraphQL query
 pub fn execute_query(
-  db: sqlight.Connection,
+  db: Executor,
   query: String,
   variables_json: String,
   did_cache: Subject(did_cache.Message),
@@ -34,7 +34,7 @@ pub fn execute_query(
 
 /// Get full GraphQL schema introspection
 pub fn introspect_schema(
-  db: sqlight.Connection,
+  db: Executor,
   did_cache: Subject(did_cache.Message),
   signing_key: Option(String),
   plc_url: String,

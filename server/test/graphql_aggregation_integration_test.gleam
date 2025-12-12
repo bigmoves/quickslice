@@ -1,4 +1,3 @@
-import database/queries/aggregates
 /// End-to-end integration tests for GraphQL aggregated queries
 ///
 /// Tests the complete aggregation flow:
@@ -6,9 +5,10 @@ import database/queries/aggregates
 /// 2. GraphQL schema building with aggregate fields
 /// 3. Aggregated query execution with various parameters
 /// 4. Result formatting and verification
+import database/executor.{type Executor}
+import database/queries/aggregates
 import database/repositories/lexicons
 import database/repositories/records
-import database/schema/tables
 import database/types
 import gleam/dict
 import gleam/http
@@ -21,7 +21,7 @@ import gleeunit
 import gleeunit/should
 import handlers/graphql as graphql_handler
 import lib/oauth/did_cache
-import sqlight
+import test_helpers
 import wisp
 import wisp/simulate
 
@@ -102,146 +102,181 @@ fn create_status_lexicon() -> String {
 }
 
 // Helper to setup test database with aggregatable records
-fn setup_aggregation_test_db() -> Result(sqlight.Connection, sqlight.Error) {
-  use conn <- result.try(sqlight.open(":memory:"))
-  use _ <- result.try(tables.create_lexicon_table(conn))
-  use _ <- result.try(tables.create_record_table(conn))
+fn setup_aggregation_test_db() -> Result(Executor, String) {
+  use exec <- result.try(
+    test_helpers.create_test_db()
+    |> result.map_error(fn(_) { "Failed to connect" }),
+  )
+  use _ <- result.try(
+    test_helpers.create_lexicon_table(exec)
+    |> result.map_error(fn(_) { "Failed to create lexicon table" }),
+  )
+  use _ <- result.try(
+    test_helpers.create_record_table(exec)
+    |> result.map_error(fn(_) { "Failed to create record table" }),
+  )
 
   // Insert post lexicon
   let post_lexicon = create_post_lexicon()
-  use _ <- result.try(lexicons.insert(conn, "app.bsky.feed.post", post_lexicon))
+  use _ <- result.try(
+    lexicons.insert(exec, "app.bsky.feed.post", post_lexicon)
+    |> result.map_error(fn(_) { "Failed to insert post lexicon" }),
+  )
 
   // Insert status lexicon
   let status_lexicon = create_status_lexicon()
-  use _ <- result.try(lexicons.insert(
-    conn,
-    "xyz.statusphere.status",
-    status_lexicon,
-  ))
+  use _ <- result.try(
+    lexicons.insert(exec, "xyz.statusphere.status", status_lexicon)
+    |> result.map_error(fn(_) { "Failed to insert status lexicon" }),
+  )
 
   // Insert test records with varying fields for aggregation
   // Posts from different authors with different languages
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:alice/app.bsky.feed.post/1",
-    "cid1",
-    "did:plc:alice",
-    "app.bsky.feed.post",
-    json.object([
-      #("text", json.string("Hello world")),
-      #("author", json.string("alice")),
-      #("lang", json.string("en")),
-      #("likes", json.int(100)),
-    ])
-      |> json.to_string,
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:alice/app.bsky.feed.post/1",
+      "cid1",
+      "did:plc:alice",
+      "app.bsky.feed.post",
+      json.object([
+        #("text", json.string("Hello world")),
+        #("author", json.string("alice")),
+        #("lang", json.string("en")),
+        #("likes", json.int(100)),
+      ])
+        |> json.to_string,
+    )
+    |> result.map_error(fn(_) { "insert failed" }),
+  )
 
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:alice/app.bsky.feed.post/2",
-    "cid2",
-    "did:plc:alice",
-    "app.bsky.feed.post",
-    json.object([
-      #("text", json.string("Another post")),
-      #("author", json.string("alice")),
-      #("lang", json.string("en")),
-      #("likes", json.int(50)),
-    ])
-      |> json.to_string,
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:alice/app.bsky.feed.post/2",
+      "cid2",
+      "did:plc:alice",
+      "app.bsky.feed.post",
+      json.object([
+        #("text", json.string("Another post")),
+        #("author", json.string("alice")),
+        #("lang", json.string("en")),
+        #("likes", json.int(50)),
+      ])
+        |> json.to_string,
+    )
+    |> result.map_error(fn(_) { "insert failed" }),
+  )
 
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:bob/app.bsky.feed.post/1",
-    "cid3",
-    "did:plc:bob",
-    "app.bsky.feed.post",
-    json.object([
-      #("text", json.string("Bonjour")),
-      #("author", json.string("bob")),
-      #("lang", json.string("fr")),
-      #("likes", json.int(75)),
-    ])
-      |> json.to_string,
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:bob/app.bsky.feed.post/1",
+      "cid3",
+      "did:plc:bob",
+      "app.bsky.feed.post",
+      json.object([
+        #("text", json.string("Bonjour")),
+        #("author", json.string("bob")),
+        #("lang", json.string("fr")),
+        #("likes", json.int(75)),
+      ])
+        |> json.to_string,
+    )
+    |> result.map_error(fn(_) { "insert failed" }),
+  )
 
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:charlie/app.bsky.feed.post/1",
-    "cid4",
-    "did:plc:charlie",
-    "app.bsky.feed.post",
-    json.object([
-      #("text", json.string("Hello from Charlie")),
-      #("author", json.string("charlie")),
-      #("lang", json.string("en")),
-      #("likes", json.int(200)),
-    ])
-      |> json.to_string,
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:charlie/app.bsky.feed.post/1",
+      "cid4",
+      "did:plc:charlie",
+      "app.bsky.feed.post",
+      json.object([
+        #("text", json.string("Hello from Charlie")),
+        #("author", json.string("charlie")),
+        #("lang", json.string("en")),
+        #("likes", json.int(200)),
+      ])
+        |> json.to_string,
+    )
+    |> result.map_error(fn(_) { "insert failed" }),
+  )
 
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:bob/app.bsky.feed.post/2",
-    "cid5",
-    "did:plc:bob",
-    "app.bsky.feed.post",
-    json.object([
-      #("text", json.string("Salut")),
-      #("author", json.string("bob")),
-      #("lang", json.string("fr")),
-      #("likes", json.int(25)),
-    ])
-      |> json.to_string,
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:bob/app.bsky.feed.post/2",
+      "cid5",
+      "did:plc:bob",
+      "app.bsky.feed.post",
+      json.object([
+        #("text", json.string("Salut")),
+        #("author", json.string("bob")),
+        #("lang", json.string("fr")),
+        #("likes", json.int(25)),
+      ])
+        |> json.to_string,
+    )
+    |> result.map_error(fn(_) { "insert failed" }),
+  )
 
   // Insert status records
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:alice/xyz.statusphere.status/1",
-    "scid1",
-    "did:plc:alice",
-    "xyz.statusphere.status",
-    json.object([
-      #("status", json.string("👍")),
-      #("createdAt", json.string("2024-01-15T10:00:00Z")),
-    ])
-      |> json.to_string,
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:alice/xyz.statusphere.status/1",
+      "scid1",
+      "did:plc:alice",
+      "xyz.statusphere.status",
+      json.object([
+        #("status", json.string("👍")),
+        #("createdAt", json.string("2024-01-15T10:00:00Z")),
+      ])
+        |> json.to_string,
+    )
+    |> result.map_error(fn(_) { "insert failed" }),
+  )
 
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:bob/xyz.statusphere.status/1",
-    "scid2",
-    "did:plc:bob",
-    "xyz.statusphere.status",
-    json.object([
-      #("status", json.string("👍")),
-      #("createdAt", json.string("2024-01-15T11:00:00Z")),
-    ])
-      |> json.to_string,
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:bob/xyz.statusphere.status/1",
+      "scid2",
+      "did:plc:bob",
+      "xyz.statusphere.status",
+      json.object([
+        #("status", json.string("👍")),
+        #("createdAt", json.string("2024-01-15T11:00:00Z")),
+      ])
+        |> json.to_string,
+    )
+    |> result.map_error(fn(_) { "insert failed" }),
+  )
 
-  use _ <- result.try(records.insert(
-    conn,
-    "at://did:plc:charlie/xyz.statusphere.status/1",
-    "scid3",
-    "did:plc:charlie",
-    "xyz.statusphere.status",
-    json.object([
-      #("status", json.string("🔥")),
-      #("createdAt", json.string("2024-01-16T10:00:00Z")),
-    ])
-      |> json.to_string,
-  ))
+  use _ <- result.try(
+    records.insert(
+      exec,
+      "at://did:plc:charlie/xyz.statusphere.status/1",
+      "scid3",
+      "did:plc:charlie",
+      "xyz.statusphere.status",
+      json.object([
+        #("status", json.string("🔥")),
+        #("createdAt", json.string("2024-01-16T10:00:00Z")),
+      ])
+        |> json.to_string,
+    )
+    |> result.map_error(fn(_) { "Failed to insert record" }),
+  )
 
-  Ok(conn)
+  Ok(exec)
 }
 
 // Test: Simple single-field aggregation through full GraphQL stack
 pub fn graphql_simple_aggregation_test() {
-  let assert Ok(db) = setup_aggregation_test_db()
+  let assert Ok(exec) = setup_aggregation_test_db()
 
   // Query: Group posts by author
   let query =
@@ -264,7 +299,7 @@ pub fn graphql_simple_aggregation_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       None,
       "",
@@ -284,13 +319,11 @@ pub fn graphql_simple_aggregation_test() {
   string.contains(body, "alice") |> should.be_true
   string.contains(body, "bob") |> should.be_true
   string.contains(body, "charlie") |> should.be_true
-
-  let assert Ok(_) = sqlight.close(db)
 }
 
 // Test: Multi-field aggregation through GraphQL
 pub fn graphql_multi_field_aggregation_test() {
-  let assert Ok(db) = setup_aggregation_test_db()
+  let assert Ok(exec) = setup_aggregation_test_db()
 
   // Query: Group posts by author AND lang
   let query =
@@ -313,7 +346,7 @@ pub fn graphql_multi_field_aggregation_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       None,
       "",
@@ -330,13 +363,11 @@ pub fn graphql_multi_field_aggregation_test() {
   string.contains(body, "bob") |> should.be_true
   string.contains(body, "en") |> should.be_true
   string.contains(body, "fr") |> should.be_true
-
-  let assert Ok(_) = sqlight.close(db)
 }
 
 // Test: Aggregation with WHERE clause filtering
 pub fn graphql_aggregation_with_where_test() {
-  let assert Ok(db) = setup_aggregation_test_db()
+  let assert Ok(exec) = setup_aggregation_test_db()
 
   // First test without WHERE to ensure aggregation works
   let query_no_where =
@@ -359,7 +390,7 @@ pub fn graphql_aggregation_with_where_test() {
   let response_no_where =
     graphql_handler.handle_graphql_request(
       request_no_where,
-      db,
+      exec,
       cache2,
       None,
       "",
@@ -389,7 +420,7 @@ pub fn graphql_aggregation_with_where_test() {
   let response_string =
     graphql_handler.handle_graphql_request(
       request_string,
-      db,
+      exec,
       cache3,
       None,
       "",
@@ -420,7 +451,7 @@ pub fn graphql_aggregation_with_where_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       None,
       "",
@@ -449,13 +480,11 @@ pub fn graphql_aggregation_with_where_test() {
   string.contains(body, "count") |> should.be_true
   string.contains(body, "3") |> should.be_true
   string.contains(body, "1") |> should.be_true
-
-  let assert Ok(_) = sqlight.close(db)
 }
 
 // Test: Aggregation with ORDER BY
 pub fn graphql_aggregation_with_order_by_test() {
-  let assert Ok(db) = setup_aggregation_test_db()
+  let assert Ok(exec) = setup_aggregation_test_db()
 
   // Query: Group by lang, order by count ascending
   let query =
@@ -478,7 +507,7 @@ pub fn graphql_aggregation_with_order_by_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       None,
       "",
@@ -492,13 +521,11 @@ pub fn graphql_aggregation_with_order_by_test() {
 
   string.contains(body, "lang") |> should.be_true
   string.contains(body, "count") |> should.be_true
-
-  let assert Ok(_) = sqlight.close(db)
 }
 
 // Test: Aggregation with LIMIT
 pub fn graphql_aggregation_with_limit_test() {
-  let assert Ok(db) = setup_aggregation_test_db()
+  let assert Ok(exec) = setup_aggregation_test_db()
 
   // Query: Group by author, limit to 2 results
   let query =
@@ -521,7 +548,7 @@ pub fn graphql_aggregation_with_limit_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       None,
       "",
@@ -535,13 +562,11 @@ pub fn graphql_aggregation_with_limit_test() {
 
   string.contains(body, "author") |> should.be_true
   string.contains(body, "count") |> should.be_true
-
-  let assert Ok(_) = sqlight.close(db)
 }
 
 // Test: Aggregation on status field (emoji grouping)
 pub fn graphql_status_aggregation_test() {
-  let assert Ok(db) = setup_aggregation_test_db()
+  let assert Ok(exec) = setup_aggregation_test_db()
 
   // Query: Group status records by status emoji
   let query =
@@ -564,7 +589,7 @@ pub fn graphql_status_aggregation_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       None,
       "",
@@ -579,18 +604,16 @@ pub fn graphql_status_aggregation_test() {
   // Should have 👍 (count=2) and 🔥 (count=1)
   string.contains(body, "👍") |> should.be_true
   string.contains(body, "🔥") |> should.be_true
-
-  let assert Ok(_) = sqlight.close(db)
 }
 
 // Test: Direct database aggregation (not through GraphQL handler)
 pub fn database_aggregation_integration_test() {
-  let assert Ok(conn) = setup_aggregation_test_db()
+  let assert Ok(exec) = setup_aggregation_test_db()
 
   // Test simple grouping by author
   let assert Ok(results) =
     aggregates.get_aggregated_records(
-      conn,
+      exec,
       "app.bsky.feed.post",
       [types.SimpleField("author")],
       None,
@@ -608,18 +631,16 @@ pub fn database_aggregation_integration_test() {
     // Count should be positive
     should.be_true(result.count > 0)
   })
-
-  let assert Ok(_) = sqlight.close(conn)
 }
 
 // Test: Database aggregation with multi-field grouping
 pub fn database_multi_field_aggregation_test() {
-  let assert Ok(conn) = setup_aggregation_test_db()
+  let assert Ok(exec) = setup_aggregation_test_db()
 
   // Group by author and lang
   let assert Ok(results) =
     aggregates.get_aggregated_records(
-      conn,
+      exec,
       "app.bsky.feed.post",
       [types.SimpleField("author"), types.SimpleField("lang")],
       None,
@@ -634,13 +655,11 @@ pub fn database_multi_field_aggregation_test() {
   list.each(results, fn(result) {
     dict.size(result.group_values) |> should.equal(2)
   })
-
-  let assert Ok(_) = sqlight.close(conn)
 }
 
 // Test: Aggregation on table column (did)
 pub fn graphql_table_column_aggregation_test() {
-  let assert Ok(db) = setup_aggregation_test_db()
+  let assert Ok(exec) = setup_aggregation_test_db()
 
   // Query: Group posts by did (table column, not JSON field)
   let query =
@@ -663,7 +682,7 @@ pub fn graphql_table_column_aggregation_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       None,
       "",
@@ -679,13 +698,11 @@ pub fn graphql_table_column_aggregation_test() {
   string.contains(body, "did:plc:alice") |> should.be_true
   string.contains(body, "did:plc:bob") |> should.be_true
   string.contains(body, "did:plc:charlie") |> should.be_true
-
-  let assert Ok(_) = sqlight.close(db)
 }
 
 // Test: Empty aggregation result
 pub fn graphql_empty_aggregation_test() {
-  let assert Ok(db) = setup_aggregation_test_db()
+  let assert Ok(exec) = setup_aggregation_test_db()
 
   // Query: Filter that matches no records
   let query =
@@ -708,7 +725,7 @@ pub fn graphql_empty_aggregation_test() {
   let response =
     graphql_handler.handle_graphql_request(
       request,
-      db,
+      exec,
       cache,
       None,
       "",
@@ -723,6 +740,4 @@ pub fn graphql_empty_aggregation_test() {
   // Should have data field but empty array
   string.contains(body, "data") |> should.be_true
   string.contains(body, "appBskyFeedPostAggregated") |> should.be_true
-
-  let assert Ok(_) = sqlight.close(db)
 }

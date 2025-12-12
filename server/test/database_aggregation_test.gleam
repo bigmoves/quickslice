@@ -1,74 +1,67 @@
+import database/executor.{type Executor, Text}
 import database/queries/aggregates
 import database/queries/where_clause
-import database/schema/tables
 import database/types
 import gleam/dict
-import gleam/dynamic/decode
 import gleam/list
 import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
-import sqlight
+import test_helpers
 
 pub fn main() {
   gleeunit.main()
 }
 
 // Helper to create an in-memory test database using existing database functions
-fn setup_test_db() -> sqlight.Connection {
-  let assert Ok(conn) = sqlight.open(":memory:")
+fn setup_test_db() -> Executor {
+  let assert Ok(exec) = test_helpers.create_test_db()
 
   // Use existing database creation functions
-  let assert Ok(_) = tables.create_record_table(conn)
-  let assert Ok(_) = tables.create_actor_table(conn)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
+  let assert Ok(_) = test_helpers.create_actor_table(exec)
 
-  conn
+  exec
 }
 
 // Helper to insert test records
 fn insert_test_record(
-  conn: sqlight.Connection,
+  exec: Executor,
   uri: String,
   collection: String,
   json: String,
   did: String,
 ) {
   let assert Ok(_) =
-    sqlight.query(
+    executor.exec(
+      exec,
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES (?, 'cid123', ?, ?, ?, datetime('now'))",
-      on: conn,
-      with: [
-        sqlight.text(uri),
-        sqlight.text(did),
-        sqlight.text(collection),
-        sqlight.text(json),
-      ],
-      expecting: decode.string,
+      [Text(uri), Text(did), Text(collection), Text(json)],
     )
   Nil
 }
 
 pub fn test_simple_group_by_single_field() {
-  let conn = setup_test_db()
+  let exec = setup_test_db()
 
   // Insert test data with different statuses
   insert_test_record(
-    conn,
+    exec,
     "at://did1/xyz.statusphere.status/1",
     "xyz.statusphere.status",
     "{\"status\": \"👍\", \"text\": \"Great!\"}",
     "did:plc:user1",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did2/xyz.statusphere.status/2",
     "xyz.statusphere.status",
     "{\"status\": \"👍\", \"text\": \"Awesome!\"}",
     "did:plc:user2",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did3/xyz.statusphere.status/3",
     "xyz.statusphere.status",
     "{\"status\": \"👎\", \"text\": \"Not good\"}",
@@ -78,7 +71,7 @@ pub fn test_simple_group_by_single_field() {
   // Aggregate by status field
   let assert Ok(results) =
     aggregates.get_aggregated_records(
-      conn,
+      exec,
       "xyz.statusphere.status",
       [types.SimpleField("status")],
       None,
@@ -97,25 +90,25 @@ pub fn test_simple_group_by_single_field() {
 }
 
 pub fn test_group_by_multiple_fields() {
-  let conn = setup_test_db()
+  let exec = setup_test_db()
 
   // Insert test data
   insert_test_record(
-    conn,
+    exec,
     "at://did1/xyz.statusphere.status/1",
     "xyz.statusphere.status",
     "{\"status\": \"👍\", \"category\": \"work\"}",
     "did:plc:user1",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did2/xyz.statusphere.status/2",
     "xyz.statusphere.status",
     "{\"status\": \"👍\", \"category\": \"personal\"}",
     "did:plc:user2",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did3/xyz.statusphere.status/3",
     "xyz.statusphere.status",
     "{\"status\": \"👍\", \"category\": \"work\"}",
@@ -125,7 +118,7 @@ pub fn test_group_by_multiple_fields() {
   // Aggregate by status and category
   let assert Ok(results) =
     aggregates.get_aggregated_records(
-      conn,
+      exec,
       "xyz.statusphere.status",
       [types.SimpleField("status"), types.SimpleField("category")],
       None,
@@ -142,25 +135,25 @@ pub fn test_group_by_multiple_fields() {
 }
 
 pub fn test_group_by_with_where_filter() {
-  let conn = setup_test_db()
+  let exec = setup_test_db()
 
   // Insert test data
   insert_test_record(
-    conn,
+    exec,
     "at://did1/xyz.statusphere.status/1",
     "xyz.statusphere.status",
     "{\"status\": \"👍\", \"active\": \"true\"}",
     "did:plc:user1",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did2/xyz.statusphere.status/2",
     "xyz.statusphere.status",
     "{\"status\": \"👍\", \"active\": \"false\"}",
     "did:plc:user2",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did3/xyz.statusphere.status/3",
     "xyz.statusphere.status",
     "{\"status\": \"👎\", \"active\": \"true\"}",
@@ -170,7 +163,7 @@ pub fn test_group_by_with_where_filter() {
   // Create WHERE clause to filter only active records
   let where_condition =
     where_clause.WhereCondition(
-      eq: Some(sqlight.text("true")),
+      eq: Some(Text("true")),
       in_values: None,
       contains: None,
       gt: None,
@@ -191,7 +184,7 @@ pub fn test_group_by_with_where_filter() {
   // Aggregate by status with WHERE filter
   let assert Ok(results) =
     aggregates.get_aggregated_records(
-      conn,
+      exec,
       "xyz.statusphere.status",
       [types.SimpleField("status")],
       Some(where_clause),
@@ -205,25 +198,25 @@ pub fn test_group_by_with_where_filter() {
 }
 
 pub fn test_group_by_table_column() {
-  let conn = setup_test_db()
+  let exec = setup_test_db()
 
   // Insert test data with different DIDs
   insert_test_record(
-    conn,
+    exec,
     "at://did1/xyz.statusphere.status/1",
     "xyz.statusphere.status",
     "{\"status\": \"👍\"}",
     "did:plc:user1",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did1/xyz.statusphere.status/2",
     "xyz.statusphere.status",
     "{\"status\": \"👍\"}",
     "did:plc:user1",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did2/xyz.statusphere.status/3",
     "xyz.statusphere.status",
     "{\"status\": \"👍\"}",
@@ -233,7 +226,7 @@ pub fn test_group_by_table_column() {
   // Aggregate by DID (table column)
   let assert Ok(results) =
     aggregates.get_aggregated_records(
-      conn,
+      exec,
       "xyz.statusphere.status",
       [types.SimpleField("did")],
       None,
@@ -250,25 +243,25 @@ pub fn test_group_by_table_column() {
 }
 
 pub fn test_order_by_count_ascending() {
-  let conn = setup_test_db()
+  let exec = setup_test_db()
 
   // Insert test data
   insert_test_record(
-    conn,
+    exec,
     "at://did1/xyz.statusphere.status/1",
     "xyz.statusphere.status",
     "{\"status\": \"👍\"}",
     "did:plc:user1",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did2/xyz.statusphere.status/2",
     "xyz.statusphere.status",
     "{\"status\": \"👎\"}",
     "did:plc:user2",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did3/xyz.statusphere.status/3",
     "xyz.statusphere.status",
     "{\"status\": \"👎\"}",
@@ -278,7 +271,7 @@ pub fn test_order_by_count_ascending() {
   // Aggregate with ascending order
   let assert Ok(results) =
     aggregates.get_aggregated_records(
-      conn,
+      exec,
       "xyz.statusphere.status",
       [types.SimpleField("status")],
       None,
@@ -295,32 +288,32 @@ pub fn test_order_by_count_ascending() {
 }
 
 pub fn test_limit() {
-  let conn = setup_test_db()
+  let exec = setup_test_db()
 
   // Insert test data with many different statuses
   insert_test_record(
-    conn,
+    exec,
     "at://did1/xyz.statusphere.status/1",
     "xyz.statusphere.status",
     "{\"status\": \"A\"}",
     "did:plc:user1",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did2/xyz.statusphere.status/2",
     "xyz.statusphere.status",
     "{\"status\": \"B\"}",
     "did:plc:user2",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did3/xyz.statusphere.status/3",
     "xyz.statusphere.status",
     "{\"status\": \"C\"}",
     "did:plc:user3",
   )
   insert_test_record(
-    conn,
+    exec,
     "at://did4/xyz.statusphere.status/4",
     "xyz.statusphere.status",
     "{\"status\": \"D\"}",
@@ -330,7 +323,7 @@ pub fn test_limit() {
   // Aggregate with limit of 2
   let assert Ok(results) =
     aggregates.get_aggregated_records(
-      conn,
+      exec,
       "xyz.statusphere.status",
       [types.SimpleField("status")],
       None,
@@ -343,40 +336,37 @@ pub fn test_limit() {
 }
 
 pub fn test_date_truncation_day() {
-  let conn = setup_test_db()
+  let exec = setup_test_db()
 
   // Insert records with indexed_at timestamps on different days
   let assert Ok(_) =
-    sqlight.query(
+    executor.exec(
+      exec,
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES (?, 'cid1', 'did1', 'xyz.statusphere.status', '{}', '2024-01-15 10:30:00')",
-      on: conn,
-      with: [sqlight.text("at://did1/xyz.statusphere.status/1")],
-      expecting: decode.string,
+      [Text("at://did1/xyz.statusphere.status/1")],
     )
 
   let assert Ok(_) =
-    sqlight.query(
+    executor.exec(
+      exec,
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES (?, 'cid2', 'did2', 'xyz.statusphere.status', '{}', '2024-01-15 15:45:00')",
-      on: conn,
-      with: [sqlight.text("at://did2/xyz.statusphere.status/2")],
-      expecting: decode.string,
+      [Text("at://did2/xyz.statusphere.status/2")],
     )
 
   let assert Ok(_) =
-    sqlight.query(
+    executor.exec(
+      exec,
       "INSERT INTO record (uri, cid, did, collection, json, indexed_at)
        VALUES (?, 'cid3', 'did3', 'xyz.statusphere.status', '{}', '2024-01-16 09:00:00')",
-      on: conn,
-      with: [sqlight.text("at://did3/xyz.statusphere.status/3")],
-      expecting: decode.string,
+      [Text("at://did3/xyz.statusphere.status/3")],
     )
 
   // Aggregate by indexed_at truncated to day
   let assert Ok(results) =
     aggregates.get_aggregated_records(
-      conn,
+      exec,
       "xyz.statusphere.status",
       [types.TruncatedField("indexed_at", types.Day)],
       None,
@@ -393,14 +383,14 @@ pub fn test_date_truncation_day() {
 }
 
 pub fn test_empty_result() {
-  let conn = setup_test_db()
+  let exec = setup_test_db()
 
   // No records inserted
 
   // Try to aggregate
   let assert Ok(results) =
     aggregates.get_aggregated_records(
-      conn,
+      exec,
       "xyz.statusphere.status",
       [types.SimpleField("status")],
       None,

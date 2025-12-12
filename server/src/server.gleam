@@ -2,7 +2,9 @@ import activity_cleanup
 import backfill
 import backfill_state
 import database/connection
+import database/executor.{type Executor}
 import database/repositories/config as config_repo
+import database/repositories/oauth_clients
 import dotenv_gleam
 import envoy
 import gleam/erlang/process
@@ -37,14 +39,13 @@ import lib/oauth/did_cache
 import logging
 import mist
 import pubsub
-import sqlight
 import stats_pubsub
 import wisp
 import wisp/wisp_mist
 
 pub type Context {
   Context(
-    db: sqlight.Connection,
+    db: Executor,
     external_base_url: String,
     backfill_state: process.Subject(backfill_state.Message),
     jetstream_consumer: option.Option(
@@ -72,11 +73,15 @@ pub fn main() {
     Error(_) -> "quickslice.db"
   }
 
-  // Initialize the database
-  let assert Ok(db) = connection.initialize(database_url)
+  // Connect to the database
+  // Note: Schema migrations must be run externally using dbmate before starting
+  let assert Ok(db) = connection.connect(database_url)
 
   // Initialize config defaults
   let _ = config_repo.initialize_config_defaults(db)
+
+  // Ensure the internal admin OAuth client exists (for admin UI authentication)
+  let _ = oauth_clients.ensure_admin_client(db)
 
   // Initialize HTTP connection pool for backfill/DID resolution
   backfill.configure_hackney_pool(150)
@@ -129,7 +134,7 @@ pub fn main() {
 }
 
 fn start_server(
-  db: sqlight.Connection,
+  db: Executor,
   jetstream_subject: option.Option(
     process.Subject(jetstream_consumer.ManagerMessage),
   ),

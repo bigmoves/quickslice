@@ -1,21 +1,39 @@
 import atproto_auth
+import database/executor.{type Executor, Int, Text}
 import database/repositories/oauth_access_tokens
 import database/repositories/oauth_atp_sessions
-import database/schema/migrations
 import database/types.{Bearer, OAuthAccessToken, OAuthAtpSession}
 import gleam/option.{None, Some}
 import gleeunit/should
 import lib/oauth/did_cache
-import sqlight
+import test_helpers
 
-fn setup_db() -> sqlight.Connection {
-  let assert Ok(conn) = sqlight.open(":memory:")
-  let assert Ok(_) = migrations.run_migrations(conn)
-  conn
+fn setup_db() -> Executor {
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_oauth_tables(exec)
+  // Create the test client that access tokens reference
+  let assert Ok(_) =
+    executor.exec(
+      exec,
+      "INSERT INTO oauth_client (client_id, client_name, redirect_uris, grant_types, response_types, token_endpoint_auth_method, client_type, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        Text("test-client"),
+        Text("Test Client"),
+        Text("[\"http://localhost\"]"),
+        Text("[\"authorization_code\"]"),
+        Text("[\"code\"]"),
+        Text("none"),
+        Text("public"),
+        Int(1000),
+        Int(1000),
+      ],
+    )
+  exec
 }
 
 pub fn verify_token_valid_returns_user_info_test() {
-  let conn = setup_db()
+  let exec = setup_db()
 
   // Insert a valid token
   let token =
@@ -32,9 +50,9 @@ pub fn verify_token_valid_returns_user_info_test() {
       revoked: False,
       dpop_jkt: None,
     )
-  let assert Ok(_) = oauth_access_tokens.insert(conn, token)
+  let assert Ok(_) = oauth_access_tokens.insert(exec, token)
 
-  let result = atproto_auth.verify_token(conn, "valid-token")
+  let result = atproto_auth.verify_token(exec, "valid-token")
 
   result |> should.be_ok
   let assert Ok(user_info) = result
@@ -42,9 +60,9 @@ pub fn verify_token_valid_returns_user_info_test() {
 }
 
 pub fn verify_token_not_found_returns_error_test() {
-  let conn = setup_db()
+  let exec = setup_db()
 
-  let result = atproto_auth.verify_token(conn, "nonexistent-token")
+  let result = atproto_auth.verify_token(exec, "nonexistent-token")
 
   result |> should.be_error
   let assert Error(err) = result
@@ -52,7 +70,7 @@ pub fn verify_token_not_found_returns_error_test() {
 }
 
 pub fn verify_token_revoked_returns_error_test() {
-  let conn = setup_db()
+  let exec = setup_db()
 
   let token =
     OAuthAccessToken(
@@ -68,9 +86,9 @@ pub fn verify_token_revoked_returns_error_test() {
       revoked: True,
       dpop_jkt: None,
     )
-  let assert Ok(_) = oauth_access_tokens.insert(conn, token)
+  let assert Ok(_) = oauth_access_tokens.insert(exec, token)
 
-  let result = atproto_auth.verify_token(conn, "revoked-token")
+  let result = atproto_auth.verify_token(exec, "revoked-token")
 
   result |> should.be_error
   let assert Error(err) = result
@@ -78,7 +96,7 @@ pub fn verify_token_revoked_returns_error_test() {
 }
 
 pub fn verify_token_expired_returns_error_test() {
-  let conn = setup_db()
+  let exec = setup_db()
 
   let token =
     OAuthAccessToken(
@@ -95,9 +113,9 @@ pub fn verify_token_expired_returns_error_test() {
       revoked: False,
       dpop_jkt: None,
     )
-  let assert Ok(_) = oauth_access_tokens.insert(conn, token)
+  let assert Ok(_) = oauth_access_tokens.insert(exec, token)
 
-  let result = atproto_auth.verify_token(conn, "expired-token")
+  let result = atproto_auth.verify_token(exec, "expired-token")
 
   result |> should.be_error
   let assert Error(err) = result
@@ -105,7 +123,7 @@ pub fn verify_token_expired_returns_error_test() {
 }
 
 pub fn verify_token_no_user_id_returns_error_test() {
-  let conn = setup_db()
+  let exec = setup_db()
 
   let token =
     OAuthAccessToken(
@@ -121,9 +139,9 @@ pub fn verify_token_no_user_id_returns_error_test() {
       revoked: False,
       dpop_jkt: None,
     )
-  let assert Ok(_) = oauth_access_tokens.insert(conn, token)
+  let assert Ok(_) = oauth_access_tokens.insert(exec, token)
 
-  let result = atproto_auth.verify_token(conn, "no-user-token")
+  let result = atproto_auth.verify_token(exec, "no-user-token")
 
   result |> should.be_error
   let assert Error(err) = result
@@ -133,7 +151,7 @@ pub fn verify_token_no_user_id_returns_error_test() {
 // ===== get_atp_session tests =====
 
 pub fn get_atp_session_no_session_id_returns_error_test() {
-  let conn = setup_db()
+  let exec = setup_db()
 
   // Token without session_id
   let token =
@@ -150,12 +168,12 @@ pub fn get_atp_session_no_session_id_returns_error_test() {
       revoked: False,
       dpop_jkt: None,
     )
-  let assert Ok(_) = oauth_access_tokens.insert(conn, token)
+  let assert Ok(_) = oauth_access_tokens.insert(exec, token)
 
   let assert Ok(cache) = did_cache.start()
 
   let result =
-    atproto_auth.get_atp_session(conn, cache, "no-session-token", None, "")
+    atproto_auth.get_atp_session(exec, cache, "no-session-token", None, "")
 
   result |> should.be_error
   let assert Error(err) = result
@@ -163,7 +181,7 @@ pub fn get_atp_session_no_session_id_returns_error_test() {
 }
 
 pub fn get_atp_session_not_exchanged_returns_error_test() {
-  let conn = setup_db()
+  let exec = setup_db()
 
   // Token with session_id
   let token =
@@ -180,7 +198,7 @@ pub fn get_atp_session_not_exchanged_returns_error_test() {
       revoked: False,
       dpop_jkt: None,
     )
-  let assert Ok(_) = oauth_access_tokens.insert(conn, token)
+  let assert Ok(_) = oauth_access_tokens.insert(exec, token)
 
   // ATP session that hasn't been exchanged yet (no access_token, no session_exchanged_at)
   let atp_session =
@@ -200,12 +218,12 @@ pub fn get_atp_session_not_exchanged_returns_error_test() {
       session_exchanged_at: None,
       exchange_error: None,
     )
-  let assert Ok(_) = oauth_atp_sessions.insert(conn, atp_session)
+  let assert Ok(_) = oauth_atp_sessions.insert(exec, atp_session)
 
   let assert Ok(cache) = did_cache.start()
 
   let result =
-    atproto_auth.get_atp_session(conn, cache, "has-session-token", None, "")
+    atproto_auth.get_atp_session(exec, cache, "has-session-token", None, "")
 
   result |> should.be_error
   let assert Error(err) = result
@@ -213,7 +231,7 @@ pub fn get_atp_session_not_exchanged_returns_error_test() {
 }
 
 pub fn get_atp_session_with_exchange_error_returns_error_test() {
-  let conn = setup_db()
+  let exec = setup_db()
 
   let token =
     OAuthAccessToken(
@@ -229,7 +247,7 @@ pub fn get_atp_session_with_exchange_error_returns_error_test() {
       revoked: False,
       dpop_jkt: None,
     )
-  let assert Ok(_) = oauth_access_tokens.insert(conn, token)
+  let assert Ok(_) = oauth_access_tokens.insert(exec, token)
 
   // ATP session with exchange error
   let atp_session =
@@ -249,12 +267,12 @@ pub fn get_atp_session_with_exchange_error_returns_error_test() {
       session_exchanged_at: Some(1000),
       exchange_error: Some("exchange failed"),
     )
-  let assert Ok(_) = oauth_atp_sessions.insert(conn, atp_session)
+  let assert Ok(_) = oauth_atp_sessions.insert(exec, atp_session)
 
   let assert Ok(cache) = did_cache.start()
 
   let result =
-    atproto_auth.get_atp_session(conn, cache, "error-session-token", None, "")
+    atproto_auth.get_atp_session(exec, cache, "error-session-token", None, "")
 
   result |> should.be_error
   let assert Error(err) = result

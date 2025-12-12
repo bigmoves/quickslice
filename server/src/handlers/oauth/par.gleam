@@ -1,5 +1,6 @@
 /// Pushed Authorization Request (PAR) endpoint
 /// POST /oauth/par
+import database/executor.{type Executor}
 import database/repositories/oauth_clients
 import database/repositories/oauth_par_requests
 import database/types.{OAuthParRequest}
@@ -10,7 +11,6 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/uri
-import sqlight
 import wisp
 
 /// PAR response
@@ -19,7 +19,7 @@ pub type PARResponse {
 }
 
 /// Handle POST /oauth/par
-pub fn handle(req: wisp.Request, conn: sqlight.Connection) -> wisp.Response {
+pub fn handle(req: wisp.Request, conn: Executor) -> wisp.Response {
   use body <- wisp.require_string_body(req)
 
   case process_par_request(body, conn) {
@@ -50,7 +50,7 @@ pub fn handle(req: wisp.Request, conn: sqlight.Connection) -> wisp.Response {
 
 fn process_par_request(
   body: String,
-  conn: sqlight.Connection,
+  conn: Executor,
 ) -> Result(PARResponse, #(Int, String, String)) {
   // Parse form data from POST body
   use params <- result.try(

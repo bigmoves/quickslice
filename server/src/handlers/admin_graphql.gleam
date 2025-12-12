@@ -3,6 +3,7 @@
 /// This handler serves the /admin/graphql endpoint which provides
 /// stats, settings, and activity data to the admin SPA
 import backfill_state
+import database/executor.{type Executor}
 import gleam/bit_array
 import gleam/dict
 import gleam/dynamic/decode
@@ -14,8 +15,7 @@ import gleam/option
 import graphql/admin/schema as admin_schema
 import jetstream_consumer
 import lib/oauth/did_cache
-import sqlight
-import swell/executor
+import swell/executor as swell_executor
 import swell/schema as swell_schema
 import swell/value
 import wisp
@@ -23,7 +23,7 @@ import wisp
 /// Handle GraphQL HTTP requests for admin API
 pub fn handle_admin_graphql_request(
   req: wisp.Request,
-  db: sqlight.Connection,
+  db: Executor,
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
@@ -54,7 +54,7 @@ pub fn handle_admin_graphql_request(
 
 fn handle_post(
   req: wisp.Request,
-  db: sqlight.Connection,
+  db: Executor,
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
@@ -88,7 +88,7 @@ fn handle_post(
 
 fn handle_get(
   req: wisp.Request,
-  db: sqlight.Connection,
+  db: Executor,
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
@@ -113,7 +113,7 @@ fn handle_get(
 
 fn execute_query(
   req: wisp.Request,
-  db: sqlight.Connection,
+  db: Executor,
   jetstream_subject: option.Option(Subject(jetstream_consumer.ManagerMessage)),
   did_cache: Subject(did_cache.Message),
   oauth_supported_scopes: List(String),
@@ -143,7 +143,7 @@ fn execute_query(
   }
 
   // Execute the query
-  case executor.execute(query, graphql_schema, ctx) {
+  case swell_executor.execute(query, graphql_schema, ctx) {
     Ok(result) -> {
       // Convert executor response to JSON
       let response_json = case result.errors {

@@ -1,5 +1,6 @@
 /// ATP OAuth Bridge
 /// Bridges OAuth server with ATProtocol PDS via redirect flow
+import database/executor.{type Executor}
 import database/repositories/oauth_atp_sessions
 import database/types.{type OAuthAtpSession, OAuthAtpSession}
 import gleam/dynamic/decode
@@ -20,7 +21,6 @@ import lib/oauth/crypto/jwt
 import lib/oauth/did_cache
 import lib/oauth/dpop/generator as dpop_generator
 import lib/oauth/token_generator
-import sqlight
 
 /// Authorization server metadata from PDS
 pub type AuthorizationServerMetadata {
@@ -72,7 +72,7 @@ pub type BridgeError {
 
 /// Handle ATP OAuth callback - exchange code for tokens
 pub fn handle_callback(
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: process.Subject(did_cache.Message),
   session: OAuthAtpSession,
   authorization_code: String,
@@ -152,7 +152,7 @@ pub fn handle_callback(
 
 /// Refresh ATP tokens (with session iteration)
 pub fn refresh_tokens(
-  conn: sqlight.Connection,
+  conn: Executor,
   did_cache: process.Subject(did_cache.Message),
   session: OAuthAtpSession,
   client_id: String,
@@ -556,7 +556,7 @@ fn get_dpop_nonce_header(headers: List(#(String, String))) -> Option(String) {
 
 /// Update ATP session with tokens after successful exchange
 fn update_session_with_tokens(
-  conn: sqlight.Connection,
+  conn: Executor,
   session: OAuthAtpSession,
   sub: String,
   access_token: String,
@@ -588,7 +588,7 @@ fn update_session_with_tokens(
 
 /// Increment session iteration with new tokens (for refresh)
 fn increment_iteration(
-  conn: sqlight.Connection,
+  conn: Executor,
   session: OAuthAtpSession,
   access_token: String,
   refresh_token: String,
