@@ -4,6 +4,8 @@ Let's build Statusphere, an app where users share their current status as an emo
 
 Along the way, we'll show what you'd write manually versus what Quickslice handles automatically.
 
+**Try it live:** A working example is running at [StackBlitz](https://stackblitz.com/edit/stackblitz-starters-g3uwhweu?file=index.html), connected to a slice at [xyzstatusphere.slices.network](https://xyzstatusphere.slices.network) with the `xyz.statusphere.status` lexicon.
+
 ## What We're Building
 
 Statusphere lets users:

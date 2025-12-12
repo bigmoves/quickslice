@@ -53,8 +53,22 @@ Visit your domain. The welcome screen prompts you to create an admin account:
 From the homepage, go to **Settings**:
 
 1. Enter your **Domain Authority** in reverse-domain format (e.g., `xyz.statusphere`)
-2. Upload your Lexicons as a `.zip` file
-3. Click **Trigger Backfill** to import existing records from the network
+2. Upload your Lexicons as a `.zip` file (JSON format, directory structure doesn't matter):
+   ```
+   lexicons.zip
+   └── lexicons/
+       └── xyz/
+           └── statusphere/
+               ├── status.json
+               └── follow.json
+   ```
+3. Click **Trigger Backfill** to import existing records from the network. The Quickslice logo enters a loading state during backfill and the page refreshes when complete. Check Railway logs to monitor progress:
+   ```
+   INFO [backfill] PDS worker 67/87 done (1898 records)
+   INFO [backfill] PDS worker 68/87 done (1117 records)
+   INFO [backfill] PDS worker 69/87 done (746 records)
+   ...
+   ```
 
 ## Environment Variables
 
@@ -85,7 +99,7 @@ primary_region = 'sjc'
   dockerfile = "Dockerfile"
 
 [env]
-  DATABASE_URL = '/data/quickslice.db'
+  DATABASE_URL = 'sqlite:/data/quickslice.db'
   HOST = '0.0.0.0'
   PORT = '8080'
 
@@ -136,7 +150,7 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=8080
-      - DATABASE_URL=/data/quickslice.db
+      - DATABASE_URL=sqlite:/data/quickslice.db
       - SECRET_KEY_BASE=${SECRET_KEY_BASE}
       - OAUTH_SIGNING_KEY=${OAUTH_SIGNING_KEY}
     restart: unless-stopped

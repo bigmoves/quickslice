@@ -20,7 +20,7 @@ This adds up before you write any application logic.
 Quickslice handles all of that automatically:
 
 - **Connects to Jetstream** and tracks the record types defined in your Lexicons
-- **Indexes** relevant records into a database (SQLite; Postgres coming)
+- **Indexes** relevant records into a database (SQLite or Postgres)
 - **Generates GraphQL** queries, mutations, and subscriptions from your Lexicon definitions
 - **Handles OAuth** and writes records back to the user's PDS
 - **Enables joins** by DID, URI, or strong reference, so you can query a status and its author's profile in one request
