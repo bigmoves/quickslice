@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="slices_and_lucy.png" alt="Slices and Lucy" width="201">
+</div>
+
 # quickslice
 
 GraphQL API for AT Protocol records with automatic schema generation from Lexicon definitions.
