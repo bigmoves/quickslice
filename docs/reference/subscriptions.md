@@ -1,10 +1,10 @@
 # Subscriptions
 
-> **Note:** Subscriptions require a WebSocket connection. Connect to `/graphql` using the [`graphql-ws`](https://github.com/enisdenjo/graphql-ws/blob/master/PROTOCOL.md) protocol.
+Subscriptions deliver real-time updates when records are created, updated, or deleted. The server pushes events over WebSocket instead of requiring polling.
+
+Connect to `/graphql` using the [`graphql-ws`](https://github.com/enisdenjo/graphql-ws/blob/master/PROTOCOL.md) protocol.
 
 ## Basic Subscription
-
-Subscribe to new records:
 
 ```graphql
 subscription {
@@ -130,7 +130,8 @@ Response:
 ### 1. Connect
 
 ```
-ws://localhost:8080/graphql
+ws://localhost:8080/graphql          # Local development
+wss://quickslice.example.com/graphql  # Production
 ```
 
 ### 2. Initialize

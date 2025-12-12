@@ -1,6 +1,6 @@
 # Variables
 
-GraphQL variables allow you to parameterize your queries and mutations for reusability and security.
+GraphQL variables parameterize queries and mutations for reusability and security.
 
 ## Basic Variables
 
@@ -205,7 +205,7 @@ Variables:
 
 ## Using in HTTP Requests
 
-When making HTTP requests, send variables in the request body:
+Send variables in the HTTP request body:
 
 ```bash
 curl -X POST http://localhost:8080/graphql \

@@ -1,39 +1,21 @@
 # MCP Server
 
-Quickslice provides an MCP (Model Context Protocol) server that lets AI assistants query your ATProto data directly.
+Quickslice provides an MCP (Model Context Protocol) server that lets AI assistants query ATProto data directly.
 
 ## Endpoint
 
+Every Quickslice instance exposes MCP at `{EXTERNAL_BASE_URL}/mcp`. For example:
+
 ```
-POST http://localhost:8080/mcp
+https://xyzstatusphere.slices.network/mcp
 ```
 
 ## Setup
 
-1. Start the quickslice server:
-   ```bash
-   cd server && gleam run
-   ```
-
-2. Connect your MCP client to `http://localhost:8080/mcp`
-
 ### Claude Code
 
 ```bash
-claude mcp add --transport http --scope user quickslice http://localhost:8080/mcp
-```
-
-### Claude Desktop
-
-Add to your `claude_desktop_config.json`:
-```json
-{
-  "mcpServers": {
-    "quickslice": {
-      "url": "http://localhost:8080/mcp"
-    }
-  }
-}
+claude mcp add --transport http quickslice https://xyzstatusphere.slices.network/mcp
 ```
 
 ### Other MCP Clients

@@ -1,6 +1,6 @@
 # Working with Blobs
 
-Blobs are used for binary data like images, videos, and files. They are uploaded separately and referenced by their CID (Content Identifier).
+Blobs store binary data like images, videos, and files. Upload separately and reference by CID (Content Identifier).
 
 ## Upload Blob
 
@@ -97,7 +97,7 @@ mutation {
 
 ## Blob URLs
 
-Blobs automatically generate CDN URLs for serving. Use the `url` field with optional presets:
+Blobs generate CDN URLs automatically. Use the `url` field with optional presets:
 
 ### Default URL
 
