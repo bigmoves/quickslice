@@ -1,5 +1,8 @@
 # Quickslice
 
+> **Warning**
+> This project is in early development. APIs may change without notice.
+
 Quickslice is a quick way to spin up an [AppView](https://atproto.com/guides/glossary#app-view) for AT Protocol applications. Import your Lexicon schemas and you get a GraphQL API with OAuth authentication, real-time sync from the network, and joins across record types without setting up a database or writing any backend code.
 
 ## The Problem
@@ -30,7 +33,7 @@ Quickslice handles all of that automatically:
 - You want to skip the AppView boilerplate
 - You want to prototype Lexicon data structures quickly
 - You want OAuth handled for you
-- You want to ship your AppView now
+- You want to ship your AppView already
 
 ## Next Steps
 

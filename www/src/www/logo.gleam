@@ -1,9 +1,10 @@
 /// Quickslice logo SVG
-import lustre/attribute.{attribute, class, id}
+import lustre/attribute.{attribute, class}
 import lustre/element.{type Element}
 import lustre/element/svg
 
 /// Render the quickslice logo SVG
+/// Uses solid colors to avoid gradient ID collisions when multiple logos are on the page
 pub fn logo() -> Element(Nil) {
   svg.svg(
     [
@@ -12,70 +13,25 @@ pub fn logo() -> Element(Nil) {
       class("sidebar-logo"),
     ],
     [
-      // Define gradients
-      svg.defs([], [
-        svg.linear_gradient(
-          [
-            id("board1"),
-            attribute("x1", "0%"),
-            attribute("y1", "0%"),
-            attribute("x2", "100%"),
-            attribute("y2", "100%"),
-          ],
-          [
-            svg.stop([
-              attribute("offset", "0%"),
-              attribute("stop-color", "#FF6347"),
-              attribute("stop-opacity", "1"),
-            ]),
-            svg.stop([
-              attribute("offset", "100%"),
-              attribute("stop-color", "#FF4500"),
-              attribute("stop-opacity", "1"),
-            ]),
-          ],
-        ),
-        svg.linear_gradient(
-          [
-            id("board2"),
-            attribute("x1", "0%"),
-            attribute("y1", "0%"),
-            attribute("x2", "100%"),
-            attribute("y2", "100%"),
-          ],
-          [
-            svg.stop([
-              attribute("offset", "0%"),
-              attribute("stop-color", "#00CED1"),
-              attribute("stop-opacity", "1"),
-            ]),
-            svg.stop([
-              attribute("offset", "100%"),
-              attribute("stop-color", "#4682B4"),
-              attribute("stop-opacity", "1"),
-            ]),
-          ],
-        ),
-      ]),
       // Surfboard/skateboard deck shapes stacked
       svg.g([attribute("transform", "translate(64, 64)")], [
-        // Top board slice
+        // Top board slice (red-orange)
         svg.ellipse([
           attribute("cx", "0"),
           attribute("cy", "-28"),
           attribute("rx", "50"),
           attribute("ry", "20"),
-          attribute("fill", "url(#board1)"),
+          attribute("fill", "#FF5722"),
         ]),
-        // Middle board slice
+        // Middle board slice (cyan-blue)
         svg.ellipse([
           attribute("cx", "0"),
           attribute("cy", "0"),
           attribute("rx", "60"),
           attribute("ry", "20"),
-          attribute("fill", "url(#board2)"),
+          attribute("fill", "#00ACC1"),
         ]),
-        // Bottom board slice
+        // Bottom board slice (lime green)
         svg.ellipse([
           attribute("cx", "0"),
           attribute("cy", "28"),
