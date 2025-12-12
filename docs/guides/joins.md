@@ -1,6 +1,6 @@
 # Joins
 
-AT Protocol data lives in collections. A user's status records occupy one collection, their profile another. Quickslice generates joins that query across collections—fetch a status and its author's profile in one request.
+AT Protocol data lives in collections. A user's status records (`xyz.statusphere.status`) occupy one collection, their profile (`app.bsky.actor.profile`) another. Quickslice generates joins that query across collections—fetch a status and its author's profile in one request.
 
 ## Join Types
 
