@@ -15,10 +15,10 @@
 <span class="line"><span style="color:#9A9A9A">  }</span></span>
 <span class="line"><span style="color:#9A9A9A">}</span></span>
 <span class="line"></span></code></pre>
-<p>When you create a record, Quickslice:</p>
+<p>Quickslice:</p>
 <ol>
 <li>Writes the record to the user's PDS</li>
-<li>Indexes the record locally for immediate query availability</li>
+<li>Indexes locally for immediate query availability</li>
 </ol>
 <h3 id="Custom-Record-Keys"><a href="#Custom-Record-Keys" class="header-anchor">#</a>Custom Record Keys</h3>
 <p>By default, Quickslice generates a TID (timestamp-based ID) for the record key. You can specify a custom key:</p>
@@ -60,7 +60,7 @@
 <span class="line"><span style="color:#9A9A9A">}</span></span>
 <span class="line"></span></code></pre>
 <h2 id="Working-with-Blobs"><a href="#Working-with-Blobs" class="header-anchor">#</a>Working with Blobs</h2>
-<p>Records can include binary data like images. Upload the blob first, then reference it in your record.</p>
+<p>Records can include binary data like images. Upload the blob first, then reference it.</p>
 <h3 id="Upload-a-Blob"><a href="#Upload-a-Blob" class="header-anchor">#</a>Upload a Blob</h3>
 <pre class="shiki quickslice" style="background-color:#1c1c1c;color:#dedede" tabindex="0"><code><span class="line"><span style="color:#F07068">mutation</span><span style="color:#9A9A9A"> {</span></span>
 <span class="line"><span style="color:#DEDEDE">  uploadBlob</span><span style="color:#9A9A9A">(</span></span>
@@ -73,7 +73,7 @@
 <span class="line"><span style="color:#9A9A9A">  }</span></span>
 <span class="line"><span style="color:#9A9A9A">}</span></span>
 <span class="line"></span></code></pre>
-<p>The <code>data</code> field accepts base64-encoded binary data. The response includes a <code>ref</code> (CID) to use in your record.</p>
+<p>The <code>data</code> field accepts base64-encoded binary data. The response includes a <code>ref</code> (CID) for use in your record.</p>
 <h3 id="Use-the-Blob-in-a-Record"><a href="#Use-the-Blob-in-a-Record" class="header-anchor">#</a>Use the Blob in a Record</h3>
 <pre class="shiki quickslice" style="background-color:#1c1c1c;color:#dedede" tabindex="0"><code><span class="line"><span style="color:#F07068">mutation</span><span style="color:#9A9A9A"> {</span></span>
 <span class="line"><span style="color:#DEDEDE">  updateAppBskyActorProfile</span><span style="color:#9A9A9A">(</span></span>
@@ -125,7 +125,7 @@
 </tbody>
 </table>
 <h2 id="Authentication"><a href="#Authentication" class="header-anchor">#</a>Authentication</h2>
-<p>Mutations require authentication. The headers you include depend on the OAuth flow:</p>
+<p>Mutations require authentication. Headers depend on the OAuth flow:</p>
 <p><strong>DPoP flow</strong> (recommended for browser apps):</p>
 <pre><code>Authorization: DPoP &lt;access_token&gt;
 DPoP: &lt;dpop_proof&gt;
@@ -133,5 +133,5 @@ DPoP: &lt;dpop_proof&gt;
 <p><strong>Bearer token flow</strong>:</p>
 <pre><code>Authorization: Bearer &lt;access_token&gt;
 </code></pre>
-<p>See the <a href="/authentication">Authentication Guide</a> for details on each flow and how to obtain tokens.</p>
+<p>See the <a href="/authentication">Authentication Guide</a> for flow details and token acquisition.</p>
 </div><nav class="page-nav"><a class="page-nav-link page-nav-prev" href="/guides/joins"><span class="page-nav-label">Previous</span><span class="page-nav-title">Joins</span></a><a class="page-nav-link page-nav-next" href="/guides/authentication"><span class="page-nav-label">Next</span><span class="page-nav-title">Authentication</span></a></nav></div></main></div><script src="/mobile-nav.js"></script><script src="/minimap.js"></script><script src="/fuse.min.js"></script><script src="/search.js"></script></body></html>

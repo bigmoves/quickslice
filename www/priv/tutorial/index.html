@@ -36,11 +36,11 @@
 <span class="line"><span style="color:#9A9A9A">  }</span></span>
 <span class="line"><span style="color:#9A9A9A">}</span></span>
 <span class="line"></span></code></pre>
-<p>When you import this Lexicon into Quickslice, several things happen automatically:</p>
+<p>Importing this Lexicon into Quickslice triggers three automatic steps:</p>
 <ol>
-<li><strong>Jetstream registration</strong>: Quickslice starts tracking <code>xyz.statusphere.status</code> records from the network</li>
-<li><strong>Database schema</strong>: A normalized table is created with proper columns and indexes</li>
-<li><strong>GraphQL types</strong>: Query, mutation, and subscription types are generated</li>
+<li><strong>Jetstream registration</strong>: Quickslice tracks <code>xyz.statusphere.status</code> records from the network</li>
+<li><strong>Database schema</strong>: Quickslice creates a normalized table with proper columns and indexes</li>
+<li><strong>GraphQL types</strong>: Quickslice generates query, mutation, and subscription types</li>
 </ol>
 <table>
 <thead>
@@ -73,7 +73,7 @@
 </tbody>
 </table>
 <h2 id="Step-2-Querying-Status-Records"><a href="#Step-2-Querying-Status-Records" class="header-anchor">#</a>Step 2: Querying Status Records</h2>
-<p>Once records are indexed, you can query them with GraphQL. Quickslice generates a query for each Lexicon type using Relay-style connections:</p>
+<p>Query indexed records with GraphQL. Quickslice generates a query for each Lexicon type using Relay-style connections:</p>
 <pre class="shiki quickslice" style="background-color:#1c1c1c;color:#dedede" tabindex="0"><code><span class="line"><span style="color:#F07068">query</span><span style="color:#5EEBD8"> GetStatuses</span><span style="color:#9A9A9A"> {</span></span>
 <span class="line"><span style="color:#DEDEDE">  xyzStatusphereStatus</span><span style="color:#9A9A9A">(</span></span>
 <span class="line"><span style="color:#DEDEDE">    first</span><span style="color:#9A9A9A">:</span><span style="color:#5EEBD8"> 20</span></span>
@@ -90,7 +90,7 @@
 <span class="line"><span style="color:#9A9A9A">  }</span></span>
 <span class="line"><span style="color:#9A9A9A">}</span></span>
 <span class="line"></span></code></pre>
-<p>The <code>edges</code> and <code>nodes</code> pattern comes from <a href="https://relay.dev/graphql/connections.htm">Relay</a>, a GraphQL specification for paginated data. Each <code>edge</code> contains a <code>node</code> (the actual record) and a <code>cursor</code> for pagination.</p>
+<p>The <code>edges</code> and <code>nodes</code> pattern comes from <a href="https://relay.dev/graphql/connections.htm">Relay</a>, a GraphQL pagination specification. Each <code>edge</code> contains a <code>node</code> (the record) and a <code>cursor</code> for pagination.</p>
 <p>You can filter with <code>where</code> clauses:</p>
 <pre class="shiki quickslice" style="background-color:#1c1c1c;color:#dedede" tabindex="0"><code><span class="line"><span style="color:#F07068">query</span><span style="color:#5EEBD8"> RecentStatuses</span><span style="color:#9A9A9A"> {</span></span>
 <span class="line"><span style="color:#DEDEDE">  xyzStatusphereStatus</span><span style="color:#9A9A9A">(</span></span>
@@ -133,8 +133,7 @@
 </tbody>
 </table>
 <h2 id="Step-3-Joining-Profile-Data"><a href="#Step-3-Joining-Profile-Data" class="header-anchor">#</a>Step 3: Joining Profile Data</h2>
-<p>This is where Quickslice really shines. Every status record has a <code>did</code> field identifying its author. We want to show the author's display name alongside their status.</p>
-<p>In Bluesky, profile information lives in <code>app.bsky.actor.profile</code> records. With Quickslice, you can join directly from a status to its author's profile:</p>
+<p>Here Quickslice shines. Every status record has a <code>did</code> field identifying its author. In Bluesky, profile information lives in <code>app.bsky.actor.profile</code> records. Join directly from a status to its author's profile:</p>
 <pre class="shiki quickslice" style="background-color:#1c1c1c;color:#dedede" tabindex="0"><code><span class="line"><span style="color:#F07068">query</span><span style="color:#5EEBD8"> StatusesWithProfiles</span><span style="color:#9A9A9A"> {</span></span>
 <span class="line"><span style="color:#DEDEDE">  xyzStatusphereStatus</span><span style="color:#9A9A9A">(</span><span style="color:#DEDEDE">first</span><span style="color:#9A9A9A">:</span><span style="color:#5EEBD8"> 20</span><span style="color:#9A9A9A">)</span><span style="color:#9A9A9A"> {</span></span>
 <span class="line"><span style="color:#DEDEDE">    edges </span><span style="color:#9A9A9A">{</span></span>
@@ -150,12 +149,12 @@
 <span class="line"><span style="color:#9A9A9A">  }</span></span>
 <span class="line"><span style="color:#9A9A9A">}</span></span>
 <span class="line"></span></code></pre>
-<p>The <code>appBskyActorProfileByDid</code> field is a <strong>DID join</strong>. It follows the <code>did</code> on the status record to find the corresponding profile record authored by the same identity.</p>
-<p>Behind the scenes, Quickslice:</p>
+<p>The <code>appBskyActorProfileByDid</code> field is a <strong>DID join</strong>. It follows the <code>did</code> on the status record to find the profile authored by that identity.</p>
+<p>Quickslice:</p>
 <ul>
-<li>Collects all DIDs from the status records</li>
+<li>Collects DIDs from the status records</li>
 <li>Batches them into a single database query (DataLoader pattern)</li>
-<li>Joins the profile data efficiently</li>
+<li>Joins profile data efficiently</li>
 </ul>
 <table>
 <thead>
@@ -188,14 +187,14 @@
 </tbody>
 </table>
 <h3 id="Other-Join-Types"><a href="#Other-Join-Types" class="header-anchor">#</a>Other Join Types</h3>
-<p>DID joins are just one option. Quickslice also supports:</p>
+<p>Quickslice also supports:</p>
 <ul>
 <li><strong>Forward joins</strong>: Follow a URI or strong ref to another record</li>
 <li><strong>Reverse joins</strong>: Find all records that reference a given record</li>
 </ul>
 <p>See the <a href="/guides/joins">Joins Guide</a> for complete documentation.</p>
 <h2 id="Step-4-Writing-a-Status-Mutations"><a href="#Step-4-Writing-a-Status-Mutations" class="header-anchor">#</a>Step 4: Writing a Status (Mutations)</h2>
-<p>When a user wants to set their status, your app calls a mutation:</p>
+<p>To set a user's status, call a mutation:</p>
 <pre class="shiki quickslice" style="background-color:#1c1c1c;color:#dedede" tabindex="0"><code><span class="line"><span style="color:#F07068">mutation</span><span style="color:#5EEBD8"> CreateStatus</span><span style="color:#9A9A9A">(</span><span style="color:#DEDEDE">$status</span><span style="color:#9A9A9A">:</span><span style="color:#5EEBD8"> String</span><span style="color:#9A9A9A">!,</span><span style="color:#DEDEDE"> $createdAt</span><span style="color:#9A9A9A">:</span><span style="color:#5EEBD8"> DateTime</span><span style="color:#9A9A9A">!)</span><span style="color:#9A9A9A"> {</span></span>
 <span class="line"><span style="color:#DEDEDE">  createXyzStatusphereStatus</span><span style="color:#9A9A9A">(</span></span>
 <span class="line"><span style="color:#DEDEDE">    input</span><span style="color:#9A9A9A">:</span><span style="color:#9A9A9A"> {</span><span style="color:#8CDB8C"> status</span><span style="color:#9A9A9A">:</span><span style="color:#DEDEDE"> $status, </span><span style="color:#8CDB8C">createdAt</span><span style="color:#9A9A9A">:</span><span style="color:#DEDEDE"> $createdAt </span><span style="color:#9A9A9A">}</span></span>
@@ -206,11 +205,11 @@
 <span class="line"><span style="color:#9A9A9A">  }</span></span>
 <span class="line"><span style="color:#9A9A9A">}</span></span>
 <span class="line"></span></code></pre>
-<p>When this mutation runs, Quickslice:</p>
+<p>Quickslice:</p>
 <ol>
-<li><strong>Writes to the user's PDS</strong>: The record is created in their personal data repository</li>
-<li><strong>Optimistically indexes locally</strong>: The record appears in queries immediately, without waiting for Jetstream</li>
-<li><strong>Handles OAuth</strong>: The authenticated session is used to sign the write</li>
+<li><strong>Writes to the user's PDS</strong>: Creates the record in their personal data repository</li>
+<li><strong>Indexes optimistically</strong>: The record appears in queries immediately, before Jetstream confirmation</li>
+<li><strong>Handles OAuth</strong>: Uses the authenticated session to sign the write</li>
 </ol>
 <table>
 <thead>
@@ -243,7 +242,7 @@
 </tbody>
 </table>
 <h2 id="Step-5-Authentication"><a href="#Step-5-Authentication" class="header-anchor">#</a>Step 5: Authentication</h2>
-<p>Quickslice bridges AT Protocol OAuth. Your frontend initiates login, and Quickslice manages the authorization flow:</p>
+<p>Quickslice bridges AT Protocol OAuth. Your frontend initiates login; Quickslice manages the authorization flow:</p>
 <ol>
 <li>User enters their handle (e.g., <code>alice.bsky.social</code>)</li>
 <li>Your app redirects to Quickslice's OAuth endpoint</li>
@@ -252,9 +251,9 @@
 <li>PDS redirects back to Quickslice with an auth code</li>
 <li>Quickslice exchanges the code for tokens and establishes a session</li>
 </ol>
-<p>For authenticated queries and mutations, include the appropriate auth headers. The exact headers depend on which OAuth flow you're using (DPoP or Bearer token). See the <a href="/guides/authentication">Authentication Guide</a> for setup details.</p>
+<p>For authenticated queries and mutations, include auth headers. The exact headers depend on your OAuth flow (DPoP or Bearer token). See the <a href="/guides/authentication">Authentication Guide</a> for details.</p>
 <h2 id="Step-6-Deploying-to-Railway"><a href="#Step-6-Deploying-to-Railway" class="header-anchor">#</a>Step 6: Deploying to Railway</h2>
-<p>The fastest way to deploy is with Railway:</p>
+<p>Deploy quickly with Railway:</p>
 <ol>
 <li>Click the deploy button in the <a href="/guides/deployment">Quickstart Guide</a></li>
 <li>Generate an OAuth signing key with <code>goat key generate -t p256</code></li>
@@ -264,18 +263,18 @@
 <li>Upload your Lexicons</li>
 </ol>
 <p>See <a href="/guides/deployment">Deployment Guide</a> for detailed instructions.</p>
-<h2 id="What-You-Didnt-Write"><a href="#What-You-Didnt-Write" class="header-anchor">#</a>What You Didn't Write</h2>
-<p>By using Quickslice, you skipped writing:</p>
+<h2 id="What-Quickslice-Handled"><a href="#What-Quickslice-Handled" class="header-anchor">#</a>What Quickslice Handled</h2>
+<p>Quickslice handled:</p>
 <ul>
-<li><strong>Jetstream connection</strong>: Connecting to the firehose, filtering events, handling reconnection</li>
-<li><strong>Record validation</strong>: Checking incoming records against Lexicon schemas</li>
-<li><strong>Database schema</strong>: Designing tables, migrations, indexes</li>
-<li><strong>Query API</strong>: Endpoints for filtering, sorting, and pagination</li>
-<li><strong>Batching</strong>: Efficient resolution of related records</li>
-<li><strong>Optimistic updates</strong>: Indexing records before Jetstream confirmation</li>
-<li><strong>OAuth flow</strong>: Token exchange, session management, DPoP proofs</li>
+<li><strong>Jetstream connection</strong>: firehose connection, event filtering, reconnection</li>
+<li><strong>Record validation</strong>: schema checking against Lexicons</li>
+<li><strong>Database schema</strong>: tables, migrations, indexes</li>
+<li><strong>Query API</strong>: filtering, sorting, pagination endpoints</li>
+<li><strong>Batching</strong>: efficient related-record resolution</li>
+<li><strong>Optimistic updates</strong>: indexing before Jetstream confirmation</li>
+<li><strong>OAuth flow</strong>: token exchange, session management, DPoP proofs</li>
 </ul>
-<p>With Quickslice, you focus on your application logic instead of infrastructure.</p>
+<p>Focus on your application logic; Quickslice handles infrastructure.</p>
 <h2 id="Next-Steps"><a href="#Next-Steps" class="header-anchor">#</a>Next Steps</h2>
 <ul>
 <li><a href="/guides/queries">Queries Guide</a>: Filtering, sorting, and pagination</li>

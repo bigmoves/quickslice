@@ -11,23 +11,22 @@
 <li>OAuth session management and PDS writes</li>
 <li>Efficient batching when resolving related records</li>
 </ul>
-<p>This adds up before you write any application logic. There are also a lot of patterns that are more or less the same that every AppView will need to implement.</p>
+<p>This adds up before you write any application logic. Every AppView also reimplements the same patterns.</p>
 <h2 id="What-Quickslice-Does"><a href="#What-Quickslice-Does" class="header-anchor">#</a>What Quickslice Does</h2>
 <p>Quickslice handles all of that automatically:</p>
 <ul>
 <li><strong>Connects to Jetstream</strong> and tracks the record types defined in your Lexicons</li>
-<li><strong>Indexes</strong> relevant records into a database (SQLite, more soon)</li>
+<li><strong>Indexes</strong> relevant records into a database (SQLite; Postgres coming)</li>
 <li><strong>Generates GraphQL</strong> queries, mutations, and subscriptions from your Lexicon definitions</li>
 <li><strong>Handles OAuth</strong> and writes records back to the user's PDS</li>
 <li><strong>Enables joins</strong> by DID, URI, or strong reference, so you can query a status and its author's profile in one request</li>
 </ul>
 <h2 id="When-to-Use-It"><a href="#When-to-Use-It" class="header-anchor">#</a>When to Use It</h2>
 <ul>
-<li>You've setup tried and failed to build an AppView from scratch</li>
-<li>You just want to tinker with Lexicon data structures and build a quick prototype</li>
-<li>You've banged your head against OAuth for too long</li>
-<li>You just want to ship your AppView already</li>
-<li>The <em>sky</em> is the limit!</li>
+<li>You want to skip the AppView boilerplate</li>
+<li>You want to prototype Lexicon data structures quickly</li>
+<li>You want OAuth handled for you</li>
+<li>You want to ship your AppView now</li>
 </ul>
 <h2 id="Next-Steps"><a href="#Next-Steps" class="header-anchor">#</a>Next Steps</h2>
 <p><a href="/tutorial">Build Statusphere with Quickslice</a>: A hands-on tutorial showing what Quickslice handles for you</p>

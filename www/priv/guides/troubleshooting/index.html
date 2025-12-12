@@ -3,14 +3,14 @@
 <p>Common issues and how to resolve them.</p>
 <h2 id="OAuth-Errors"><a href="#OAuth-Errors" class="header-anchor">#</a>OAuth Errors</h2>
 <h3 id="Invalid-redirect-URI"><a href="#Invalid-redirect-URI" class="header-anchor">#</a>&quot;Invalid redirect URI&quot;</h3>
-<p>The redirect URI in your OAuth request doesn't match any registered URI for your client.</p>
-<p><strong>Fix:</strong> Check that the redirect URI in your app exactly matches one registered in Settings &gt; OAuth Clients. URIs must match including protocol, host, port, and path.</p>
+<p>The redirect URI in your OAuth request doesn't match any registered URI.</p>
+<p><strong>Fix:</strong> Ensure the redirect URI in your app exactly matches one in Settings &gt; OAuth Clients. URIs must match protocol, host, port, and path.</p>
 <h3 id="Invalid-client-ID"><a href="#Invalid-client-ID" class="header-anchor">#</a>&quot;Invalid client ID&quot;</h3>
 <p>The client ID doesn't exist or was deleted.</p>
 <p><strong>Fix:</strong> Verify the client ID in Settings &gt; OAuth Clients. If it was deleted, register a new client.</p>
 <h3 id="PKCE-code-verifier-mismatch"><a href="#PKCE-code-verifier-mismatch" class="header-anchor">#</a>&quot;PKCE code verifier mismatch&quot;</h3>
 <p>The code verifier sent during token exchange doesn't match the code challenge from authorization.</p>
-<p><strong>Fix:</strong> This usually means the code verifier wasn't stored correctly between the authorization redirect and callback. If using the SDK, ensure you're calling <code>handleRedirectCallback()</code> in the same browser session that initiated login.</p>
+<p><strong>Fix:</strong> The code verifier wasn't stored correctly between authorization redirect and callback. If using the SDK, call <code>handleRedirectCallback()</code> in the same browser session that initiated login.</p>
 <h3 id="DPoP-proof-invalid"><a href="#DPoP-proof-invalid" class="header-anchor">#</a>&quot;DPoP proof invalid&quot;</h3>
 <p>The DPoP proof header is missing, malformed, or signed with the wrong key.</p>
 <p><strong>Fix:</strong> If using the SDK, this is handled automatically. If implementing manually, ensure:</p>
@@ -21,7 +21,7 @@
 </ul>
 <h2 id="GraphQL-Errors"><a href="#GraphQL-Errors" class="header-anchor">#</a>GraphQL Errors</h2>
 <h3 id="Cannot-query-field-X-on-type-Y"><a href="#Cannot-query-field-X-on-type-Y" class="header-anchor">#</a>&quot;Cannot query field X on type Y&quot;</h3>
-<p>The field doesn't exist on the type you're querying.</p>
+<p>The field doesn't exist on the queried type.</p>
 <p><strong>Fix:</strong> Check your query against the schema in GraphiQL. Common causes:</p>
 <ul>
 <li>Typo in field name</li>
@@ -38,7 +38,7 @@
 </ul>
 <h3 id="Record-not-found"><a href="#Record-not-found" class="header-anchor">#</a>&quot;Record not found&quot;</h3>
 <p>The record you're trying to update or delete doesn't exist.</p>
-<p><strong>Fix:</strong> Verify the record key (rkey) is correct. You can query for the record first to confirm it exists.</p>
+<p><strong>Fix:</strong> Verify the record key (rkey). Query for the record first to confirm it exists.</p>
 <h2 id="Jetstream-Issues"><a href="#Jetstream-Issues" class="header-anchor">#</a>Jetstream Issues</h2>
 <h3 id="Records-not-appearing-after-creation"><a href="#Records-not-appearing-after-creation" class="header-anchor">#</a>Records not appearing after creation</h3>
 <p>Records created via mutation should appear immediately due to optimistic indexing. If they don't:</p>
@@ -60,7 +60,7 @@
 </ol>
 <h2 id="Database-Issues"><a href="#Database-Issues" class="header-anchor">#</a>Database Issues</h2>
 <h3 id="Database-is-locked"><a href="#Database-is-locked" class="header-anchor">#</a>&quot;Database is locked&quot;</h3>
-<p>SQLite can't acquire a write lock. Usually caused by long-running queries or concurrent access issues.</p>
+<p>SQLite can't acquire a write lock. Caused by long-running queries or concurrent access.</p>
 <p><strong>Fix:</strong></p>
 <ul>
 <li>Ensure only one Quickslice instance writes to the database</li>
@@ -95,7 +95,7 @@
 <span class="line"></span></code></pre>
 <p>Returns <code>null</code> if not authenticated. Returns user info if authenticated.</p>
 <h3 id="Inspect-the-GraphQL-schema"><a href="#Inspect-the-GraphQL-schema" class="header-anchor">#</a>Inspect the GraphQL schema</h3>
-<p>Use GraphiQL at <code>/graphiql</code> to explore available types, queries, and mutations. The Docs panel shows all fields and their types.</p>
+<p>Use GraphiQL at <code>/graphiql</code> to explore types, queries, and mutations. The Docs panel shows all fields and types.</p>
 <h3 id="Check-Lexicon-registration"><a href="#Check-Lexicon-registration" class="header-anchor">#</a>Check Lexicon registration</h3>
 <p>Use the MCP endpoint or admin UI to list registered Lexicons:</p>
 <pre class="shiki quickslice" style="background-color:#1c1c1c;color:#dedede" tabindex="0"><code><span class="line"><span style="color:#F07068">query</span><span style="color:#9A9A9A"> {</span></span>

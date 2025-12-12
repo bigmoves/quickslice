@@ -18,7 +18,7 @@
 <span class="line"><span style="color:#9A9A9A">  }</span></span>
 <span class="line"><span style="color:#9A9A9A">}</span></span>
 <span class="line"></span></code></pre>
-<p>This works for any record type. The <code>appBskyActorProfileByDid</code> field is available on all records because every record has a <code>did</code> field.</p>
+<p>The <code>appBskyActorProfileByDid</code> field works on all records because every record has a <code>did</code> field.</p>
 <h2 id="User-Timelines"><a href="#User-Timelines" class="header-anchor">#</a>User Timelines</h2>
 <p>Fetch all records by a specific user using DID joins from their profile.</p>
 <pre class="shiki quickslice" style="background-color:#1c1c1c;color:#dedede" tabindex="0"><code><span class="line"><span style="color:#F07068">query</span><span style="color:#5EEBD8"> UserTimeline</span><span style="color:#9A9A9A">(</span><span style="color:#DEDEDE">$handle</span><span style="color:#9A9A9A">:</span><span style="color:#5EEBD8"> String</span><span style="color:#9A9A9A">!)</span><span style="color:#9A9A9A"> {</span></span>
@@ -190,7 +190,7 @@
 <span class="line"><span style="color:#9A9A9A">}</span></span>
 <span class="line"></span></code></pre>
 <h2 id="Real-Time-Updates"><a href="#Real-Time-Updates" class="header-anchor">#</a>Real-Time Updates</h2>
-<p>Subscribe to new records and update your UI in real-time.</p>
+<p>Subscribe to new records and update your UI live.</p>
 <pre class="shiki quickslice" style="background-color:#1c1c1c;color:#dedede" tabindex="0"><code><span class="line"><span style="color:#5EEBD8">subscription</span><span style="color:#5EEBD8"> NewStatuses</span><span style="color:#9A9A9A"> {</span></span>
 <span class="line"><span style="color:#DEDEDE">  xyzStatusphereStatusCreated </span><span style="color:#9A9A9A">{</span></span>
 <span class="line"><span style="color:#DEDEDE">    uri</span></span>
@@ -203,7 +203,7 @@
 <span class="line"><span style="color:#9A9A9A">  }</span></span>
 <span class="line"><span style="color:#9A9A9A">}</span></span>
 <span class="line"></span></code></pre>
-<p>Combine with an initial query to show existing data, then append new records as they arrive.</p>
+<p>Combine with an initial query to show existing data, then append new records as they arrive via subscription.</p>
 <h2 id="Aggregations"><a href="#Aggregations" class="header-anchor">#</a>Aggregations</h2>
 <p>Get statistics like top items or activity over time.</p>
 <pre class="shiki quickslice" style="background-color:#1c1c1c;color:#dedede" tabindex="0"><code><span class="line"><span style="color:#F07068">query</span><span style="color:#5EEBD8"> TopArtists</span><span style="color:#9A9A9A">(</span><span style="color:#DEDEDE">$user</span><span style="color:#9A9A9A">:</span><span style="color:#5EEBD8"> String</span><span style="color:#9A9A9A">!)</span><span style="color:#9A9A9A"> {</span></span>
