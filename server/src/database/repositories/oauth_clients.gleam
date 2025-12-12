@@ -29,13 +29,22 @@ pub fn insert(exec: Executor, client: OAuthClient) -> Result(Nil, DbError) {
   let p16 = executor.placeholder(exec, 16)
   let p17 = executor.placeholder(exec, 17)
 
-  let sql = "INSERT INTO oauth_client (
-      client_id, client_secret, client_name, redirect_uris,
-      grant_types, response_types, scope, token_endpoint_auth_method,
-      client_type, created_at, updated_at, metadata,
-      access_token_expiration, refresh_token_expiration,
-      require_redirect_exact, registration_access_token, jwks
-    ) VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> ", " <> p6 <> ", " <> p7 <> ", " <> p8 <> ", " <> p9 <> ", " <> p10 <> ", " <> p11 <> ", " <> p12 <> ", " <> p13 <> ", " <> p14 <> ", " <> p15 <> ", " <> p16 <> ", " <> p17 <> ")"
+  let sql = case executor.dialect(exec) {
+    executor.SQLite -> "INSERT INTO oauth_client (
+        client_id, client_secret, client_name, redirect_uris,
+        grant_types, response_types, scope, token_endpoint_auth_method,
+        client_type, created_at, updated_at, metadata,
+        access_token_expiration, refresh_token_expiration,
+        require_redirect_exact, registration_access_token, jwks
+      ) VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> ", " <> p6 <> ", " <> p7 <> ", " <> p8 <> ", " <> p9 <> ", " <> p10 <> ", " <> p11 <> ", " <> p12 <> ", " <> p13 <> ", " <> p14 <> ", " <> p15 <> ", " <> p16 <> ", " <> p17 <> ")"
+    executor.PostgreSQL -> "INSERT INTO oauth_client (
+        client_id, client_secret, client_name, redirect_uris,
+        grant_types, response_types, scope, token_endpoint_auth_method,
+        client_type, created_at, updated_at, metadata,
+        access_token_expiration, refresh_token_expiration,
+        require_redirect_exact, registration_access_token, jwks
+      ) VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> ", " <> p6 <> ", " <> p7 <> ", " <> p8 <> ", " <> p9 <> ", " <> p10 <> ", " <> p11 <> ", " <> p12 <> "::jsonb, " <> p13 <> ", " <> p14 <> ", " <> p15 <> ", " <> p16 <> ", " <> p17 <> "::jsonb)"
+  }
 
   let redirect_uris_json =
     json.to_string(json.array(client.redirect_uris, json.string))
@@ -80,7 +89,6 @@ pub fn get(
   exec: Executor,
   client_id: String,
 ) -> Result(Option(OAuthClient), DbError) {
-  // PostgreSQL: metadata and jwks are JSONB (need ::text cast)
   let sql = case executor.dialect(exec) {
     executor.SQLite ->
       "SELECT client_id, client_secret, client_name, redirect_uris,
@@ -94,7 +102,7 @@ pub fn get(
               grant_types, response_types, scope, token_endpoint_auth_method,
               client_type, created_at, updated_at, metadata::text,
               access_token_expiration, refresh_token_expiration,
-              require_redirect_exact, registration_access_token, jwks::text
+              require_redirect_exact::int, registration_access_token, jwks::text
        FROM oauth_client WHERE client_id = " <> executor.placeholder(exec, 1)
   }
 
@@ -110,7 +118,6 @@ pub fn get(
 
 /// Get all OAuth clients (excludes internal 'admin' client)
 pub fn get_all(exec: Executor) -> Result(List(OAuthClient), DbError) {
-  // PostgreSQL: metadata and jwks are JSONB (need ::text cast)
   let sql = case executor.dialect(exec) {
     executor.SQLite ->
       "SELECT client_id, client_secret, client_name, redirect_uris,
@@ -125,7 +132,7 @@ pub fn get_all(exec: Executor) -> Result(List(OAuthClient), DbError) {
               grant_types, response_types, scope, token_endpoint_auth_method,
               client_type, created_at, updated_at, metadata::text,
               access_token_expiration, refresh_token_expiration,
-              require_redirect_exact, registration_access_token, jwks::text
+              require_redirect_exact::int, registration_access_token, jwks::text
        FROM oauth_client WHERE client_id != 'admin'
        ORDER BY created_at DESC"
   }
@@ -150,21 +157,38 @@ pub fn update(exec: Executor, client: OAuthClient) -> Result(Nil, DbError) {
   let p13 = executor.placeholder(exec, 13)
   let p14 = executor.placeholder(exec, 14)
 
-  let sql = "UPDATE oauth_client SET
-      client_secret = " <> p1 <> ",
-      client_name = " <> p2 <> ",
-      redirect_uris = " <> p3 <> ",
-      grant_types = " <> p4 <> ",
-      response_types = " <> p5 <> ",
-      scope = " <> p6 <> ",
-      token_endpoint_auth_method = " <> p7 <> ",
-      updated_at = " <> p8 <> ",
-      metadata = " <> p9 <> ",
-      access_token_expiration = " <> p10 <> ",
-      refresh_token_expiration = " <> p11 <> ",
-      require_redirect_exact = " <> p12 <> ",
-      jwks = " <> p13 <> "
-    WHERE client_id = " <> p14
+  let sql = case executor.dialect(exec) {
+    executor.SQLite -> "UPDATE oauth_client SET
+        client_secret = " <> p1 <> ",
+        client_name = " <> p2 <> ",
+        redirect_uris = " <> p3 <> ",
+        grant_types = " <> p4 <> ",
+        response_types = " <> p5 <> ",
+        scope = " <> p6 <> ",
+        token_endpoint_auth_method = " <> p7 <> ",
+        updated_at = " <> p8 <> ",
+        metadata = " <> p9 <> ",
+        access_token_expiration = " <> p10 <> ",
+        refresh_token_expiration = " <> p11 <> ",
+        require_redirect_exact = " <> p12 <> ",
+        jwks = " <> p13 <> "
+      WHERE client_id = " <> p14
+    executor.PostgreSQL -> "UPDATE oauth_client SET
+        client_secret = " <> p1 <> ",
+        client_name = " <> p2 <> ",
+        redirect_uris = " <> p3 <> ",
+        grant_types = " <> p4 <> ",
+        response_types = " <> p5 <> ",
+        scope = " <> p6 <> ",
+        token_endpoint_auth_method = " <> p7 <> ",
+        updated_at = " <> p8 <> ",
+        metadata = " <> p9 <> "::jsonb,
+        access_token_expiration = " <> p10 <> ",
+        refresh_token_expiration = " <> p11 <> ",
+        require_redirect_exact = " <> p12 <> ",
+        jwks = " <> p13 <> "::jsonb
+      WHERE client_id = " <> p14
+  }
 
   let redirect_uris_json =
     json.to_string(json.array(client.redirect_uris, json.string))

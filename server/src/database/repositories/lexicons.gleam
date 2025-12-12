@@ -18,7 +18,7 @@ pub fn insert(exec: Executor, id: String, json: String) -> Result(Nil, DbError) 
          json = excluded.json,
          created_at = " <> now
     executor.PostgreSQL -> "INSERT INTO lexicon (id, json, created_at)
-       VALUES (" <> p1 <> ", " <> p2 <> ", " <> now <> ")
+       VALUES (" <> p1 <> ", " <> p2 <> "::jsonb, " <> now <> ")
        ON CONFLICT(id) DO UPDATE SET
          json = EXCLUDED.json,
          created_at = " <> now
@@ -29,7 +29,6 @@ pub fn insert(exec: Executor, id: String, json: String) -> Result(Nil, DbError) 
 
 /// Gets a lexicon by ID
 pub fn get(exec: Executor, id: String) -> Result(List(Lexicon), DbError) {
-  // PostgreSQL: json is JSONB (needs ::text cast), created_at is TIMESTAMPTZ (needs ::text cast)
   // SQLite: both are TEXT
   let sql = case executor.dialect(exec) {
     executor.SQLite -> "SELECT id, json, created_at
@@ -52,7 +51,6 @@ pub fn get(exec: Executor, id: String) -> Result(List(Lexicon), DbError) {
 
 /// Gets all lexicons from the database
 pub fn get_all(exec: Executor) -> Result(List(Lexicon), DbError) {
-  // PostgreSQL: json is JSONB (needs ::text cast), created_at is TIMESTAMPTZ (needs ::text cast)
   // SQLite: both are TEXT
   let sql = case executor.dialect(exec) {
     executor.SQLite ->
@@ -151,9 +149,7 @@ pub fn get_count(exec: Executor) -> Result(Int, DbError) {
 /// Gets all lexicons that are of type "record" (collections)
 pub fn get_record_types(exec: Executor) -> Result(List(Lexicon), DbError) {
   // Lexicon JSON structure has type at defs.main.type, not at root level
-  // PostgreSQL: use JSONB path query (json->'defs'->'main'->>'type')
   // SQLite: use LIKE pattern matching on the JSON text
-  // PostgreSQL: json is JSONB (needs ::text cast), created_at is TIMESTAMPTZ (needs ::text cast)
   let sql = case executor.dialect(exec) {
     executor.SQLite ->
       "SELECT id, json, created_at

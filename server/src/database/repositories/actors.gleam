@@ -35,7 +35,6 @@ pub fn upsert(
 
 /// Gets an actor by DID
 pub fn get(exec: Executor, did: String) -> Result(List(Actor), DbError) {
-  // PostgreSQL: indexed_at is TIMESTAMPTZ (needs ::text cast)
   // SQLite: indexed_at is TEXT
   let sql = case executor.dialect(exec) {
     executor.SQLite -> "SELECT did, handle, indexed_at
@@ -61,7 +60,6 @@ pub fn get_by_handle(
   exec: Executor,
   handle: String,
 ) -> Result(List(Actor), DbError) {
-  // PostgreSQL: indexed_at is TIMESTAMPTZ (needs ::text cast)
   // SQLite: indexed_at is TEXT
   let sql = case executor.dialect(exec) {
     executor.SQLite -> "SELECT did, handle, indexed_at

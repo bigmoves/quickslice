@@ -47,10 +47,18 @@ pub fn get(
   exec: Executor,
   token_value: String,
 ) -> Result(Option(OAuthAccessToken), DbError) {
-  let sql = "SELECT token, token_type, client_id, user_id, session_id,
-            session_iteration, scope, created_at, expires_at,
-            revoked, dpop_jkt
-     FROM oauth_access_token WHERE token = " <> executor.placeholder(exec, 1)
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "SELECT token, token_type, client_id, user_id, session_id,
+              session_iteration, scope, created_at, expires_at,
+              revoked, dpop_jkt
+       FROM oauth_access_token WHERE token = " <> executor.placeholder(exec, 1)
+    executor.PostgreSQL ->
+      "SELECT token, token_type, client_id, user_id, session_id,
+              session_iteration, scope, created_at, expires_at,
+              revoked::int, dpop_jkt
+       FROM oauth_access_token WHERE token = " <> executor.placeholder(exec, 1)
+  }
 
   case executor.query(exec, sql, [Text(token_value)], decoder()) {
     Ok(rows) ->
@@ -67,11 +75,20 @@ pub fn get_by_jkt(
   exec: Executor,
   jkt: String,
 ) -> Result(Option(OAuthAccessToken), DbError) {
-  let sql = "SELECT token, token_type, client_id, user_id, session_id,
-            session_iteration, scope, created_at, expires_at,
-            revoked, dpop_jkt
-     FROM oauth_access_token
-     WHERE dpop_jkt = " <> executor.placeholder(exec, 1) <> " AND revoked = 0"
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "SELECT token, token_type, client_id, user_id, session_id,
+              session_iteration, scope, created_at, expires_at,
+              revoked, dpop_jkt
+       FROM oauth_access_token
+       WHERE dpop_jkt = " <> executor.placeholder(exec, 1) <> " AND revoked = 0"
+    executor.PostgreSQL ->
+      "SELECT token, token_type, client_id, user_id, session_id,
+              session_iteration, scope, created_at, expires_at,
+              revoked::int, dpop_jkt
+       FROM oauth_access_token
+       WHERE dpop_jkt = " <> executor.placeholder(exec, 1) <> " AND revoked = FALSE"
+  }
 
   case executor.query(exec, sql, [Text(jkt)], decoder()) {
     Ok(rows) ->
@@ -88,13 +105,24 @@ pub fn get_by_session_id(
   exec: Executor,
   session_id: String,
 ) -> Result(Option(OAuthAccessToken), DbError) {
-  let sql = "SELECT token, token_type, client_id, user_id, session_id,
-            session_iteration, scope, created_at, expires_at,
-            revoked, dpop_jkt
-     FROM oauth_access_token
-     WHERE session_id = " <> executor.placeholder(exec, 1) <> " AND revoked = 0
-     ORDER BY created_at DESC
-     LIMIT 1"
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "SELECT token, token_type, client_id, user_id, session_id,
+              session_iteration, scope, created_at, expires_at,
+              revoked, dpop_jkt
+       FROM oauth_access_token
+       WHERE session_id = " <> executor.placeholder(exec, 1) <> " AND revoked = 0
+       ORDER BY created_at DESC
+       LIMIT 1"
+    executor.PostgreSQL ->
+      "SELECT token, token_type, client_id, user_id, session_id,
+              session_iteration, scope, created_at, expires_at,
+              revoked::int, dpop_jkt
+       FROM oauth_access_token
+       WHERE session_id = " <> executor.placeholder(exec, 1) <> " AND revoked = FALSE
+       ORDER BY created_at DESC
+       LIMIT 1"
+  }
 
   case executor.query(exec, sql, [Text(session_id)], decoder()) {
     Ok(rows) ->
@@ -123,9 +151,14 @@ pub fn update_session_iteration(
 
 /// Revoke an access token
 pub fn revoke(exec: Executor, token_value: String) -> Result(Nil, DbError) {
-  let sql =
-    "UPDATE oauth_access_token SET revoked = 1 WHERE token = "
-    <> executor.placeholder(exec, 1)
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "UPDATE oauth_access_token SET revoked = 1 WHERE token = "
+      <> executor.placeholder(exec, 1)
+    executor.PostgreSQL ->
+      "UPDATE oauth_access_token SET revoked = TRUE WHERE token = "
+      <> executor.placeholder(exec, 1)
+  }
 
   executor.exec(exec, sql, [Text(token_value)])
 }

@@ -27,7 +27,6 @@ pub fn log_activity(
   let p4 = executor.placeholder(exec, 4)
   let p5 = executor.placeholder(exec, 5)
 
-  // PostgreSQL: Timestamptz value type handles TIMESTAMPTZ, event_json needs ::jsonb cast
   // SQLite: both are TEXT
   let sql = case executor.dialect(exec) {
     executor.SQLite ->
@@ -116,7 +115,6 @@ pub fn get_recent_activity(
   let hours_str = int.to_string(hours)
 
   // Use dialect-specific datetime comparison
-  // PostgreSQL: timestamp is TIMESTAMPTZ (needs ::text cast), event_json is JSONB (needs ::text cast)
   // SQLite: both are TEXT
   let sql = case executor.dialect(exec) {
     executor.SQLite ->

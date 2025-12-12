@@ -58,11 +58,18 @@ pub fn get(
   exec: Executor,
   code_value: String,
 ) -> Result(Option(OAuthAuthorizationCode), DbError) {
-  let sql =
-    "SELECT code, client_id, user_id, session_id, session_iteration, redirect_uri, scope,
-            code_challenge, code_challenge_method, nonce, created_at, expires_at, used
-     FROM oauth_authorization_code WHERE code = "
-    <> executor.placeholder(exec, 1)
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "SELECT code, client_id, user_id, session_id, session_iteration, redirect_uri, scope,
+              code_challenge, code_challenge_method, nonce, created_at, expires_at, used
+       FROM oauth_authorization_code WHERE code = "
+      <> executor.placeholder(exec, 1)
+    executor.PostgreSQL ->
+      "SELECT code, client_id, user_id, session_id, session_iteration, redirect_uri, scope,
+              code_challenge, code_challenge_method, nonce, created_at, expires_at, used::int
+       FROM oauth_authorization_code WHERE code = "
+      <> executor.placeholder(exec, 1)
+  }
 
   case executor.query(exec, sql, [Text(code_value)], decoder()) {
     Ok(rows) ->
@@ -76,9 +83,14 @@ pub fn get(
 
 /// Mark an authorization code as used
 pub fn mark_used(exec: Executor, code_value: String) -> Result(Nil, DbError) {
-  let sql =
-    "UPDATE oauth_authorization_code SET used = 1 WHERE code = "
-    <> executor.placeholder(exec, 1)
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "UPDATE oauth_authorization_code SET used = 1 WHERE code = "
+      <> executor.placeholder(exec, 1)
+    executor.PostgreSQL ->
+      "UPDATE oauth_authorization_code SET used = TRUE WHERE code = "
+      <> executor.placeholder(exec, 1)
+  }
 
   executor.exec(exec, sql, [Text(code_value)])
 }

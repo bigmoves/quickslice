@@ -44,11 +44,18 @@ pub fn get(
   exec: Executor,
   token_value: String,
 ) -> Result(Option(OAuthRefreshToken), DbError) {
-  let sql =
-    "SELECT token, access_token, client_id, user_id, session_id, session_iteration,
-            scope, created_at, expires_at, revoked
-     FROM oauth_refresh_token WHERE token = "
-    <> executor.placeholder(exec, 1)
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "SELECT token, access_token, client_id, user_id, session_id, session_iteration,
+              scope, created_at, expires_at, revoked
+       FROM oauth_refresh_token WHERE token = "
+      <> executor.placeholder(exec, 1)
+    executor.PostgreSQL ->
+      "SELECT token, access_token, client_id, user_id, session_id, session_iteration,
+              scope, created_at, expires_at, revoked::int
+       FROM oauth_refresh_token WHERE token = "
+      <> executor.placeholder(exec, 1)
+  }
 
   case executor.query(exec, sql, [Text(token_value)], decoder()) {
     Ok(rows) ->
@@ -65,15 +72,26 @@ pub fn get_by_session_id(
   exec: Executor,
   session_id: String,
 ) -> Result(Option(OAuthRefreshToken), DbError) {
-  let sql =
-    "SELECT token, access_token, client_id, user_id, session_id, session_iteration,
-            scope, created_at, expires_at, revoked
-     FROM oauth_refresh_token
-     WHERE session_id = "
-    <> executor.placeholder(exec, 1)
-    <> " AND revoked = 0
-     ORDER BY created_at DESC
-     LIMIT 1"
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "SELECT token, access_token, client_id, user_id, session_id, session_iteration,
+              scope, created_at, expires_at, revoked
+       FROM oauth_refresh_token
+       WHERE session_id = "
+      <> executor.placeholder(exec, 1)
+      <> " AND revoked = 0
+       ORDER BY created_at DESC
+       LIMIT 1"
+    executor.PostgreSQL ->
+      "SELECT token, access_token, client_id, user_id, session_id, session_iteration,
+              scope, created_at, expires_at, revoked::int
+       FROM oauth_refresh_token
+       WHERE session_id = "
+      <> executor.placeholder(exec, 1)
+      <> " AND revoked = FALSE
+       ORDER BY created_at DESC
+       LIMIT 1"
+  }
 
   case executor.query(exec, sql, [Text(session_id)], decoder()) {
     Ok(rows) ->
@@ -87,9 +105,14 @@ pub fn get_by_session_id(
 
 /// Revoke a refresh token
 pub fn revoke(exec: Executor, token_value: String) -> Result(Nil, DbError) {
-  let sql =
-    "UPDATE oauth_refresh_token SET revoked = 1 WHERE token = "
-    <> executor.placeholder(exec, 1)
+  let sql = case executor.dialect(exec) {
+    executor.SQLite ->
+      "UPDATE oauth_refresh_token SET revoked = 1 WHERE token = "
+      <> executor.placeholder(exec, 1)
+    executor.PostgreSQL ->
+      "UPDATE oauth_refresh_token SET revoked = TRUE WHERE token = "
+      <> executor.placeholder(exec, 1)
+  }
 
   executor.exec(exec, sql, [Text(token_value)])
 }

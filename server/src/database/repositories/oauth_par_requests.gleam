@@ -15,10 +15,16 @@ pub fn insert(exec: Executor, par: OAuthParRequest) -> Result(Nil, DbError) {
   let p6 = executor.placeholder(exec, 6)
   let p7 = executor.placeholder(exec, 7)
 
-  let sql = "INSERT INTO oauth_par_request (
-      request_uri, authorization_request, client_id,
-      created_at, expires_at, subject, metadata
-    ) VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> ", " <> p6 <> ", " <> p7 <> ")"
+  let sql = case executor.dialect(exec) {
+    executor.SQLite -> "INSERT INTO oauth_par_request (
+        request_uri, authorization_request, client_id,
+        created_at, expires_at, subject, metadata
+      ) VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> ", " <> p6 <> ", " <> p7 <> ")"
+    executor.PostgreSQL -> "INSERT INTO oauth_par_request (
+        request_uri, authorization_request, client_id,
+        created_at, expires_at, subject, metadata
+      ) VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> ", " <> p6 <> ", " <> p7 <> "::jsonb)"
+  }
 
   let params = [
     Text(par.request_uri),
@@ -38,7 +44,6 @@ pub fn get(
   exec: Executor,
   request_uri: String,
 ) -> Result(Option(OAuthParRequest), DbError) {
-  // PostgreSQL: metadata is JSONB (needs ::text cast)
   let sql = case executor.dialect(exec) {
     executor.SQLite -> "SELECT request_uri, authorization_request, client_id,
               created_at, expires_at, subject, metadata

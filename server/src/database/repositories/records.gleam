@@ -16,7 +16,6 @@ import gleam/string
 // ===== Column Selection Helpers =====
 
 /// Returns the columns to select for Record queries
-/// PostgreSQL: json is JSONB (needs ::text cast), indexed_at is TIMESTAMPTZ (needs ::text cast)
 /// SQLite: both are TEXT
 fn record_columns(exec: Executor) -> String {
   case executor.dialect(exec) {
@@ -165,7 +164,7 @@ pub fn insert(
            indexed_at = datetime('now')"
         executor.PostgreSQL ->
           "INSERT INTO record (uri, cid, did, collection, json)
-         VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> ")
+         VALUES (" <> p1 <> ", " <> p2 <> ", " <> p3 <> ", " <> p4 <> ", " <> p5 <> "::jsonb)
          ON CONFLICT(uri) DO UPDATE SET
            cid = EXCLUDED.cid,
            json = EXCLUDED.json,
@@ -368,7 +367,7 @@ pub fn update(
       <> p1
       <> ", json = "
       <> p2
-      <> ", indexed_at = NOW() WHERE uri = "
+      <> "::jsonb, indexed_at = NOW() WHERE uri = "
       <> p3
   }
 
