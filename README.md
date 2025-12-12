@@ -78,15 +78,19 @@ query {
 
 ## Documentation
 
-- [Queries](docs/queries.md)
-- [Joins](docs/joins.md)
-- [Mutations](docs/mutations.md)
-- [Subscriptions](docs/subscriptions.md)
-- [Blobs](docs/blobs.md)
-- [Variables](docs/variables.md)
-- [Deployment](docs/deployment.md)
+- [Queries](docs/guides/queries.md)
+- [Joins](docs/guides/joins.md)
+- [Mutations](docs/guides/mutations.md)
+- [Subscriptions](docs/reference/subscriptions.md)
+- [Blobs](docs/reference/blobs.md)
+- [Variables](docs/reference/variables.md)
+- [Deployment](docs/guides/deployment.md)
 
-## Architecture
+## Structure
 
-- `lexicon_graphql/` - Schema generation from Lexicons
-- `server/` - Database layer and record storage
+- `server/` - Main server with database layer, GraphQL API, and Jetstream ingestion
+- `lexicon_graphql/` - GraphQL schema generation from AT Protocol Lexicons
+- `atproto_car/` - CAR (Content Addressable aRchive) file parsing for backfills
+- `client/` - Web-based GraphQL playground and admin UI
+- `quickslice-client-js/` - JavaScript client library
+- `www/` - Documentation website
