@@ -13,7 +13,7 @@ Building an AppView from scratch means writing a lot of infrastructure code:
 - OAuth session management and PDS writes
 - Efficient batching when resolving related records
 
-This adds up before you write any application logic. Every AppView also reimplements the same patterns.
+This adds up before you write any application logic.
 
 ## What Quickslice Does
 

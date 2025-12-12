@@ -181,11 +181,14 @@ fn menu_toggle() -> Element(Nil) {
   ])
 }
 
+const version = "v0.15.1"
+
 fn sidebar(current_path: String, pages: List(DocPage)) -> Element(Nil) {
   aside([class("sidebar")], [
     div([class("sidebar-brand")], [
       logo.logo(),
       span([class("sidebar-title")], [html.text("quickslice")]),
+      span([class("sidebar-version")], [html.text(version)]),
     ]),
     a([href("https://tangled.sh"), class("tangled-link")], [
       tangled_logo(),

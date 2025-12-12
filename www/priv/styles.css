@@ -13,13 +13,16 @@
   --text-hover: oklab(0.92 0 0);
   --text-comment: oklab(0.45 0 0);
 
-  /* Accent colors (from logo) */
-  --accent-cyan: oklab(0.876 -0.094 -0.036);
-  --accent-cyan-hover: oklab(0.92 -0.07 -0.02);
-  --accent-red: oklab(0.68 0.15 0.10);
-  --accent-orange: oklab(0.65 0.18 0.14);
-  --accent-blue: oklab(0.58 -0.03 -0.10);
-  --accent-green: oklab(0.75 -0.18 0.12);
+  /* Accent colors (matched to logo) */
+  /* Logo top: #FF6347 → #FF4500 (red-orange) */
+  --accent-red: oklab(0.70 0.16 0.13);
+  --accent-orange: oklab(0.68 0.18 0.15);
+  /* Logo middle: #00CED1 → #4682B4 (cyan-blue) */
+  --accent-cyan: oklab(0.78 -0.10 -0.06);
+  --accent-cyan-hover: oklab(0.84 -0.08 -0.04);
+  --accent-blue: oklab(0.60 -0.04 -0.12);
+  /* Logo bottom: #32CD32 (lime green) */
+  --accent-green: oklab(0.73 -0.19 0.14);
 
   /* Overlay */
   --overlay: oklab(0 0 0 / 0.6);
@@ -118,6 +121,12 @@ body {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-primary);
+}
+
+.sidebar-version {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-left: var(--space-2);
 }
 
 .tangled-link {
