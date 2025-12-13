@@ -1,3 +1,4 @@
+import database/repositories/oauth_authorization_code
 import database/repositories/oauth_clients
 import database/repositories/oauth_refresh_tokens
 import database/types
@@ -236,4 +237,139 @@ pub fn token_public_client_no_secret_required_test() {
 
   // Should NOT be 401 (auth passed, will fail on invalid code instead)
   response.status |> should.not_equal(401)
+}
+
+pub fn token_response_includes_sub_claim_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_all_tables(exec)
+
+  // Create a confidential client (doesn't require DPoP)
+  let test_client =
+    types.OAuthClient(
+      client_id: "test-client",
+      client_secret: Some("test-secret"),
+      client_name: "Test Client",
+      redirect_uris: ["https://example.com/callback"],
+      grant_types: [types.AuthorizationCode, types.RefreshToken],
+      response_types: [types.Code],
+      scope: Some("atproto"),
+      token_endpoint_auth_method: types.ClientSecretPost,
+      client_type: types.Confidential,
+      created_at: 0,
+      updated_at: 0,
+      metadata: "{}",
+      access_token_expiration: 3600,
+      refresh_token_expiration: 2_592_000,
+      require_redirect_exact: True,
+      registration_access_token: None,
+      jwks: None,
+    )
+  let assert Ok(_) = oauth_clients.insert(exec, test_client)
+
+  // Create an authorization code with a DID as user_id
+  let test_code =
+    types.OAuthAuthorizationCode(
+      code: "test-auth-code",
+      client_id: "test-client",
+      user_id: "did:plc:testuser123",
+      session_id: Some("test-session"),
+      session_iteration: Some(0),
+      redirect_uri: "https://example.com/callback",
+      scope: Some("atproto"),
+      code_challenge: Some("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"),
+      code_challenge_method: Some(types.S256),
+      nonce: None,
+      created_at: 0,
+      expires_at: 9_999_999_999,
+      used: False,
+    )
+  let assert Ok(_) = oauth_authorization_code.insert(exec, test_code)
+
+  // Exchange code for token (include client_secret for confidential client)
+  let req =
+    simulate.request(http.Post, "/oauth/token")
+    |> simulate.header("content-type", "application/x-www-form-urlencoded")
+    |> simulate.string_body(
+      "grant_type=authorization_code&client_id=test-client&client_secret=test-secret&code=test-auth-code&redirect_uri=https://example.com/callback&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+    )
+
+  let response = token.handle(req, exec, "http://localhost:8080")
+
+  response.status |> should.equal(200)
+
+  case response.body {
+    wisp.Text(response_body) -> {
+      // Verify sub claim is present with the user's DID
+      response_body |> string.contains("\"sub\"") |> should.be_true
+      response_body |> string.contains("did:plc:testuser123") |> should.be_true
+    }
+    _ -> should.fail()
+  }
+}
+
+pub fn refresh_token_response_includes_sub_claim_test() {
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_all_tables(exec)
+
+  // Create a confidential client (doesn't require DPoP)
+  let test_client =
+    types.OAuthClient(
+      client_id: "test-client",
+      client_secret: Some("test-secret"),
+      client_name: "Test Client",
+      redirect_uris: ["https://example.com/callback"],
+      grant_types: [types.AuthorizationCode, types.RefreshToken],
+      response_types: [types.Code],
+      scope: Some("atproto"),
+      token_endpoint_auth_method: types.ClientSecretPost,
+      client_type: types.Confidential,
+      created_at: 0,
+      updated_at: 0,
+      metadata: "{}",
+      access_token_expiration: 3600,
+      refresh_token_expiration: 2_592_000,
+      require_redirect_exact: True,
+      registration_access_token: None,
+      jwks: None,
+    )
+  let assert Ok(_) = oauth_clients.insert(exec, test_client)
+
+  // Create a refresh token with a DID as user_id
+  let test_refresh_token =
+    types.OAuthRefreshToken(
+      token: "test-refresh-token",
+      access_token: "old-access-token",
+      client_id: "test-client",
+      user_id: "did:plc:refreshuser456",
+      session_id: Some("test-session"),
+      session_iteration: Some(0),
+      scope: Some("atproto"),
+      created_at: 0,
+      expires_at: None,
+      revoked: False,
+    )
+  let assert Ok(_) = oauth_refresh_tokens.insert(exec, test_refresh_token)
+
+  // Refresh the token (include client_secret for confidential client)
+  let req =
+    simulate.request(http.Post, "/oauth/token")
+    |> simulate.header("content-type", "application/x-www-form-urlencoded")
+    |> simulate.string_body(
+      "grant_type=refresh_token&client_id=test-client&client_secret=test-secret&refresh_token=test-refresh-token",
+    )
+
+  let response = token.handle(req, exec, "http://localhost:8080")
+
+  response.status |> should.equal(200)
+
+  case response.body {
+    wisp.Text(response_body) -> {
+      // Verify sub claim is present with the user's DID
+      response_body |> string.contains("\"sub\"") |> should.be_true
+      response_body
+      |> string.contains("did:plc:refreshuser456")
+      |> should.be_true
+    }
+    _ -> should.fail()
+  }
 }

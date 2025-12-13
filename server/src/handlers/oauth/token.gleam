@@ -373,6 +373,7 @@ fn handle_authorization_code(
                                         client.access_token_expiration,
                                         Some(refresh_token_value),
                                         code.scope,
+                                        Some(code.user_id),
                                       )
                                     }
                                   }
@@ -586,6 +587,7 @@ fn handle_refresh_token(
                                               client.access_token_expiration,
                                               Some(new_refresh_token_value),
                                               scope,
+                                              Some(old_refresh_token.user_id),
                                             )
                                           }
                                         }
@@ -760,6 +762,7 @@ fn token_response(
   expires_in: Int,
   refresh_token: Option(String),
   scope: Option(String),
+  sub: Option(String),
 ) -> wisp.Response {
   let base_fields = [
     #("access_token", json.string(access_token)),
@@ -777,9 +780,14 @@ fn token_response(
     None -> with_refresh
   }
 
+  let with_sub = case sub {
+    Some(s) -> list.append(with_scope, [#("sub", json.string(s))])
+    None -> with_scope
+  }
+
   wisp.response(200)
   |> wisp.set_header("content-type", "application/json")
   |> wisp.set_header("cache-control", "no-store")
   |> wisp.set_header("pragma", "no-cache")
-  |> wisp.set_body(wisp.Text(json.to_string(json.object(with_scope))))
+  |> wisp.set_body(wisp.Text(json.to_string(json.object(with_sub))))
 }
