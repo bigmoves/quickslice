@@ -153,6 +153,7 @@ services:
       - DATABASE_URL=sqlite:/data/quickslice.db
       - SECRET_KEY_BASE=${SECRET_KEY_BASE}
       - OAUTH_SIGNING_KEY=${OAUTH_SIGNING_KEY}
+      - EXTERNAL_BASE_URL=https://your-quickslice.example.com
     restart: unless-stopped
 
 volumes:
