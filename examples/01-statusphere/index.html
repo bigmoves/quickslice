@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src http://localhost:8080; img-src 'self' https: data:;"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline'; connect-src http://localhost:8080 http://127.0.0.1:8080; img-src 'self' https: data:;"
     />
     <title>Statusphere</title>
     <style>
@@ -368,15 +368,16 @@
     </div>
 
     <!-- Quickslice Client SDK -->
-    <script src="../../quickslice-client-js/dist/quickslice-client.min.js"></script>
+    <script src="https://unpkg.com/quickslice-client-js/dist/quickslice-client.min.js"></script>
 
     <script>
       // =============================================================================
       // CONFIGURATION
       // =============================================================================
 
-      const SERVER_URL = "http://localhost:8080";
-      const CLIENT_ID = ""; // Set your OAuth client ID here
+      // Use the same hostname as the current page to avoid DPoP htu mismatch
+      const SERVER_URL = `http://${window.location.hostname}:8080`;
+      const CLIENT_ID = "client_hIDdeUW3tBTUZF6qgpXxbg"; // Set your OAuth client ID here
 
       const EMOJIS = [
         "👍",
