@@ -30,6 +30,34 @@ query {
 - `pageInfo`: Pagination metadata
 - `totalCount`: Total number of matching records
 
+## Built-in Fields
+
+Every record includes these fields automatically:
+
+| Field | Description |
+|-------|-------------|
+| `uri` | The AT-URI of the record |
+| `cid` | Content identifier (hash) |
+| `did` | Author's decentralized identifier |
+| `collection` | The Lexicon collection (e.g., `app.bsky.feed.post`) |
+| `actorHandle` | Author's handle (e.g., `alice.bsky.social`) |
+| `indexedAt` | When Quickslice indexed the record |
+
+The `actorHandle` field resolves the author's DID to their current handle, useful for display without a separate join:
+
+```graphql
+query {
+  xyzStatusphereStatus(first: 10) {
+    edges {
+      node {
+        status
+        actorHandle
+      }
+    }
+  }
+}
+```
+
 ## Filtering
 
 Use the `where` argument to filter records:
@@ -59,6 +87,37 @@ query {
 | `lt` | Less than | `{ createdAt: { lt: "2025-06-01T00:00:00Z" } }` |
 | `gte` | Greater than or equal | `{ position: { gte: 1 } }` |
 | `lte` | Less than or equal | `{ position: { lte: 10 } }` |
+| `isNull` | Null check | `{ replyParent: { isNull: true } }` |
+
+### Filtering Ref Fields
+
+Reference fields (AT-URIs or strong refs pointing to other records) only support `isNull`. Use it to find records with or without a reference:
+
+```graphql
+query {
+  # Find root posts (no reply parent)
+  appBskyFeedPost(where: { replyParent: { isNull: true } }) {
+    edges {
+      node {
+        text
+      }
+    }
+  }
+}
+```
+
+```graphql
+query {
+  # Find replies only
+  appBskyFeedPost(where: { replyParent: { isNull: false } }) {
+    edges {
+      node {
+        text
+      }
+    }
+  }
+}
+```
 
 ### Multiple Conditions
 
