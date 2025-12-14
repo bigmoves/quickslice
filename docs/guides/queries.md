@@ -87,7 +87,7 @@ query {
 | `lt` | Less than | `{ createdAt: { lt: "2025-06-01T00:00:00Z" } }` |
 | `gte` | Greater than or equal | `{ position: { gte: 1 } }` |
 | `lte` | Less than or equal | `{ position: { lte: 10 } }` |
-| `isNull` | Null check | `{ replyParent: { isNull: true } }` |
+| `isNull` | Null check | `{ reply: { isNull: true } }` |
 
 ### Filtering Ref Fields
 
@@ -95,8 +95,8 @@ Reference fields (AT-URIs or strong refs pointing to other records) only support
 
 ```graphql
 query {
-  # Find root posts (no reply parent)
-  appBskyFeedPost(where: { replyParent: { isNull: true } }) {
+  # Find root posts (no reply)
+  appBskyFeedPost(where: { reply: { isNull: true } }) {
     edges {
       node {
         text
@@ -109,7 +109,7 @@ query {
 ```graphql
 query {
   # Find replies only
-  appBskyFeedPost(where: { replyParent: { isNull: false } }) {
+  appBskyFeedPost(where: { reply: { isNull: false } }) {
     edges {
       node {
         text
