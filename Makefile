@@ -38,11 +38,13 @@ format-examples:
 
 # Generate documentation
 docs-build:
+	@VERSION=$$(git describe --tags --abbrev=0) && \
+		sed -i '' "s/const version = \"v[0-9.]*\"/const version = \"$$VERSION\"/" www/src/www/layout.gleam
 	@cd www && gleam run
 
 docs-dev:
 	@cd www && npx serve priv
 
 # Deploy www to Bunny CDN
-deploy-www: docs
+deploy-www: docs-build
 	@scripts/deploy-cdn.sh
