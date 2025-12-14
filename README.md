@@ -76,6 +76,50 @@ query {
 }
 ```
 
+## Quick Start
+
+### Docker (Fastest)
+
+Run Quickslice locally with Docker:
+
+```bash
+docker compose up --build
+```
+
+Open http://localhost:8080 and login with your Bluesky handle.
+
+For PostgreSQL instead of SQLite:
+
+```bash
+docker compose -f docker-compose.postgres.yml up --build
+```
+
+### Native Development
+
+For development without Docker:
+
+**Prerequisites:**
+- [Gleam](https://gleam.run/getting-started/installing/) v1.13+
+- [dbmate](https://github.com/amacneil/dbmate) for migrations
+- Node.js 18+ (for client build)
+
+**Setup:**
+
+```bash
+# Server
+cd server
+cp .env.example .env
+make db-setup-sqlite
+gleam run
+
+# Client (rebuild after changes)
+cd client
+npm install
+gleam run -m lustre/dev build
+```
+
+See [server/README.md](server/README.md) for detailed configuration.
+
 ## Documentation
 
 - [Queries](docs/guides/queries.md)

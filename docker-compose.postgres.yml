@@ -3,12 +3,10 @@ services:
     build: .
     ports:
       - "8080:8080"
-    volumes:
-      - quickslice-data:/data
     environment:
       - HOST=0.0.0.0
       - PORT=8080
-      - DATABASE_URL=sqlite:/data/quickslice.db
+      - DATABASE_URL=postgres://quickslice:quickslice@postgres:5432/quickslice?sslmode=disable
       - JETSTREAM_URL=wss://jetstream2.us-west.bsky.network/subscribe
       # NOTE: Do NOT use in production - generate your own secure key
       - SECRET_KEY_BASE=Xdb/9oovpIzYRKPjfTm45QSWYyYJi35GY3n4475SBVmcyxHS9tMoFJcOwPGfA0xW
@@ -18,6 +16,19 @@ services:
       - OAUTH_SIGNING_KEY=z42tsNCXT8jZHj37qRd1D1vBE4qns8rp43DZsm1uez3cr8h6
       - OAUTH_LOOPBACK_MODE=true
     restart: on-failure:5
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=quickslice
+      - POSTGRES_PASSWORD=quickslice
+      - POSTGRES_DB=quickslice
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
 
 volumes:
-  quickslice-data:
+  postgres-data:
