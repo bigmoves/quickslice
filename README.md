@@ -4,17 +4,18 @@
 
 # quickslice
 
-GraphQL API for AT Protocol records with automatic schema generation from Lexicon definitions.
+Quickslice is a quick way to spin up an [AppView](https://atproto.com/guides/glossary#app-view) for AT Protocol applications. Import your Lexicon schemas and you get a GraphQL API with OAuth authentication, real-time sync from the network, and joins across record types without setting up a database or writing any backend code.
 
-Work in progress. APIs subject to change.
+> **Warning**
+> This project is in early development. APIs may change without notice.
 
-## Features
+## What Quickslice Does
 
-- Automatic GraphQL schema generation from AT Protocol Lexicons
-- Relay-compliant cursor-based pagination
-- Real-time ingestion via Jetstream
-- Backfill support for historical data
-- SQLite storage
+- **Connects to Jetstream** and tracks the record types defined in your Lexicons
+- **Indexes** relevant records into a database (SQLite or Postgres)
+- **Generates GraphQL** queries, mutations, and subscriptions from your Lexicon definitions
+- **Handles OAuth** and writes records back to the user's PDS
+- **Enables joins** by DID, URI, or strong reference, so you can query a status and its author's profile in one request
 
 ## Example
 
@@ -78,7 +79,7 @@ query {
 
 ## Quick Start
 
-### Docker (Fastest)
+### Docker
 
 Run Quickslice locally with Docker:
 
@@ -138,3 +139,7 @@ See [server/README.md](server/README.md) for detailed configuration.
 - `client/` - Web-based GraphQL playground and admin UI
 - `quickslice-client-js/` - JavaScript client library
 - `www/` - Documentation website
+
+## License
+
+Apache License 2.0
