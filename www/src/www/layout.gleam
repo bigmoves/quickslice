@@ -222,16 +222,6 @@ fn sidebar(current_path: String, pages: List(DocPage)) -> Element(Nil) {
       html.span([attribute.class("sidebar-title")], [html.text("quickslice")]),
       html.span([attribute.class("sidebar-version")], [html.text(version)]),
     ]),
-    html.a(
-      [
-        attribute.href("https://tangled.org/slices.network/quickslice"),
-        attribute.class("tangled-link"),
-      ],
-      [
-        tangled_logo(),
-        html.span([], [html.text("tangled.org")]),
-      ],
-    ),
     html.div([attribute.class("search-container")], [
       html.input([
         attribute.attribute("type", "text"),
@@ -247,6 +237,16 @@ fn sidebar(current_path: String, pages: List(DocPage)) -> Element(Nil) {
         [],
       ),
     ]),
+    html.a(
+      [
+        attribute.href("https://tangled.org/slices.network/quickslice"),
+        attribute.class("tangled-link"),
+      ],
+      [
+        tangled_logo(),
+        html.span([], [html.text("tangled.org")]),
+      ],
+    ),
     html.nav([], render_grouped_nav(current_path, pages)),
   ])
 }
@@ -260,26 +260,45 @@ fn render_grouped_nav(
   |> group_by_group
   |> list.map(fn(group) {
     let #(group_name, group_pages) = group
-    html.div([attribute.class("sidebar-group")], [
-      html.div([attribute.class("sidebar-group-label")], [
-        html.text(group_name),
-      ]),
-      html.ul(
-        [],
-        list.map(group_pages, fn(p) {
-          let is_active = p.path == current_path
-          let classes = case is_active {
-            True -> "active"
-            False -> ""
-          }
-          html.li([], [
+    case group_name {
+      "" ->
+        // Standalone pages - render without group header
+        html.div(
+          [attribute.class("sidebar-standalone")],
+          list.map(group_pages, fn(p) {
+            let is_active = p.path == current_path
+            let classes = case is_active {
+              True -> "active"
+              False -> ""
+            }
             html.a([attribute.href(p.path), attribute.class(classes)], [
               html.text(p.title),
-            ]),
-          ])
-        }),
-      ),
-    ])
+            ])
+          }),
+        )
+      _ ->
+        // Grouped pages - render with header
+        html.div([attribute.class("sidebar-group")], [
+          html.div([attribute.class("sidebar-group-label")], [
+            html.text(group_name),
+          ]),
+          html.ul(
+            [],
+            list.map(group_pages, fn(p) {
+              let is_active = p.path == current_path
+              let classes = case is_active {
+                True -> "active"
+                False -> ""
+              }
+              html.li([], [
+                html.a([attribute.href(p.path), attribute.class(classes)], [
+                  html.text(p.title),
+                ]),
+              ])
+            }),
+          ),
+        ])
+    }
   })
 }
 

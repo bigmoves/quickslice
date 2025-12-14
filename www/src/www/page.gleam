@@ -20,7 +20,11 @@ pub fn render(page: DocPage, all_pages: List(DocPage)) -> Element(Nil) {
     |> transform_links
 
   // Extract headings BEFORE adding anchor links (regex expects clean headings)
-  let headings = extract_headings(html_before_anchors)
+  // Skip minimap for changelog (has duplicate heading IDs like "Added", "Fixed")
+  let headings = case page.slug {
+    "changelog" -> []
+    _ -> extract_headings(html_before_anchors)
+  }
 
   let html_content =
     html_before_anchors

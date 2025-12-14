@@ -20,45 +20,67 @@ pub type NavGroup {
   NavGroup(name: String, pages: List(#(String, String, String)))
 }
 
+/// Navigation item - either a group or standalone page
+pub type NavItem {
+  /// A group with header and multiple pages
+  Group(NavGroup)
+  /// A standalone page (no group header)
+  Page(filename: String, path: String, title: String)
+}
+
 /// Sidebar navigation structure
-/// Each group contains: #(filename, path, nav_title)
-pub const navigation: List(NavGroup) = [
-  NavGroup(
-    "Getting Started",
-    [
-      #("README.md", "/", "Introduction"),
-      #("tutorial.md", "/tutorial", "Tutorial"),
-    ],
+pub const navigation: List(NavItem) = [
+  Page("CHANGELOG.md", "/changelog", "CHANGELOG"),
+  Group(
+    NavGroup(
+      "Getting Started",
+      [
+        #("README.md", "/", "Introduction"),
+        #("tutorial.md", "/tutorial", "Tutorial"),
+      ],
+    ),
   ),
-  NavGroup(
-    "Guides",
-    [
-      #("guides/queries.md", "/guides/queries", "Queries"),
-      #("guides/joins.md", "/guides/joins", "Joins"),
-      #("guides/mutations.md", "/guides/mutations", "Mutations"),
-      #("guides/authentication.md", "/guides/authentication", "Authentication"),
-      #("guides/deployment.md", "/guides/deployment", "Deployment"),
-      #("guides/patterns.md", "/guides/patterns", "Patterns"),
-      #(
-        "guides/troubleshooting.md",
-        "/guides/troubleshooting",
-        "Troubleshooting",
-      ),
-    ],
+  Group(
+    NavGroup(
+      "Guides",
+      [
+        #("guides/queries.md", "/guides/queries", "Queries"),
+        #("guides/joins.md", "/guides/joins", "Joins"),
+        #("guides/mutations.md", "/guides/mutations", "Mutations"),
+        #(
+          "guides/authentication.md",
+          "/guides/authentication",
+          "Authentication",
+        ),
+        #("guides/deployment.md", "/guides/deployment", "Deployment"),
+        #("guides/patterns.md", "/guides/patterns", "Patterns"),
+        #(
+          "guides/troubleshooting.md",
+          "/guides/troubleshooting",
+          "Troubleshooting",
+        ),
+      ],
+    ),
   ),
-  NavGroup(
-    "Reference",
-    [
-      #("reference/aggregations.md", "/reference/aggregations", "Aggregations"),
-      #(
-        "reference/subscriptions.md",
-        "/reference/subscriptions",
-        "Subscriptions",
-      ),
-      #("reference/blobs.md", "/reference/blobs", "Blobs"),
-      #("reference/variables.md", "/reference/variables", "Variables"),
-      #("reference/mcp.md", "/reference/mcp", "MCP"),
-    ],
+  Group(
+    NavGroup(
+      "Reference",
+      [
+        #(
+          "reference/aggregations.md",
+          "/reference/aggregations",
+          "Aggregations",
+        ),
+        #(
+          "reference/subscriptions.md",
+          "/reference/subscriptions",
+          "Subscriptions",
+        ),
+        #("reference/blobs.md", "/reference/blobs", "Blobs"),
+        #("reference/variables.md", "/reference/variables", "Variables"),
+        #("reference/mcp.md", "/reference/mcp", "MCP"),
+      ],
+    ),
   ),
 ]
 
