@@ -214,6 +214,18 @@ if [ ! -d "$LOCAL_DIR" ]; then
     exit 1
 fi
 
+# Fingerprint styles.css for cache busting
+echo "Fingerprinting styles.css..."
+if [ -f "${LOCAL_DIR}/styles.css" ]; then
+    HASH=$(md5 -q "${LOCAL_DIR}/styles.css" | cut -c1-8)
+    mv "${LOCAL_DIR}/styles.css" "${LOCAL_DIR}/styles.${HASH}.css"
+    find "$LOCAL_DIR" -name "*.html" -exec sed -i '' "s|/styles.css|/styles.${HASH}.css|g" {} \;
+    echo -e "${GREEN}  styles.css -> styles.${HASH}.css${NC}"
+else
+    echo -e "${YELLOW}  No styles.css found, skipping${NC}"
+fi
+echo ""
+
 # Step 1: Upload all local files
 echo "Uploading files..."
 LOCAL_FILES_LIST=$(mktemp)
