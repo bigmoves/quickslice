@@ -21,7 +21,15 @@ brew install goat
 goat key generate -t p256
 ```
 
-Paste the output into the `OAUTH_SIGNING_KEY` field in Railway, then click **Save Config**.
+This outputs:
+
+```
+Key Type: P-256 / secp256r1 / ES256 private key
+Secret Key (Multibase Syntax): z42tsQ4W...
+Public Key (DID Key Syntax): did:key:zDnaek...
+```
+
+Copy only the **Secret Key** value (starts with `z`) and paste it into the `OAUTH_SIGNING_KEY` field in Railway, then click **Save Config**.
 
 ### 3. Configure Your Domain
 
@@ -53,14 +61,13 @@ Visit your domain. The welcome screen prompts you to create an admin account:
 From the homepage, go to **Settings**:
 
 1. Enter your **Domain Authority** in reverse-domain format (e.g., `xyz.statusphere`)
-2. Upload your Lexicons as a `.zip` file (JSON format, directory structure doesn't matter):
+2. Upload your Lexicons as a `.zip` file (JSON format, directory structure doesn't matter). See [statusphere lexicons](https://tangled.org/slices.network/lexicon-sets/tree/main/statusphere) for an example.
    ```
    lexicons.zip
    └── lexicons/
        └── xyz/
            └── statusphere/
-               ├── status.json
-               └── follow.json
+               └── status.json
    ```
 3. Click **Trigger Backfill** to import existing records from the network. The Quickslice logo enters a loading state during backfill and the page refreshes when complete. Check Railway logs to monitor progress:
    ```
@@ -69,6 +76,7 @@ From the homepage, go to **Settings**:
    INFO [backfill] PDS worker 69/87 done (746 records)
    ...
    ```
+   Depending on the lexicon, this could take a few seconds (`xyz.statusphere.*`) to days (`app.bsky.*`) to complete. Be mindful of your available storage and associated cloud provider fees when backfilling large lexicons.
 
 ## Environment Variables
 
@@ -100,6 +108,7 @@ primary_region = 'sjc'
 
 [env]
   DATABASE_URL = 'sqlite:/data/quickslice.db'
+  EXTERNAL_BASE_URL=https://your-quickslice.fly.dev
   HOST = '0.0.0.0'
   PORT = '8080'
 
@@ -124,7 +133,13 @@ primary_region = 'sjc'
 
 ```bash
 fly secrets set SECRET_KEY_BASE=$(openssl rand -base64 48)
-fly secrets set OAUTH_SIGNING_KEY="$(goat key generate -t p256)"
+```
+
+Generate a signing key and copy only the **Secret Key** value (starts with `z`):
+
+```bash
+goat key generate -t p256
+fly secrets set OAUTH_SIGNING_KEY="z42tsQ4W..."  # paste your secret key here
 ```
 
 ### 4. Deploy
@@ -164,7 +179,7 @@ Create a `.env` file:
 
 ```bash
 SECRET_KEY_BASE=$(openssl rand -base64 48)
-OAUTH_SIGNING_KEY=$(goat key generate -t p256)
+OAUTH_SIGNING_KEY=z42tsQ4W...  # paste your secret key here
 ```
 
 Start:

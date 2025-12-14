@@ -56,10 +56,11 @@ npx http-server . -p 3000
 
 ## Security Notes
 
-- Tokens are stored in `sessionStorage` (cleared when tab closes)
-- No external dependencies - all code is inline
+- Uses the local `quickslice-client-js` SDK from `../../quickslice-client-js`
+- Tokens are stored in `localStorage` (shared across tabs, persisted across sessions)
+- Uses DPoP (Demonstrating Proof-of-Possession) for token binding
 - Uses PKCE for secure OAuth flow
-- CSP header restricts connections to localhost:8080
+- CSP header restricts script sources and connections
 
 ## Troubleshooting
 
