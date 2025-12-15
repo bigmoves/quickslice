@@ -329,6 +329,9 @@ async function initiateLogin(authorizeUrl, clientId, options = {}) {
   if (options.handle) {
     params.set("login_hint", options.handle);
   }
+  if (options.scope) {
+    params.set("scope", options.scope);
+  }
   window.location.href = `${authorizeUrl}?${params.toString()}`;
 }
 async function handleOAuthCallback(tokenUrl) {
@@ -427,6 +430,7 @@ var QuicksliceClient = class {
     this.server = options.server.replace(/\/$/, "");
     this.clientId = options.clientId;
     this.redirectUri = options.redirectUri;
+    this.scope = options.scope;
     this.graphqlUrl = `${this.server}/graphql`;
     this.authorizeUrl = `${this.server}/oauth/authorize`;
     this.tokenUrl = `${this.server}/oauth/token`;
@@ -446,7 +450,8 @@ var QuicksliceClient = class {
     await this.init();
     await initiateLogin(this.authorizeUrl, this.clientId, {
       ...options,
-      redirectUri: options.redirectUri || this.redirectUri
+      redirectUri: options.redirectUri || this.redirectUri,
+      scope: options.scope || this.scope
     });
   }
   /**

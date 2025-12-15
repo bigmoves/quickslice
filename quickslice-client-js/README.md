@@ -19,11 +19,12 @@ npm install quickslice-client-js
 ## Usage
 
 ```javascript
-// Initialize client
+// Initialize client (with optional default scope)
 const client = await QuicksliceClient.createQuicksliceClient({
   server: 'https://api.example.com',
   clientId: 'client_abc123',
   redirectUri: 'https://yourapp.com/oauth/callback', // optional
+  scope: 'atproto', // optional - server uses default if omitted
 });
 
 // Handle OAuth callback (on page load)
@@ -41,9 +42,12 @@ if (await client.isAuthenticated()) {
   const profile = await client.query(`query { viewer { handle } }`);
 }
 
-// Login
+// Login (can override scope per-login)
 document.getElementById('login').onclick = async () => {
-  await client.loginWithRedirect({ handle: 'alice.bsky.social' });
+  await client.loginWithRedirect({
+    handle: 'alice.bsky.social',
+    scope: 'atproto transition:generic', // optional override
+  });
 };
 
 // Logout
@@ -81,12 +85,13 @@ Options:
 - `server` (required): Quickslice server URL
 - `clientId` (required): Pre-registered client ID
 - `redirectUri` (optional): OAuth callback URL. Defaults to current page URL if omitted. Useful when you have a dedicated callback route.
+- `scope` (optional): OAuth scope string to request. Server uses its default if omitted.
 
 ### `QuicksliceClient`
 
 #### Auth Methods
 
-- `loginWithRedirect(options?)` - Start OAuth login flow
+- `loginWithRedirect(options?)` - Start OAuth login flow. Options: `handle`, `redirectUri`, `scope` (overrides client default)
 - `handleRedirectCallback()` - Process OAuth callback
 - `logout(options?)` - Clear session and reload
 - `isAuthenticated()` - Check if logged in

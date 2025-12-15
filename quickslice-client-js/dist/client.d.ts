@@ -3,6 +3,7 @@ export interface QuicksliceClientOptions {
     server: string;
     clientId: string;
     redirectUri?: string;
+    scope?: string;
 }
 export interface User {
     did: string;
@@ -11,6 +12,7 @@ export declare class QuicksliceClient {
     private server;
     private clientId;
     private redirectUri?;
+    private scope?;
     private graphqlUrl;
     private authorizeUrl;
     private tokenUrl;

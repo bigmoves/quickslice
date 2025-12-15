@@ -7,6 +7,7 @@ import { storeTokens } from './tokens';
 export interface LoginOptions {
   handle?: string;
   redirectUri?: string;
+  scope?: string;
 }
 
 /**
@@ -42,6 +43,10 @@ export async function initiateLogin(
 
   if (options.handle) {
     params.set('login_hint', options.handle);
+  }
+
+  if (options.scope) {
+    params.set('scope', options.scope);
   }
 
   window.location.href = `${authorizeUrl}?${params.toString()}`;
