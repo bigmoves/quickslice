@@ -213,7 +213,7 @@ fn mobile_header() -> Element(Nil) {
   ])
 }
 
-const version = "v0.17.3"
+const version = "v0.17.4"
 
 fn sidebar(current_path: String, pages: List(DocPage)) -> Element(Nil) {
   html.aside([attribute.class("sidebar")], [
