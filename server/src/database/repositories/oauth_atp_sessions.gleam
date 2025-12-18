@@ -71,26 +71,23 @@ pub fn insert(exec: Executor, session: OAuthAtpSession) -> Result(Nil, DbError) 
   executor.exec(exec, sql, params)
 }
 
-/// Get an ATP session by session_id and iteration
+/// Get an ATP session by session_id (iteration parameter deprecated, ignored)
 pub fn get(
   exec: Executor,
   session_id: String,
-  iteration: Int,
+  _iteration: Int,
 ) -> Result(Option(OAuthAtpSession), DbError) {
+  // Query by session_id only, ORDER BY iteration DESC LIMIT 1
+  // to get the latest if multiple exist during migration
   let sql =
     "SELECT session_id, iteration, did, session_created_at, atp_oauth_state,
             signing_key_jkt, dpop_key, access_token, refresh_token,
             access_token_created_at, access_token_expires_at, access_token_scopes,
             session_exchanged_at, exchange_error
      FROM oauth_atp_session
-     WHERE session_id = " <> executor.placeholder(exec, 1) <> " AND iteration = " <> executor.placeholder(
-      exec,
-      2,
-    )
+     WHERE session_id = " <> executor.placeholder(exec, 1) <> " ORDER BY iteration DESC LIMIT 1"
 
-  case
-    executor.query(exec, sql, [Text(session_id), DbInt(iteration)], decoder())
-  {
+  case executor.query(exec, sql, [Text(session_id)], decoder()) {
     Ok(rows) ->
       case list.first(rows) {
         Ok(session) -> Ok(Some(session))
@@ -144,6 +141,31 @@ pub fn get_by_state(
       }
     Error(err) -> Error(err)
   }
+}
+
+/// Update tokens for an existing ATP session (in place, no new iteration)
+pub fn update_tokens(
+  exec: Executor,
+  session_id: String,
+  access_token: String,
+  refresh_token: String,
+  created_at: Int,
+  expires_at: Int,
+) -> Result(Nil, DbError) {
+  let sql = "UPDATE oauth_atp_session SET
+    access_token = " <> executor.placeholder(exec, 1) <> ",
+    refresh_token = " <> executor.placeholder(exec, 2) <> ",
+    access_token_created_at = " <> executor.placeholder(exec, 3) <> ",
+    access_token_expires_at = " <> executor.placeholder(exec, 4) <> "
+    WHERE session_id = " <> executor.placeholder(exec, 5)
+
+  executor.exec(exec, sql, [
+    Text(access_token),
+    Text(refresh_token),
+    DbInt(created_at),
+    DbInt(expires_at),
+    Text(session_id),
+  ])
 }
 
 /// Decode ATP session from database row

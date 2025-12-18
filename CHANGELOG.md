@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `scope` parameter to `QuicksliceClientOptions` for setting default OAuth scope
 - Add `scope` option to `loginWithRedirect()` for per-login scope override
 
+## v0.17.4
+
+### Fixed
+- Fix "Invalid refresh token" error caused by session iteration drift after ATP token refresh
+
 ## v0.17.3
 
 ### Fixed

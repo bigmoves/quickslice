@@ -304,7 +304,7 @@ fn handle_authorization_code(
                                   client_id: cid,
                                   user_id: Some(code.user_id),
                                   session_id: code.session_id,
-                                  session_iteration: code.session_iteration,
+                                  session_iteration: Some(0),
                                   scope: code.scope,
                                   created_at: now,
                                   expires_at: token_generator.expiration_timestamp(
@@ -321,7 +321,7 @@ fn handle_authorization_code(
                                   client_id: cid,
                                   user_id: code.user_id,
                                   session_id: code.session_id,
-                                  session_iteration: code.session_iteration,
+                                  session_iteration: Some(0),
                                   scope: code.scope,
                                   created_at: now,
                                   expires_at: case
@@ -513,7 +513,7 @@ fn handle_refresh_token(
                                         client_id: cid,
                                         user_id: Some(old_refresh_token.user_id),
                                         session_id: old_refresh_token.session_id,
-                                        session_iteration: old_refresh_token.session_iteration,
+                                        session_iteration: Some(0),
                                         scope: scope,
                                         created_at: now,
                                         expires_at: token_generator.expiration_timestamp(
@@ -530,7 +530,7 @@ fn handle_refresh_token(
                                         client_id: cid,
                                         user_id: old_refresh_token.user_id,
                                         session_id: old_refresh_token.session_id,
-                                        session_iteration: old_refresh_token.session_iteration,
+                                        session_iteration: Some(0),
                                         scope: scope,
                                         created_at: now,
                                         expires_at: case

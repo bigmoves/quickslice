@@ -171,16 +171,7 @@ pub fn get_atp_session(
           signing_key,
         )
       {
-        Ok(refreshed) -> {
-          // Update the access token's session_iteration to point to the new ATP session
-          let _ =
-            oauth_access_tokens.update_session_iteration(
-              conn,
-              token,
-              refreshed.iteration,
-            )
-          Ok(refreshed)
-        }
+        Ok(refreshed) -> Ok(refreshed)
         Error(err) -> Error(RefreshFailed(string.inspect(err)))
       }
     }

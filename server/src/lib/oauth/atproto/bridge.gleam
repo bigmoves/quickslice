@@ -218,8 +218,8 @@ pub fn refresh_tokens(
     auth_server.issuer,
   ))
 
-  // Increment session iteration with new tokens
-  increment_iteration(
+  // Update session tokens in place
+  update_session_tokens(
     conn,
     session,
     token_response.access_token,
@@ -586,8 +586,8 @@ fn update_session_with_tokens(
   }
 }
 
-/// Increment session iteration with new tokens (for refresh)
-fn increment_iteration(
+/// Update session tokens in place (for refresh)
+fn update_session_tokens(
   conn: Executor,
   session: OAuthAtpSession,
   access_token: String,
@@ -597,19 +597,27 @@ fn increment_iteration(
   let now = token_generator.current_timestamp()
   let expires_at = now + expires_in
 
-  let new_session =
-    OAuthAtpSession(
-      ..session,
-      iteration: session.iteration + 1,
-      access_token: Some(access_token),
-      refresh_token: Some(refresh_token),
-      access_token_created_at: Some(now),
-      access_token_expires_at: Some(expires_at),
+  case
+    oauth_atp_sessions.update_tokens(
+      conn,
+      session.session_id,
+      access_token,
+      refresh_token,
+      now,
+      expires_at,
     )
-
-  case oauth_atp_sessions.insert(conn, new_session) {
-    Ok(_) -> Ok(new_session)
+  {
+    Ok(_) ->
+      Ok(
+        OAuthAtpSession(
+          ..session,
+          access_token: Some(access_token),
+          refresh_token: Some(refresh_token),
+          access_token_created_at: Some(now),
+          access_token_expires_at: Some(expires_at),
+        ),
+      )
     Error(err) ->
-      Error(StorageError("Failed to increment session: " <> string.inspect(err)))
+      Error(StorageError("Failed to update session: " <> string.inspect(err)))
   }
 }
