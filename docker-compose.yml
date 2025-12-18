@@ -9,7 +9,6 @@ services:
       - HOST=0.0.0.0
       - PORT=8080
       - DATABASE_URL=sqlite:/data/quickslice.db
-      - JETSTREAM_URL=wss://jetstream2.us-west.bsky.network/subscribe
       # NOTE: Do NOT use in production - generate your own secure key
       - SECRET_KEY_BASE=Xdb/9oovpIzYRKPjfTm45QSWYyYJi35GY3n4475SBVmcyxHS9tMoFJcOwPGfA0xW
       - JETSTREAM_DISABLE_CURSOR=true
