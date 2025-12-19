@@ -129,27 +129,9 @@ body {
   margin-left: var(--space-2);
 }
 
-.tangled-link {
-  display: flex !important;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
+qs-tangled-stars {
+  margin: var(--space-1) var(--space-3);
   margin-bottom: var(--space-3);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--text-dim);
-  text-decoration: none;
-  border-radius: var(--radius-md);
-  transition: color 0.15s ease;
-}
-
-.tangled-link:hover {
-  color: var(--text-hover);
-}
-
-.tangled-link .sidebar-logo {
-  width: 14px;
-  height: 14px;
 }
 
 .sidebar ul { list-style: none; }
