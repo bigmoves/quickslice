@@ -222,7 +222,7 @@ fn mobile_header() -> Element(Nil) {
   ])
 }
 
-const version = "v0.17.4"
+const version = "v0.17.5"
 
 fn sidebar(current_path: String, pages: List(DocPage)) -> Element(Nil) {
   html.aside([attribute.class("sidebar")], [
@@ -252,6 +252,7 @@ fn sidebar(current_path: String, pages: List(DocPage)) -> Element(Nil) {
       [
         attribute.attribute("handle", "slices.network"),
         attribute.attribute("repo", "quickslice"),
+        attribute.attribute("instance", "https://fmteal.slices.network"),
       ],
       "",
     ),
