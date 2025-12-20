@@ -2,6 +2,9 @@ name = "quickslice_client"
 version = "1.0.0"
 target = "javascript"
 
+[tools.lustre.bin]
+bun = "system"
+
 [tools.lustre.build]
 minify = true
 # Build the application into our server's `priv/static` directory so it can be

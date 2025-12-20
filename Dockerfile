@@ -11,7 +11,8 @@ RUN apk add --no-cache \
     npm \
     build-base \
     sqlite-dev \
-    postgresql-dev
+    postgresql-dev \
+    && npm install -g bun
 
 # Configure git for non-interactive use
 ENV GIT_TERMINAL_PROMPT=0
