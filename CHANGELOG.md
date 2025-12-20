@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Publish pubsub events after GraphQL mutations for immediate WebSocket subscription updates
 
+## quickslice-client-js v0.3.0
+
+### Added
+- Add storage namespace isolation for multi-app support
+  - Storage keys prefixed with 8-char SHA-256 hash of clientId
+  - IndexedDB database name includes namespace
+  - Lock keys include namespace
+
+### Breaking Changes
+- Existing users will need to re-login once after update
+
 ## quickslice-client-js v0.2.0
 
 ### Added
