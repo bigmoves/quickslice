@@ -21,8 +21,10 @@ import gleam/result
 import honk
 import honk/errors
 import lib/oauth/did_cache
+import pubsub
 import swell/schema
 import swell/value
+import timestamp
 
 /// Context for mutation execution
 pub type MutationContext {
@@ -500,6 +502,17 @@ pub fn create_resolver_factory(
       |> result.map_error(fn(_) { "Failed to index record in database" }),
     )
 
+    // Publish event for GraphQL subscriptions
+    pubsub.publish(pubsub.RecordEvent(
+      uri: uri,
+      cid: cid,
+      did: auth.user_info.did,
+      collection: collection,
+      value: record_json_string,
+      indexed_at: timestamp.current_iso8601(),
+      operation: pubsub.Create,
+    ))
+
     Ok(
       value.Object([
         #("uri", value.String(uri)),
@@ -613,6 +626,17 @@ pub fn update_resolver_factory(
       |> result.map_error(fn(_) { "Failed to update record in database" }),
     )
 
+    // Publish event for GraphQL subscriptions
+    pubsub.publish(pubsub.RecordEvent(
+      uri: uri,
+      cid: cid,
+      did: auth.user_info.did,
+      collection: collection,
+      value: record_json_string,
+      indexed_at: timestamp.current_iso8601(),
+      operation: pubsub.Update,
+    ))
+
     Ok(
       value.Object([
         #("uri", value.String(uri)),
@@ -680,6 +704,17 @@ pub fn delete_resolver_factory(
       records.delete(ctx.db, uri)
       |> result.map_error(fn(_) { "Failed to delete record from database" }),
     )
+
+    // Publish event for GraphQL subscriptions
+    pubsub.publish(pubsub.RecordEvent(
+      uri: uri,
+      cid: "",
+      did: auth.user_info.did,
+      collection: collection,
+      value: "",
+      indexed_at: timestamp.current_iso8601(),
+      operation: pubsub.Delete,
+    ))
 
     Ok(value.Object([#("uri", value.String(uri))]))
   }

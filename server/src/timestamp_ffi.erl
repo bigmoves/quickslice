@@ -1,4 +1,4 @@
--module(event_handler_ffi).
+-module(timestamp_ffi).
 -export([microseconds_to_iso8601/1]).
 
 %% Convert microseconds since Unix epoch to ISO8601 format

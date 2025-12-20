@@ -19,6 +19,7 @@ import honk/errors
 import logging
 import pubsub
 import stats_pubsub
+import timestamp
 
 /// Convert a Dynamic value (Erlang term) to JSON string
 fn dynamic_to_json(value: Dynamic) -> String {
@@ -50,11 +51,6 @@ fn iolist_to_string(iolist: Dynamic) -> String {
     }
   }
 }
-
-/// Convert microseconds since Unix epoch to ISO8601 format
-/// Uses the event's original timestamp for accurate indexedAt values
-@external(erlang, "event_handler_ffi", "microseconds_to_iso8601")
-fn microseconds_to_iso8601(time_us: Int) -> String
 
 /// Serialize a commit event to JSON string for activity logging
 fn serialize_commit_event(
@@ -104,7 +100,7 @@ pub fn handle_commit_event(
 
   // Log activity at entry point - serialize the commit event to JSON
   let event_json = serialize_commit_event(did, time_us, commit)
-  let timestamp = microseconds_to_iso8601(time_us)
+  let timestamp = timestamp.microseconds_to_iso8601(time_us)
 
   let activity_id = case
     jetstream_activity.log_activity(
@@ -269,7 +265,8 @@ pub fn handle_commit_event(
                               }
 
                               // Convert event timestamp from microseconds to ISO8601
-                              let indexed_at = microseconds_to_iso8601(time_us)
+                              let indexed_at =
+                                timestamp.microseconds_to_iso8601(time_us)
 
                               let event =
                                 pubsub.RecordEvent(
@@ -587,7 +584,7 @@ pub fn handle_commit_event(
 
           // Publish delete event to PubSub for GraphQL subscriptions
           // Use the event timestamp from the Jetstream event
-          let indexed_at = microseconds_to_iso8601(time_us)
+          let indexed_at = timestamp.microseconds_to_iso8601(time_us)
 
           let event =
             pubsub.RecordEvent(
