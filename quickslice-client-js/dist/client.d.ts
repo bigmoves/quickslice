@@ -17,11 +17,14 @@ export declare class QuicksliceClient {
     private authorizeUrl;
     private tokenUrl;
     private initialized;
+    private namespace;
+    private storage;
     constructor(options: QuicksliceClientOptions);
     /**
      * Initialize the client - must be called before other methods
      */
     init(): Promise<void>;
+    private getStorage;
     /**
      * Start OAuth login flow
      */
@@ -45,7 +48,7 @@ export declare class QuicksliceClient {
      * Get current user's DID (from stored token data)
      * For richer profile info, use client.query() with your own schema
      */
-    getUser(): User | null;
+    getUser(): Promise<User | null>;
     /**
      * Get access token (auto-refreshes if needed)
      */

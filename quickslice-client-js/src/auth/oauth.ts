@@ -1,5 +1,4 @@
-import { storage } from '../storage/storage';
-import { STORAGE_KEYS } from '../storage/keys';
+import { Storage } from '../storage/storage';
 import { createDPoPProof, clearDPoPKeys } from './dpop';
 import { generateCodeVerifier, generateCodeChallenge, generateState } from './pkce';
 import { storeTokens } from './tokens';
@@ -14,6 +13,7 @@ export interface LoginOptions {
  * Initiate OAuth login flow with PKCE
  */
 export async function initiateLogin(
+  storage: Storage,
   authorizeUrl: string,
   clientId: string,
   options: LoginOptions = {}
@@ -26,10 +26,10 @@ export async function initiateLogin(
   const redirectUri = options.redirectUri || (window.location.origin + window.location.pathname);
 
   // Store for callback
-  storage.set(STORAGE_KEYS.codeVerifier, codeVerifier);
-  storage.set(STORAGE_KEYS.oauthState, state);
-  storage.set(STORAGE_KEYS.clientId, clientId);
-  storage.set(STORAGE_KEYS.redirectUri, redirectUri);
+  storage.set('codeVerifier', codeVerifier);
+  storage.set('oauthState', state);
+  storage.set('clientId', clientId);
+  storage.set('redirectUri', redirectUri);
 
   // Build authorization URL
   const params = new URLSearchParams({
@@ -56,7 +56,11 @@ export async function initiateLogin(
  * Handle OAuth callback - exchange code for tokens
  * Returns true if callback was handled, false if not a callback
  */
-export async function handleOAuthCallback(tokenUrl: string): Promise<boolean> {
+export async function handleOAuthCallback(
+  storage: Storage,
+  namespace: string,
+  tokenUrl: string
+): Promise<boolean> {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
   const state = params.get('state');
@@ -73,22 +77,22 @@ export async function handleOAuthCallback(tokenUrl: string): Promise<boolean> {
   }
 
   // Verify state
-  const storedState = storage.get(STORAGE_KEYS.oauthState);
+  const storedState = storage.get('oauthState');
   if (state !== storedState) {
     throw new Error('OAuth state mismatch - possible CSRF attack');
   }
 
   // Get stored values
-  const codeVerifier = storage.get(STORAGE_KEYS.codeVerifier);
-  const clientId = storage.get(STORAGE_KEYS.clientId);
-  const redirectUri = storage.get(STORAGE_KEYS.redirectUri);
+  const codeVerifier = storage.get('codeVerifier');
+  const clientId = storage.get('clientId');
+  const redirectUri = storage.get('redirectUri');
 
   if (!codeVerifier || !clientId || !redirectUri) {
     throw new Error('Missing OAuth session data');
   }
 
   // Exchange code for tokens with DPoP
-  const dpopProof = await createDPoPProof('POST', tokenUrl);
+  const dpopProof = await createDPoPProof(namespace, 'POST', tokenUrl);
 
   const tokenResponse = await fetch(tokenUrl, {
     method: 'POST',
@@ -115,12 +119,12 @@ export async function handleOAuthCallback(tokenUrl: string): Promise<boolean> {
   const tokens = await tokenResponse.json();
 
   // Store tokens
-  storeTokens(tokens);
+  storeTokens(storage, tokens);
 
   // Clean up OAuth state
-  storage.remove(STORAGE_KEYS.codeVerifier);
-  storage.remove(STORAGE_KEYS.oauthState);
-  storage.remove(STORAGE_KEYS.redirectUri);
+  storage.remove('codeVerifier');
+  storage.remove('oauthState');
+  storage.remove('redirectUri');
 
   // Clear URL params
   window.history.replaceState({}, document.title, window.location.pathname);
@@ -131,9 +135,13 @@ export async function handleOAuthCallback(tokenUrl: string): Promise<boolean> {
 /**
  * Logout - clear all stored data
  */
-export async function logout(options: { reload?: boolean } = {}): Promise<void> {
+export async function logout(
+  storage: Storage,
+  namespace: string,
+  options: { reload?: boolean } = {}
+): Promise<void> {
   storage.clear();
-  await clearDPoPKeys();
+  await clearDPoPKeys(namespace);
 
   if (options.reload !== false) {
     window.location.reload();

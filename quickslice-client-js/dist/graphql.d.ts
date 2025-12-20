@@ -1,3 +1,4 @@
+import { Storage } from './storage/storage';
 export interface GraphQLResponse<T = unknown> {
     data?: T;
     errors?: Array<{
@@ -8,4 +9,4 @@ export interface GraphQLResponse<T = unknown> {
 /**
  * Execute a GraphQL query or mutation
  */
-export declare function graphqlRequest<T = unknown>(graphqlUrl: string, tokenUrl: string, query: string, variables?: Record<string, unknown>, requireAuth?: boolean): Promise<T>;
+export declare function graphqlRequest<T = unknown>(storage: Storage, namespace: string, graphqlUrl: string, tokenUrl: string, query: string, variables?: Record<string, unknown>, requireAuth?: boolean): Promise<T>;

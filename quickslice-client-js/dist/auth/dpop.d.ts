@@ -4,13 +4,13 @@ interface DPoPKeyData {
     publicJwk: JsonWebKey;
     createdAt: number;
 }
-export declare function getOrCreateDPoPKey(): Promise<DPoPKeyData>;
+export declare function getOrCreateDPoPKey(namespace: string): Promise<DPoPKeyData>;
 /**
  * Create a DPoP proof JWT
  */
-export declare function createDPoPProof(method: string, url: string, accessToken?: string | null): Promise<string>;
+export declare function createDPoPProof(namespace: string, method: string, url: string, accessToken?: string | null): Promise<string>;
 /**
  * Clear DPoP keys from IndexedDB
  */
-export declare function clearDPoPKeys(): Promise<void>;
+export declare function clearDPoPKeys(namespace: string): Promise<void>;
 export {};

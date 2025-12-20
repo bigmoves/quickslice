@@ -10,6 +10,17 @@ export async function sha256Base64Url(data: string): Promise<string> {
 }
 
 /**
+ * Generate an 8-character namespace hash from clientId
+ */
+export async function generateNamespaceHash(clientId: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const hash = await crypto.subtle.digest('SHA-256', encoder.encode(clientId));
+  const hashArray = Array.from(new Uint8Array(hash));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex.substring(0, 8);
+}
+
+/**
  * Sign a JWT with an ECDSA P-256 private key
  */
 export async function signJwt(

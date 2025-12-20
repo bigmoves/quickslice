@@ -1,8 +1,8 @@
 /**
  * Acquire a lock using localStorage for multi-tab coordination
  */
-export declare function acquireLock(key: string, timeout?: number): Promise<string | null>;
+export declare function acquireLock(namespace: string, key: string, timeout?: number): Promise<string | null>;
 /**
  * Release a lock
  */
-export declare function releaseLock(key: string, lockValue: string): void;
+export declare function releaseLock(namespace: string, key: string, lockValue: string): void;

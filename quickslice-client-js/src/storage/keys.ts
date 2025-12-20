@@ -1,15 +1,28 @@
 /**
- * Storage key constants
+ * Storage key factory - generates namespaced keys
  */
-export const STORAGE_KEYS = {
-  accessToken: 'quickslice_access_token',
-  refreshToken: 'quickslice_refresh_token',
-  tokenExpiresAt: 'quickslice_token_expires_at',
-  clientId: 'quickslice_client_id',
-  userDid: 'quickslice_user_did',
-  codeVerifier: 'quickslice_code_verifier',
-  oauthState: 'quickslice_oauth_state',
-  redirectUri: 'quickslice_redirect_uri',
-} as const;
+export interface StorageKeys {
+  accessToken: string;
+  refreshToken: string;
+  tokenExpiresAt: string;
+  clientId: string;
+  userDid: string;
+  codeVerifier: string;
+  oauthState: string;
+  redirectUri: string;
+}
 
-export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
+export function createStorageKeys(namespace: string): StorageKeys {
+  return {
+    accessToken: `quickslice_${namespace}_access_token`,
+    refreshToken: `quickslice_${namespace}_refresh_token`,
+    tokenExpiresAt: `quickslice_${namespace}_token_expires_at`,
+    clientId: `quickslice_${namespace}_client_id`,
+    userDid: `quickslice_${namespace}_user_did`,
+    codeVerifier: `quickslice_${namespace}_code_verifier`,
+    oauthState: `quickslice_${namespace}_oauth_state`,
+    redirectUri: `quickslice_${namespace}_redirect_uri`,
+  };
+}
+
+export type StorageKey = string;

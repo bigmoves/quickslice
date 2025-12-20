@@ -3,6 +3,10 @@
  */
 export declare function sha256Base64Url(data: string): Promise<string>;
 /**
+ * Generate an 8-character namespace hash from clientId
+ */
+export declare function generateNamespaceHash(clientId: string): Promise<string>;
+/**
  * Sign a JWT with an ECDSA P-256 private key
  */
 export declare function signJwt(header: Record<string, unknown>, payload: Record<string, unknown>, privateKey: CryptoKey): Promise<string>;

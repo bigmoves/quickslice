@@ -1,9 +1,10 @@
-import { storage } from './storage/storage';
-import { STORAGE_KEYS } from './storage/keys';
+import { createStorageKeys } from './storage/keys';
+import { createStorage, Storage } from './storage/storage';
 import { getOrCreateDPoPKey } from './auth/dpop';
 import { initiateLogin, handleOAuthCallback, logout as doLogout, LoginOptions } from './auth/oauth';
 import { getValidAccessToken, hasValidSession } from './auth/tokens';
 import { graphqlRequest } from './graphql';
+import { generateNamespaceHash } from './utils/crypto';
 
 export interface QuicksliceClientOptions {
   server: string;
@@ -25,6 +26,8 @@ export class QuicksliceClient {
   private authorizeUrl: string;
   private tokenUrl: string;
   private initialized = false;
+  private namespace: string = '';
+  private storage: Storage | null = null;
 
   constructor(options: QuicksliceClientOptions) {
     this.server = options.server.replace(/\/$/, ''); // Remove trailing slash
@@ -43,10 +46,24 @@ export class QuicksliceClient {
   async init(): Promise<void> {
     if (this.initialized) return;
 
+    // Generate namespace from clientId
+    this.namespace = await generateNamespaceHash(this.clientId);
+
+    // Create namespaced storage
+    const keys = createStorageKeys(this.namespace);
+    this.storage = createStorage(keys);
+
     // Ensure DPoP key exists
-    await getOrCreateDPoPKey();
+    await getOrCreateDPoPKey(this.namespace);
 
     this.initialized = true;
+  }
+
+  private getStorage(): Storage {
+    if (!this.storage) {
+      throw new Error('Client not initialized. Call init() first.');
+    }
+    return this.storage;
   }
 
   /**
@@ -54,7 +71,7 @@ export class QuicksliceClient {
    */
   async loginWithRedirect(options: LoginOptions = {}): Promise<void> {
     await this.init();
-    await initiateLogin(this.authorizeUrl, this.clientId, {
+    await initiateLogin(this.getStorage(), this.authorizeUrl, this.clientId, {
       ...options,
       redirectUri: options.redirectUri || this.redirectUri,
       scope: options.scope || this.scope,
@@ -67,33 +84,36 @@ export class QuicksliceClient {
    */
   async handleRedirectCallback(): Promise<boolean> {
     await this.init();
-    return await handleOAuthCallback(this.tokenUrl);
+    return await handleOAuthCallback(this.getStorage(), this.namespace, this.tokenUrl);
   }
 
   /**
    * Logout and clear all stored data
    */
   async logout(options: { reload?: boolean } = {}): Promise<void> {
-    await doLogout(options);
+    await this.init();
+    await doLogout(this.getStorage(), this.namespace, options);
   }
 
   /**
    * Check if user is authenticated
    */
   async isAuthenticated(): Promise<boolean> {
-    return hasValidSession();
+    await this.init();
+    return hasValidSession(this.getStorage());
   }
 
   /**
    * Get current user's DID (from stored token data)
    * For richer profile info, use client.query() with your own schema
    */
-  getUser(): User | null {
-    if (!hasValidSession()) {
+  async getUser(): Promise<User | null> {
+    await this.init();
+    if (!hasValidSession(this.getStorage())) {
       return null;
     }
 
-    const did = storage.get(STORAGE_KEYS.userDid);
+    const did = this.getStorage().get('userDid');
     if (!did) {
       return null;
     }
@@ -106,7 +126,7 @@ export class QuicksliceClient {
    */
   async getAccessToken(): Promise<string> {
     await this.init();
-    return await getValidAccessToken(this.tokenUrl);
+    return await getValidAccessToken(this.getStorage(), this.namespace, this.tokenUrl);
   }
 
   /**
@@ -118,6 +138,8 @@ export class QuicksliceClient {
   ): Promise<T> {
     await this.init();
     return await graphqlRequest<T>(
+      this.getStorage(),
+      this.namespace,
       this.graphqlUrl,
       this.tokenUrl,
       query,
@@ -145,6 +167,8 @@ export class QuicksliceClient {
   ): Promise<T> {
     await this.init();
     return await graphqlRequest<T>(
+      this.getStorage(),
+      this.namespace,
       this.graphqlUrl,
       this.tokenUrl,
       query,

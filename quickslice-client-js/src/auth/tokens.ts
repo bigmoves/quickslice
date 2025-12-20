@@ -1,5 +1,4 @@
-import { storage } from '../storage/storage';
-import { STORAGE_KEYS } from '../storage/keys';
+import { Storage } from '../storage/storage';
 import { acquireLock, releaseLock } from '../storage/lock';
 import { createDPoPProof } from './dpop';
 
@@ -12,15 +11,19 @@ function sleep(ms: number): Promise<void> {
 /**
  * Refresh tokens using the refresh token
  */
-async function refreshTokens(tokenUrl: string): Promise<string> {
-  const refreshToken = storage.get(STORAGE_KEYS.refreshToken);
-  const clientId = storage.get(STORAGE_KEYS.clientId);
+async function refreshTokens(
+  storage: Storage,
+  namespace: string,
+  tokenUrl: string
+): Promise<string> {
+  const refreshToken = storage.get('refreshToken');
+  const clientId = storage.get('clientId');
 
   if (!refreshToken || !clientId) {
     throw new Error('No refresh token available');
   }
 
-  const dpopProof = await createDPoPProof('POST', tokenUrl);
+  const dpopProof = await createDPoPProof(namespace, 'POST', tokenUrl);
 
   const response = await fetch(tokenUrl, {
     method: 'POST',
@@ -45,13 +48,13 @@ async function refreshTokens(tokenUrl: string): Promise<string> {
   const tokens = await response.json();
 
   // Store new tokens (rotation - new refresh token each time)
-  storage.set(STORAGE_KEYS.accessToken, tokens.access_token);
+  storage.set('accessToken', tokens.access_token);
   if (tokens.refresh_token) {
-    storage.set(STORAGE_KEYS.refreshToken, tokens.refresh_token);
+    storage.set('refreshToken', tokens.refresh_token);
   }
 
   const expiresAt = Date.now() + tokens.expires_in * 1000;
-  storage.set(STORAGE_KEYS.tokenExpiresAt, expiresAt.toString());
+  storage.set('tokenExpiresAt', expiresAt.toString());
 
   return tokens.access_token;
 }
@@ -60,9 +63,13 @@ async function refreshTokens(tokenUrl: string): Promise<string> {
  * Get a valid access token, refreshing if necessary.
  * Uses multi-tab locking to prevent duplicate refresh requests.
  */
-export async function getValidAccessToken(tokenUrl: string): Promise<string> {
-  const accessToken = storage.get(STORAGE_KEYS.accessToken);
-  const expiresAt = parseInt(storage.get(STORAGE_KEYS.tokenExpiresAt) || '0');
+export async function getValidAccessToken(
+  storage: Storage,
+  namespace: string,
+  tokenUrl: string
+): Promise<string> {
+  const accessToken = storage.get('accessToken');
+  const expiresAt = parseInt(storage.get('tokenExpiresAt') || '0');
 
   // Check if token is still valid (with buffer)
   if (accessToken && Date.now() < expiresAt - TOKEN_REFRESH_BUFFER_MS) {
@@ -70,18 +77,15 @@ export async function getValidAccessToken(tokenUrl: string): Promise<string> {
   }
 
   // Need to refresh - acquire lock first
-  const clientId = storage.get(STORAGE_KEYS.clientId);
-  const lockKey = `token_refresh_${clientId}`;
-  const lockValue = await acquireLock(lockKey);
+  const lockKey = 'token_refresh';
+  const lockValue = await acquireLock(namespace, lockKey);
 
   if (!lockValue) {
     // Failed to acquire lock, another tab is refreshing
     // Wait a bit and check cache again
     await sleep(100);
-    const freshToken = storage.get(STORAGE_KEYS.accessToken);
-    const freshExpiry = parseInt(
-      storage.get(STORAGE_KEYS.tokenExpiresAt) || '0'
-    );
+    const freshToken = storage.get('accessToken');
+    const freshExpiry = parseInt(storage.get('tokenExpiresAt') || '0');
     if (freshToken && Date.now() < freshExpiry - TOKEN_REFRESH_BUFFER_MS) {
       return freshToken;
     }
@@ -90,48 +94,49 @@ export async function getValidAccessToken(tokenUrl: string): Promise<string> {
 
   try {
     // Double-check after acquiring lock
-    const freshToken = storage.get(STORAGE_KEYS.accessToken);
-    const freshExpiry = parseInt(
-      storage.get(STORAGE_KEYS.tokenExpiresAt) || '0'
-    );
+    const freshToken = storage.get('accessToken');
+    const freshExpiry = parseInt(storage.get('tokenExpiresAt') || '0');
     if (freshToken && Date.now() < freshExpiry - TOKEN_REFRESH_BUFFER_MS) {
       return freshToken;
     }
 
     // Actually refresh
-    return await refreshTokens(tokenUrl);
+    return await refreshTokens(storage, namespace, tokenUrl);
   } finally {
-    releaseLock(lockKey, lockValue);
+    releaseLock(namespace, lockKey, lockValue);
   }
 }
 
 /**
  * Store tokens from OAuth response
  */
-export function storeTokens(tokens: {
-  access_token: string;
-  refresh_token?: string;
-  expires_in: number;
-  sub?: string;
-}): void {
-  storage.set(STORAGE_KEYS.accessToken, tokens.access_token);
+export function storeTokens(
+  storage: Storage,
+  tokens: {
+    access_token: string;
+    refresh_token?: string;
+    expires_in: number;
+    sub?: string;
+  }
+): void {
+  storage.set('accessToken', tokens.access_token);
   if (tokens.refresh_token) {
-    storage.set(STORAGE_KEYS.refreshToken, tokens.refresh_token);
+    storage.set('refreshToken', tokens.refresh_token);
   }
 
   const expiresAt = Date.now() + tokens.expires_in * 1000;
-  storage.set(STORAGE_KEYS.tokenExpiresAt, expiresAt.toString());
+  storage.set('tokenExpiresAt', expiresAt.toString());
 
   if (tokens.sub) {
-    storage.set(STORAGE_KEYS.userDid, tokens.sub);
+    storage.set('userDid', tokens.sub);
   }
 }
 
 /**
  * Check if we have a valid session
  */
-export function hasValidSession(): boolean {
-  const accessToken = storage.get(STORAGE_KEYS.accessToken);
-  const refreshToken = storage.get(STORAGE_KEYS.refreshToken);
+export function hasValidSession(storage: Storage): boolean {
+  const accessToken = storage.get('accessToken');
+  const refreshToken = storage.get('refreshToken');
   return !!(accessToken || refreshToken);
 }

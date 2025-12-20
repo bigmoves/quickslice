@@ -1,36 +1,43 @@
-import { STORAGE_KEYS, StorageKey } from './keys';
+import { StorageKeys } from './keys';
 
 /**
- * Hybrid storage utility - sessionStorage for OAuth flow state,
- * localStorage for tokens (shared across tabs)
+ * Create a namespaced storage interface
  */
-export const storage = {
-  get(key: StorageKey): string | null {
-    // OAuth flow state stays in sessionStorage (per-tab)
-    if (key === STORAGE_KEYS.codeVerifier || key === STORAGE_KEYS.oauthState) {
-      return sessionStorage.getItem(key);
-    }
-    // Tokens go in localStorage (shared across tabs)
-    return localStorage.getItem(key);
-  },
+export function createStorage(keys: StorageKeys) {
+  return {
+    get(key: keyof StorageKeys): string | null {
+      const storageKey = keys[key];
+      // OAuth flow state stays in sessionStorage (per-tab)
+      if (key === 'codeVerifier' || key === 'oauthState') {
+        return sessionStorage.getItem(storageKey);
+      }
+      // Tokens go in localStorage (shared across tabs)
+      return localStorage.getItem(storageKey);
+    },
 
-  set(key: StorageKey, value: string): void {
-    if (key === STORAGE_KEYS.codeVerifier || key === STORAGE_KEYS.oauthState) {
-      sessionStorage.setItem(key, value);
-    } else {
-      localStorage.setItem(key, value);
-    }
-  },
+    set(key: keyof StorageKeys, value: string): void {
+      const storageKey = keys[key];
+      if (key === 'codeVerifier' || key === 'oauthState') {
+        sessionStorage.setItem(storageKey, value);
+      } else {
+        localStorage.setItem(storageKey, value);
+      }
+    },
 
-  remove(key: StorageKey): void {
-    sessionStorage.removeItem(key);
-    localStorage.removeItem(key);
-  },
+    remove(key: keyof StorageKeys): void {
+      const storageKey = keys[key];
+      sessionStorage.removeItem(storageKey);
+      localStorage.removeItem(storageKey);
+    },
 
-  clear(): void {
-    Object.values(STORAGE_KEYS).forEach((key) => {
-      sessionStorage.removeItem(key);
-      localStorage.removeItem(key);
-    });
-  },
-};
+    clear(): void {
+      (Object.keys(keys) as Array<keyof StorageKeys>).forEach((key) => {
+        const storageKey = keys[key];
+        sessionStorage.removeItem(storageKey);
+        localStorage.removeItem(storageKey);
+      });
+    },
+  };
+}
+
+export type Storage = ReturnType<typeof createStorage>;

@@ -1,18 +1,22 @@
 const LOCK_TIMEOUT = 5000; // 5 seconds
-const LOCK_PREFIX = 'quickslice_lock_';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getLockKey(namespace: string, key: string): string {
+  return `quickslice_${namespace}_lock_${key}`;
 }
 
 /**
  * Acquire a lock using localStorage for multi-tab coordination
  */
 export async function acquireLock(
+  namespace: string,
   key: string,
   timeout = LOCK_TIMEOUT
 ): Promise<string | null> {
-  const lockKey = LOCK_PREFIX + key;
+  const lockKey = getLockKey(namespace, key);
   const lockValue = `${Date.now()}_${Math.random()}`;
   const deadline = Date.now() + timeout;
 
@@ -48,8 +52,8 @@ export async function acquireLock(
 /**
  * Release a lock
  */
-export function releaseLock(key: string, lockValue: string): void {
-  const lockKey = LOCK_PREFIX + key;
+export function releaseLock(namespace: string, key: string, lockValue: string): void {
+  const lockKey = getLockKey(namespace, key);
   // Only release if we still hold it
   if (localStorage.getItem(lockKey) === lockValue) {
     localStorage.removeItem(lockKey);

@@ -1,5 +1,6 @@
 import { createDPoPProof } from './auth/dpop';
 import { getValidAccessToken } from './auth/tokens';
+import { Storage } from './storage/storage';
 
 export interface GraphQLResponse<T = unknown> {
   data?: T;
@@ -10,6 +11,8 @@ export interface GraphQLResponse<T = unknown> {
  * Execute a GraphQL query or mutation
  */
 export async function graphqlRequest<T = unknown>(
+  storage: Storage,
+  namespace: string,
   graphqlUrl: string,
   tokenUrl: string,
   query: string,
@@ -21,13 +24,13 @@ export async function graphqlRequest<T = unknown>(
   };
 
   if (requireAuth) {
-    const token = await getValidAccessToken(tokenUrl);
+    const token = await getValidAccessToken(storage, namespace, tokenUrl);
     if (!token) {
       throw new Error('Not authenticated');
     }
 
     // Create DPoP proof bound to this request
-    const dpopProof = await createDPoPProof('POST', graphqlUrl, token);
+    const dpopProof = await createDPoPProof(namespace, 'POST', graphqlUrl, token);
 
     headers['Authorization'] = `DPoP ${token}`;
     headers['DPoP'] = dpopProof;

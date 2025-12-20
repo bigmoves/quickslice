@@ -1,7 +1,6 @@
 import { generateRandomString } from '../utils/base64url';
 import { sha256Base64Url, signJwt } from '../utils/crypto';
 
-const DB_NAME = 'quickslice-oauth';
 const DB_VERSION = 1;
 const KEY_STORE = 'dpop-keys';
 const KEY_ID = 'dpop-key';
@@ -13,13 +12,19 @@ interface DPoPKeyData {
   createdAt: number;
 }
 
-let dbPromise: Promise<IDBDatabase> | null = null;
+// Cache database connections per namespace
+const dbPromises = new Map<string, Promise<IDBDatabase>>();
 
-function openDatabase(): Promise<IDBDatabase> {
-  if (dbPromise) return dbPromise;
+function getDbName(namespace: string): string {
+  return `quickslice-oauth-${namespace}`;
+}
 
-  dbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+function openDatabase(namespace: string): Promise<IDBDatabase> {
+  const existing = dbPromises.get(namespace);
+  if (existing) return existing;
+
+  const promise = new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(getDbName(namespace), DB_VERSION);
 
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
@@ -32,11 +37,12 @@ function openDatabase(): Promise<IDBDatabase> {
     };
   });
 
-  return dbPromise;
+  dbPromises.set(namespace, promise);
+  return promise;
 }
 
-async function getDPoPKey(): Promise<DPoPKeyData | null> {
-  const db = await openDatabase();
+async function getDPoPKey(namespace: string): Promise<DPoPKeyData | null> {
+  const db = await openDatabase(namespace);
   return new Promise((resolve, reject) => {
     const tx = db.transaction(KEY_STORE, 'readonly');
     const store = tx.objectStore(KEY_STORE);
@@ -48,10 +54,11 @@ async function getDPoPKey(): Promise<DPoPKeyData | null> {
 }
 
 async function storeDPoPKey(
+  namespace: string,
   privateKey: CryptoKey,
   publicJwk: JsonWebKey
 ): Promise<void> {
-  const db = await openDatabase();
+  const db = await openDatabase(namespace);
   return new Promise((resolve, reject) => {
     const tx = db.transaction(KEY_STORE, 'readwrite');
     const store = tx.objectStore(KEY_STORE);
@@ -67,8 +74,8 @@ async function storeDPoPKey(
   });
 }
 
-export async function getOrCreateDPoPKey(): Promise<DPoPKeyData> {
-  const keyData = await getDPoPKey();
+export async function getOrCreateDPoPKey(namespace: string): Promise<DPoPKeyData> {
+  const keyData = await getDPoPKey(namespace);
 
   if (keyData) {
     return keyData;
@@ -85,7 +92,7 @@ export async function getOrCreateDPoPKey(): Promise<DPoPKeyData> {
   const publicJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
 
   // Store in IndexedDB
-  await storeDPoPKey(keyPair.privateKey, publicJwk);
+  await storeDPoPKey(namespace, keyPair.privateKey, publicJwk);
 
   return {
     id: KEY_ID,
@@ -99,11 +106,12 @@ export async function getOrCreateDPoPKey(): Promise<DPoPKeyData> {
  * Create a DPoP proof JWT
  */
 export async function createDPoPProof(
+  namespace: string,
   method: string,
   url: string,
   accessToken: string | null = null
 ): Promise<string> {
-  const keyData = await getOrCreateDPoPKey();
+  const keyData = await getOrCreateDPoPKey(namespace);
 
   // Strip WebCrypto-specific fields from JWK for interoperability
   const { kty, crv, x, y } = keyData.publicJwk;
@@ -133,8 +141,8 @@ export async function createDPoPProof(
 /**
  * Clear DPoP keys from IndexedDB
  */
-export async function clearDPoPKeys(): Promise<void> {
-  const db = await openDatabase();
+export async function clearDPoPKeys(namespace: string): Promise<void> {
+  const db = await openDatabase(namespace);
   return new Promise((resolve, reject) => {
     const tx = db.transaction(KEY_STORE, 'readwrite');
     const store = tx.objectStore(KEY_STORE);
