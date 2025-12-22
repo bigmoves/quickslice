@@ -252,7 +252,10 @@ fn sidebar(current_path: String, pages: List(DocPage)) -> Element(Nil) {
       [
         attribute.attribute("handle", "slices.network"),
         attribute.attribute("repo", "quickslice"),
-        attribute.attribute("instance", "https://fmteal.slices.network"),
+        attribute.attribute(
+          "instance",
+          "https://quickslice-production-ddc3.up.railway.app",
+        ),
       ],
       "",
     ),
