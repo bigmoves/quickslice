@@ -25,6 +25,7 @@ import gleam/time/duration
 import gleam/time/timestamp
 import honk
 import honk/errors
+import lib/http_client
 import lib/oauth/did_cache
 import logging
 
@@ -149,7 +150,7 @@ fn send_with_permit(
   req: request.Request(String),
 ) -> Result(gleam_http_response.Response(String), hackney.Error) {
   acquire_permit()
-  let result = hackney.send(req)
+  let result = http_client.hackney_send(req)
   release_permit()
   result
 }
@@ -160,7 +161,7 @@ fn send_bits_with_permit(
   req: request.Request(bytes_tree.BytesTree),
 ) -> Result(gleam_http_response.Response(BitArray), hackney.Error) {
   acquire_permit()
-  let result = hackney.send_bits(req)
+  let result = http_client.hackney_send_bits(req)
   release_permit()
   result
 }

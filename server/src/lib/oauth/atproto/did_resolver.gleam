@@ -2,12 +2,12 @@
 import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
 import gleam/http/request
-import gleam/httpc
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None}
 import gleam/result
 import gleam/string
+import lib/http_client
 import lib/oauth/atproto/types.{type ATProtoError}
 import lib/oauth/did_cache
 
@@ -82,7 +82,7 @@ fn resolve_plc_did(did: String) -> Result(DIDDocument, ATProtoError) {
   )
 
   use resp <- result.try(
-    httpc.send(req)
+    http_client.send(req)
     |> result.map_error(fn(_) { types.HTTPError("Request failed") }),
   )
 
@@ -108,7 +108,7 @@ fn resolve_web_did(did: String) -> Result(DIDDocument, ATProtoError) {
   )
 
   use resp <- result.try(
-    httpc.send(req)
+    http_client.send(req)
     |> result.map_error(fn(_) { types.HTTPError("Request failed") }),
   )
 
@@ -134,7 +134,7 @@ pub fn resolve_handle_to_did(handle: String) -> Result(String, ATProtoError) {
   )
 
   use resp <- result.try(
-    httpc.send(req)
+    http_client.send(req)
     |> result.map_error(fn(_) { types.HTTPError("Request failed") }),
   )
 

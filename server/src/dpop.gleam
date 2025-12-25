@@ -3,11 +3,11 @@ import gleam/bit_array
 import gleam/http.{type Method, Delete, Get, Head, Options, Patch, Post, Put}
 import gleam/http/request
 import gleam/http/response.{type Response}
-import gleam/httpc
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
 import jose_wrapper
+import lib/http_client
 
 /// Make an authenticated DPoP request to a PDS with nonce retry support
 ///
@@ -89,7 +89,7 @@ fn make_dpop_request_with_nonce(
             |> request.set_header("content-type", "application/json")
             |> request.set_body(body)
 
-          case httpc.send(req) {
+          case http_client.send(req) {
             Error(_) -> Error("Request failed")
             Ok(resp) -> Ok(resp)
           }
@@ -199,7 +199,7 @@ fn make_dpop_request_with_binary_and_nonce(
             |> request.set_header("content-type", content_type)
             |> request.set_body(body)
 
-          case httpc.send_bits(req) {
+          case http_client.send_bits(req) {
             Error(_) -> Error("Request failed")
             Ok(resp) -> {
               // Convert BitArray response body to String

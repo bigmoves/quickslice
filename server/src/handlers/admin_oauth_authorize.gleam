@@ -9,12 +9,12 @@ import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
 import gleam/http
 import gleam/http/request as http_request
-import gleam/httpc
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import gleam/uri
+import lib/http_client
 import lib/oauth/atproto/did_resolver
 import lib/oauth/did_cache
 import lib/oauth/dpop/keygen
@@ -214,7 +214,7 @@ fn fetch_auth_server_metadata(pds_endpoint: String) -> Result(String, String) {
   case http_request.to(pr_url) {
     Error(_) -> Error("Invalid URL")
     Ok(pr_req) -> {
-      case httpc.send(pr_req) {
+      case http_client.send(pr_req) {
         Error(_) -> Error("Request failed")
         Ok(pr_resp) -> {
           case pr_resp.status {
@@ -229,7 +229,7 @@ fn fetch_auth_server_metadata(pds_endpoint: String) -> Result(String, String) {
                   case http_request.to(as_url) {
                     Error(_) -> Error("Invalid auth server URL")
                     Ok(as_req) -> {
-                      case httpc.send(as_req) {
+                      case http_client.send(as_req) {
                         Error(_) -> Error("Auth server request failed")
                         Ok(as_resp) -> {
                           case as_resp.status {

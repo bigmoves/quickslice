@@ -7,7 +7,6 @@ import gleam/dynamic/decode
 import gleam/erlang/process
 import gleam/http
 import gleam/http/request
-import gleam/httpc
 import gleam/int
 import gleam/json
 import gleam/list
@@ -15,6 +14,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/uri
+import lib/http_client
 import lib/oauth/atproto/did_resolver
 import lib/oauth/atproto/types as atp_types
 import lib/oauth/crypto/jwt
@@ -242,7 +242,7 @@ pub fn fetch_protected_resource_metadata(
   )
 
   use resp <- result.try(
-    httpc.send(req)
+    http_client.send(req)
     |> result.map_error(fn(_) {
       HTTPError("Failed to fetch protected resource metadata")
     }),
@@ -292,7 +292,7 @@ pub fn fetch_authorization_server_metadata(
   )
 
   use resp <- result.try(
-    httpc.send(req)
+    http_client.send(req)
     |> result.map_error(fn(_) {
       HTTPError("Failed to fetch authorization server metadata")
     }),
@@ -422,7 +422,7 @@ fn fetch_tokens(
     |> request.set_body(body_with_assertion)
 
   use resp <- result.try(
-    httpc.send(req)
+    http_client.send(req)
     |> result.map_error(fn(_) { HTTPError("Failed to send token request") }),
   )
 
@@ -499,7 +499,7 @@ fn fetch_tokens_with_nonce(
     |> request.set_body(body)
 
   use resp <- result.try(
-    httpc.send(req)
+    http_client.send(req)
     |> result.map_error(fn(_) { HTTPError("Failed to send token request") }),
   )
 

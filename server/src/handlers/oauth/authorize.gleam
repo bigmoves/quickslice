@@ -12,13 +12,13 @@ import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
 import gleam/http
 import gleam/http/request as http_request
-import gleam/httpc
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/uri
+import lib/http_client
 import lib/oauth/atproto/did_resolver
 import lib/oauth/did_cache
 import lib/oauth/dpop/keygen
@@ -457,7 +457,7 @@ fn fetch_authorization_server_metadata(
   )
 
   use pr_resp <- result.try(
-    httpc.send(pr_req)
+    http_client.send(pr_req)
     |> result.map_error(fn(_) { "Request failed" }),
   )
 
@@ -482,7 +482,7 @@ fn fetch_authorization_server_metadata(
   )
 
   use as_resp <- result.try(
-    httpc.send(as_req)
+    http_client.send(as_req)
     |> result.map_error(fn(_) { "Request failed" }),
   )
 
