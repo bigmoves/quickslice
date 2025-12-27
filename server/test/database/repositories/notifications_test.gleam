@@ -94,3 +94,66 @@ pub fn get_notifications_filters_by_collection_test() {
   let assert Ok(first): Result(Record, _) = list.first(results)
   first.collection |> should.equal("app.bsky.feed.like")
 }
+
+pub fn get_notifications_pagination_test() {
+  let assert Ok(db) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_record_table(db)
+
+  // Insert 3 records mentioning target with TID-like rkeys for predictable ordering
+  // TIDs sort lexicographically, so "3aaa" < "3bbb" < "3ccc"
+  let assert Ok(_) =
+    records.insert(
+      db,
+      "at://did:plc:author/app.bsky.feed.like/3aaaaaa",
+      "bafy1",
+      "did:plc:author",
+      "app.bsky.feed.like",
+      "{\"subject\":\"at://did:plc:target/post/1\"}",
+    )
+
+  let assert Ok(_) =
+    records.insert(
+      db,
+      "at://did:plc:author/app.bsky.feed.like/3bbbbbbb",
+      "bafy2",
+      "did:plc:author",
+      "app.bsky.feed.like",
+      "{\"subject\":\"at://did:plc:target/post/2\"}",
+    )
+
+  let assert Ok(_) =
+    records.insert(
+      db,
+      "at://did:plc:author/app.bsky.feed.like/3ccccccc",
+      "bafy3",
+      "did:plc:author",
+      "app.bsky.feed.like",
+      "{\"subject\":\"at://did:plc:target/post/3\"}",
+    )
+
+  // Get first page with limit 2
+  let assert Ok(#(page1, cursor1, has_next1, _)) =
+    records.get_notifications(db, "did:plc:target", None, Some(2), None)
+
+  // Should have 2 results, sorted by rkey DESC (3ccc, 3bbb)
+  list.length(page1) |> should.equal(2)
+  has_next1 |> should.be_true
+
+  let assert Ok(first) = list.first(page1)
+  first.rkey |> should.equal("3ccccccc")
+
+  let assert Ok(second) = page1 |> list.drop(1) |> list.first
+  second.rkey |> should.equal("3bbbbbbb")
+
+  // Use cursor to get next page
+  let assert Some(cursor) = cursor1
+  let assert Ok(#(page2, _cursor2, has_next2, _)) =
+    records.get_notifications(db, "did:plc:target", None, Some(2), Some(cursor))
+
+  // Should have 1 result (3aaa)
+  list.length(page2) |> should.equal(1)
+  has_next2 |> should.be_false
+
+  let assert Ok(third) = list.first(page2)
+  third.rkey |> should.equal("3aaaaaa")
+}

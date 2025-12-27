@@ -1112,10 +1112,12 @@ pub fn get_notifications(
   }
 
   // Build cursor clause
+  // Notification cursors use rkey|uri format (2 parts)
+  let notification_sort = Some([#("rkey", "desc")])
   let #(cursor_clause, cursor_params) = case after {
     None -> #("", [])
     Some(cursor) -> {
-      case pagination.decode_cursor(cursor, None) {
+      case pagination.decode_cursor(cursor, notification_sort) {
         Ok(decoded) -> {
           // Cursor format: rkey|uri for TID-based chronological sorting
           let rkey_value =
