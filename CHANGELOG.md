@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `notificationCreated` GraphQL subscription for real-time notifications
 - Auto-generate `RecordCollection` enum from registered lexicons
 - Auto-generate `NotificationRecord` union type from record types
+- Add `rkey` generated column for TID-based chronological notification sorting
+- Add User-Agent header to all outbound HTTP requests
 
 ### Changed
 - Upgrade swell to 2.1.3 (fixes NonNull-wrapped union type resolution)
