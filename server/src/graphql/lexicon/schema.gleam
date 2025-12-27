@@ -118,7 +118,10 @@ pub fn build_schema_from_db(
           mutations.upload_blob_resolver_factory(mutation_ctx)
         })
 
-      // Step 6: Build schema with database-backed resolvers, mutations, and subscriptions
+      // Step 6: Create notification fetcher
+      let notification_fetcher = fetchers.notification_fetcher(db)
+
+      // Step 7: Build schema with database-backed resolvers, mutations, and subscriptions
       database.build_schema_with_subscriptions(
         parsed_lexicons,
         record_fetcher,
@@ -130,6 +133,7 @@ pub fn build_schema_from_db(
         upload_blob_factory,
         option.Some(aggregate_fetcher),
         option.Some(viewer_fetcher),
+        option.Some(notification_fetcher),
       )
     }
   }

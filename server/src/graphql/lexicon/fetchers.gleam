@@ -348,3 +348,34 @@ pub fn viewer_fetcher(db: Executor) {
     }
   }
 }
+
+/// Create a notification fetcher for cross-collection DID mention queries
+pub fn notification_fetcher(db: Executor) {
+  fn(
+    did: String,
+    collections: option.Option(List(String)),
+    first: option.Option(Int),
+    after: option.Option(String),
+  ) -> Result(
+    #(List(#(value.Value, String)), option.Option(String), Bool, Bool),
+    String,
+  ) {
+    use result <- result.try(
+      records.get_notifications(db, did, collections, first, after)
+      |> result.map_error(fn(e) { "Database error: " <> string.inspect(e) }),
+    )
+
+    let #(records_list, end_cursor, has_next, has_prev) = result
+
+    // Convert database records to GraphQL values with cursors
+    let converted =
+      list.map(records_list, fn(record) {
+        let graphql_value = converters.record_to_graphql_value(record, db)
+        // Generate cursor for this record (no sort_by for notifications)
+        let cursor = pagination.generate_cursor_from_record(record, option.None)
+        #(graphql_value, cursor)
+      })
+
+    Ok(#(converted, end_cursor, has_next, has_prev))
+  }
+}

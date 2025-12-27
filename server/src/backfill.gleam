@@ -229,6 +229,7 @@ fn car_record_with_path_to_db_record(
     collection: car_record.collection,
     json: atproto_car.record_to_json(car_record),
     indexed_at: now,
+    rkey: car_record.rkey,
   )
 }
 

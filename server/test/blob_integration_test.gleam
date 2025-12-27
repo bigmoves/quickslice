@@ -5,10 +5,8 @@
 /// 2. Insert records with blob data in AT Protocol format
 /// 3. Execute GraphQL queries with blob field selection
 /// 4. Verify blob fields are resolved correctly with all sub-fields
-import database/executor
 import database/repositories/lexicons
 import database/repositories/records
-import database/sqlite/connection as db_connection
 import gleam/http
 import gleam/json
 import gleam/option
@@ -16,6 +14,7 @@ import gleam/string
 import gleeunit/should
 import handlers/graphql as graphql_handler
 import lib/oauth/did_cache
+import test_helpers
 import wisp
 import wisp/simulate
 
@@ -67,19 +66,9 @@ fn create_profile_lexicon() -> String {
 
 pub fn blob_field_query_test() {
   // Create in-memory database
-  let assert Ok(exec) = db_connection.connect("sqlite::memory:")
-  let assert Ok(_) =
-    executor.exec(
-      exec,
-      "CREATE TABLE IF NOT EXISTS lexicon (id TEXT PRIMARY KEY NOT NULL, json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
-      [],
-    )
-  let assert Ok(_) =
-    executor.exec(
-      exec,
-      "CREATE TABLE IF NOT EXISTS record (uri TEXT PRIMARY KEY NOT NULL, cid TEXT NOT NULL, did TEXT NOT NULL, collection TEXT NOT NULL, json TEXT NOT NULL, indexed_at TEXT NOT NULL DEFAULT (datetime('now')))",
-      [],
-    )
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   // Insert profile lexicon with blob fields
   let lexicon = create_profile_lexicon()
@@ -176,19 +165,9 @@ pub fn blob_field_query_test() {
 
 pub fn blob_field_with_different_presets_test() {
   // Create in-memory database
-  let assert Ok(exec) = db_connection.connect("sqlite::memory:")
-  let assert Ok(_) =
-    executor.exec(
-      exec,
-      "CREATE TABLE IF NOT EXISTS lexicon (id TEXT PRIMARY KEY NOT NULL, json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
-      [],
-    )
-  let assert Ok(_) =
-    executor.exec(
-      exec,
-      "CREATE TABLE IF NOT EXISTS record (uri TEXT PRIMARY KEY NOT NULL, cid TEXT NOT NULL, did TEXT NOT NULL, collection TEXT NOT NULL, json TEXT NOT NULL, indexed_at TEXT NOT NULL DEFAULT (datetime('now')))",
-      [],
-    )
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   // Insert profile lexicon
   let lexicon = create_profile_lexicon()
@@ -262,19 +241,9 @@ pub fn blob_field_with_different_presets_test() {
 
 pub fn blob_field_default_preset_test() {
   // Test that when no preset is specified, feed_fullsize is used
-  let assert Ok(exec) = db_connection.connect("sqlite::memory:")
-  let assert Ok(_) =
-    executor.exec(
-      exec,
-      "CREATE TABLE IF NOT EXISTS lexicon (id TEXT PRIMARY KEY NOT NULL, json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
-      [],
-    )
-  let assert Ok(_) =
-    executor.exec(
-      exec,
-      "CREATE TABLE IF NOT EXISTS record (uri TEXT PRIMARY KEY NOT NULL, cid TEXT NOT NULL, did TEXT NOT NULL, collection TEXT NOT NULL, json TEXT NOT NULL, indexed_at TEXT NOT NULL DEFAULT (datetime('now')))",
-      [],
-    )
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   let lexicon = create_profile_lexicon()
   let assert Ok(_) = lexicons.insert(exec, "app.test.profile", lexicon)
@@ -344,19 +313,9 @@ pub fn blob_field_default_preset_test() {
 
 pub fn blob_field_null_when_missing_test() {
   // Test that blob fields return null when not present in record
-  let assert Ok(exec) = db_connection.connect("sqlite::memory:")
-  let assert Ok(_) =
-    executor.exec(
-      exec,
-      "CREATE TABLE IF NOT EXISTS lexicon (id TEXT PRIMARY KEY NOT NULL, json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
-      [],
-    )
-  let assert Ok(_) =
-    executor.exec(
-      exec,
-      "CREATE TABLE IF NOT EXISTS record (uri TEXT PRIMARY KEY NOT NULL, cid TEXT NOT NULL, did TEXT NOT NULL, collection TEXT NOT NULL, json TEXT NOT NULL, indexed_at TEXT NOT NULL DEFAULT (datetime('now')))",
-      [],
-    )
+  let assert Ok(exec) = test_helpers.create_test_db()
+  let assert Ok(_) = test_helpers.create_lexicon_table(exec)
+  let assert Ok(_) = test_helpers.create_record_table(exec)
 
   let lexicon = create_profile_lexicon()
   let assert Ok(_) = lexicons.insert(exec, "app.test.profile", lexicon)

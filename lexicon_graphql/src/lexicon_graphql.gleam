@@ -42,6 +42,9 @@ pub type Property =
 pub type ViewerFetcher =
   db_schema_builder.ViewerFetcher
 
+pub type NotificationFetcher =
+  db_schema_builder.NotificationFetcher
+
 // Re-export main schema building functions
 pub fn build_schema(lexicons: List(Lexicon)) {
   schema_builder.build_schema(lexicons)
@@ -58,6 +61,7 @@ pub fn build_schema_with_subscriptions(
   upload_blob_factory: Option(mutation_builder.UploadBlobResolverFactory),
   aggregate_fetcher: Option(db_schema_builder.AggregateFetcher),
   viewer_fetcher: Option(ViewerFetcher),
+  notification_fetcher: Option(NotificationFetcher),
 ) {
   db_schema_builder.build_schema_with_subscriptions(
     lexicons,
@@ -70,6 +74,7 @@ pub fn build_schema_with_subscriptions(
     upload_blob_factory,
     aggregate_fetcher,
     viewer_fetcher,
+    notification_fetcher,
   )
 }
 

@@ -19,9 +19,9 @@ import gleam/string
 /// SQLite: both are TEXT
 fn record_columns(exec: Executor) -> String {
   case executor.dialect(exec) {
-    executor.SQLite -> "uri, cid, did, collection, json, indexed_at"
+    executor.SQLite -> "uri, cid, did, collection, json, indexed_at, rkey"
     executor.PostgreSQL ->
-      "uri, cid, did, collection, json::text, indexed_at::text"
+      "uri, cid, did, collection, json::text, indexed_at::text, rkey"
   }
 }
 
@@ -29,9 +29,9 @@ fn record_columns(exec: Executor) -> String {
 fn record_columns_prefixed(exec: Executor) -> String {
   case executor.dialect(exec) {
     executor.SQLite ->
-      "record.uri, record.cid, record.did, record.collection, record.json, record.indexed_at"
+      "record.uri, record.cid, record.did, record.collection, record.json, record.indexed_at, record.rkey"
     executor.PostgreSQL ->
-      "record.uri, record.cid, record.did, record.collection, record.json::text, record.indexed_at::text"
+      "record.uri, record.cid, record.did, record.collection, record.json::text, record.indexed_at::text, record.rkey"
   }
 }
 
@@ -394,7 +394,16 @@ fn record_decoder() -> decode.Decoder(Record) {
   use collection <- decode.field(3, decode.string)
   use json <- decode.field(4, decode.string)
   use indexed_at <- decode.field(5, decode.string)
-  decode.success(Record(uri:, cid:, did:, collection:, json:, indexed_at:))
+  use rkey <- decode.field(6, decode.string)
+  decode.success(Record(
+    uri:,
+    cid:,
+    did:,
+    collection:,
+    json:,
+    indexed_at:,
+    rkey:,
+  ))
 }
 
 // ===== Statistics Functions =====
@@ -1061,6 +1070,107 @@ pub fn get_by_dids_and_collection(
       executor.query(exec, sql, params, record_decoder())
     }
   }
+}
+
+/// Get records that mention the given DID (excluding records authored by that DID)
+/// This is used for notifications - finding all records that reference a user.
+/// Returns: (records, next_cursor, has_next_page, has_previous_page)
+pub fn get_notifications(
+  exec: Executor,
+  did: String,
+  collections: Option(List(String)),
+  first: Option(Int),
+  after: Option(String),
+) -> Result(#(List(Record), Option(String), Bool, Bool), DbError) {
+  let limit = option.unwrap(first, 50)
+  let pattern = "%" <> did <> "%"
+
+  // Start building params - pattern is $1, did is $2
+  let mut_params: List(Value) = [Text(pattern), Text(did)]
+  let mut_param_count = 2
+
+  // Build collection filter
+  let #(collection_clause, collection_params, param_count_after_cols) = case
+    collections
+  {
+    None -> #("", [], mut_param_count)
+    Some([]) -> #("", [], mut_param_count)
+    Some(cols) -> {
+      let placeholders =
+        cols
+        |> list.index_map(fn(_, i) {
+          executor.placeholder(exec, mut_param_count + i + 1)
+        })
+        |> string.join(", ")
+      let new_count = mut_param_count + list.length(cols)
+      #(
+        " AND collection IN (" <> placeholders <> ")",
+        list.map(cols, Text),
+        new_count,
+      )
+    }
+  }
+
+  // Build cursor clause
+  let #(cursor_clause, cursor_params) = case after {
+    None -> #("", [])
+    Some(cursor) -> {
+      case pagination.decode_cursor(cursor, None) {
+        Ok(decoded) -> {
+          // Cursor format: rkey|uri for TID-based chronological sorting
+          let rkey_value =
+            decoded.field_values |> list.first |> result.unwrap("")
+          let uri_value = decoded.cid
+          let p1 = executor.placeholder(exec, param_count_after_cols + 1)
+          let p2 = executor.placeholder(exec, param_count_after_cols + 2)
+          #(" AND (rkey, uri) < (" <> p1 <> ", " <> p2 <> ")", [
+            Text(rkey_value),
+            Text(uri_value),
+          ])
+        }
+        Error(_) -> #("", [])
+      }
+    }
+  }
+
+  // Combine all params
+  let all_params =
+    mut_params
+    |> list.append(collection_params)
+    |> list.append(cursor_params)
+
+  let sql =
+    "SELECT "
+    <> record_columns(exec)
+    <> " FROM record WHERE json LIKE "
+    <> executor.placeholder(exec, 1)
+    <> " AND did != "
+    <> executor.placeholder(exec, 2)
+    <> collection_clause
+    <> cursor_clause
+    <> " ORDER BY rkey DESC, uri DESC LIMIT "
+    <> int.to_string(limit + 1)
+
+  use results <- result.try(executor.query(
+    exec,
+    sql,
+    all_params,
+    record_decoder(),
+  ))
+
+  let has_next = list.length(results) > limit
+  let trimmed = results |> list.take(limit)
+
+  let end_cursor = case list.last(trimmed) {
+    Ok(record) -> {
+      // Encode cursor as rkey|uri for notification pagination
+      let cursor_content = record.rkey <> "|" <> record.uri
+      Some(pagination.encode_base64(cursor_content))
+    }
+    Error(_) -> None
+  }
+
+  Ok(#(trimmed, end_cursor, has_next, False))
 }
 
 /// Get records by DID and collection with pagination (for DID joins with connections)

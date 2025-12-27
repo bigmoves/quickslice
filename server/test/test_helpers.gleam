@@ -20,7 +20,10 @@ pub fn create_record_table(exec: Executor) -> Result(Nil, DbError) {
       did TEXT NOT NULL,
       collection TEXT NOT NULL,
       json TEXT NOT NULL,
-      indexed_at TEXT NOT NULL DEFAULT (datetime('now'))
+      indexed_at TEXT NOT NULL DEFAULT (datetime('now')),
+      rkey TEXT GENERATED ALWAYS AS (
+        substr(uri, instr(substr(uri, instr(substr(uri, 6), '/') + 6), '/') + instr(substr(uri, 6), '/') + 6)
+      ) STORED
     )",
     [],
   )

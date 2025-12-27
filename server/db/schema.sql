@@ -6,7 +6,10 @@ CREATE TABLE record (
   collection TEXT NOT NULL,
   json TEXT NOT NULL,
   indexed_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
+, rkey TEXT
+  GENERATED ALWAYS AS (
+    substr(uri, instr(substr(uri, instr(substr(uri, 6), '/') + 6), '/') + instr(substr(uri, 6), '/') + 6)
+  ) VIRTUAL);
 CREATE INDEX idx_record_did ON record(did);
 CREATE INDEX idx_record_collection ON record(collection);
 CREATE INDEX idx_record_did_collection ON record(did, collection);
@@ -190,4 +193,5 @@ CREATE TABLE admin_session (
 CREATE INDEX idx_admin_session_atp_session_id ON admin_session(atp_session_id);
 -- Dbmate schema migrations
 INSERT INTO "schema_migrations" (version) VALUES
-  ('20241210000001');
+  ('20241210000001'),
+  ('20241227000001');

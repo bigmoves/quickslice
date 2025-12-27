@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.18.0
+
+### Added
+- Add `notifications` GraphQL query for cross-collection DID mention search
+- Add `notificationCreated` GraphQL subscription for real-time notifications
+- Auto-generate `RecordCollection` enum from registered lexicons
+- Auto-generate `NotificationRecord` union type from record types
+
+### Changed
+- Upgrade swell to 2.1.3 (fixes NonNull-wrapped union type resolution)
+
 ## v0.17.5
 
 ### Fixed

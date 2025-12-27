@@ -14,6 +14,7 @@ pub fn encode_cursor_no_sort_test() {
       collection: "app.bsky.feed.post",
       json: "{\"text\":\"Hello world\",\"createdAt\":\"2025-01-15T12:00:00Z\"}",
       indexed_at: "2025-01-15 12:00:00",
+      rkey: "123",
     )
 
   let result = pagination.generate_cursor_from_record(record, None)
@@ -34,6 +35,7 @@ pub fn encode_cursor_single_field_test() {
       collection: "app.bsky.feed.post",
       json: "{\"text\":\"Hello world\",\"createdAt\":\"2025-01-15T12:00:00Z\"}",
       indexed_at: "2025-01-15 12:00:00",
+      rkey: "123",
     )
 
   let sort_by = Some([#("indexed_at", "desc")])
@@ -56,6 +58,7 @@ pub fn encode_cursor_json_field_test() {
       collection: "app.bsky.feed.post",
       json: "{\"text\":\"Hello world\",\"createdAt\":\"2025-01-15T12:00:00Z\"}",
       indexed_at: "2025-01-15 12:00:00",
+      rkey: "123",
     )
 
   let sort_by = Some([#("text", "desc")])
@@ -77,6 +80,7 @@ pub fn encode_cursor_nested_json_field_test() {
       collection: "app.bsky.feed.post",
       json: "{\"author\":{\"name\":\"Alice\"},\"createdAt\":\"2025-01-15T12:00:00Z\"}",
       indexed_at: "2025-01-15 12:00:00",
+      rkey: "123",
     )
 
   let sort_by = Some([#("author.name", "asc")])
@@ -98,6 +102,7 @@ pub fn encode_cursor_multi_field_test() {
       collection: "app.bsky.feed.post",
       json: "{\"text\":\"Hello\",\"createdAt\":\"2025-01-15T12:00:00Z\"}",
       indexed_at: "2025-01-15 12:00:00",
+      rkey: "123",
     )
 
   let sort_by = Some([#("text", "desc"), #("createdAt", "desc")])
@@ -179,6 +184,7 @@ pub fn extract_field_value_table_column_test() {
       collection: "app.bsky.feed.post",
       json: "{}",
       indexed_at: "2025-01-15 12:00:00",
+      rkey: "123",
     )
 
   pagination.extract_field_value(record, "uri")
@@ -207,6 +213,7 @@ pub fn extract_field_value_json_test() {
       collection: "app.bsky.feed.post",
       json: "{\"text\":\"Hello world\",\"createdAt\":\"2025-01-15T12:00:00Z\",\"likeCount\":42}",
       indexed_at: "2025-01-15 12:00:00",
+      rkey: "123",
     )
 
   pagination.extract_field_value(record, "text")
@@ -229,6 +236,7 @@ pub fn extract_field_value_nested_json_test() {
       collection: "app.bsky.feed.post",
       json: "{\"author\":{\"name\":\"Alice\",\"did\":\"did:plc:alice\"}}",
       indexed_at: "2025-01-15 12:00:00",
+      rkey: "123",
     )
 
   pagination.extract_field_value(record, "author.name")
@@ -248,6 +256,7 @@ pub fn extract_field_value_missing_test() {
       collection: "app.bsky.feed.post",
       json: "{\"text\":\"Hello\"}",
       indexed_at: "2025-01-15 12:00:00",
+      rkey: "123",
     )
 
   pagination.extract_field_value(record, "nonexistent")

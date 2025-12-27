@@ -484,6 +484,69 @@ fn event_matches_subscription(
   event_field == subscription_field
 }
 
+/// Check if a record event matches a notification subscription
+///
+/// A notification event matches when:
+/// 1. The event value contains the subscribed DID (is a mention)
+/// 2. The event is NOT authored by the subscribed DID (excludes self)
+/// 3. The operation is Create (notifications are for new records only)
+/// 4. The collection matches the filter (if provided)
+pub fn event_matches_notification_subscription(
+  event: pubsub.RecordEvent,
+  subscribed_did: String,
+  collections: Option(List(String)),
+) -> Bool {
+  // Event value must contain the subscribed DID (mentioning them)
+  let contains_did = string.contains(event.value, subscribed_did)
+
+  // Event must NOT be authored by the subscribed DID (exclude self)
+  let not_self_authored = event.did != subscribed_did
+
+  // Event must be a Create operation (notifications for new records only)
+  let is_create = event.operation == pubsub.Create
+
+  // Event collection must match filter (if provided)
+  let matches_collection = case collections {
+    None -> True
+    Some([]) -> True
+    Some(cols) -> list.contains(cols, event.collection)
+  }
+
+  contains_did && not_self_authored && is_create && matches_collection
+}
+
+/// Extract a string value from variables dict
+fn get_variable_string(
+  variables: Dict(String, value.Value),
+  key: String,
+) -> Option(String) {
+  case dict.get(variables, key) {
+    Ok(value.String(s)) -> Some(s)
+    _ -> None
+  }
+}
+
+/// Extract a list of strings from variables dict (for enum list values)
+fn get_variable_string_list(
+  variables: Dict(String, value.Value),
+  key: String,
+) -> Option(List(String)) {
+  case dict.get(variables, key) {
+    Ok(value.List(items)) -> {
+      let strings =
+        list.filter_map(items, fn(item) {
+          case item {
+            value.String(s) -> Ok(s)
+            value.Enum(e) -> Ok(e)
+            _ -> Error(Nil)
+          }
+        })
+      Some(strings)
+    }
+    _ -> None
+  }
+}
+
 /// Process an event and send it to the WebSocket client if it matches
 fn process_event(
   event: pubsub.RecordEvent,
@@ -495,7 +558,39 @@ fn process_event(
   db: Executor,
   graphql_schema: schema.Schema,
 ) -> Nil {
-  case event_matches_subscription(event, subscription_field) {
+  // Check if this is a notification subscription
+  let matches = case subscription_field {
+    "notificationCreated" -> {
+      // For notifications, extract did and collections from variables
+      let subscribed_did = case get_variable_string(variables, "did") {
+        Some(did) -> did
+        None -> ""
+      }
+      // Convert enum values to NSIDs (APP_BSKY_FEED_LIKE -> app.bsky.feed.like)
+      let collections = case
+        get_variable_string_list(variables, "collections")
+      {
+        Some(enum_values) -> {
+          let nsids =
+            list.map(enum_values, fn(enum_val) {
+              enum_val
+              |> string.lowercase()
+              |> string.replace("_", ".")
+            })
+          Some(nsids)
+        }
+        None -> None
+      }
+      event_matches_notification_subscription(
+        event,
+        subscribed_did,
+        collections,
+      )
+    }
+    _ -> event_matches_subscription(event, subscription_field)
+  }
+
+  case matches {
     True -> {
       // Execute the GraphQL subscription query with the event data and variables
       case

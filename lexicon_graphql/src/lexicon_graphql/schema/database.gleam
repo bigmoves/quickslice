@@ -126,6 +126,21 @@ pub type AggregateFetcher =
 pub type ViewerFetcher =
   fn(String) -> Result(#(String, option.Option(String)), String)
 
+/// Type for notification fetcher function
+/// Takes: did, optional collection filter, first (limit), after (cursor)
+/// Returns: (records_with_cursors, end_cursor, has_next_page, has_previous_page)
+pub type NotificationFetcher =
+  fn(
+    String,
+    option.Option(List(String)),
+    option.Option(Int),
+    option.Option(String),
+  ) ->
+    Result(
+      #(List(#(value.Value, String)), option.Option(String), Bool, Bool),
+      String,
+    )
+
 /// Build a GraphQL schema from lexicons with database-backed resolvers
 ///
 /// The fetcher parameter should be a function that queries the database for records with pagination
@@ -163,6 +178,9 @@ pub fn build_schema_with_fetcher(
           batch_fetcher,
           paginated_batch_fetcher,
           option.None,
+          option.None,
+          option.None,
+          option.None,
         )
 
       // Build the mutation type with provided resolver factories
@@ -198,6 +216,7 @@ pub fn build_schema_with_subscriptions(
   upload_blob_factory: option.Option(mutation_builder.UploadBlobResolverFactory),
   aggregate_fetcher: option.Option(AggregateFetcher),
   viewer_fetcher: option.Option(ViewerFetcher),
+  notification_fetcher: option.Option(NotificationFetcher),
 ) -> Result(schema.Schema, String) {
   case lexicons {
     [] -> Error("Cannot build schema from empty lexicon list")
@@ -210,6 +229,16 @@ pub fn build_schema_with_subscriptions(
           paginated_batch_fetcher,
         )
 
+      // Build notification types if fetcher provided
+      let #(notification_union, collection_enum) = case notification_fetcher {
+        option.Some(_) -> {
+          let assert Ok(union) = build_notification_record_union(lexicons)
+          let assert Ok(enum) = build_record_collection_enum(lexicons)
+          #(option.Some(union), option.Some(enum))
+        }
+        option.None -> #(option.None, option.None)
+      }
+
       // Build the query type (pass field_type_registry for aggregation validation)
       let query_type =
         build_query_type(
@@ -221,6 +250,9 @@ pub fn build_schema_with_subscriptions(
           batch_fetcher,
           paginated_batch_fetcher,
           viewer_fetcher,
+          notification_fetcher,
+          notification_union,
+          collection_enum,
         )
 
       // Build the mutation type
@@ -236,7 +268,12 @@ pub fn build_schema_with_subscriptions(
 
       // Build the subscription type
       let subscription_type =
-        build_subscription_type(record_types, object_types)
+        build_subscription_type(
+          record_types,
+          object_types,
+          notification_union,
+          collection_enum,
+        )
 
       // Create the schema with queries, mutations, and subscriptions
       Ok(schema.schema_with_subscriptions(
@@ -1561,6 +1598,9 @@ fn build_query_type(
   batch_fetcher: option.Option(dataloader.BatchFetcher),
   paginated_batch_fetcher: option.Option(dataloader.PaginatedBatchFetcher),
   viewer_fetcher: option.Option(ViewerFetcher),
+  notification_fetcher: option.Option(NotificationFetcher),
+  notification_union: option.Option(schema.Type),
+  collection_enum: option.Option(schema.Type),
 ) -> schema.Type {
   // Build regular query fields
   let query_fields =
@@ -1899,11 +1939,148 @@ fn build_query_type(
     option.None -> []
   }
 
+  // Build notifications query field if fetcher provided
+  let notification_fields = case notification_fetcher, notification_union {
+    option.Some(notif_fetcher), option.Some(union_type) -> {
+      // Build connection types for notifications
+      let edge_type = connection.edge_type("NotificationRecord", union_type)
+      let connection_type =
+        connection.connection_type("NotificationRecord", edge_type)
+
+      // Build notification-specific args
+      let notification_args = build_notification_query_args(collection_enum)
+
+      [
+        schema.field_with_args(
+          "notifications",
+          connection_type,
+          "Query notifications for the authenticated user (records mentioning them)",
+          notification_args,
+          fn(ctx: schema.Context) {
+            // Get viewer DID from context (viewer field should be resolved first)
+            case schema.get_argument(ctx, "viewerDid") {
+              option.Some(value.String(viewer_did)) -> {
+                // Extract collection filter
+                let collections = case schema.get_argument(ctx, "collections") {
+                  option.Some(value.List(items)) -> {
+                    let nsids =
+                      list.filter_map(items, fn(item) {
+                        case item {
+                          value.String(enum_val) ->
+                            Ok(enum_value_to_nsid(enum_val))
+                          _ -> Error(Nil)
+                        }
+                      })
+                    case nsids {
+                      [] -> option.None
+                      _ -> option.Some(nsids)
+                    }
+                  }
+                  _ -> option.None
+                }
+
+                // Extract pagination params
+                let first = case schema.get_argument(ctx, "first") {
+                  option.Some(value.Int(n)) -> option.Some(n)
+                  _ -> option.None
+                }
+                let after = case schema.get_argument(ctx, "after") {
+                  option.Some(value.String(cursor)) -> option.Some(cursor)
+                  _ -> option.None
+                }
+
+                // Call the notification fetcher
+                use #(records_with_cursors, end_cursor, has_next, has_prev) <- result.try(
+                  notif_fetcher(viewer_did, collections, first, after),
+                )
+
+                // Build edges from records with their cursors
+                let edges =
+                  list.map(records_with_cursors, fn(record_tuple) {
+                    let #(record_value, record_cursor) = record_tuple
+                    connection.Edge(node: record_value, cursor: record_cursor)
+                  })
+
+                // Build PageInfo
+                let page_info =
+                  connection.PageInfo(
+                    has_next_page: has_next,
+                    has_previous_page: has_prev,
+                    start_cursor: case list.first(edges) {
+                      Ok(edge) -> option.Some(edge.cursor)
+                      Error(_) -> option.None
+                    },
+                    end_cursor: end_cursor,
+                  )
+
+                // Build Connection
+                let conn =
+                  connection.Connection(
+                    edges: edges,
+                    page_info: page_info,
+                    total_count: option.None,
+                  )
+                Ok(connection.connection_to_value(conn))
+              }
+              _ -> Error("notifications query requires viewerDid argument")
+            }
+          },
+        ),
+      ]
+    }
+    _, _ -> []
+  }
+
   // Combine all query fields
   let all_query_fields =
-    list.flatten([query_fields, aggregate_query_fields, viewer_field])
+    list.flatten([
+      query_fields,
+      aggregate_query_fields,
+      viewer_field,
+      notification_fields,
+    ])
 
   schema.object_type("Query", "Root query type", all_query_fields)
+}
+
+/// Build notification query arguments
+fn build_notification_query_args(
+  collection_enum: option.Option(schema.Type),
+) -> List(schema.Argument) {
+  let base_args = [
+    schema.argument(
+      "viewerDid",
+      schema.non_null(schema.string_type()),
+      "DID of the viewer to get notifications for",
+      option.None,
+    ),
+    schema.argument(
+      "first",
+      schema.int_type(),
+      "Number of notifications to return",
+      option.Some(value.Int(50)),
+    ),
+    schema.argument(
+      "after",
+      schema.string_type(),
+      "Cursor for pagination",
+      option.None,
+    ),
+  ]
+
+  case collection_enum {
+    option.Some(enum_type) -> {
+      list.append(base_args, [
+        schema.argument(
+          "collections",
+          schema.list_type(enum_type),
+          "Filter notifications by collection types",
+          option.None,
+        ),
+      ])
+    }
+    option.None -> base_args
+  }
 }
 
 /// Extract pagination parameters from GraphQL context
@@ -2196,6 +2373,8 @@ fn inject_did_into_value(val: value.Value, did: String) -> value.Value {
 fn build_subscription_type(
   record_types: List(RecordType),
   object_types: dict.Dict(String, schema.Type),
+  notification_union: option.Option(schema.Type),
+  collection_enum: option.Option(schema.Type),
 ) -> schema.Type {
   let subscription_fields =
     list.flat_map(record_types, fn(record_type) {
@@ -2256,11 +2435,67 @@ fn build_subscription_type(
       [created_field, updated_field, deleted_field]
     })
 
+  // Build notification subscription field if union type provided
+  let notification_subscription_fields = case notification_union {
+    option.Some(union_type) -> {
+      let notification_args =
+        build_notification_subscription_args(collection_enum)
+      [
+        schema.field_with_args(
+          "notificationCreated",
+          schema.non_null(union_type),
+          "Emitted when a new notification is created for the subscriber",
+          notification_args,
+          fn(ctx) {
+            // Event data is passed via ctx.data
+            case ctx.data {
+              option.Some(data) -> Ok(data)
+              option.None ->
+                Error("Subscription resolver called without event data")
+            }
+          },
+        ),
+      ]
+    }
+    option.None -> []
+  }
+
+  let all_subscription_fields =
+    list.append(subscription_fields, notification_subscription_fields)
+
   schema.object_type(
     "Subscription",
     "GraphQL subscription root",
-    subscription_fields,
+    all_subscription_fields,
   )
+}
+
+/// Build notification subscription arguments
+fn build_notification_subscription_args(
+  collection_enum: option.Option(schema.Type),
+) -> List(schema.Argument) {
+  let base_args = [
+    schema.argument(
+      "subscriberDid",
+      schema.non_null(schema.string_type()),
+      "DID of the subscriber to receive notifications for",
+      option.None,
+    ),
+  ]
+
+  case collection_enum {
+    option.Some(enum_type) -> {
+      list.append(base_args, [
+        schema.argument(
+          "collections",
+          schema.list_type(enum_type),
+          "Filter notifications to specific collection types",
+          option.None,
+        ),
+      ])
+    }
+    option.None -> base_args
+  }
 }
 
 // ===== Aggregated Query Support =====
@@ -2762,4 +2997,93 @@ fn json_dynamic_to_graphql_value(dyn: dynamic.Dynamic) -> value.Value {
           }
       }
   }
+}
+
+// ===== Notification Schema Helpers =====
+
+/// Convert NSID to GraphQL enum value (app.bsky.feed.post -> APP_BSKY_FEED_POST)
+pub fn nsid_to_enum_value(nsid: String) -> String {
+  nsid
+  |> string.replace(".", "_")
+  |> string.uppercase()
+}
+
+/// Convert GraphQL enum value back to NSID (APP_BSKY_FEED_POST -> app.bsky.feed.post)
+pub fn enum_value_to_nsid(enum_value: String) -> String {
+  enum_value
+  |> string.lowercase()
+  |> string.replace("_", ".")
+}
+
+/// Build RecordCollection enum from parsed lexicons
+/// Only includes record-type lexicons (excludes object types like RichtextFacet)
+pub fn build_record_collection_enum(
+  lexicons: List(types.Lexicon),
+) -> Result(schema.Type, String) {
+  // Only include lexicons where main.type_ is "record" (not "object")
+  let record_nsids =
+    lexicons
+    |> list.filter_map(fn(lex) {
+      case lex.defs.main {
+        option.Some(types.RecordDef(type_: "record", key: _, properties: _)) ->
+          Ok(lex.id)
+        _ -> Error(Nil)
+      }
+    })
+
+  let enum_values =
+    record_nsids
+    |> list.map(fn(nsid) {
+      schema.enum_value(nsid_to_enum_value(nsid), "Collection: " <> nsid)
+    })
+
+  Ok(schema.enum_type(
+    "RecordCollection",
+    "Available record collection types for notifications",
+    enum_values,
+  ))
+}
+
+/// Build NotificationRecord union from all record types in lexicons
+/// This union represents any record that can appear as a notification
+pub fn build_notification_record_union(
+  lexicons: List(types.Lexicon),
+) -> Result(schema.Type, String) {
+  // Only include lexicons where main.type_ is "record" (not "object")
+  let record_type_names =
+    lexicons
+    |> list.filter_map(fn(lex) {
+      case lex.defs.main {
+        option.Some(types.RecordDef(type_: "record", key: _, properties: _)) ->
+          Ok(nsid.to_type_name(lex.id))
+        _ -> Error(Nil)
+      }
+    })
+
+  // Build placeholder object types for the union
+  // These just need the correct names - actual resolution uses the real types
+  let possible_types =
+    record_type_names
+    |> list.map(fn(type_name) {
+      schema.object_type(type_name, "Record type: " <> type_name, [])
+    })
+
+  // Type resolver examines the "collection" field to determine the concrete type
+  let type_resolver = fn(ctx: schema.Context) -> Result(String, String) {
+    case get_field_from_context(ctx, "collection") {
+      Ok(collection_nsid) -> {
+        // Convert NSID to type name (e.g., "app.bsky.feed.post" -> "AppBskyFeedPost")
+        Ok(nsid.to_type_name(collection_nsid))
+      }
+      Error(_) ->
+        Error("Could not determine record type: missing 'collection' field")
+    }
+  }
+
+  Ok(schema.union_type(
+    "NotificationRecord",
+    "Union of all record types for notifications",
+    possible_types,
+    type_resolver,
+  ))
 }

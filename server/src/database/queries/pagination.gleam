@@ -65,6 +65,7 @@ pub fn extract_field_value(record: Record, field: String) -> String {
     "did" -> record.did
     "collection" -> record.collection
     "indexed_at" -> record.indexed_at
+    "rkey" -> record.rkey
     _ -> extract_json_field(record.json, field)
   }
 }
@@ -308,7 +309,7 @@ fn build_progressive_clauses(
 /// Builds a field reference for cursor SQL queries (handles JSON fields)
 fn build_cursor_field_reference(exec: Executor, field: String) -> String {
   case field {
-    "uri" | "cid" | "did" | "collection" | "indexed_at" -> field
+    "uri" | "cid" | "did" | "collection" | "indexed_at" | "rkey" -> field
     _ -> executor.json_extract(exec, "json", field)
   }
 }
@@ -376,7 +377,7 @@ pub fn build_order_by(
         False -> ""
       }
       let field_ref = case field_name {
-        "uri" | "cid" | "did" | "collection" | "indexed_at" ->
+        "uri" | "cid" | "did" | "collection" | "indexed_at" | "rkey" ->
           table_prefix <> field_name
         "createdAt" | "indexedAt" -> {
           let json_field =

@@ -11,6 +11,7 @@ pub type Record {
     collection: String,
     json: String,
     indexed_at: String,
+    rkey: String,
   )
 }
 
