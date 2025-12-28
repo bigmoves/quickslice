@@ -2,6 +2,7 @@
 ///
 /// Public API for building and executing the lexicon-driven GraphQL schema.
 /// External code should import this module for all lexicon GraphQL operations.
+import atproto_auth
 import backfill
 import database/executor.{type Executor}
 import database/repositories/config as config_repo
@@ -121,7 +122,10 @@ pub fn build_schema_from_db(
       // Step 6: Create notification fetcher
       let notification_fetcher = fetchers.notification_fetcher(db)
 
-      // Step 7: Build schema with database-backed resolvers, mutations, and subscriptions
+      // Step 7: Create viewer state fetcher
+      let viewer_state_fetcher = fetchers.viewer_state_fetcher(db)
+
+      // Step 8: Build schema with database-backed resolvers, mutations, and subscriptions
       database.build_schema_with_subscriptions(
         parsed_lexicons,
         record_fetcher,
@@ -134,6 +138,7 @@ pub fn build_schema_from_db(
         option.Some(aggregate_fetcher),
         option.Some(viewer_fetcher),
         option.Some(notification_fetcher),
+        option.Some(viewer_state_fetcher),
       )
     }
   }
@@ -169,19 +174,41 @@ pub fn execute_query_with_db(
     domain_authority,
   ))
 
-  // Create context with auth token if provided
-  let ctx_data = case auth_token {
+  // Convert json variables to Dict(String, value.Value)
+  // SECURITY: Strip any client-provided viewer_did - it must come from auth token only
+  let variables_dict =
+    json_string_to_variables_dict(variables_json_str)
+    |> dict.delete("viewer_did")
+
+  // Extract viewer DID from auth token and add to variables
+  // This is stored in variables (not ctx.data) because ctx.data gets
+  // overwritten with parent values during field resolution
+  let #(ctx_data, variables_with_viewer) = case auth_token {
     Ok(token) -> {
-      // Add auth token to context for mutation resolvers
-      option.Some(value.Object([#("auth_token", value.String(token))]))
+      case atproto_auth.verify_token(db, token) {
+        Ok(user_info) -> {
+          // Add viewer_did to variables for viewer state fields
+          let vars_with_viewer =
+            dict.insert(
+              variables_dict,
+              "viewer_did",
+              value.String(user_info.did),
+            )
+          // Keep auth_token in ctx.data for mutation resolvers
+          let data =
+            option.Some(value.Object([#("auth_token", value.String(token))]))
+          #(data, vars_with_viewer)
+        }
+        Error(_) -> {
+          // Token invalid/expired - allow query but without viewer context
+          #(option.None, variables_dict)
+        }
+      }
     }
-    Error(_) -> option.None
+    Error(_) -> #(option.None, variables_dict)
   }
 
-  // Convert json variables to Dict(String, value.Value)
-  let variables_dict = json_string_to_variables_dict(variables_json_str)
-
-  let ctx = schema.context_with_variables(ctx_data, variables_dict)
+  let ctx = schema.context_with_variables(ctx_data, variables_with_viewer)
 
   // Execute the query
   use response <- result.try(swell_executor.execute(

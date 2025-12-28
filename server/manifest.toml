@@ -52,7 +52,7 @@ packages = [
   { name = "simplifile", version = "2.3.2", build_tools = ["gleam"], requirements = ["filepath", "gleam_stdlib"], otp_app = "simplifile", source = "hex", outer_checksum = "E049B4DACD4D206D87843BCF4C775A50AE0F50A52031A2FFB40C9ED07D6EC70A" },
   { name = "sqlight", version = "1.0.3", build_tools = ["gleam"], requirements = ["esqlite", "gleam_stdlib"], otp_app = "sqlight", source = "hex", outer_checksum = "CADD79663C9B61D4BAC960A47CC2D42CA8F48EAF5804DBEB79977287750F4B16" },
   { name = "ssl_verify_fun", version = "1.1.7", build_tools = ["mix", "rebar3", "make"], requirements = [], otp_app = "ssl_verify_fun", source = "hex", outer_checksum = "FE4C190E8F37401D30167C8C405EDA19469F34577987C76DDE613E838BBC67F8" },
-  { name = "swell", version = "2.1.3", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "swell", source = "hex", outer_checksum = "018FF9B3F775F101E72208B4E0EA15A670A51E59C83247DD0302C3AD8C2FE9FF" },
+  { name = "swell", version = "2.1.4", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "swell", source = "hex", outer_checksum = "E12BCF0F90886C3B0C641AA2BB69CE9EDEEF1293279256B75DEB14A03F2F8221" },
   { name = "telemetry", version = "1.3.0", build_tools = ["rebar3"], requirements = [], otp_app = "telemetry", source = "hex", outer_checksum = "7015FC8919DBE63764F4B4B87A95B7C0996BD539E0D499BE6EC9D7F3875B79E6" },
   { name = "unicode_util_compat", version = "0.7.1", build_tools = ["rebar3"], requirements = [], otp_app = "unicode_util_compat", source = "hex", outer_checksum = "B3A917854CE3AE233619744AD1E0102E05673136776FB2FA76234F3E03B23642" },
   { name = "wisp", version = "2.1.1", build_tools = ["gleam"], requirements = ["directories", "exception", "filepath", "gleam_crypto", "gleam_erlang", "gleam_http", "gleam_json", "gleam_stdlib", "houdini", "logging", "marceau", "mist", "simplifile"], otp_app = "wisp", source = "hex", outer_checksum = "46E2E31DECD61A3748CF6CB317D9AC432BBC8D8A6E65655A9E787BDC69389DE0" },
@@ -84,5 +84,5 @@ pg_types = { version = ">= 0.6.0 and < 1.0.0" }
 pog = { version = ">= 4.0.0 and < 5.0.0" }
 simplifile = { version = ">= 2.0.0 and < 3.0.0" }
 sqlight = { version = ">= 1.0.0 and < 2.0.0" }
-swell = { version = ">= 2.1.3 and < 3.0.0" }
+swell = { version = ">= 2.1.4 and < 3.0.0" }
 wisp = { version = ">= 2.1.0 and < 3.0.0" }

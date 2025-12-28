@@ -7,6 +7,76 @@ import gleeunit/should
 import lexicon_graphql/internal/lexicon/collection_meta
 import lexicon_graphql/types
 
+// Test detecting DID-typed subject field (for follows)
+pub fn detects_did_subject_field_test() {
+  // Follow lexicon has subject with format: "did"
+  let lexicon =
+    types.Lexicon(
+      id: "social.grain.graph.follow",
+      defs: types.Defs(
+        main: Some(
+          types.RecordDef(type_: "record", key: Some("tid"), properties: [
+            #(
+              "subject",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: Some("did"),
+                ref: None,
+                refs: None,
+                items: None,
+              ),
+            ),
+          ]),
+        ),
+        others: dict.new(),
+      ),
+    )
+
+  let meta = collection_meta.extract_metadata(lexicon)
+
+  // Should detect subject as a DID-typed field
+  meta.did_subject_fields
+  |> should.equal(["subject"])
+}
+
+// Test that at-uri fields are NOT detected as DID fields
+pub fn detects_at_uri_subject_field_not_did_test() {
+  // Favorite lexicon has subject with format: "at-uri"
+  let lexicon =
+    types.Lexicon(
+      id: "social.grain.favorite",
+      defs: types.Defs(
+        main: Some(
+          types.RecordDef(type_: "record", key: Some("tid"), properties: [
+            #(
+              "subject",
+              types.Property(
+                type_: "string",
+                required: True,
+                format: Some("at-uri"),
+                ref: None,
+                refs: None,
+                items: None,
+              ),
+            ),
+          ]),
+        ),
+        others: dict.new(),
+      ),
+    )
+
+  let meta = collection_meta.extract_metadata(lexicon)
+
+  // Should detect subject as at-uri (existing behavior)
+  meta.reverse_join_fields
+  |> should.equal(["subject"])
+
+  // Should NOT detect as DID field
+  meta.did_subject_fields
+  |> should.equal([])
+}
+
 // Test extracting metadata from a lexicon with strongRef fields
 pub fn extract_metadata_with_strong_ref_test() {
   let lexicon =

@@ -1,6 +1,7 @@
 /// GraphQL WebSocket Handler
 ///
 /// Handles WebSocket connections for GraphQL subscriptions using the graphql-ws protocol
+import atproto_auth
 import database/executor.{type Executor}
 import database/repositories/actors
 import gleam/dict.{type Dict}
@@ -175,6 +176,8 @@ pub type State {
     subscription_subject: process.Subject(websocket_ffi.SubscriptionMessage),
     // GraphQL schema for executing subscription queries
     schema: schema.Schema,
+    // Authenticated viewer DID (extracted from auth token)
+    viewer_did: Option(String),
   )
 }
 
@@ -188,6 +191,28 @@ pub fn handle_websocket(
   plc_url: String,
   domain_authority: String,
 ) -> response.Response(ResponseData) {
+  // Extract auth token from request headers before WebSocket upgrade
+  let auth_token = case request.get_header(req, "authorization") {
+    Ok(auth_header) -> {
+      case string.starts_with(auth_header, "Bearer ") {
+        True -> Some(string.drop_start(auth_header, 7))
+        False -> None
+      }
+    }
+    Error(_) -> None
+  }
+
+  // Verify auth token and extract viewer DID
+  let viewer_did = case auth_token {
+    Some(token) -> {
+      case atproto_auth.verify_token(db, token) {
+        Ok(user_info) -> Some(user_info.did)
+        Error(_) -> None
+      }
+    }
+    None -> None
+  }
+
   mist.websocket(
     request: req,
     on_init: fn(conn) {
@@ -231,6 +256,7 @@ pub fn handle_websocket(
           conn: conn,
           subscription_subject: subscription_subject,
           schema: graphql_schema,
+          viewer_did: viewer_did,
         )
 
       #(state, Some(selector))
@@ -356,10 +382,25 @@ fn handle_text_message(state: State, conn: WebsocketConnection, text: String) {
                 }
                 Ok(field_name) -> {
                   // Parse variables from JSON
-                  let variables = case variables_opt {
+                  // SECURITY: Strip any client-provided viewer_did - it must come from auth token only
+                  let base_variables = case variables_opt {
                     Some(vars_json) ->
                       lexicon_schema.json_string_to_variables_dict(vars_json)
+                      |> dict.delete("viewer_did")
                     None -> dict.new()
+                  }
+
+                  // Inject viewer_did from auth token into variables
+                  // This is stored in variables (not ctx.data) because ctx.data
+                  // gets overwritten with parent values during field resolution
+                  let variables = case state.viewer_did {
+                    Some(did) ->
+                      dict.insert(
+                        base_variables,
+                        "viewer_did",
+                        value.String(did),
+                      )
+                    None -> base_variables
                   }
 
                   logging.log(

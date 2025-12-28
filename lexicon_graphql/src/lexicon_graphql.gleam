@@ -62,6 +62,7 @@ pub fn build_schema_with_subscriptions(
   aggregate_fetcher: Option(db_schema_builder.AggregateFetcher),
   viewer_fetcher: Option(ViewerFetcher),
   notification_fetcher: Option(NotificationFetcher),
+  viewer_state_fetcher: Option(dataloader.ViewerStateFetcher),
 ) {
   db_schema_builder.build_schema_with_subscriptions(
     lexicons,
@@ -75,6 +76,7 @@ pub fn build_schema_with_subscriptions(
     aggregate_fetcher,
     viewer_fetcher,
     notification_fetcher,
+    viewer_state_fetcher,
   )
 }
 

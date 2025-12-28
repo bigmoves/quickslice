@@ -77,6 +77,13 @@ pub type ReverseJoinKey {
   )
 }
 
+/// Fetcher for viewer state queries
+/// Takes viewer DID, collection, reference field, and list of parent keys
+/// Returns a dict mapping parent keys to the viewer's record (if any)
+pub type ViewerStateFetcher =
+  fn(String, String, String, List(String)) ->
+    Result(Dict(String, value.Value), String)
+
 /// Extract the collection name from an AT URI
 /// Format: at://did:plc:abc123/app.bsky.feed.post/rkey
 /// Returns: app.bsky.feed.post
@@ -178,6 +185,21 @@ pub fn batch_fetch_by_did_paginated(
 ) -> Result(PaginatedBatchResult, String) {
   // Fetch paginated records by DID
   fetcher(did, target_collection, None, pagination)
+}
+
+/// Batch fetch viewer state for multiple parent records
+///
+/// Given a viewer DID and list of parent URIs/DIDs, finds the viewer's
+/// record for each parent (if any).
+/// Returns a Dict mapping parent keys to the viewer's record.
+pub fn batch_fetch_viewer_state(
+  viewer_did: String,
+  collection: String,
+  reference_field: String,
+  parent_keys: List(String),
+  fetcher: ViewerStateFetcher,
+) -> Result(Dict(String, value.Value), String) {
+  fetcher(viewer_did, collection, reference_field, parent_keys)
 }
 
 /// Group URIs by their collection for batching

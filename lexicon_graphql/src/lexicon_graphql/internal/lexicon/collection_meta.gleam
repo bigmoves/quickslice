@@ -22,6 +22,8 @@ pub type CollectionMeta {
     forward_join_fields: List(ForwardJoinField),
     /// Fields that can be used for reverse joins (fields with at-uri format)
     reverse_join_fields: List(String),
+    /// Fields with format: "did" that can be used for DID-based viewer joins
+    did_subject_fields: List(String),
   )
 }
 
@@ -49,7 +51,7 @@ pub fn extract_metadata(lexicon: types.Lexicon) -> CollectionMeta {
       // Collections with key="literal:self" have a unique record per DID (e.g., profiles)
       let has_unique_did = key_type == "literal:self"
 
-      let #(forward_fields, reverse_fields) =
+      let #(forward_fields, reverse_fields, did_fields) =
         scan_properties(main_def.properties)
 
       CollectionMeta(
@@ -59,6 +61,7 @@ pub fn extract_metadata(lexicon: types.Lexicon) -> CollectionMeta {
         has_unique_did: has_unique_did,
         forward_join_fields: forward_fields,
         reverse_join_fields: reverse_fields,
+        did_subject_fields: did_fields,
       )
     }
     None -> {
@@ -70,17 +73,18 @@ pub fn extract_metadata(lexicon: types.Lexicon) -> CollectionMeta {
         has_unique_did: False,
         forward_join_fields: [],
         reverse_join_fields: [],
+        did_subject_fields: [],
       )
     }
   }
 }
 
-/// Scan properties to identify forward and reverse join fields
+/// Scan properties to identify forward, reverse, and DID join fields
 fn scan_properties(
   properties: List(#(String, types.Property)),
-) -> #(List(ForwardJoinField), List(String)) {
-  list.fold(properties, #([], []), fn(acc, prop) {
-    let #(forward_fields, reverse_fields) = acc
+) -> #(List(ForwardJoinField), List(String), List(String)) {
+  list.fold(properties, #([], [], []), fn(acc, prop) {
+    let #(forward_fields, reverse_fields, did_fields) = acc
     let #(name, property) = prop
 
     // Check if this is a forward join field
@@ -95,8 +99,22 @@ fn scan_properties(
       False -> reverse_fields
     }
 
-    #(new_forward, new_reverse)
+    // Check if this is a DID-typed field
+    let new_did = case is_did_field(property) {
+      True -> [name, ..did_fields]
+      False -> did_fields
+    }
+
+    #(new_forward, new_reverse, new_did)
   })
+}
+
+/// Check if a property has DID format
+fn is_did_field(property: types.Property) -> Bool {
+  case property.format {
+    Some(fmt) if fmt == "did" -> True
+    _ -> False
+  }
 }
 
 /// Check if a property is a forward join field

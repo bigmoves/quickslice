@@ -349,6 +349,52 @@ pub fn viewer_fetcher(db: Executor) {
   }
 }
 
+/// Create a viewer state fetcher for checking viewer relationships
+/// This fetches records owned by the viewer that reference parent keys
+pub fn viewer_state_fetcher(db: Executor) {
+  fn(
+    viewer_did: String,
+    collection: String,
+    reference_field: String,
+    parent_keys: List(String),
+  ) -> Result(dict.Dict(String, value.Value), String) {
+    // Fetch records owned by viewer_did that reference any of the parent_keys
+    case
+      records.get_viewer_state_records(
+        db,
+        viewer_did,
+        collection,
+        reference_field,
+        parent_keys,
+      )
+    {
+      Ok(record_list) -> {
+        // Create a dict mapping parent_key -> single record (the viewer's record)
+        let result =
+          list.fold(record_list, dict.new(), fn(acc, record) {
+            let graphql_value = converters.record_to_graphql_value(record, db)
+            // Extract the reference field value to find which parent this belongs to
+            case
+              converters.extract_reference_uri(record.json, reference_field)
+            {
+              Ok(parent_key) -> {
+                // Only keep first record per parent (there should only be one)
+                case dict.has_key(acc, parent_key) {
+                  True -> acc
+                  False -> dict.insert(acc, parent_key, graphql_value)
+                }
+              }
+              Error(_) -> acc
+            }
+          })
+        Ok(result)
+      }
+      Error(_) ->
+        Error("Failed to fetch viewer state records for " <> collection)
+    }
+  }
+}
+
 /// Create a notification fetcher for cross-collection DID mention queries
 pub fn notification_fetcher(db: Executor) {
   fn(

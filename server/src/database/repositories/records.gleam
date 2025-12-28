@@ -1039,6 +1039,61 @@ pub fn get_by_reference_field_paginated(
   ))
 }
 
+/// Get viewer state records - records owned by viewer_did where reference field matches parent keys
+/// Used for viewer fields like viewerSocialGrainFavoriteViaSubject
+pub fn get_viewer_state_records(
+  exec: Executor,
+  viewer_did: String,
+  collection: String,
+  field_name: String,
+  parent_keys: List(String),
+) -> Result(List(Record), DbError) {
+  case parent_keys {
+    [] -> Ok([])
+    _ -> {
+      let key_count = list.length(parent_keys)
+      // Placeholder 1 is viewer_did
+      // Placeholder 2 is collection
+      // Placeholders 3 to key_count+2 are first set of keys (for direct match)
+      // Placeholders key_count+3 to 2*key_count+2 are second set (for strongRef match)
+      let placeholders1 = executor.placeholders(exec, key_count, 3)
+      let placeholders2 = executor.placeholders(exec, key_count, key_count + 3)
+
+      // Use dialect-specific JSON extraction
+      let json_field = executor.json_extract(exec, "json", field_name)
+      let json_uri_field =
+        executor.json_extract_path(exec, "json", [field_name, "uri"])
+
+      let sql =
+        "SELECT "
+        <> record_columns(exec)
+        <> " FROM record WHERE did = "
+        <> executor.placeholder(exec, 1)
+        <> " AND collection = "
+        <> executor.placeholder(exec, 2)
+        <> " AND ("
+        <> json_field
+        <> " IN ("
+        <> placeholders1
+        <> ") OR "
+        <> json_uri_field
+        <> " IN ("
+        <> placeholders2
+        <> "))"
+
+      // Build params: viewer_did + collection + parent_keys twice
+      let params: List(Value) =
+        list.flatten([
+          [Text(viewer_did), Text(collection)],
+          list.map(parent_keys, Text),
+          list.map(parent_keys, Text),
+        ])
+
+      executor.query(exec, sql, params, record_decoder())
+    }
+  }
+}
+
 /// Get records by DIDs and collection (for DID joins / DataLoader)
 /// Finds all records in a specific collection that belong to any of the given DIDs
 /// Uses the idx_record_did_collection index for efficient lookup

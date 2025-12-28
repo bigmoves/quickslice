@@ -320,3 +320,27 @@ pub fn create_all_tables(exec: Executor) -> Result(Nil, DbError) {
   use _ <- result.try(create_oauth_tables(exec))
   create_admin_session_table(exec)
 }
+
+/// Insert a test token that maps to a DID for testing viewer authentication
+pub fn insert_test_token(
+  exec: Executor,
+  token: String,
+  did: String,
+) -> Result(Nil, DbError) {
+  // First, insert a test client if it doesn't exist (required for foreign key)
+  use _ <- result.try(
+    executor.exec(
+      exec,
+      "INSERT OR IGNORE INTO oauth_client (client_id, client_name, redirect_uris, grant_types, response_types, token_endpoint_auth_method, client_type, created_at, updated_at) VALUES ('test-client', 'Test Client', '[]', '[]', '[]', 'none', 'public', 0, 0)",
+      [],
+    ),
+  )
+
+  let far_future = 9_999_999_999
+  // Won't expire
+  executor.exec(
+    exec,
+    "INSERT INTO oauth_access_token (token, token_type, client_id, user_id, scope, created_at, expires_at, revoked) VALUES (?, 'Bearer', 'test-client', ?, 'atproto', 0, ?, 0)",
+    [executor.Text(token), executor.Text(did), executor.Int(far_future)],
+  )
+}

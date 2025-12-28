@@ -165,6 +165,8 @@ pub fn build_schema_with_fetcher(
           lexicons,
           batch_fetcher,
           paginated_batch_fetcher,
+          option.None,
+          // No viewer state fetcher for basic schema
         )
 
       // Build the query type with fields for each record using shared object types
@@ -217,6 +219,7 @@ pub fn build_schema_with_subscriptions(
   aggregate_fetcher: option.Option(AggregateFetcher),
   viewer_fetcher: option.Option(ViewerFetcher),
   notification_fetcher: option.Option(NotificationFetcher),
+  viewer_state_fetcher: option.Option(dataloader.ViewerStateFetcher),
 ) -> Result(schema.Schema, String) {
   case lexicons {
     [] -> Error("Cannot build schema from empty lexicon list")
@@ -227,6 +230,7 @@ pub fn build_schema_with_subscriptions(
           lexicons,
           batch_fetcher,
           paginated_batch_fetcher,
+          viewer_state_fetcher,
         )
 
       // Build notification types if fetcher provided
@@ -298,6 +302,7 @@ fn extract_record_types_and_object_types(
   lexicons: List(types.Lexicon),
   batch_fetcher: option.Option(dataloader.BatchFetcher),
   paginated_batch_fetcher: option.Option(dataloader.PaginatedBatchFetcher),
+  viewer_state_fetcher: option.Option(dataloader.ViewerStateFetcher),
 ) -> #(
   List(RecordType),
   dict.Dict(String, schema.Type),
@@ -343,6 +348,10 @@ fn extract_record_types_and_object_types(
 
   // Build DID join map: source_nsid -> List(#(target_nsid, target_meta))
   let did_join_map = build_did_join_map(metadata_list)
+
+  // Build list of collections with DID-typed subject fields
+  // Used for generating viewerXxxViaSubject fields on all record types
+  let did_subject_collections = build_did_subject_collections(metadata_list)
 
   // Parse lexicons to create TEMPORARY RecordTypes (just to build Record union)
   let temp_record_types =
@@ -512,13 +521,32 @@ fn extract_record_types_and_object_types(
           sort_field_enums,
         )
 
-      // Combine all fields (base + forward + reverse + DID joins)
+      // Build viewer fields for AT-URI reverse joins
+      let viewer_fields =
+        build_viewer_fields_for_reverse_joins(
+          reverse_joins,
+          viewer_state_fetcher,
+          basic_object_types,
+        )
+
+      // Build viewer fields for DID-based subjects (e.g., follows)
+      // These are added to all record types since all have a did field
+      let did_viewer_fields =
+        build_viewer_fields_for_did_subjects(
+          did_subject_collections,
+          viewer_state_fetcher,
+          basic_object_types,
+        )
+
+      // Combine all fields (base + forward + reverse + DID joins + viewer + DID viewer)
       let all_fields =
         list.flatten([
           record_type.fields,
           forward_join_fields,
           reverse_join_fields,
           did_join_fields,
+          viewer_fields,
+          did_viewer_fields,
         ])
 
       RecordType(
@@ -588,6 +616,22 @@ fn extract_record_types_and_object_types(
           sort_field_enums,
         )
 
+      // Build viewer fields for AT-URI reverse joins
+      let viewer_fields =
+        build_viewer_fields_for_reverse_joins(
+          reverse_joins,
+          viewer_state_fetcher,
+          complete_object_types,
+        )
+
+      // Build viewer fields for DID-based subjects (e.g., follows)
+      let did_viewer_fields =
+        build_viewer_fields_for_did_subjects(
+          did_subject_collections,
+          viewer_state_fetcher,
+          complete_object_types,
+        )
+
       // Combine all fields
       let all_fields =
         list.flatten([
@@ -595,6 +639,8 @@ fn extract_record_types_and_object_types(
           forward_join_fields,
           reverse_join_fields,
           did_join_fields,
+          viewer_fields,
+          did_viewer_fields,
         ])
 
       RecordType(
@@ -982,6 +1028,206 @@ fn build_reverse_join_fields_with_types(
         }
       },
     )
+  })
+}
+
+/// Build viewer state fields for reverse joins
+/// These return a single nullable record (the viewer's record, if any)
+/// For example, if a gallery has a socialGrainFavoriteViaSubject connection,
+/// it will also get a viewerSocialGrainFavoriteViaSubject field that returns
+/// the viewer's like record (or null if not liked/not authenticated)
+fn build_viewer_fields_for_reverse_joins(
+  reverse_joins: List(ReverseJoinRelationship),
+  viewer_state_fetcher: option.Option(dataloader.ViewerStateFetcher),
+  object_types: dict.Dict(String, schema.Type),
+) -> List(schema.Field) {
+  list.map(reverse_joins, fn(relationship) {
+    // Generate field name: viewer<SourceTypeName>Via<FieldName>
+    // Example: viewerSocialGrainFavoriteViaSubject
+    let field_name =
+      "viewer"
+      <> relationship.source_type_name
+      <> "Via"
+      <> capitalize_first(relationship.source_field)
+
+    // Get the source object type
+    let source_object_type = case
+      dict.get(object_types, relationship.source_collection)
+    {
+      Ok(obj_type) -> obj_type
+      Error(_) -> schema.string_type()
+    }
+
+    // Return type is the source object type (nullable by default in GraphQL)
+    let return_type = source_object_type
+
+    schema.field(
+      field_name,
+      return_type,
+      "Viewer's "
+        <> relationship.source_collection
+        <> " record referencing this via "
+        <> relationship.source_field
+        <> " (null if not authenticated or no record)",
+      fn(ctx) {
+        // Get viewer DID from context
+        case get_viewer_did_from_context(ctx) {
+          Ok(viewer_did) -> {
+            // Get parent URI
+            case get_field_from_context(ctx, "uri") {
+              Ok(parent_uri) -> {
+                case viewer_state_fetcher {
+                  option.Some(fetcher) -> {
+                    case
+                      dataloader.batch_fetch_viewer_state(
+                        viewer_did,
+                        relationship.source_collection,
+                        relationship.source_field,
+                        [parent_uri],
+                        fetcher,
+                      )
+                    {
+                      Ok(results) -> {
+                        case dict.get(results, parent_uri) {
+                          Ok(record) -> Ok(record)
+                          Error(_) -> Ok(value.Null)
+                        }
+                      }
+                      Error(_) -> Ok(value.Null)
+                    }
+                  }
+                  option.None -> Ok(value.Null)
+                }
+              }
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          Error(_) -> Ok(value.Null)
+        }
+      },
+    )
+  })
+}
+
+/// Extract viewer DID from context variables
+/// The viewer DID is set by the server after verifying the auth token
+/// It's stored in variables (not ctx.data) because ctx.data gets overwritten
+/// with parent values during field resolution
+fn get_viewer_did_from_context(ctx: schema.Context) -> Result(String, Nil) {
+  case schema.get_variable(ctx, "viewer_did") {
+    option.Some(value.String(did)) -> Ok(did)
+    _ -> Error(Nil)
+  }
+}
+
+/// Structure representing a collection with DID-typed subject fields
+type DidSubjectCollection {
+  DidSubjectCollection(
+    /// Collection NSID (e.g., "social.grain.graph.follow")
+    nsid: String,
+    /// Type name (e.g., "SocialGrainGraphFollow")
+    type_name: String,
+    /// DID-typed field names (e.g., ["subject"])
+    did_fields: List(String),
+  )
+}
+
+/// Build a list of collections with DID-typed subject fields
+fn build_did_subject_collections(
+  metadata_list: List(#(String, collection_meta.CollectionMeta)),
+) -> List(DidSubjectCollection) {
+  list.filter_map(metadata_list, fn(meta_pair) {
+    let #(nsid, meta) = meta_pair
+    case meta.did_subject_fields {
+      [] -> Error(Nil)
+      fields ->
+        Ok(DidSubjectCollection(
+          nsid: nsid,
+          type_name: meta.type_name,
+          did_fields: fields,
+        ))
+    }
+  })
+}
+
+/// Build viewer state fields for DID-based relationships
+/// These are added to all record types (since all records have a did field)
+/// For example, if social.grain.graph.follow has subject: format "did",
+/// then all types get viewerSocialGrainGraphFollowViaSubject
+fn build_viewer_fields_for_did_subjects(
+  did_subject_collections: List(DidSubjectCollection),
+  viewer_state_fetcher: option.Option(dataloader.ViewerStateFetcher),
+  object_types: dict.Dict(String, schema.Type),
+) -> List(schema.Field) {
+  // For each collection with DID-typed subject fields
+  list.flat_map(did_subject_collections, fn(collection) {
+    // Get the source object type
+    let source_object_type = case dict.get(object_types, collection.nsid) {
+      Ok(obj_type) -> obj_type
+      Error(_) -> schema.string_type()
+    }
+
+    // Generate a viewer field for each DID field
+    list.map(collection.did_fields, fn(field_name) {
+      let viewer_field_name =
+        "viewer"
+        <> collection.type_name
+        <> "Via"
+        <> capitalize_first(field_name)
+
+      let return_type = source_object_type
+
+      schema.field(
+        viewer_field_name,
+        return_type,
+        "Viewer's "
+          <> collection.nsid
+          <> " record where "
+          <> field_name
+          <> " matches this record's DID (null if not authenticated or no record)",
+        fn(ctx) {
+          // Get viewer DID from context
+          case get_viewer_did_from_context(ctx) {
+            Ok(viewer_did) -> {
+              // Get parent DID (extract from URI)
+              case get_field_from_context(ctx, "uri") {
+                Ok(parent_uri) -> {
+                  case extract_did_from_uri(parent_uri) {
+                    option.Some(parent_did) -> {
+                      case viewer_state_fetcher {
+                        option.Some(fetcher) -> {
+                          case
+                            dataloader.batch_fetch_viewer_state(
+                              viewer_did,
+                              collection.nsid,
+                              field_name,
+                              [parent_did],
+                              fetcher,
+                            )
+                          {
+                            Ok(results) -> {
+                              case dict.get(results, parent_did) {
+                                Ok(record) -> Ok(record)
+                                Error(_) -> Ok(value.Null)
+                              }
+                            }
+                            Error(_) -> Ok(value.Null)
+                          }
+                        }
+                        option.None -> Ok(value.Null)
+                      }
+                    }
+                    option.None -> Ok(value.Null)
+                  }
+                }
+                Error(_) -> Ok(value.Null)
+              }
+            }
+            Error(_) -> Ok(value.Null)
+          }
+        },
+      )
+    })
   })
 }
 

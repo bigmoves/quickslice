@@ -57,6 +57,7 @@ pub fn groupby_field_enum_exists_test() {
       option.Some(stub_aggregate_fetcher),
       option.None,
       option.None,
+      option.None,
     )
 
   // Introspection query to check if AppBskyFeedPostGroupByField enum exists
@@ -205,6 +206,7 @@ pub fn groupby_input_uses_field_enum_test() {
       option.None,
       option.None,
       option.Some(stub_aggregate_fetcher),
+      option.None,
       option.None,
       option.None,
     )

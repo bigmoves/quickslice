@@ -484,6 +484,94 @@ pub fn batch_fetch_paginated_error_handling_test() {
   }
 }
 
+// Test viewer state batch fetching
+pub fn batch_fetch_viewer_state_test() {
+  // Mock fetcher that returns records for specific viewer+subject combinations
+  let fetcher = fn(
+    viewer_did: String,
+    collection: String,
+    _reference_field: String,
+    parent_keys: List(String),
+  ) -> Result(dict.Dict(String, value.Value), String) {
+    // Simulate: viewer "did:plc:viewer" liked gallery1 and gallery3
+    case viewer_did, collection {
+      "did:plc:viewer", "social.grain.favorite" -> {
+        let results =
+          list.fold(parent_keys, dict.new(), fn(acc, key) {
+            case key {
+              "at://did:plc:author/social.grain.gallery/gallery1" ->
+                dict.insert(
+                  acc,
+                  key,
+                  value.Object([
+                    #(
+                      "uri",
+                      value.String(
+                        "at://did:plc:viewer/social.grain.favorite/abc",
+                      ),
+                    ),
+                    #("subject", value.String(key)),
+                  ]),
+                )
+              "at://did:plc:author/social.grain.gallery/gallery3" ->
+                dict.insert(
+                  acc,
+                  key,
+                  value.Object([
+                    #(
+                      "uri",
+                      value.String(
+                        "at://did:plc:viewer/social.grain.favorite/def",
+                      ),
+                    ),
+                    #("subject", value.String(key)),
+                  ]),
+                )
+              _ -> acc
+            }
+          })
+        Ok(results)
+      }
+      _, _ -> Ok(dict.new())
+    }
+  }
+
+  let parent_uris = [
+    "at://did:plc:author/social.grain.gallery/gallery1",
+    "at://did:plc:author/social.grain.gallery/gallery2",
+    "at://did:plc:author/social.grain.gallery/gallery3",
+  ]
+
+  let result =
+    dataloader.batch_fetch_viewer_state(
+      "did:plc:viewer",
+      "social.grain.favorite",
+      "subject",
+      parent_uris,
+      fetcher,
+    )
+
+  result
+  |> should.be_ok
+
+  let records = case result {
+    Ok(r) -> r
+    Error(_) -> dict.new()
+  }
+
+  // gallery1 should have a record
+  dict.get(records, "at://did:plc:author/social.grain.gallery/gallery1")
+  |> should.be_ok
+
+  // gallery2 should NOT have a record (viewer didn't like it)
+  dict.get(records, "at://did:plc:author/social.grain.gallery/gallery2")
+  |> should.be_error
+
+  // gallery3 should have a record
+  dict.get(records, "at://did:plc:author/social.grain.gallery/gallery3")
+  |> should.be_ok
+}
+
 // Test backward pagination parameters
 pub fn batch_fetch_backward_pagination_test() {
   // Mock paginated fetcher that handles backward pagination
