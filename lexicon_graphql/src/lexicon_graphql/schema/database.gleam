@@ -2203,9 +2203,9 @@ fn build_query_type(
           "Query notifications for the authenticated user (records mentioning them)",
           notification_args,
           fn(ctx: schema.Context) {
-            // Get viewer DID from context (viewer field should be resolved first)
-            case schema.get_argument(ctx, "viewerDid") {
-              option.Some(value.String(viewer_did)) -> {
+            // Get viewer DID from auth token (injected by server into variables)
+            case get_viewer_did_from_context(ctx) {
+              Ok(viewer_did) -> {
                 // Extract collection filter
                 let collections = case schema.get_argument(ctx, "collections") {
                   option.Some(value.List(items)) -> {
@@ -2268,7 +2268,7 @@ fn build_query_type(
                   )
                 Ok(connection.connection_to_value(conn))
               }
-              _ -> Error("notifications query requires viewerDid argument")
+              Error(Nil) -> Error("notifications query requires authentication")
             }
           },
         ),
@@ -2294,12 +2294,6 @@ fn build_notification_query_args(
   collection_enum: option.Option(schema.Type),
 ) -> List(schema.Argument) {
   let base_args = [
-    schema.argument(
-      "viewerDid",
-      schema.non_null(schema.string_type()),
-      "DID of the viewer to get notifications for",
-      option.None,
-    ),
     schema.argument(
       "first",
       schema.int_type(),

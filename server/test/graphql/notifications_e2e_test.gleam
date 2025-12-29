@@ -170,6 +170,13 @@ pub fn notifications_returns_mentioning_records_test() {
   let assert Ok(_) = test_helpers.create_lexicon_table(exec)
   let assert Ok(_) = test_helpers.create_record_table(exec)
   let assert Ok(_) = test_helpers.create_actor_table(exec)
+  let assert Ok(_) = test_helpers.create_oauth_tables(exec)
+  let assert Ok(_) =
+    test_helpers.insert_test_token(
+      exec,
+      "test-notification-token",
+      "did:plc:target",
+    )
 
   // Insert lexicons
   let assert Ok(_) =
@@ -232,7 +239,7 @@ pub fn notifications_returns_mentioning_records_test() {
   let query =
     "
     query {
-      notifications(viewerDid: \"did:plc:target\", first: 10) {
+      notifications(first: 10) {
         edges {
           cursor
           node {
@@ -259,7 +266,7 @@ pub fn notifications_returns_mentioning_records_test() {
       exec,
       query,
       "{}",
-      Error(Nil),
+      Ok("test-notification-token"),
       cache,
       option.None,
       "",
@@ -292,6 +299,13 @@ pub fn notifications_filters_by_collection_test() {
   let assert Ok(_) = test_helpers.create_lexicon_table(exec)
   let assert Ok(_) = test_helpers.create_record_table(exec)
   let assert Ok(_) = test_helpers.create_actor_table(exec)
+  let assert Ok(_) = test_helpers.create_oauth_tables(exec)
+  let assert Ok(_) =
+    test_helpers.insert_test_token(
+      exec,
+      "test-notification-token",
+      "did:plc:target",
+    )
 
   // Insert lexicons
   let assert Ok(_) =
@@ -332,7 +346,7 @@ pub fn notifications_filters_by_collection_test() {
   let query =
     "
     query {
-      notifications(viewerDid: \"did:plc:target\", collections: [APP_BSKY_FEED_LIKE], first: 10) {
+      notifications(collections: [APP_BSKY_FEED_LIKE], first: 10) {
         edges {
           cursor
           node {
@@ -352,7 +366,7 @@ pub fn notifications_filters_by_collection_test() {
       exec,
       query,
       "{}",
-      Error(Nil),
+      Ok("test-notification-token"),
       cache,
       option.None,
       "",
@@ -381,6 +395,13 @@ pub fn notifications_excludes_self_authored_test() {
   let assert Ok(_) = test_helpers.create_lexicon_table(exec)
   let assert Ok(_) = test_helpers.create_record_table(exec)
   let assert Ok(_) = test_helpers.create_actor_table(exec)
+  let assert Ok(_) = test_helpers.create_oauth_tables(exec)
+  let assert Ok(_) =
+    test_helpers.insert_test_token(
+      exec,
+      "test-notification-token",
+      "did:plc:target",
+    )
 
   // Insert lexicons
   let assert Ok(_) =
@@ -403,7 +424,7 @@ pub fn notifications_excludes_self_authored_test() {
   let query =
     "
     query {
-      notifications(viewerDid: \"did:plc:target\", first: 10) {
+      notifications(first: 10) {
         edges {
           cursor
           node {
@@ -420,7 +441,7 @@ pub fn notifications_excludes_self_authored_test() {
       exec,
       query,
       "{}",
-      Error(Nil),
+      Ok("test-notification-token"),
       cache,
       option.None,
       "",
