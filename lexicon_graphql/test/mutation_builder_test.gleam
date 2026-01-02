@@ -25,7 +25,7 @@ pub fn build_mutation_type_includes_upload_blob_test() {
   }
 
   // Build mutation type with uploadBlob factory
-  let mutation_type =
+  let mutation_build_result =
     mutation_builder.build_mutation_type(
       [],
       dict.new(),
@@ -33,10 +33,12 @@ pub fn build_mutation_type_includes_upload_blob_test() {
       None,
       None,
       Some(upload_factory),
+      None,
+      None,
     )
 
   // Verify the mutation type has uploadBlob field
-  let fields = schema.get_fields(mutation_type)
+  let fields = schema.get_fields(mutation_build_result.mutation_type)
   let has_upload_blob =
     list.any(fields, fn(field) { schema.field_name(field) == "uploadBlob" })
 
@@ -47,11 +49,20 @@ pub fn build_mutation_type_includes_upload_blob_test() {
 /// Test that uploadBlob mutation is NOT added when factory is None
 pub fn build_mutation_type_without_upload_blob_test() {
   // Build mutation type without uploadBlob factory
-  let mutation_type =
-    mutation_builder.build_mutation_type([], dict.new(), None, None, None, None)
+  let mutation_build_result =
+    mutation_builder.build_mutation_type(
+      [],
+      dict.new(),
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+    )
 
   // Verify the mutation type does NOT have uploadBlob field
-  let fields = schema.get_fields(mutation_type)
+  let fields = schema.get_fields(mutation_build_result.mutation_type)
   let has_upload_blob =
     list.any(fields, fn(field) { schema.field_name(field) == "uploadBlob" })
 
@@ -75,7 +86,7 @@ pub fn upload_blob_has_correct_arguments_test() {
   }
 
   // Build mutation type
-  let mutation_type =
+  let mutation_build_result =
     mutation_builder.build_mutation_type(
       [],
       dict.new(),
@@ -83,10 +94,12 @@ pub fn upload_blob_has_correct_arguments_test() {
       None,
       None,
       Some(upload_factory),
+      None,
+      None,
     )
 
   // Get uploadBlob field
-  let fields = schema.get_fields(mutation_type)
+  let fields = schema.get_fields(mutation_build_result.mutation_type)
   let upload_blob_field =
     list.find(fields, fn(field) { schema.field_name(field) == "uploadBlob" })
 
@@ -121,7 +134,7 @@ pub fn upload_blob_data_argument_is_non_null_string_test() {
     }
   }
 
-  let mutation_type =
+  let mutation_build_result =
     mutation_builder.build_mutation_type(
       [],
       dict.new(),
@@ -129,10 +142,12 @@ pub fn upload_blob_data_argument_is_non_null_string_test() {
       None,
       None,
       Some(upload_factory),
+      None,
+      None,
     )
 
   // Get uploadBlob field
-  let fields = schema.get_fields(mutation_type)
+  let fields = schema.get_fields(mutation_build_result.mutation_type)
   let upload_blob_field =
     list.find(fields, fn(field) { schema.field_name(field) == "uploadBlob" })
 
@@ -177,7 +192,7 @@ pub fn upload_blob_mime_type_argument_is_non_null_string_test() {
     }
   }
 
-  let mutation_type =
+  let mutation_build_result =
     mutation_builder.build_mutation_type(
       [],
       dict.new(),
@@ -185,10 +200,12 @@ pub fn upload_blob_mime_type_argument_is_non_null_string_test() {
       None,
       None,
       Some(upload_factory),
+      None,
+      None,
     )
 
   // Get uploadBlob field
-  let fields = schema.get_fields(mutation_type)
+  let fields = schema.get_fields(mutation_build_result.mutation_type)
   let upload_blob_field =
     list.find(fields, fn(field) { schema.field_name(field) == "uploadBlob" })
 
@@ -233,7 +250,7 @@ pub fn upload_blob_return_type_is_non_null_blob_upload_response_test() {
     }
   }
 
-  let mutation_type =
+  let mutation_build_result =
     mutation_builder.build_mutation_type(
       [],
       dict.new(),
@@ -241,10 +258,12 @@ pub fn upload_blob_return_type_is_non_null_blob_upload_response_test() {
       None,
       None,
       Some(upload_factory),
+      None,
+      None,
     )
 
   // Get uploadBlob field
-  let fields = schema.get_fields(mutation_type)
+  let fields = schema.get_fields(mutation_build_result.mutation_type)
   let upload_blob_field =
     list.find(fields, fn(field) { schema.field_name(field) == "uploadBlob" })
 
@@ -280,7 +299,7 @@ pub fn blob_upload_response_has_ref_field_test() {
     }
   }
 
-  let mutation_type =
+  let mutation_build_result =
     mutation_builder.build_mutation_type(
       [],
       dict.new(),
@@ -288,10 +307,12 @@ pub fn blob_upload_response_has_ref_field_test() {
       None,
       None,
       Some(upload_factory),
+      None,
+      None,
     )
 
   // Get uploadBlob field
-  let fields = schema.get_fields(mutation_type)
+  let fields = schema.get_fields(mutation_build_result.mutation_type)
   let upload_blob_field =
     list.find(fields, fn(field) { schema.field_name(field) == "uploadBlob" })
 
@@ -326,7 +347,7 @@ pub fn blob_upload_response_has_mime_type_field_test() {
     }
   }
 
-  let mutation_type =
+  let mutation_build_result =
     mutation_builder.build_mutation_type(
       [],
       dict.new(),
@@ -334,10 +355,12 @@ pub fn blob_upload_response_has_mime_type_field_test() {
       None,
       None,
       Some(upload_factory),
+      None,
+      None,
     )
 
   // Get uploadBlob field
-  let fields = schema.get_fields(mutation_type)
+  let fields = schema.get_fields(mutation_build_result.mutation_type)
   let upload_blob_field =
     list.find(fields, fn(field) { schema.field_name(field) == "uploadBlob" })
 
@@ -374,7 +397,7 @@ pub fn blob_upload_response_has_size_field_test() {
     }
   }
 
-  let mutation_type =
+  let mutation_build_result =
     mutation_builder.build_mutation_type(
       [],
       dict.new(),
@@ -382,10 +405,12 @@ pub fn blob_upload_response_has_size_field_test() {
       None,
       None,
       Some(upload_factory),
+      None,
+      None,
     )
 
   // Get uploadBlob field
-  let fields = schema.get_fields(mutation_type)
+  let fields = schema.get_fields(mutation_build_result.mutation_type)
   let upload_blob_field =
     list.find(fields, fn(field) { schema.field_name(field) == "uploadBlob" })
 
@@ -420,7 +445,7 @@ pub fn blob_upload_response_has_three_fields_test() {
     }
   }
 
-  let mutation_type =
+  let mutation_build_result =
     mutation_builder.build_mutation_type(
       [],
       dict.new(),
@@ -428,10 +453,12 @@ pub fn blob_upload_response_has_three_fields_test() {
       None,
       None,
       Some(upload_factory),
+      None,
+      None,
     )
 
   // Get uploadBlob field
-  let fields = schema.get_fields(mutation_type)
+  let fields = schema.get_fields(mutation_build_result.mutation_type)
   let upload_blob_field =
     list.find(fields, fn(field) { schema.field_name(field) == "uploadBlob" })
 

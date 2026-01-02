@@ -18,6 +18,7 @@ import lexicon_graphql/query/dataloader
 import lexicon_graphql/schema/builder as schema_builder
 import lexicon_graphql/schema/database as db_schema_builder
 import lexicon_graphql/types
+import swell/schema
 
 // Re-export core types
 pub type Lexicon =
@@ -63,6 +64,9 @@ pub fn build_schema_with_subscriptions(
   viewer_fetcher: Option(ViewerFetcher),
   notification_fetcher: Option(NotificationFetcher),
   viewer_state_fetcher: Option(dataloader.ViewerStateFetcher),
+  labels_fetcher: Option(db_schema_builder.LabelsFetcher),
+  custom_mutation_fields: Option(List(schema.Field)),
+  custom_query_fields: Option(List(schema.Field)),
 ) {
   db_schema_builder.build_schema_with_subscriptions(
     lexicons,
@@ -77,6 +81,9 @@ pub fn build_schema_with_subscriptions(
     viewer_fetcher,
     notification_fetcher,
     viewer_state_fetcher,
+    labels_fetcher,
+    custom_mutation_fields,
+    custom_query_fields,
   )
 }
 

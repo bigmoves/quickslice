@@ -455,3 +455,215 @@ pub fn expand_ref(ref: String, lexicon_id: String) -> String {
     False -> ref
   }
 }
+
+/// Context needed for building union input types
+pub type UnionInputContext {
+  UnionInputContext(
+    input_types: Dict(String, schema.Type),
+    parent_type_name: String,
+  )
+}
+
+/// Maps a lexicon property to a GraphQL input type, with union input registry lookup
+/// This version can resolve union refs to their generated input types
+/// For multi-variant unions, builds discriminated union input types on demand
+pub fn map_input_type_with_unions(
+  property: types.Property,
+  field_name: String,
+  ctx: UnionInputContext,
+) -> schema.Type {
+  case property.type_ {
+    // For unions, handle single vs multi-variant
+    "union" -> {
+      case property.refs {
+        // Single-variant: use variant's input type directly
+        option.Some([single_ref]) -> {
+          case dict.get(ctx.input_types, single_ref) {
+            Ok(input_type) -> input_type
+            Error(_) -> schema.string_type()
+          }
+        }
+        // Multi-variant: build discriminated union input (2 or more refs)
+        option.Some([first, second, ..rest]) -> {
+          let refs = [first, second, ..rest]
+          build_multi_variant_union_input(
+            ctx.parent_type_name,
+            field_name,
+            refs,
+            ctx.input_types,
+          )
+        }
+        _ -> schema.string_type()
+      }
+    }
+
+    // For refs, check the registry
+    "ref" -> {
+      case property.ref {
+        option.Some(ref) -> {
+          case dict.get(ctx.input_types, ref) {
+            Ok(input_type) -> input_type
+            Error(_) -> map_input_type("ref")
+          }
+        }
+        option.None -> map_input_type("ref")
+      }
+    }
+
+    // For arrays with ref/union items
+    "array" -> {
+      case property.items {
+        option.Some(types.ArrayItems(item_type, item_ref, item_refs)) -> {
+          case item_type {
+            "ref" -> {
+              case item_ref {
+                option.Some(ref) -> {
+                  case dict.get(ctx.input_types, ref) {
+                    Ok(input_type) ->
+                      schema.list_type(schema.non_null(input_type))
+                    Error(_) ->
+                      schema.list_type(schema.non_null(schema.string_type()))
+                  }
+                }
+                option.None ->
+                  schema.list_type(schema.non_null(schema.string_type()))
+              }
+            }
+            "union" -> {
+              case item_refs {
+                // Single-variant array items
+                option.Some([single_ref]) -> {
+                  case dict.get(ctx.input_types, single_ref) {
+                    Ok(input_type) ->
+                      schema.list_type(schema.non_null(input_type))
+                    Error(_) ->
+                      schema.list_type(schema.non_null(schema.string_type()))
+                  }
+                }
+                // Multi-variant array items (2 or more refs)
+                option.Some([first, second, ..rest]) -> {
+                  let refs = [first, second, ..rest]
+                  let item_union =
+                    build_multi_variant_union_input(
+                      ctx.parent_type_name,
+                      field_name <> "Item",
+                      refs,
+                      ctx.input_types,
+                    )
+                  schema.list_type(schema.non_null(item_union))
+                }
+                _ -> schema.list_type(schema.non_null(schema.string_type()))
+              }
+            }
+            _ -> map_array_type(property.items, dict.new(), "", "")
+          }
+        }
+        option.None -> schema.list_type(schema.non_null(schema.string_type()))
+      }
+    }
+
+    // Default to regular input type mapping
+    _ -> map_input_type(property.type_)
+  }
+}
+
+/// Build a discriminated union input type for multi-variant unions
+fn build_multi_variant_union_input(
+  parent_type_name: String,
+  field_name: String,
+  refs: List(String),
+  existing_input_types: Dict(String, schema.Type),
+) -> schema.Type {
+  let union_name = parent_type_name <> capitalize_first(field_name) <> "Input"
+  let enum_name = parent_type_name <> capitalize_first(field_name) <> "Type"
+
+  // Build the type enum with variant names
+  let enum_values =
+    list.map(refs, fn(ref) {
+      let value_name = ref_to_variant_enum_value(ref)
+      schema.enum_value(value_name, "Select " <> ref <> " variant")
+    })
+
+  let type_enum =
+    schema.enum_type(
+      enum_name,
+      "Discriminator for " <> field_name <> " union variants",
+      enum_values,
+    )
+
+  // Build input fields: required type discriminator + optional variant fields
+  let type_field =
+    schema.input_field(
+      "type",
+      schema.non_null(type_enum),
+      "Select which variant to use",
+      option.None,
+    )
+
+  let variant_fields =
+    list.map(refs, fn(ref) {
+      let variant_field_name = ref_to_variant_field_name(ref)
+      let field_type = case dict.get(existing_input_types, ref) {
+        Ok(input_type) -> input_type
+        Error(_) -> schema.string_type()
+      }
+      schema.input_field(
+        variant_field_name,
+        field_type,
+        // Optional - user provides data for selected variant
+        "Data for " <> ref <> " variant",
+        option.None,
+      )
+    })
+
+  let all_fields = [type_field, ..variant_fields]
+
+  schema.input_object_type(
+    union_name,
+    "Union input for " <> field_name <> " - use type field to select variant",
+    all_fields,
+  )
+}
+
+/// Convert a ref to SCREAMING_SNAKE_CASE enum value
+fn ref_to_variant_enum_value(ref: String) -> String {
+  let short_name = case string.split(ref, "#") {
+    [_, name] -> name
+    _ -> {
+      case string.split(ref, ".") |> list.last {
+        Ok(name) -> name
+        Error(_) -> ref
+      }
+    }
+  }
+  camel_to_screaming_snake(short_name)
+}
+
+/// Convert camelCase to SCREAMING_SNAKE_CASE
+fn camel_to_screaming_snake(s: String) -> String {
+  s
+  |> string.to_graphemes
+  |> list.fold(#("", False), fn(acc, char) {
+    let #(result, prev_was_lower) = acc
+    let is_upper =
+      string.uppercase(char) == char && string.lowercase(char) != char
+    case is_upper, prev_was_lower {
+      True, True -> #(result <> "_" <> char, False)
+      _, _ -> #(result <> string.uppercase(char), !is_upper)
+    }
+  })
+  |> fn(pair) { pair.0 }
+}
+
+/// Convert a ref to a camelCase field name
+fn ref_to_variant_field_name(ref: String) -> String {
+  case string.split(ref, "#") {
+    [_, name] -> name
+    _ -> {
+      case string.split(ref, ".") |> list.last {
+        Ok(name) -> name
+        Error(_) -> ref
+      }
+    }
+  }
+}

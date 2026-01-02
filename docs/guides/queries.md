@@ -1,6 +1,8 @@
 # Queries
 
-Quickslice generates a GraphQL query for each Lexicon record type. Queries are public; no authentication required.
+Quickslice generates a GraphQL query for each Lexicon record type at the `/graphql` endpoint. Queries are public; no authentication required.
+
+> **Endpoints:** Lexicon queries and mutations use `/graphql`. Admin operations (labels, reports, settings) use `/admin/graphql`.
 
 ## Relay Connections
 

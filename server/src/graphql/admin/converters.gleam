@@ -1,12 +1,16 @@
 /// Value converters for admin GraphQL API
 ///
 /// Transform domain types to GraphQL value.Value objects
+import database/repositories/label_definitions
+import database/repositories/labels
+import database/repositories/reports
 import database/types.{
   type ActivityBucket, type ActivityEntry, type Lexicon, type OAuthClient,
   client_type_to_string,
 }
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/string
 import swell/value
 
 /// Convert CurrentSession data to GraphQL value
@@ -113,5 +117,71 @@ pub fn lexicon_to_value(lexicon: Lexicon) -> value.Value {
     #("id", value.String(lexicon.id)),
     #("json", value.String(lexicon.json)),
     #("createdAt", value.String(lexicon.created_at)),
+  ])
+}
+
+// =============================================================================
+// Label and Report Converters
+// =============================================================================
+
+/// Convert LabelDefinition to GraphQL value
+pub fn label_definition_to_value(
+  def: label_definitions.LabelDefinition,
+) -> value.Value {
+  value.Object([
+    #("val", value.String(def.val)),
+    #("description", value.String(def.description)),
+    #("severity", value.Enum(string.uppercase(def.severity))),
+    #("defaultVisibility", value.Enum(string.uppercase(def.default_visibility))),
+    #("createdAt", value.String(def.created_at)),
+  ])
+}
+
+/// Convert Label to GraphQL value
+pub fn label_to_value(label: labels.Label) -> value.Value {
+  let cid_value = case label.cid {
+    Some(c) -> value.String(c)
+    None -> value.Null
+  }
+  let exp_value = case label.exp {
+    Some(e) -> value.String(e)
+    None -> value.Null
+  }
+  value.Object([
+    #("id", value.Int(label.id)),
+    #("src", value.String(label.src)),
+    #("uri", value.String(label.uri)),
+    #("cid", cid_value),
+    #("val", value.String(label.val)),
+    #("neg", value.Boolean(label.neg)),
+    #("cts", value.String(label.cts)),
+    #("exp", exp_value),
+  ])
+}
+
+/// Convert Report to GraphQL value
+pub fn report_to_value(report: reports.Report) -> value.Value {
+  let reason_value = case report.reason {
+    Some(r) -> value.String(r)
+    None -> value.Null
+  }
+  let resolved_by_value = case report.resolved_by {
+    Some(r) -> value.String(r)
+    None -> value.Null
+  }
+  let resolved_at_value = case report.resolved_at {
+    Some(r) -> value.String(r)
+    None -> value.Null
+  }
+  value.Object([
+    #("id", value.Int(report.id)),
+    #("reporterDid", value.String(report.reporter_did)),
+    #("subjectUri", value.String(report.subject_uri)),
+    #("reasonType", value.Enum(string.uppercase(report.reason_type))),
+    #("reason", reason_value),
+    #("status", value.Enum(string.uppercase(report.status))),
+    #("resolvedBy", resolved_by_value),
+    #("resolvedAt", resolved_at_value),
+    #("createdAt", value.String(report.created_at)),
   ])
 }

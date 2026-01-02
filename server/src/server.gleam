@@ -394,6 +394,8 @@ fn handle_request(
       )
     ["graphiql"] ->
       graphiql_handler.handle_graphiql_request(req, ctx.db, ctx.did_cache)
+    ["graphiql", "admin"] ->
+      graphiql_handler.handle_admin_graphiql_request(req, ctx.db, ctx.did_cache)
     // MCP endpoint for AI assistant introspection
     ["mcp"] -> {
       let mcp_ctx =

@@ -9,7 +9,9 @@ import gleam/dict
 import gleam/list
 import gleam/option
 import lexicon_graphql/internal/graphql/type_mapper
+import lexicon_graphql/internal/graphql/union_input_builder
 import lexicon_graphql/internal/lexicon/nsid
+import lexicon_graphql/internal/lexicon/registry as lexicon_registry
 import lexicon_graphql/types
 import swell/schema
 import swell/value
@@ -24,6 +26,19 @@ pub type ResolverFactory =
 pub type UploadBlobResolverFactory =
   fn() -> schema.Resolver
 
+/// Result of building mutation type - includes the type and union field registry
+///
+/// The union_registry is used during schema generation to create proper GraphQL
+/// input types for AT Protocol union fields. At runtime, mutation resolvers use
+/// lexicon JSON directly to transform union inputs (matching the blob transformation
+/// pattern), so union_registry is not needed after schema building.
+pub type MutationBuildResult {
+  MutationBuildResult(
+    mutation_type: schema.Type,
+    union_registry: union_input_builder.UnionRegistry,
+  )
+}
+
 /// Build a GraphQL Mutation type from lexicon definitions
 ///
 /// For each record type, generates:
@@ -32,8 +47,10 @@ pub type UploadBlobResolverFactory =
 /// - delete{TypeName}(rkey: String!): {TypeName}
 ///
 /// Also adds uploadBlob mutation if upload_blob_factory is provided
+/// Custom fields can be passed to add additional mutations beyond collection-based ones
 ///
 /// Resolver factories are optional - if None, mutations will return errors
+/// Registry parameter enables union input type generation
 pub fn build_mutation_type(
   lexicons: List(types.Lexicon),
   object_types: dict.Dict(String, schema.Type),
@@ -41,24 +58,40 @@ pub fn build_mutation_type(
   update_factory: option.Option(ResolverFactory),
   delete_factory: option.Option(ResolverFactory),
   upload_blob_factory: option.Option(UploadBlobResolverFactory),
-) -> schema.Type {
+  custom_fields: option.Option(List(schema.Field)),
+  registry: option.Option(lexicon_registry.Registry),
+) -> MutationBuildResult {
+  // Build union input types if registry is provided
+  let initial_union_registry = case registry {
+    option.Some(reg) -> union_input_builder.build_union_input_types(reg)
+    option.None ->
+      union_input_builder.UnionRegistry(
+        input_types: dict.new(),
+        field_variants: dict.new(),
+      )
+  }
+
   // Extract record types
   let record_types = extract_record_types(lexicons)
 
-  // Build mutation fields for each record type using complete object types
-  let record_mutation_fields =
-    list.flat_map(record_types, fn(record) {
-      build_mutations_for_record(
-        record,
-        object_types,
-        create_factory,
-        update_factory,
-        delete_factory,
-      )
+  // Build mutation fields for each record type, accumulating union field registrations
+  let #(record_mutation_fields, final_union_registry) =
+    list.fold(record_types, #([], initial_union_registry), fn(acc, record) {
+      let #(fields_acc, registry_acc) = acc
+      let #(new_fields, updated_registry) =
+        build_mutations_for_record(
+          record,
+          object_types,
+          create_factory,
+          update_factory,
+          delete_factory,
+          registry_acc,
+        )
+      #(list.append(fields_acc, new_fields), updated_registry)
     })
 
   // Add uploadBlob mutation if factory is provided
-  let all_mutation_fields = case upload_blob_factory {
+  let with_upload_blob = case upload_blob_factory {
     option.Some(factory) -> {
       let upload_blob_mutation = build_upload_blob_mutation(factory)
       [upload_blob_mutation, ..record_mutation_fields]
@@ -66,8 +99,20 @@ pub fn build_mutation_type(
     option.None -> record_mutation_fields
   }
 
+  // Add custom fields if provided
+  let all_mutation_fields = case custom_fields {
+    option.Some(fields) -> list.append(with_upload_blob, fields)
+    option.None -> with_upload_blob
+  }
+
   // Build the Mutation object type
-  schema.object_type("Mutation", "Root mutation type", all_mutation_fields)
+  let mutation_type =
+    schema.object_type("Mutation", "Root mutation type", all_mutation_fields)
+
+  MutationBuildResult(
+    mutation_type: mutation_type,
+    union_registry: final_union_registry,
+  )
 }
 
 /// Record type info needed for building mutations
@@ -103,14 +148,24 @@ fn build_mutations_for_record(
   create_factory: option.Option(ResolverFactory),
   update_factory: option.Option(ResolverFactory),
   delete_factory: option.Option(ResolverFactory),
-) -> List(schema.Field) {
+  union_registry: union_input_builder.UnionRegistry,
+) -> #(List(schema.Field), union_input_builder.UnionRegistry) {
+  // Build input type and get updated registry with union field mappings
+  let #(input_type, updated_registry) =
+    build_input_type_with_registry(
+      record.type_name <> "Input",
+      record.nsid,
+      record.properties,
+      union_registry,
+    )
+
   let create_mutation =
-    build_create_mutation(record, object_types, create_factory)
+    build_create_mutation(record, object_types, create_factory, input_type)
   let update_mutation =
-    build_update_mutation(record, object_types, update_factory)
+    build_update_mutation(record, object_types, update_factory, input_type)
   let delete_mutation = build_delete_mutation(record, delete_factory)
 
-  [create_mutation, update_mutation, delete_mutation]
+  #([create_mutation, update_mutation, delete_mutation], updated_registry)
 }
 
 /// Build create mutation for a record type
@@ -119,12 +174,9 @@ fn build_create_mutation(
   record: RecordInfo,
   object_types: dict.Dict(String, schema.Type),
   factory: option.Option(ResolverFactory),
+  input_type: schema.Type,
 ) -> schema.Field {
   let mutation_name = "create" <> record.type_name
-  let input_type_name = record.type_name <> "Input"
-
-  // Build the input type
-  let input_type = build_input_type(input_type_name, record.properties)
 
   // Get the complete object type from the dict (includes all join fields)
   let assert Ok(return_type) = dict.get(object_types, record.nsid)
@@ -170,12 +222,9 @@ fn build_update_mutation(
   record: RecordInfo,
   object_types: dict.Dict(String, schema.Type),
   factory: option.Option(ResolverFactory),
+  input_type: schema.Type,
 ) -> schema.Field {
   let mutation_name = "update" <> record.type_name
-  let input_type_name = record.type_name <> "Input"
-
-  // Build the input type
-  let input_type = build_input_type(input_type_name, record.properties)
 
   // Get the complete object type from the dict (includes all join fields)
   let assert Ok(return_type) = dict.get(object_types, record.nsid)
@@ -255,16 +304,46 @@ fn build_delete_mutation(
   )
 }
 
-/// Build an InputObjectType from lexicon properties
-fn build_input_type(
+/// Build an InputObjectType and register union fields
+fn build_input_type_with_registry(
   type_name: String,
+  collection: String,
   properties: List(#(String, types.Property)),
-) -> schema.Type {
-  let input_fields =
-    list.map(properties, fn(prop) {
-      let #(name, types.Property(type_, required, _, _, _, _)) = prop
-      // Use map_input_type to get input-compatible types (e.g., BlobInput instead of Blob)
-      let graphql_type = type_mapper.map_input_type(type_)
+  union_registry: union_input_builder.UnionRegistry,
+) -> #(schema.Type, union_input_builder.UnionRegistry) {
+  // Create context for union input type resolution
+  let ctx =
+    type_mapper.UnionInputContext(
+      input_types: union_registry.input_types,
+      parent_type_name: type_name,
+    )
+
+  // Build fields and register union fields
+  let #(input_fields, final_registry) =
+    list.fold(properties, #([], union_registry), fn(acc, prop) {
+      let #(fields_acc, registry_acc) = acc
+      let #(name, types.Property(type_, required, _, ref, refs, items)) = prop
+
+      // Build property for type mapping
+      let property =
+        types.Property(type_, required, option.None, ref, refs, items)
+
+      // Use union-aware type mapping with field name for multi-variant naming
+      let graphql_type =
+        type_mapper.map_input_type_with_unions(property, name, ctx)
+
+      // Register union fields for later transformation
+      let updated_registry = case type_, refs {
+        "union", option.Some(ref_list) -> {
+          union_input_builder.register_union_field(
+            registry_acc,
+            collection,
+            name,
+            ref_list,
+          )
+        }
+        _, _ -> registry_acc
+      }
 
       // Make required fields non-null
       let field_type = case required {
@@ -272,19 +351,26 @@ fn build_input_type(
         False -> graphql_type
       }
 
-      schema.input_field(
-        name,
-        field_type,
-        "Input field for " <> name,
-        option.None,
-      )
+      let input_field =
+        schema.input_field(
+          name,
+          field_type,
+          "Input field for " <> name,
+          option.None,
+        )
+
+      #([input_field, ..fields_acc], updated_registry)
     })
 
-  schema.input_object_type(
-    type_name,
-    "Input type for " <> type_name,
-    input_fields,
-  )
+  let reversed_fields = list.reverse(input_fields)
+  let input_type =
+    schema.input_object_type(
+      type_name,
+      "Input type for " <> type_name,
+      reversed_fields,
+    )
+
+  #(input_type, final_registry)
 }
 
 /// Build a simple deletion result type that only contains URI

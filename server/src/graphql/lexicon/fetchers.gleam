@@ -7,9 +7,13 @@ import database/executor.{type Executor}
 import database/queries/aggregates
 import database/queries/pagination
 import database/repositories/actors
+import database/repositories/labels
 import database/repositories/records
 import database/types
 import gleam/dict
+import gleam/dynamic/decode
+import gleam/int
+import gleam/json
 import gleam/list
 import gleam/option
 import gleam/result
@@ -20,6 +24,74 @@ import lexicon_graphql/input/aggregate
 import lexicon_graphql/query/dataloader
 import lexicon_graphql/schema/database
 import swell/value
+
+/// Filter out records with active takedown labels
+fn filter_takedowns(
+  db: Executor,
+  record_list: List(types.Record),
+) -> List(types.Record) {
+  let record_uris = list.map(record_list, fn(r) { r.uri })
+  let takedown_uris = case labels.get_takedown_uris(db, record_uris) {
+    Ok(uris) -> uris
+    Error(_) -> []
+  }
+  list.filter(record_list, fn(record) {
+    !list.contains(takedown_uris, record.uri)
+  })
+}
+
+/// Parse self-labels from a record's JSON if present
+/// Self-labels have format: {"$type": "com.atproto.label.defs#selfLabels", "values": [{"val": "..."}]}
+fn parse_self_labels_from_json(
+  json_str: String,
+  uri: String,
+) -> List(value.Value) {
+  // Decoder for self-labels structure
+  let self_labels_decoder = {
+    use type_field <- decode.field("$type", decode.string)
+    use values <- decode.field(
+      "values",
+      decode.list({
+        use val <- decode.field("val", decode.string)
+        decode.success(val)
+      }),
+    )
+    decode.success(#(type_field, values))
+  }
+
+  let labels_field_decoder = {
+    use labels <- decode.field("labels", self_labels_decoder)
+    decode.success(labels)
+  }
+
+  case json.parse(json_str, labels_field_decoder) {
+    Error(_) -> []
+    Ok(#(type_field, vals)) -> {
+      case type_field == "com.atproto.label.defs#selfLabels" {
+        False -> []
+        True -> {
+          // Extract DID from URI (at://did:plc:xxx/...)
+          let src = case string.split(uri, "/") {
+            ["at:", "", did, ..] -> did
+            _ -> ""
+          }
+          list.map(vals, fn(val) {
+            value.Object([
+              #("val", value.String(val)),
+              #("src", value.String(src)),
+              #("uri", value.String(uri)),
+              #("neg", value.Boolean(False)),
+              #("cts", value.Null),
+              #("exp", value.Null),
+              #("cid", value.Null),
+              #("id", value.Null),
+            ])
+          })
+        }
+      }
+    }
+  }
+}
 
 /// Create a record fetcher for paginated collection queries
 pub fn record_fetcher(db: Executor) {
@@ -41,10 +113,14 @@ pub fn record_fetcher(db: Executor) {
     }
 
     // Get total count for this collection (with where filter if present)
-    let total_count =
+    // Subtract takedown count for accurate pagination
+    let raw_count =
       records.get_collection_count_with_where(db, collection_nsid, where_clause)
-      |> result.map(option.Some)
-      |> result.unwrap(option.None)
+      |> result.unwrap(0)
+    let takedown_count =
+      labels.count_takedowns_for_collection(db, collection_nsid)
+      |> result.unwrap(0)
+    let total_count = option.Some(int.max(0, raw_count - takedown_count))
 
     // Fetch records from database for this collection with pagination
     case
@@ -62,9 +138,12 @@ pub fn record_fetcher(db: Executor) {
       Error(_) -> Ok(#([], option.None, False, False, option.None))
       // Return empty result on error
       Ok(#(record_list, next_cursor, has_next_page, has_previous_page)) -> {
+        // Filter out records with takedown labels
+        let filtered_records = filter_takedowns(db, record_list)
+
         // Convert database records to GraphQL values with cursors
         let graphql_records_with_cursors =
-          list.map(record_list, fn(record) {
+          list.map(filtered_records, fn(record) {
             let graphql_value = converters.record_to_graphql_value(record, db)
             // Generate cursor for this record
             let record_cursor =
@@ -104,9 +183,12 @@ pub fn batch_fetcher(db: Executor) {
                 // DID join: fetch records by DID and collection
                 case records.get_by_dids_and_collection(db, uris, collection) {
                   Ok(record_list) -> {
+                    // Filter out records with takedown labels
+                    let filtered_records = filter_takedowns(db, record_list)
+
                     // Group records by DID
                     let grouped =
-                      list.fold(record_list, dict.new(), fn(acc, record) {
+                      list.fold(filtered_records, dict.new(), fn(acc, record) {
                         let graphql_value =
                           converters.record_to_graphql_value(record, db)
                         let existing =
@@ -122,9 +204,12 @@ pub fn batch_fetcher(db: Executor) {
                 // Forward join: fetch records by their URIs
                 case records.get_by_uris(db, uris) {
                   Ok(record_list) -> {
+                    // Filter out records with takedown labels
+                    let filtered_records = filter_takedowns(db, record_list)
+
                     // Group records by URI
                     let grouped =
-                      list.fold(record_list, dict.new(), fn(acc, record) {
+                      list.fold(filtered_records, dict.new(), fn(acc, record) {
                         let graphql_value =
                           converters.record_to_graphql_value(record, db)
                         // For forward joins, return single record per URI
@@ -145,10 +230,13 @@ pub fn batch_fetcher(db: Executor) {
           records.get_by_reference_field(db, collection, reference_field, uris)
         {
           Ok(record_list) -> {
+            // Filter out records with takedown labels
+            let filtered_records = filter_takedowns(db, record_list)
+
             // Group records by the parent URI they reference
             // Parse each record's JSON to extract the reference field value
             let grouped =
-              list.fold(record_list, dict.new(), fn(acc, record) {
+              list.fold(filtered_records, dict.new(), fn(acc, record) {
                 let graphql_value =
                   converters.record_to_graphql_value(record, db)
                 // Extract the reference field from the record JSON to find parent URI
@@ -221,9 +309,12 @@ pub fn paginated_batch_fetcher(db: Executor) {
             has_previous_page,
             total_count,
           )) -> {
+            // Filter out records with takedown labels
+            let filtered_records = filter_takedowns(db, record_list)
+
             // Convert records to GraphQL values with cursors
             let edges =
-              list.map(record_list, fn(record) {
+              list.map(filtered_records, fn(record) {
                 let graphql_value =
                   converters.record_to_graphql_value(record, db)
                 let cursor =
@@ -264,9 +355,12 @@ pub fn paginated_batch_fetcher(db: Executor) {
             has_previous_page,
             total_count,
           )) -> {
+            // Filter out records with takedown labels
+            let filtered_records = filter_takedowns(db, record_list)
+
             // Convert records to GraphQL values with cursors
             let edges =
-              list.map(record_list, fn(record) {
+              list.map(filtered_records, fn(record) {
                 let graphql_value =
                   converters.record_to_graphql_value(record, db)
                 let cursor =
@@ -423,5 +517,66 @@ pub fn notification_fetcher(db: Executor) {
       })
 
     Ok(#(converted, end_cursor, has_next, has_prev))
+  }
+}
+
+/// Create a labels fetcher for batch loading labels by URI
+/// Now accepts tuples of (uri, optional_record_json) to support self-labels
+pub fn labels_fetcher(db: Executor) {
+  fn(uris_with_json: List(#(String, option.Option(String)))) -> Result(
+    dict.Dict(String, List(value.Value)),
+    String,
+  ) {
+    let uris = list.map(uris_with_json, fn(pair) { pair.0 })
+
+    case labels.get_by_uris(db, uris) {
+      Ok(label_list) -> {
+        // Group moderator labels by URI
+        let mod_labels =
+          list.fold(label_list, dict.new(), fn(acc, label) {
+            let label_value =
+              value.Object([
+                #("id", value.Int(label.id)),
+                #("src", value.String(label.src)),
+                #("uri", value.String(label.uri)),
+                #("cid", case label.cid {
+                  option.Some(c) -> value.String(c)
+                  option.None -> value.Null
+                }),
+                #("val", value.String(label.val)),
+                #("neg", value.Boolean(label.neg)),
+                #("cts", value.String(label.cts)),
+                #("exp", case label.exp {
+                  option.Some(e) -> value.String(e)
+                  option.None -> value.Null
+                }),
+              ])
+            let existing = dict.get(acc, label.uri) |> result.unwrap([])
+            dict.insert(acc, label.uri, [label_value, ..existing])
+          })
+
+        // Merge with self-labels from record JSON
+        let merged =
+          list.fold(uris_with_json, mod_labels, fn(acc, pair) {
+            let #(uri, json_opt) = pair
+            case json_opt {
+              option.None -> acc
+              option.Some(json_str) -> {
+                let self_labels = parse_self_labels_from_json(json_str, uri)
+                case self_labels {
+                  [] -> acc
+                  _ -> {
+                    let existing = dict.get(acc, uri) |> result.unwrap([])
+                    dict.insert(acc, uri, list.append(self_labels, existing))
+                  }
+                }
+              }
+            }
+          })
+
+        Ok(merged)
+      }
+      Error(_) -> Error("Failed to fetch labels")
+    }
   }
 }

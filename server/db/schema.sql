@@ -191,7 +191,56 @@ CREATE TABLE admin_session (
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 CREATE INDEX idx_admin_session_atp_session_id ON admin_session(atp_session_id);
+CREATE TABLE label_definition (
+  val TEXT PRIMARY KEY NOT NULL,
+  description TEXT NOT NULL,
+  severity TEXT NOT NULL CHECK (severity IN ('inform', 'alert', 'takedown')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+, default_visibility TEXT NOT NULL DEFAULT 'warn');
+CREATE TABLE label (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  src TEXT NOT NULL,
+  uri TEXT NOT NULL,
+  cid TEXT,
+  val TEXT NOT NULL,
+  neg INTEGER NOT NULL DEFAULT 0,
+  cts TEXT NOT NULL DEFAULT (datetime('now')),
+  exp TEXT,
+  FOREIGN KEY (val) REFERENCES label_definition(val)
+);
+CREATE INDEX idx_label_uri ON label(uri);
+CREATE INDEX idx_label_val ON label(val);
+CREATE INDEX idx_label_src ON label(src);
+CREATE INDEX idx_label_cts ON label(cts DESC);
+CREATE INDEX idx_label_takedown ON label(uri, val, neg);
+CREATE TABLE report (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reporter_did TEXT NOT NULL,
+  subject_uri TEXT NOT NULL,
+  reason_type TEXT NOT NULL CHECK (reason_type IN ('spam', 'violation', 'misleading', 'sexual', 'rude', 'other')),
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'resolved', 'dismissed')),
+  resolved_by TEXT,
+  resolved_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  -- Prevent duplicate reports from same user for same content
+  UNIQUE(reporter_did, subject_uri)
+);
+CREATE INDEX idx_report_status ON report(status);
+CREATE INDEX idx_report_subject_uri ON report(subject_uri);
+CREATE INDEX idx_report_reporter_did ON report(reporter_did);
+CREATE INDEX idx_report_created_at ON report(created_at DESC);
+CREATE TABLE actor_label_preference (
+  did TEXT NOT NULL,
+  label_val TEXT NOT NULL,
+  visibility TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (did, label_val)
+);
+CREATE INDEX idx_actor_label_preference_did ON actor_label_preference(did);
 -- Dbmate schema migrations
 INSERT INTO "schema_migrations" (version) VALUES
   ('20241210000001'),
-  ('20241227000001');
+  ('20241227000001'),
+  ('20251229000001'),
+  ('20251230000001');

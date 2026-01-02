@@ -6,9 +6,12 @@ import database/executor.{type Executor}
 import database/repositories/actors
 import database/repositories/config as config_repo
 import database/repositories/jetstream_activity
+import database/repositories/label_definitions
+import database/repositories/labels
 import database/repositories/lexicons
 import database/repositories/oauth_clients
 import database/repositories/records
+import database/repositories/reports
 import database/types
 import gleam/erlang/process.{type Subject}
 import gleam/list
@@ -1098,6 +1101,354 @@ pub fn mutation_type(
                     }
                   }
                   _ -> Error("Invalid clientId argument")
+                }
+              }
+              False -> Error("Admin privileges required")
+            }
+          }
+          Error(_) -> Error("Authentication required")
+        }
+      },
+    ),
+    // createLabel mutation (admin only)
+    schema.field_with_args(
+      "createLabel",
+      schema.non_null(admin_types.label_type()),
+      "Create a label on a record or account (admin only)",
+      [
+        schema.argument(
+          "uri",
+          schema.non_null(schema.string_type()),
+          "Subject URI (at:// or did:)",
+          None,
+        ),
+        schema.argument(
+          "val",
+          schema.non_null(schema.string_type()),
+          "Label value",
+          None,
+        ),
+        schema.argument(
+          "cid",
+          schema.string_type(),
+          "Optional CID for version-specific label",
+          None,
+        ),
+        schema.argument(
+          "exp",
+          schema.string_type(),
+          "Optional expiration datetime",
+          None,
+        ),
+      ],
+      fn(ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            case config_repo.is_admin(conn, sess.did) {
+              True -> {
+                case
+                  schema.get_argument(ctx, "uri"),
+                  schema.get_argument(ctx, "val")
+                {
+                  Some(value.String(uri)), Some(value.String(val)) -> {
+                    // Validate URI format
+                    case labels.is_valid_subject_uri(uri) {
+                      False ->
+                        Error(
+                          "Invalid URI format. Must be at://did/collection/rkey or a DID",
+                        )
+                      True -> {
+                        // Validate label value exists
+                        case label_definitions.exists(conn, val) {
+                          Ok(True) -> {
+                            let cid = case schema.get_argument(ctx, "cid") {
+                              Some(value.String(c)) -> Some(c)
+                              _ -> None
+                            }
+                            let exp = case schema.get_argument(ctx, "exp") {
+                              Some(value.String(e)) -> Some(e)
+                              _ -> None
+                            }
+                            case
+                              labels.insert(conn, sess.did, uri, cid, val, exp)
+                            {
+                              Ok(label) -> Ok(converters.label_to_value(label))
+                              Error(_) -> Error("Failed to create label")
+                            }
+                          }
+                          Ok(False) -> Error("Unknown label value: " <> val)
+                          Error(_) -> Error("Failed to validate label value")
+                        }
+                      }
+                    }
+                  }
+                  _, _ -> Error("uri and val are required")
+                }
+              }
+              False -> Error("Admin privileges required")
+            }
+          }
+          Error(_) -> Error("Authentication required")
+        }
+      },
+    ),
+    // negateLabel mutation (admin only)
+    schema.field_with_args(
+      "negateLabel",
+      schema.non_null(admin_types.label_type()),
+      "Negate (retract) a label on a record or account (admin only)",
+      [
+        schema.argument(
+          "uri",
+          schema.non_null(schema.string_type()),
+          "Subject URI",
+          None,
+        ),
+        schema.argument(
+          "val",
+          schema.non_null(schema.string_type()),
+          "Label value to negate",
+          None,
+        ),
+      ],
+      fn(ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            case config_repo.is_admin(conn, sess.did) {
+              True -> {
+                case
+                  schema.get_argument(ctx, "uri"),
+                  schema.get_argument(ctx, "val")
+                {
+                  Some(value.String(uri)), Some(value.String(val)) -> {
+                    // Validate URI format
+                    case labels.is_valid_subject_uri(uri) {
+                      False ->
+                        Error(
+                          "Invalid URI format. Must be at://did/collection/rkey or a DID",
+                        )
+                      True -> {
+                        case labels.insert_negation(conn, sess.did, uri, val) {
+                          Ok(label) -> Ok(converters.label_to_value(label))
+                          Error(_) -> Error("Failed to negate label")
+                        }
+                      }
+                    }
+                  }
+                  _, _ -> Error("uri and val are required")
+                }
+              }
+              False -> Error("Admin privileges required")
+            }
+          }
+          Error(_) -> Error("Authentication required")
+        }
+      },
+    ),
+    // createLabelDefinition mutation (admin only)
+    schema.field_with_args(
+      "createLabelDefinition",
+      schema.non_null(admin_types.label_definition_type()),
+      "Create a custom label definition (admin only)",
+      [
+        schema.argument(
+          "val",
+          schema.non_null(schema.string_type()),
+          "Label value",
+          None,
+        ),
+        schema.argument(
+          "description",
+          schema.non_null(schema.string_type()),
+          "Description",
+          None,
+        ),
+        schema.argument(
+          "severity",
+          schema.non_null(admin_types.label_severity_enum()),
+          "Severity level",
+          None,
+        ),
+        schema.argument(
+          "defaultVisibility",
+          schema.string_type(),
+          "Default visibility setting (ignore, show, warn, hide). Defaults to warn.",
+          None,
+        ),
+      ],
+      fn(ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            case config_repo.is_admin(conn, sess.did) {
+              True -> {
+                // Extract severity as string from either Enum or String
+                let severity_opt = case schema.get_argument(ctx, "severity") {
+                  Some(value.Enum(s)) -> Some(string.lowercase(s))
+                  Some(value.String(s)) -> Some(string.lowercase(s))
+                  _ -> None
+                }
+                // Extract defaultVisibility (defaults to "warn")
+                let default_visibility = case
+                  schema.get_argument(ctx, "defaultVisibility")
+                {
+                  Some(value.Enum(v)) -> string.lowercase(v)
+                  Some(value.String(v)) -> string.lowercase(v)
+                  _ -> "warn"
+                }
+                // Validate defaultVisibility
+                case label_definitions.validate_visibility(default_visibility) {
+                  Error(e) -> Error(e)
+                  Ok(_) -> {
+                    case
+                      schema.get_argument(ctx, "val"),
+                      schema.get_argument(ctx, "description"),
+                      severity_opt
+                    {
+                      Some(value.String(val)),
+                        Some(value.String(desc)),
+                        Some(severity)
+                      -> {
+                        case
+                          label_definitions.insert(
+                            conn,
+                            val,
+                            desc,
+                            severity,
+                            default_visibility,
+                          )
+                        {
+                          Ok(_) -> {
+                            case label_definitions.get(conn, val) {
+                              Ok(Some(def)) ->
+                                Ok(converters.label_definition_to_value(def))
+                              _ -> Error("Failed to fetch created definition")
+                            }
+                          }
+                          Error(_) -> Error("Failed to create label definition")
+                        }
+                      }
+                      _, _, _ ->
+                        Error("val, description, and severity are required")
+                    }
+                  }
+                }
+              }
+              False -> Error("Admin privileges required")
+            }
+          }
+          Error(_) -> Error("Authentication required")
+        }
+      },
+    ),
+    // resolveReport mutation (admin only)
+    schema.field_with_args(
+      "resolveReport",
+      schema.non_null(admin_types.report_type()),
+      "Resolve a moderation report (admin only)",
+      [
+        schema.argument(
+          "id",
+          schema.non_null(schema.int_type()),
+          "Report ID",
+          None,
+        ),
+        schema.argument(
+          "action",
+          schema.non_null(admin_types.report_action_enum()),
+          "Action to take",
+          None,
+        ),
+        schema.argument(
+          "labelVal",
+          schema.string_type(),
+          "Label value to apply (required if action is APPLY_LABEL)",
+          None,
+        ),
+      ],
+      fn(ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            case config_repo.is_admin(conn, sess.did) {
+              True -> {
+                // Extract action as string from either Enum or String
+                let action_opt = case schema.get_argument(ctx, "action") {
+                  Some(value.Enum(a)) -> Some(a)
+                  Some(value.String(a)) -> Some(a)
+                  _ -> None
+                }
+                case schema.get_argument(ctx, "id"), action_opt {
+                  Some(value.Int(id)), Some(action) -> {
+                    // Get the report first
+                    case reports.get(conn, id) {
+                      Ok(Some(report)) -> {
+                        case action {
+                          "APPLY_LABEL" -> {
+                            case schema.get_argument(ctx, "labelVal") {
+                              Some(value.String(label_val)) -> {
+                                // Validate label value exists
+                                case label_definitions.exists(conn, label_val) {
+                                  Ok(True) -> {
+                                    // Create the label
+                                    case
+                                      labels.insert(
+                                        conn,
+                                        sess.did,
+                                        report.subject_uri,
+                                        None,
+                                        label_val,
+                                        None,
+                                      )
+                                    {
+                                      Ok(_) -> {
+                                        // Mark report as resolved
+                                        case
+                                          reports.resolve(
+                                            conn,
+                                            id,
+                                            "resolved",
+                                            sess.did,
+                                          )
+                                        {
+                                          Ok(resolved) ->
+                                            Ok(converters.report_to_value(
+                                              resolved,
+                                            ))
+                                          Error(_) ->
+                                            Error("Failed to resolve report")
+                                        }
+                                      }
+                                      Error(_) -> Error("Failed to apply label")
+                                    }
+                                  }
+                                  Ok(False) ->
+                                    Error("Unknown label value: " <> label_val)
+                                  Error(_) ->
+                                    Error("Failed to validate label value")
+                                }
+                              }
+                              _ ->
+                                Error(
+                                  "labelVal is required when action is APPLY_LABEL",
+                                )
+                            }
+                          }
+                          "DISMISS" -> {
+                            case
+                              reports.resolve(conn, id, "dismissed", sess.did)
+                            {
+                              Ok(resolved) ->
+                                Ok(converters.report_to_value(resolved))
+                              Error(_) -> Error("Failed to dismiss report")
+                            }
+                          }
+                          _ -> Error("Invalid action")
+                        }
+                      }
+                      Ok(None) -> Error("Report not found")
+                      Error(_) -> Error("Failed to fetch report")
+                    }
+                  }
+                  _, _ -> Error("id and action are required")
                 }
               }
               False -> Error("Admin privileges required")

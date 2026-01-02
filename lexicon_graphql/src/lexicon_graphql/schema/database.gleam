@@ -141,6 +141,13 @@ pub type NotificationFetcher =
       String,
     )
 
+/// Type for labels batch fetcher function
+/// Takes: list of (URI, optional record JSON) tuples
+/// Returns: dict mapping URI -> List of label values
+pub type LabelsFetcher =
+  fn(List(#(String, option.Option(String)))) ->
+    Result(dict.Dict(String, List(value.Value)), String)
+
 /// Build a GraphQL schema from lexicons with database-backed resolvers
 ///
 /// The fetcher parameter should be a function that queries the database for records with pagination
@@ -167,6 +174,8 @@ pub fn build_schema_with_fetcher(
           paginated_batch_fetcher,
           option.None,
           // No viewer state fetcher for basic schema
+          option.None,
+          // No labels fetcher for basic schema
         )
 
       // Build the query type with fields for each record using shared object types
@@ -183,11 +192,12 @@ pub fn build_schema_with_fetcher(
           option.None,
           option.None,
           option.None,
+          option.None,
         )
 
       // Build the mutation type with provided resolver factories
       // Pass the complete object types so mutations use the same types as queries
-      let mutation_type =
+      let mutation_build_result =
         mutation_builder.build_mutation_type(
           lexicons,
           object_types,
@@ -195,10 +205,15 @@ pub fn build_schema_with_fetcher(
           update_factory,
           delete_factory,
           upload_blob_factory,
+          option.None,
+          option.None,
         )
 
       // Create the schema with both queries and mutations
-      Ok(schema.schema(query_type, option.Some(mutation_type)))
+      Ok(schema.schema(
+        query_type,
+        option.Some(mutation_build_result.mutation_type),
+      ))
     }
   }
 }
@@ -220,6 +235,9 @@ pub fn build_schema_with_subscriptions(
   viewer_fetcher: option.Option(ViewerFetcher),
   notification_fetcher: option.Option(NotificationFetcher),
   viewer_state_fetcher: option.Option(dataloader.ViewerStateFetcher),
+  labels_fetcher: option.Option(LabelsFetcher),
+  custom_mutation_fields: option.Option(List(schema.Field)),
+  custom_query_fields: option.Option(List(schema.Field)),
 ) -> Result(schema.Schema, String) {
   case lexicons {
     [] -> Error("Cannot build schema from empty lexicon list")
@@ -231,6 +249,7 @@ pub fn build_schema_with_subscriptions(
           batch_fetcher,
           paginated_batch_fetcher,
           viewer_state_fetcher,
+          labels_fetcher,
         )
 
       // Build notification types if fetcher provided
@@ -257,10 +276,11 @@ pub fn build_schema_with_subscriptions(
           notification_fetcher,
           notification_union,
           collection_enum,
+          custom_query_fields,
         )
 
       // Build the mutation type
-      let mutation_type =
+      let mutation_build_result =
         mutation_builder.build_mutation_type(
           lexicons,
           object_types,
@@ -268,6 +288,8 @@ pub fn build_schema_with_subscriptions(
           update_factory,
           delete_factory,
           upload_blob_factory,
+          custom_mutation_fields,
+          option.None,
         )
 
       // Build the subscription type
@@ -282,7 +304,7 @@ pub fn build_schema_with_subscriptions(
       // Create the schema with queries, mutations, and subscriptions
       Ok(schema.schema_with_subscriptions(
         query_type,
-        option.Some(mutation_type),
+        option.Some(mutation_build_result.mutation_type),
         option.Some(subscription_type),
       ))
     }
@@ -303,6 +325,7 @@ fn extract_record_types_and_object_types(
   batch_fetcher: option.Option(dataloader.BatchFetcher),
   paginated_batch_fetcher: option.Option(dataloader.PaginatedBatchFetcher),
   viewer_state_fetcher: option.Option(dataloader.ViewerStateFetcher),
+  labels_fetcher: option.Option(LabelsFetcher),
 ) -> #(
   List(RecordType),
   dict.Dict(String, schema.Type),
@@ -632,15 +655,29 @@ fn extract_record_types_and_object_types(
           complete_object_types,
         )
 
+      // Replace lexicon's labels field resolver if it exists, otherwise use as-is
+      let enhanced_fields = case
+        has_self_labels_property(record_type.properties)
+      {
+        True ->
+          replace_labels_field_resolver(record_type.fields, labels_fetcher)
+        False -> record_type.fields
+      }
+
+      // Build labels field if labels_fetcher is provided (skipped if lexicon defines it)
+      let labels_field =
+        build_labels_field(labels_fetcher, record_type.properties)
+
       // Combine all fields
       let all_fields =
         list.flatten([
-          record_type.fields,
+          enhanced_fields,
           forward_join_fields,
           reverse_join_fields,
           did_join_fields,
           viewer_fields,
           did_viewer_fields,
+          labels_field,
         ])
 
       RecordType(
@@ -1847,6 +1884,7 @@ fn build_query_type(
   notification_fetcher: option.Option(NotificationFetcher),
   notification_union: option.Option(schema.Type),
   collection_enum: option.Option(schema.Type),
+  custom_query_fields: option.Option(List(schema.Field)),
 ) -> schema.Type {
   // Build regular query fields
   let query_fields =
@@ -2277,6 +2315,12 @@ fn build_query_type(
     _, _ -> []
   }
 
+  // Get custom query fields if provided
+  let custom_fields = case custom_query_fields {
+    option.Some(fields) -> fields
+    option.None -> []
+  }
+
   // Combine all query fields
   let all_query_fields =
     list.flatten([
@@ -2284,6 +2328,7 @@ fn build_query_type(
       aggregate_query_fields,
       viewer_field,
       notification_fields,
+      custom_fields,
     ])
 
   schema.object_type("Query", "Root query type", all_query_fields)
@@ -3326,4 +3371,191 @@ pub fn build_notification_record_union(
     possible_types,
     type_resolver,
   ))
+}
+
+/// Build the Label GraphQL type used for moderation labels
+fn build_label_type() -> schema.Type {
+  schema.object_type("Label", "AT Protocol moderation label", [
+    schema.field("id", schema.non_null(schema.int_type()), "Label ID", fn(ctx) {
+      get_field_from_parent(ctx, "id")
+    }),
+    schema.field(
+      "src",
+      schema.non_null(schema.string_type()),
+      "DID of the label source (labeler)",
+      fn(ctx) { get_field_from_parent(ctx, "src") },
+    ),
+    schema.field(
+      "uri",
+      schema.non_null(schema.string_type()),
+      "AT-URI of the subject",
+      fn(ctx) { get_field_from_parent(ctx, "uri") },
+    ),
+    schema.field(
+      "cid",
+      schema.string_type(),
+      "Optional CID of the subject",
+      fn(ctx) { get_field_from_parent(ctx, "cid") },
+    ),
+    schema.field(
+      "val",
+      schema.non_null(schema.string_type()),
+      "Label value (e.g., '!takedown', 'porn')",
+      fn(ctx) { get_field_from_parent(ctx, "val") },
+    ),
+    schema.field(
+      "neg",
+      schema.non_null(schema.boolean_type()),
+      "True if this is a negation of the label",
+      fn(ctx) { get_field_from_parent(ctx, "neg") },
+    ),
+    schema.field(
+      "cts",
+      schema.non_null(schema.string_type()),
+      "Creation timestamp",
+      fn(ctx) { get_field_from_parent(ctx, "cts") },
+    ),
+    schema.field(
+      "exp",
+      schema.string_type(),
+      "Optional expiration timestamp",
+      fn(ctx) { get_field_from_parent(ctx, "exp") },
+    ),
+  ])
+}
+
+/// Build labels field for record types if labels_fetcher is provided
+/// Returns a list with one field, or empty list if no fetcher
+/// Skips adding the field if the lexicon already defines a labels field with selfLabels
+fn build_labels_field(
+  labels_fetcher: option.Option(LabelsFetcher),
+  properties: List(#(String, types.Property)),
+) -> List(schema.Field) {
+  case labels_fetcher {
+    option.None -> []
+    option.Some(fetcher) -> {
+      // Skip if lexicon already defines a labels field - we'll replace its resolver instead
+      case has_self_labels_property(properties) {
+        True -> []
+        False -> {
+          let label_type = build_label_type()
+          [
+            schema.field(
+              "labels",
+              schema.non_null(schema.list_type(schema.non_null(label_type))),
+              "Moderation labels applied to this record",
+              fn(ctx) {
+                // Get the URI and JSON from the parent record
+                case get_field_from_context(ctx, "uri") {
+                  Ok(uri_str) -> {
+                    let json_opt = case get_field_from_context(ctx, "json") {
+                      Ok(j) -> option.Some(j)
+                      Error(_) -> option.None
+                    }
+                    // Fetch labels for this URI with optional JSON for self-labels
+                    case fetcher([#(uri_str, json_opt)]) {
+                      Ok(results) -> {
+                        case dict.get(results, uri_str) {
+                          Ok(labels) -> Ok(value.List(labels))
+                          Error(_) -> Ok(value.List([]))
+                        }
+                      }
+                      Error(_) -> Ok(value.List([]))
+                    }
+                  }
+                  Error(_) -> Ok(value.List([]))
+                }
+              },
+            ),
+          ]
+        }
+      }
+    }
+  }
+}
+
+/// Check if a record type has a labels property with selfLabels ref
+/// Handles both direct ref and union refs array
+fn has_self_labels_property(properties: List(#(String, types.Property))) -> Bool {
+  list.any(properties, fn(prop) {
+    let #(name, types.Property(_, _, _, ref, refs, _)) = prop
+    case name == "labels" {
+      False -> False
+      True -> {
+        // Check direct ref
+        let has_direct_ref =
+          ref == option.Some("com.atproto.label.defs#selfLabels")
+        // Check union refs array
+        let has_union_ref = case refs {
+          option.Some(ref_list) ->
+            list.contains(ref_list, "com.atproto.label.defs#selfLabels")
+          option.None -> False
+        }
+        has_direct_ref || has_union_ref
+      }
+    }
+  })
+}
+
+/// Replace the labels field resolver with an enhanced version that merges moderator labels
+fn replace_labels_field_resolver(
+  fields: List(schema.Field),
+  labels_fetcher: option.Option(LabelsFetcher),
+) -> List(schema.Field) {
+  case labels_fetcher {
+    option.None -> fields
+    option.Some(fetcher) -> {
+      let label_type = build_label_type()
+      list.map(fields, fn(field) {
+        case schema.field_name(field) == "labels" {
+          False -> field
+          True -> {
+            // Replace with enhanced resolver that fetches moderator labels
+            // Use our Label type instead of the lexicon's selfLabels type
+            schema.field(
+              "labels",
+              schema.non_null(schema.list_type(schema.non_null(label_type))),
+              "Labels applied to this record (self-labels and moderator labels)",
+              fn(ctx) {
+                case get_field_from_context(ctx, "uri") {
+                  Ok(uri_str) -> {
+                    let json_opt = case get_field_from_context(ctx, "json") {
+                      Ok(j) -> option.Some(j)
+                      Error(_) -> option.None
+                    }
+                    case fetcher([#(uri_str, json_opt)]) {
+                      Ok(results) -> {
+                        case dict.get(results, uri_str) {
+                          Ok(labels) -> Ok(value.List(labels))
+                          Error(_) -> Ok(value.List([]))
+                        }
+                      }
+                      Error(_) -> Ok(value.List([]))
+                    }
+                  }
+                  Error(_) -> Ok(value.List([]))
+                }
+              },
+            )
+          }
+        }
+      })
+    }
+  }
+}
+
+/// Helper to get a field value from the parent context
+fn get_field_from_parent(
+  ctx: schema.Context,
+  field_name: String,
+) -> Result(value.Value, String) {
+  case ctx.data {
+    option.Some(value.Object(fields)) -> {
+      case list.key_find(fields, field_name) {
+        Ok(v) -> Ok(v)
+        Error(_) -> Error("Field " <> field_name <> " not found in parent")
+      }
+    }
+    _ -> Error("Parent is not an object")
+  }
 }

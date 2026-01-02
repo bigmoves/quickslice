@@ -5,16 +5,24 @@ import database/executor.{type Executor}
 import database/repositories/actors
 import database/repositories/config as config_repo
 import database/repositories/jetstream_activity
+import database/repositories/label_definitions
+import database/repositories/label_preferences
+import database/repositories/labels
 import database/repositories/lexicons
 import database/repositories/oauth_clients
 import database/repositories/records
+import database/repositories/reports
 import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/otp/actor
+import gleam/string
 import graphql/admin/converters
+import graphql/admin/cursor
 import graphql/admin/types as admin_types
+import graphql/lexicon/converters as lexicon_converters
 import lib/oauth/did_cache
+import swell/connection
 import swell/schema
 import swell/value
 import wisp
@@ -230,6 +238,284 @@ pub fn query_type(
             }
           }
           _ -> Error("Invalid or missing hours argument")
+        }
+      },
+    ),
+    // labelDefinitions query
+    schema.field(
+      "labelDefinitions",
+      schema.non_null(
+        schema.list_type(schema.non_null(admin_types.label_definition_type())),
+      ),
+      "Get all label definitions",
+      fn(_ctx) {
+        case label_definitions.get_all(conn) {
+          Ok(defs) ->
+            Ok(value.List(list.map(defs, converters.label_definition_to_value)))
+          Error(_) -> Error("Failed to fetch label definitions")
+        }
+      },
+    ),
+    // viewerLabelPreferences query (authenticated users)
+    schema.field(
+      "viewerLabelPreferences",
+      schema.non_null(
+        schema.list_type(schema.non_null(admin_types.label_preference_type())),
+      ),
+      "Get label preferences for the current user (non-system labels only)",
+      fn(_ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            // Get non-system label definitions
+            case label_definitions.get_non_system(conn) {
+              Ok(defs) -> {
+                // Get user's preferences
+                case label_preferences.get_by_did(conn, sess.did) {
+                  Ok(prefs) -> {
+                    // Build a map of label_val -> visibility
+                    let pref_map =
+                      list.fold(prefs, [], fn(acc, pref) {
+                        [#(pref.label_val, pref.visibility), ..acc]
+                      })
+
+                    // Map each definition to a preference, using user's setting or default
+                    let result =
+                      list.map(defs, fn(def) {
+                        let visibility = case list.key_find(pref_map, def.val) {
+                          Ok(v) -> v
+                          Error(_) -> def.default_visibility
+                        }
+                        lexicon_converters.label_preference_to_value(
+                          def,
+                          visibility,
+                        )
+                      })
+
+                    Ok(value.List(result))
+                  }
+                  Error(_) -> Error("Failed to fetch label preferences")
+                }
+              }
+              Error(_) -> Error("Failed to fetch label definitions")
+            }
+          }
+          Error(_) -> Error("Authentication required")
+        }
+      },
+    ),
+    // labels query (admin only) - Connection type
+    schema.field_with_args(
+      "labels",
+      schema.non_null(admin_types.label_connection_type()),
+      "Get labels with optional filters (admin only)",
+      [
+        schema.argument(
+          "uri",
+          schema.string_type(),
+          "Filter by subject URI",
+          None,
+        ),
+        schema.argument(
+          "val",
+          schema.string_type(),
+          "Filter by label value",
+          None,
+        ),
+        schema.argument(
+          "first",
+          schema.int_type(),
+          "Number of items to fetch (default 50)",
+          None,
+        ),
+        schema.argument(
+          "after",
+          schema.string_type(),
+          "Cursor for pagination",
+          None,
+        ),
+      ],
+      fn(ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            case config_repo.is_admin(conn, sess.did) {
+              True -> {
+                let uri_filter = case schema.get_argument(ctx, "uri") {
+                  Some(value.String(u)) -> Some(u)
+                  _ -> None
+                }
+                let val_filter = case schema.get_argument(ctx, "val") {
+                  Some(value.String(v)) -> Some(v)
+                  _ -> None
+                }
+                let first = case schema.get_argument(ctx, "first") {
+                  Some(value.Int(f)) -> f
+                  _ -> 50
+                }
+                let after_id = case schema.get_argument(ctx, "after") {
+                  Some(value.String(c)) -> {
+                    case cursor.decode(c) {
+                      Ok(#("Label", id)) -> Some(id)
+                      _ -> None
+                    }
+                  }
+                  _ -> None
+                }
+
+                case
+                  labels.get_paginated(
+                    conn,
+                    uri_filter,
+                    val_filter,
+                    first,
+                    after_id,
+                  )
+                {
+                  Ok(paginated) -> {
+                    // Build edges with cursors
+                    let edges =
+                      list.map(paginated.labels, fn(label) {
+                        connection.Edge(
+                          node: converters.label_to_value(label),
+                          cursor: cursor.encode("Label", label.id),
+                        )
+                      })
+
+                    // Build page info
+                    let start_cursor = case list.first(paginated.labels) {
+                      Ok(first_label) ->
+                        Some(cursor.encode("Label", first_label.id))
+                      Error(_) -> None
+                    }
+                    let end_cursor = case list.last(paginated.labels) {
+                      Ok(last_label) ->
+                        Some(cursor.encode("Label", last_label.id))
+                      Error(_) -> None
+                    }
+
+                    let page_info =
+                      connection.PageInfo(
+                        has_next_page: paginated.has_next_page,
+                        has_previous_page: option.is_some(after_id),
+                        start_cursor: start_cursor,
+                        end_cursor: end_cursor,
+                      )
+
+                    let conn_value =
+                      connection.Connection(
+                        edges: edges,
+                        page_info: page_info,
+                        total_count: Some(paginated.total_count),
+                      )
+
+                    Ok(connection.connection_to_value(conn_value))
+                  }
+                  Error(_) -> Error("Failed to fetch labels")
+                }
+              }
+              False -> Error("Admin privileges required")
+            }
+          }
+          Error(_) -> Error("Authentication required")
+        }
+      },
+    ),
+    // reports query (admin only) - Connection type
+    schema.field_with_args(
+      "reports",
+      schema.non_null(admin_types.report_connection_type()),
+      "Get moderation reports with optional status filter (admin only)",
+      [
+        schema.argument(
+          "status",
+          admin_types.report_status_enum(),
+          "Filter by status",
+          None,
+        ),
+        schema.argument(
+          "first",
+          schema.int_type(),
+          "Number of items to fetch (default 50)",
+          None,
+        ),
+        schema.argument(
+          "after",
+          schema.string_type(),
+          "Cursor for pagination",
+          None,
+        ),
+      ],
+      fn(ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            case config_repo.is_admin(conn, sess.did) {
+              True -> {
+                let status_filter = case schema.get_argument(ctx, "status") {
+                  Some(value.Enum(s)) -> Some(string.lowercase(s))
+                  _ -> None
+                }
+                let first = case schema.get_argument(ctx, "first") {
+                  Some(value.Int(f)) -> f
+                  _ -> 50
+                }
+                let after_id = case schema.get_argument(ctx, "after") {
+                  Some(value.String(c)) -> {
+                    case cursor.decode(c) {
+                      Ok(#("Report", id)) -> Some(id)
+                      _ -> None
+                    }
+                  }
+                  _ -> None
+                }
+
+                case
+                  reports.get_paginated(conn, status_filter, first, after_id)
+                {
+                  Ok(paginated) -> {
+                    // Build edges with cursors
+                    let edges =
+                      list.map(paginated.reports, fn(report) {
+                        connection.Edge(
+                          node: converters.report_to_value(report),
+                          cursor: cursor.encode("Report", report.id),
+                        )
+                      })
+
+                    // Build page info
+                    let start_cursor = case list.first(paginated.reports) {
+                      Ok(first_report) ->
+                        Some(cursor.encode("Report", first_report.id))
+                      Error(_) -> None
+                    }
+                    let end_cursor = case list.last(paginated.reports) {
+                      Ok(last_report) ->
+                        Some(cursor.encode("Report", last_report.id))
+                      Error(_) -> None
+                    }
+
+                    let page_info =
+                      connection.PageInfo(
+                        has_next_page: paginated.has_next_page,
+                        has_previous_page: option.is_some(after_id),
+                        start_cursor: start_cursor,
+                        end_cursor: end_cursor,
+                      )
+
+                    let conn_value =
+                      connection.Connection(
+                        edges: edges,
+                        page_info: page_info,
+                        total_count: Some(paginated.total_count),
+                      )
+
+                    Ok(connection.connection_to_value(conn_value))
+                  }
+                  Error(_) -> Error("Failed to fetch reports")
+                }
+              }
+              False -> Error("Admin privileges required")
+            }
+          }
+          Error(_) -> Error("Authentication required")
         }
       },
     ),

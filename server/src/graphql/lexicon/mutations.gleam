@@ -6,8 +6,11 @@ import actor_validator
 import atproto_auth
 import backfill
 import database/executor.{type Executor}
+import database/repositories/label_definitions
+import database/repositories/label_preferences
 import database/repositories/lexicons
 import database/repositories/records
+import database/repositories/reports
 import dpop
 import gleam/dict
 import gleam/dynamic
@@ -18,8 +21,10 @@ import gleam/json
 import gleam/list
 import gleam/option
 import gleam/result
+import gleam/string
 import honk
 import honk/errors
+import lexicon_graphql/input/union as union_input
 import lib/oauth/did_cache
 import pubsub
 import swell/schema
@@ -39,7 +44,7 @@ pub type MutationContext {
   )
 }
 
-// ─── Private Auth Helper ───────────────────────────────────────────
+// ─── Private Auth Helpers ───────────────────────────────────────────
 
 /// Authenticated session info returned by auth helper
 type AuthenticatedSession {
@@ -47,6 +52,40 @@ type AuthenticatedSession {
     user_info: atproto_auth.UserInfo,
     session: atproto_auth.AtprotoSession,
   )
+}
+
+/// Lightweight auth that only verifies the token
+/// Use this for mutations that don't need ATP session (e.g., label preferences)
+fn get_viewer_auth(
+  resolver_ctx: schema.Context,
+  db: executor.Executor,
+) -> Result(atproto_auth.UserInfo, String) {
+  // Extract auth token from context data
+  let token = case resolver_ctx.data {
+    option.Some(value.Object(fields)) -> {
+      case list.key_find(fields, "auth_token") {
+        Ok(value.String(t)) -> Ok(t)
+        Ok(_) -> Error("auth_token must be a string")
+        Error(_) ->
+          Error("Authentication required. Please provide Authorization header.")
+      }
+    }
+    _ -> Error("Authentication required. Please provide Authorization header.")
+  }
+
+  use token <- result.try(token)
+
+  // Verify OAuth token
+  atproto_auth.verify_token(db, token)
+  |> result.map_error(fn(err) {
+    case err {
+      atproto_auth.UnauthorizedToken -> "Unauthorized"
+      atproto_auth.TokenExpired -> "Token expired"
+      atproto_auth.MissingAuthHeader -> "Missing authentication"
+      atproto_auth.InvalidAuthHeader -> "Invalid authentication header"
+      _ -> "Authentication error"
+    }
+  })
 }
 
 /// Extract token, verify auth, ensure actor exists, get ATP session
@@ -346,6 +385,256 @@ fn transform_blob_object(fields: List(#(String, value.Value))) -> value.Value {
   }
 }
 
+// ─── Private Union Helpers ────────────────────────────────────────
+
+/// Union field info: path to field and list of possible type refs
+type UnionFieldInfo {
+  UnionFieldInfo(path: List(String), refs: List(String))
+}
+
+/// Get union field info from a lexicon for a given collection
+fn get_union_fields(
+  collection: String,
+  lexicons: List(json.Json),
+) -> List(UnionFieldInfo) {
+  let lexicon =
+    list.find(lexicons, fn(lex) {
+      case json.parse(json.to_string(lex), decode.at(["id"], decode.string)) {
+        Ok(id) -> id == collection
+        Error(_) -> False
+      }
+    })
+
+  case lexicon {
+    Ok(lex) -> {
+      let properties_decoder =
+        decode.at(
+          ["defs", "main", "record", "properties"],
+          decode.dict(decode.string, decode.dynamic),
+        )
+      case json.parse(json.to_string(lex), properties_decoder) {
+        Ok(properties) -> extract_union_fields_from_properties(properties, [])
+        Error(_) -> []
+      }
+    }
+    Error(_) -> []
+  }
+}
+
+/// Recursively extract union fields from lexicon properties
+fn extract_union_fields_from_properties(
+  properties: dict.Dict(String, dynamic.Dynamic),
+  current_path: List(String),
+) -> List(UnionFieldInfo) {
+  dict.fold(properties, [], fn(acc, field_name, field_def) {
+    let field_path = list.append(current_path, [field_name])
+    let type_result = decode.run(field_def, decode.at(["type"], decode.string))
+
+    case type_result {
+      Ok("union") -> {
+        // Extract refs from the union definition
+        let refs_result =
+          decode.run(field_def, decode.at(["refs"], decode.list(decode.string)))
+        case refs_result {
+          Ok(refs) -> [UnionFieldInfo(path: field_path, refs: refs), ..acc]
+          Error(_) -> acc
+        }
+      }
+      Ok("object") -> {
+        let nested_props_result =
+          decode.run(
+            field_def,
+            decode.at(
+              ["properties"],
+              decode.dict(decode.string, decode.dynamic),
+            ),
+          )
+        case nested_props_result {
+          Ok(nested_props) -> {
+            let nested_fields =
+              extract_union_fields_from_properties(nested_props, field_path)
+            list.append(nested_fields, acc)
+          }
+          Error(_) -> acc
+        }
+      }
+      Ok("array") -> {
+        let items_type_result =
+          decode.run(field_def, decode.at(["items", "type"], decode.string))
+        case items_type_result {
+          Ok("union") -> {
+            let refs_result =
+              decode.run(
+                field_def,
+                decode.at(["items", "refs"], decode.list(decode.string)),
+              )
+            case refs_result {
+              Ok(refs) -> [UnionFieldInfo(path: field_path, refs: refs), ..acc]
+              Error(_) -> acc
+            }
+          }
+          Ok("object") -> {
+            let item_props_result =
+              decode.run(
+                field_def,
+                decode.at(
+                  ["items", "properties"],
+                  decode.dict(decode.string, decode.dynamic),
+                ),
+              )
+            case item_props_result {
+              Ok(item_props) -> {
+                let nested_fields =
+                  extract_union_fields_from_properties(item_props, field_path)
+                list.append(nested_fields, acc)
+              }
+              Error(_) -> acc
+            }
+          }
+          _ -> acc
+        }
+      }
+      _ -> acc
+    }
+  })
+}
+
+/// Transform union inputs by adding $type based on the discriminator
+fn transform_union_inputs(
+  input: value.Value,
+  union_fields: List(UnionFieldInfo),
+) -> value.Value {
+  transform_unions_at_paths(input, union_fields, [])
+}
+
+/// Recursively transform union values at specified paths
+fn transform_unions_at_paths(
+  val: value.Value,
+  union_fields: List(UnionFieldInfo),
+  current_path: List(String),
+) -> value.Value {
+  case val {
+    value.Object(fields) -> {
+      // Check if current path matches a union field
+      let matching_union =
+        list.find(union_fields, fn(uf) { uf.path == current_path })
+
+      case matching_union {
+        Ok(union_info) -> transform_union_object(fields, union_info.refs)
+        Error(_) -> {
+          // Recurse into object fields
+          value.Object(
+            list.map(fields, fn(field) {
+              let #(key, field_val) = field
+              let new_path = list.append(current_path, [key])
+              #(
+                key,
+                transform_unions_at_paths(field_val, union_fields, new_path),
+              )
+            }),
+          )
+        }
+      }
+    }
+    value.List(items) -> {
+      // Check if current path is a union array
+      let matching_union =
+        list.find(union_fields, fn(uf) { uf.path == current_path })
+
+      case matching_union {
+        Ok(union_info) -> {
+          // Transform each item in the array
+          value.List(
+            list.map(items, fn(item) {
+              case item {
+                value.Object(item_fields) ->
+                  transform_union_object(item_fields, union_info.refs)
+                _ -> item
+              }
+            }),
+          )
+        }
+        Error(_) -> {
+          // Recurse into list items
+          value.List(
+            list.map(items, fn(item) {
+              transform_unions_at_paths(item, union_fields, current_path)
+            }),
+          )
+        }
+      }
+    }
+    _ -> val
+  }
+}
+
+/// Transform a union object from GraphQL discriminated format to AT Protocol format
+/// GraphQL input: { type: "SELF_LABELS", selfLabels: { values: [...] } }
+/// AT Protocol output: { $type: "com.atproto.label.defs#selfLabels", values: [...] }
+fn transform_union_object(
+  fields: List(#(String, value.Value)),
+  refs: List(String),
+) -> value.Value {
+  // Find the "type" discriminator field
+  let type_field = list.key_find(fields, "type")
+
+  case type_field {
+    Ok(value.Enum(enum_value)) -> {
+      // Convert enum value back to ref
+      let matching_ref = find_ref_for_enum_value(enum_value, refs)
+      case matching_ref {
+        Ok(ref) -> {
+          // Find the variant field (same name as the short ref name)
+          let short_name = enum_value_to_short_name(enum_value)
+          case list.key_find(fields, short_name) {
+            Ok(value.Object(variant_fields)) -> {
+              // Build AT Protocol format: variant fields + $type
+              value.Object([#("$type", value.String(ref)), ..variant_fields])
+            }
+            _ -> {
+              // No variant data, just return $type
+              value.Object([#("$type", value.String(ref))])
+            }
+          }
+        }
+        Error(_) -> value.Object(fields)
+      }
+    }
+    Ok(value.String(str_value)) -> {
+      // Handle string type discriminator (fallback)
+      let matching_ref = find_ref_for_enum_value(str_value, refs)
+      case matching_ref {
+        Ok(ref) -> {
+          let short_name = enum_value_to_short_name(str_value)
+          case list.key_find(fields, short_name) {
+            Ok(value.Object(variant_fields)) -> {
+              value.Object([#("$type", value.String(ref)), ..variant_fields])
+            }
+            _ -> value.Object([#("$type", value.String(ref))])
+          }
+        }
+        Error(_) -> value.Object(fields)
+      }
+    }
+    _ -> value.Object(fields)
+  }
+}
+
+/// Find the ref that matches an enum value
+/// "SELF_LABELS" matches "com.atproto.label.defs#selfLabels"
+fn find_ref_for_enum_value(
+  enum_value: String,
+  refs: List(String),
+) -> Result(String, Nil) {
+  list.find(refs, fn(ref) { union_input.ref_to_enum_value(ref) == enum_value })
+}
+
+/// Convert SCREAMING_SNAKE_CASE to camelCase for field lookup
+/// "SELF_LABELS" -> "selfLabels"
+fn enum_value_to_short_name(enum_value: String) -> String {
+  union_input.screaming_snake_to_camel(enum_value)
+}
+
 /// Decode base64 string to bit array
 fn decode_base64(base64_str: String) -> Result(BitArray, Nil) {
   Ok(do_erlang_base64_decode(base64_str))
@@ -429,7 +718,13 @@ pub fn create_resolver_factory(
 
     // Transform blob inputs from GraphQL format to AT Protocol format
     let blob_paths = get_blob_paths(collection, all_lex_jsons)
-    let transformed_input = transform_blob_inputs(input, blob_paths)
+    let blob_transformed = transform_blob_inputs(input, blob_paths)
+
+    // Transform union inputs from GraphQL discriminated format to AT Protocol format
+    let union_fields = get_union_fields(collection, all_lex_jsons)
+    let transformed_input =
+      transform_union_inputs(blob_transformed, union_fields)
+
     let record_json_value = graphql_value_to_json_value(transformed_input)
     let record_json_string = json.to_string(record_json_value)
 
@@ -569,7 +864,13 @@ pub fn update_resolver_factory(
 
     // Transform blob inputs from GraphQL format to AT Protocol format
     let blob_paths = get_blob_paths(collection, all_lex_jsons)
-    let transformed_input = transform_blob_inputs(input, blob_paths)
+    let blob_transformed = transform_blob_inputs(input, blob_paths)
+
+    // Transform union inputs from GraphQL discriminated format to AT Protocol format
+    let union_fields = get_union_fields(collection, all_lex_jsons)
+    let transformed_input =
+      transform_union_inputs(blob_transformed, union_fields)
+
     let record_json_value = graphql_value_to_json_value(transformed_input)
     let record_json_string = json.to_string(record_json_value)
 
@@ -788,5 +1089,159 @@ pub fn upload_blob_resolver_factory(ctx: MutationContext) -> schema.Resolver {
     })
 
     Ok(blob_ref)
+  }
+}
+
+/// Create a resolver for createReport mutation
+/// Allows authenticated users to submit moderation reports
+pub fn create_report_resolver_factory(ctx: MutationContext) -> schema.Resolver {
+  fn(resolver_ctx: schema.Context) -> Result(value.Value, String) {
+    // Get authenticated session using helper
+    use auth <- result.try(get_authenticated_session(resolver_ctx, ctx))
+
+    // Get subjectUri (required) and reasonType (required) from arguments
+    let subject_uri_result = case
+      schema.get_argument(resolver_ctx, "subjectUri")
+    {
+      option.Some(value.String(u)) -> Ok(u)
+      option.Some(_) -> Error("subjectUri must be a string")
+      option.None -> Error("Missing required argument: subjectUri")
+    }
+
+    use subject_uri <- result.try(subject_uri_result)
+
+    let reason_type_result = case
+      schema.get_argument(resolver_ctx, "reasonType")
+    {
+      option.Some(value.Enum(r)) -> Ok(string.lowercase(r))
+      option.Some(value.String(r)) -> Ok(string.lowercase(r))
+      option.Some(_) -> Error("reasonType must be a string")
+      option.None -> Error("Missing required argument: reasonType")
+    }
+
+    use reason_type <- result.try(reason_type_result)
+
+    // Validate reason_type
+    let valid_reasons = [
+      "spam",
+      "violation",
+      "misleading",
+      "sexual",
+      "rude",
+      "other",
+    ]
+    use _ <- result.try(case list.contains(valid_reasons, reason_type) {
+      True -> Ok(Nil)
+      False ->
+        Error(
+          "Invalid reasonType. Must be one of: "
+          <> string.join(valid_reasons, ", "),
+        )
+    })
+
+    // Get optional reason text
+    let reason = case schema.get_argument(resolver_ctx, "reason") {
+      option.Some(value.String(r)) -> option.Some(r)
+      _ -> option.None
+    }
+
+    // Insert the report
+    use report <- result.try(
+      reports.insert(
+        ctx.db,
+        auth.user_info.did,
+        subject_uri,
+        reason_type,
+        reason,
+      )
+      |> result.map_error(fn(_) { "Failed to create report" }),
+    )
+
+    // Return the created report
+    let reason_value = case report.reason {
+      option.Some(r) -> value.String(r)
+      option.None -> value.Null
+    }
+
+    Ok(
+      value.Object([
+        #("id", value.Int(report.id)),
+        #("reporterDid", value.String(report.reporter_did)),
+        #("subjectUri", value.String(report.subject_uri)),
+        #("reasonType", value.Enum(string.uppercase(report.reason_type))),
+        #("reason", reason_value),
+        #("status", value.Enum("PENDING")),
+        #("createdAt", value.String(report.created_at)),
+      ]),
+    )
+  }
+}
+
+// ─── Label Preference Mutation ────────────────────────────────────────────
+
+/// Resolver factory for setLabelPreference mutation
+pub fn set_label_preference_resolver_factory(
+  ctx: MutationContext,
+) -> schema.Resolver {
+  fn(resolver_ctx: schema.Context) -> Result(value.Value, String) {
+    // Get viewer auth (lightweight - no ATP session needed)
+    use user_info <- result.try(get_viewer_auth(resolver_ctx, ctx.db))
+
+    // Get val (required) argument
+    let val_result = case schema.get_argument(resolver_ctx, "val") {
+      option.Some(value.String(v)) -> Ok(v)
+      option.Some(_) -> Error("val must be a string")
+      option.None -> Error("Missing required argument: val")
+    }
+
+    use val <- result.try(val_result)
+
+    // Get visibility (required) argument
+    let visibility_result = case
+      schema.get_argument(resolver_ctx, "visibility")
+    {
+      option.Some(value.Enum(v)) -> Ok(string.lowercase(v))
+      option.Some(value.String(v)) -> Ok(string.lowercase(v))
+      option.Some(_) -> Error("visibility must be a valid enum value")
+      option.None -> Error("Missing required argument: visibility")
+    }
+
+    use visibility <- result.try(visibility_result)
+
+    // Validate not a system label (starts with !)
+    use _ <- result.try(case string.starts_with(val, "!") {
+      True -> Error("Cannot set preference for system labels")
+      False -> Ok(Nil)
+    })
+
+    // Validate visibility is a valid value
+    use _ <- result.try(label_definitions.validate_visibility(visibility))
+
+    // Validate label exists
+    use def <- result.try(case label_definitions.get(ctx.db, val) {
+      Ok(option.None) -> Error("Unknown label: " <> val)
+      Error(_) -> Error("Failed to validate label")
+      Ok(option.Some(d)) -> Ok(d)
+    })
+
+    // Set the preference
+    use _ <- result.try(
+      label_preferences.set(ctx.db, user_info.did, val, visibility)
+      |> result.map_error(fn(_) { "Failed to set label preference" }),
+    )
+
+    // Return the updated preference
+    Ok(
+      value.Object([
+        #("val", value.String(def.val)),
+        #("description", value.String(def.description)),
+        #("severity", value.Enum(string.uppercase(def.severity))),
+        #(
+          "defaultVisibility",
+          value.Enum(string.uppercase(def.default_visibility)),
+        ),
+        #("visibility", value.Enum(string.uppercase(visibility))),
+      ]),
+    )
   }
 }

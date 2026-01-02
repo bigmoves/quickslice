@@ -321,6 +321,99 @@ pub fn create_all_tables(exec: Executor) -> Result(Nil, DbError) {
   create_admin_session_table(exec)
 }
 
+/// Create label_definition table for tests
+pub fn create_label_definition_table(exec: Executor) -> Result(Nil, DbError) {
+  use _ <- result.try(
+    executor.exec(
+      exec,
+      "CREATE TABLE IF NOT EXISTS label_definition (
+      val TEXT PRIMARY KEY NOT NULL,
+      description TEXT NOT NULL,
+      severity TEXT NOT NULL CHECK (severity IN ('inform', 'alert', 'takedown')),
+      default_visibility TEXT NOT NULL DEFAULT 'warn',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )",
+      [],
+    ),
+  )
+
+  // Seed default label definitions
+  executor.exec(
+    exec,
+    "INSERT INTO label_definition (val, description, severity, default_visibility) VALUES
+      ('!takedown', 'Content removed by moderators', 'takedown', 'hide'),
+      ('!suspend', 'Account suspended', 'takedown', 'hide'),
+      ('!warn', 'Show warning before displaying', 'alert', 'warn'),
+      ('!hide', 'Hide from feeds', 'alert', 'hide'),
+      ('porn', 'Pornographic content', 'alert', 'hide'),
+      ('spam', 'Spam or unwanted content', 'inform', 'warn'),
+      ('sexual', 'Sexually suggestive content', 'alert', 'warn'),
+      ('nudity', 'Non-sexual nudity', 'alert', 'warn')",
+    [],
+  )
+}
+
+/// Create actor_label_preference table for tests
+pub fn create_label_preference_table(exec: Executor) -> Result(Nil, DbError) {
+  executor.exec(
+    exec,
+    "CREATE TABLE IF NOT EXISTS actor_label_preference (
+      did TEXT NOT NULL,
+      label_val TEXT NOT NULL,
+      visibility TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (did, label_val)
+    )",
+    [],
+  )
+}
+
+/// Create label table for tests
+pub fn create_label_table(exec: Executor) -> Result(Nil, DbError) {
+  executor.exec(
+    exec,
+    "CREATE TABLE IF NOT EXISTS label (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      src TEXT NOT NULL,
+      uri TEXT NOT NULL,
+      cid TEXT,
+      val TEXT NOT NULL,
+      neg INTEGER NOT NULL DEFAULT 0,
+      cts TEXT NOT NULL DEFAULT (datetime('now')),
+      exp TEXT,
+      FOREIGN KEY (val) REFERENCES label_definition(val)
+    )",
+    [],
+  )
+}
+
+/// Create report table for tests
+pub fn create_report_table(exec: Executor) -> Result(Nil, DbError) {
+  executor.exec(
+    exec,
+    "CREATE TABLE IF NOT EXISTS report (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      reporter_did TEXT NOT NULL,
+      subject_uri TEXT NOT NULL,
+      reason_type TEXT NOT NULL CHECK (reason_type IN ('spam', 'violation', 'misleading', 'sexual', 'rude', 'other')),
+      reason TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'resolved', 'dismissed')),
+      resolved_by TEXT,
+      resolved_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )",
+    [],
+  )
+}
+
+/// Create labels and reports tables for tests
+pub fn create_moderation_tables(exec: Executor) -> Result(Nil, DbError) {
+  use _ <- result.try(create_label_definition_table(exec))
+  use _ <- result.try(create_label_table(exec))
+  use _ <- result.try(create_report_table(exec))
+  create_label_preference_table(exec)
+}
+
 /// Insert a test token that maps to a DID for testing viewer authentication
 pub fn insert_test_token(
   exec: Executor,

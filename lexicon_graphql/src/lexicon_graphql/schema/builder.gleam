@@ -65,7 +65,7 @@ pub fn build_schema(lexicons: List(Lexicon)) -> Result(schema.Schema, String) {
       let query_type = build_query_type(record_types, object_types)
 
       // Build the mutation type with stub resolvers, using shared object types
-      let mutation_type =
+      let mutation_build_result =
         mutation_builder.build_mutation_type(
           lexicons,
           object_types,
@@ -73,10 +73,15 @@ pub fn build_schema(lexicons: List(Lexicon)) -> Result(schema.Schema, String) {
           option.None,
           option.None,
           option.None,
+          option.None,
+          option.None,
         )
 
       // Create the schema with queries and mutations
-      Ok(schema.schema(query_type, option.Some(mutation_type)))
+      Ok(schema.schema(
+        query_type,
+        option.Some(mutation_build_result.mutation_type),
+      ))
     }
   }
 }

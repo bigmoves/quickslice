@@ -3,12 +3,14 @@
 /// Transform database records and dynamic values to GraphQL value.Value objects
 import database/executor.{type Executor}
 import database/repositories/actors
+import database/repositories/label_definitions
 import database/types
 import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/json
 import gleam/list
+import gleam/string
 import swell/value
 
 /// Convert a database Record to a GraphQL value.Value
@@ -164,4 +166,19 @@ pub fn extract_reference_uri(
     }
     _ -> Error(Nil)
   }
+}
+
+/// Convert a LabelPreference to GraphQL value
+/// Takes a label definition and the user's effective visibility setting
+pub fn label_preference_to_value(
+  def: label_definitions.LabelDefinition,
+  visibility: String,
+) -> value.Value {
+  value.Object([
+    #("val", value.String(def.val)),
+    #("description", value.String(def.description)),
+    #("severity", value.Enum(string.uppercase(def.severity))),
+    #("defaultVisibility", value.Enum(string.uppercase(def.default_visibility))),
+    #("visibility", value.Enum(string.uppercase(visibility))),
+  ])
 }

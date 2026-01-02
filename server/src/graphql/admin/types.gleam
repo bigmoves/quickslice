@@ -3,6 +3,7 @@
 /// Contains all object types, enum types, and the get_field helper
 import gleam/list
 import gleam/option.{Some}
+import swell/connection
 import swell/schema
 import swell/value
 
@@ -303,4 +304,256 @@ pub fn activity_entry_type() -> schema.Type {
       Ok(get_field(ctx, "eventJson"))
     }),
   ])
+}
+
+// =============================================================================
+// Label and Report Types
+// =============================================================================
+
+/// LabelSeverity enum for label definitions
+pub fn label_severity_enum() -> schema.Type {
+  schema.enum_type("LabelSeverity", "Severity level of a label", [
+    schema.enum_value("INFORM", "Informational, client can show indicator"),
+    schema.enum_value("ALERT", "Client should warn/blur"),
+    schema.enum_value("TAKEDOWN", "Server filters, content not returned"),
+  ])
+}
+
+/// LabelVisibility enum for user preferences
+pub fn label_visibility_enum() -> schema.Type {
+  schema.enum_type("LabelVisibility", "How to display labeled content", [
+    schema.enum_value("IGNORE", "Show content normally, no indicator"),
+    schema.enum_value("SHOW", "Explicitly show (for adult content)"),
+    schema.enum_value("WARN", "Blur with click-through warning"),
+    schema.enum_value("HIDE", "Do not show content"),
+  ])
+}
+
+/// LabelDefinition type
+pub fn label_definition_type() -> schema.Type {
+  schema.object_type("LabelDefinition", "Label value definition", [
+    schema.field(
+      "val",
+      schema.non_null(schema.string_type()),
+      "Label value (e.g., 'porn', '!takedown')",
+      fn(ctx) { Ok(get_field(ctx, "val")) },
+    ),
+    schema.field(
+      "description",
+      schema.non_null(schema.string_type()),
+      "Human-readable description",
+      fn(ctx) { Ok(get_field(ctx, "description")) },
+    ),
+    schema.field(
+      "severity",
+      schema.non_null(label_severity_enum()),
+      "Severity level",
+      fn(ctx) { Ok(get_field(ctx, "severity")) },
+    ),
+    schema.field(
+      "defaultVisibility",
+      schema.non_null(label_visibility_enum()),
+      "Default visibility setting for this label",
+      fn(ctx) { Ok(get_field(ctx, "defaultVisibility")) },
+    ),
+    schema.field(
+      "createdAt",
+      schema.non_null(schema.string_type()),
+      "Creation timestamp",
+      fn(ctx) { Ok(get_field(ctx, "createdAt")) },
+    ),
+  ])
+}
+
+/// LabelPreference type for viewerLabelPreferences query
+pub fn label_preference_type() -> schema.Type {
+  schema.object_type("LabelPreference", "User preference for a label type", [
+    schema.field(
+      "val",
+      schema.non_null(schema.string_type()),
+      "Label value",
+      fn(ctx) { Ok(get_field(ctx, "val")) },
+    ),
+    schema.field(
+      "description",
+      schema.non_null(schema.string_type()),
+      "Label description",
+      fn(ctx) { Ok(get_field(ctx, "description")) },
+    ),
+    schema.field(
+      "severity",
+      schema.non_null(label_severity_enum()),
+      "Label severity (inform, alert, takedown)",
+      fn(ctx) { Ok(get_field(ctx, "severity")) },
+    ),
+    schema.field(
+      "defaultVisibility",
+      schema.non_null(label_visibility_enum()),
+      "Default visibility setting",
+      fn(ctx) { Ok(get_field(ctx, "defaultVisibility")) },
+    ),
+    schema.field(
+      "visibility",
+      schema.non_null(label_visibility_enum()),
+      "User's effective visibility setting",
+      fn(ctx) { Ok(get_field(ctx, "visibility")) },
+    ),
+  ])
+}
+
+/// Label type
+pub fn label_type() -> schema.Type {
+  schema.object_type("Label", "Applied label on a record or account", [
+    schema.field("id", schema.non_null(schema.int_type()), "Label ID", fn(ctx) {
+      Ok(get_field(ctx, "id"))
+    }),
+    schema.field(
+      "src",
+      schema.non_null(schema.string_type()),
+      "DID of admin who applied the label",
+      fn(ctx) { Ok(get_field(ctx, "src")) },
+    ),
+    schema.field(
+      "uri",
+      schema.non_null(schema.string_type()),
+      "Subject URI (at:// or did:)",
+      fn(ctx) { Ok(get_field(ctx, "uri")) },
+    ),
+    schema.field(
+      "cid",
+      schema.string_type(),
+      "Optional CID for version-specific label",
+      fn(ctx) { Ok(get_field(ctx, "cid")) },
+    ),
+    schema.field(
+      "val",
+      schema.non_null(schema.string_type()),
+      "Label value",
+      fn(ctx) { Ok(get_field(ctx, "val")) },
+    ),
+    schema.field(
+      "neg",
+      schema.non_null(schema.boolean_type()),
+      "True if this is a negation (retraction)",
+      fn(ctx) { Ok(get_field(ctx, "neg")) },
+    ),
+    schema.field(
+      "cts",
+      schema.non_null(schema.string_type()),
+      "Creation timestamp",
+      fn(ctx) { Ok(get_field(ctx, "cts")) },
+    ),
+    schema.field(
+      "exp",
+      schema.string_type(),
+      "Optional expiration timestamp",
+      fn(ctx) { Ok(get_field(ctx, "exp")) },
+    ),
+  ])
+}
+
+/// Edge type for Label connection
+pub fn label_edge_type() -> schema.Type {
+  connection.edge_type("Label", label_type())
+}
+
+/// Connection type for paginated Label results
+pub fn label_connection_type() -> schema.Type {
+  connection.connection_type("Label", label_edge_type())
+}
+
+/// ReportReasonType enum
+pub fn report_reason_type_enum() -> schema.Type {
+  schema.enum_type("ReportReasonType", "Reason for submitting a report", [
+    schema.enum_value("SPAM", "Spam or unwanted content"),
+    schema.enum_value("VIOLATION", "Violates terms of service"),
+    schema.enum_value("MISLEADING", "Misleading or false information"),
+    schema.enum_value("SEXUAL", "Inappropriate sexual content"),
+    schema.enum_value("RUDE", "Rude or abusive behavior"),
+    schema.enum_value("OTHER", "Other reason"),
+  ])
+}
+
+/// ReportStatus enum
+pub fn report_status_enum() -> schema.Type {
+  schema.enum_type("ReportStatus", "Status of a moderation report", [
+    schema.enum_value("PENDING", "Awaiting review"),
+    schema.enum_value("RESOLVED", "Resolved with action"),
+    schema.enum_value("DISMISSED", "Dismissed without action"),
+  ])
+}
+
+/// ReportAction enum for resolving reports
+pub fn report_action_enum() -> schema.Type {
+  schema.enum_type("ReportAction", "Action to take when resolving a report", [
+    schema.enum_value("APPLY_LABEL", "Apply a label to the subject"),
+    schema.enum_value("DISMISS", "Dismiss the report without action"),
+  ])
+}
+
+/// Report type
+pub fn report_type() -> schema.Type {
+  schema.object_type("Report", "User-submitted moderation report", [
+    schema.field("id", schema.non_null(schema.int_type()), "Report ID", fn(ctx) {
+      Ok(get_field(ctx, "id"))
+    }),
+    schema.field(
+      "reporterDid",
+      schema.non_null(schema.string_type()),
+      "DID of reporter",
+      fn(ctx) { Ok(get_field(ctx, "reporterDid")) },
+    ),
+    schema.field(
+      "subjectUri",
+      schema.non_null(schema.string_type()),
+      "Subject URI (at:// or did:)",
+      fn(ctx) { Ok(get_field(ctx, "subjectUri")) },
+    ),
+    schema.field(
+      "reasonType",
+      schema.non_null(report_reason_type_enum()),
+      "Reason type",
+      fn(ctx) { Ok(get_field(ctx, "reasonType")) },
+    ),
+    schema.field(
+      "reason",
+      schema.string_type(),
+      "Optional free-text explanation",
+      fn(ctx) { Ok(get_field(ctx, "reason")) },
+    ),
+    schema.field(
+      "status",
+      schema.non_null(report_status_enum()),
+      "Report status",
+      fn(ctx) { Ok(get_field(ctx, "status")) },
+    ),
+    schema.field(
+      "resolvedBy",
+      schema.string_type(),
+      "DID of admin who resolved",
+      fn(ctx) { Ok(get_field(ctx, "resolvedBy")) },
+    ),
+    schema.field(
+      "resolvedAt",
+      schema.string_type(),
+      "Resolution timestamp",
+      fn(ctx) { Ok(get_field(ctx, "resolvedAt")) },
+    ),
+    schema.field(
+      "createdAt",
+      schema.non_null(schema.string_type()),
+      "Creation timestamp",
+      fn(ctx) { Ok(get_field(ctx, "createdAt")) },
+    ),
+  ])
+}
+
+/// Edge type for Report connection
+pub fn report_edge_type() -> schema.Type {
+  connection.edge_type("Report", report_type())
+}
+
+/// Connection type for paginated Report results
+pub fn report_connection_type() -> schema.Type {
+  connection.connection_type("Report", report_edge_type())
 }

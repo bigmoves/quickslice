@@ -6,6 +6,8 @@ import atproto_auth
 import backfill
 import database/executor.{type Executor}
 import database/repositories/config as config_repo
+import database/repositories/label_definitions
+import database/repositories/label_preferences
 import database/repositories/lexicons
 import gleam/dict
 import gleam/dynamic/decode
@@ -15,6 +17,7 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
+import graphql/admin/types as admin_types
 import graphql/lexicon/converters
 import graphql/lexicon/fetchers
 import graphql/lexicon/mutations
@@ -125,7 +128,118 @@ pub fn build_schema_from_db(
       // Step 7: Create viewer state fetcher
       let viewer_state_fetcher = fetchers.viewer_state_fetcher(db)
 
-      // Step 8: Build schema with database-backed resolvers, mutations, and subscriptions
+      // Step 8: Create labels fetcher
+      let labels_fetch = fetchers.labels_fetcher(db)
+
+      // Step 9: Build createReport mutation field
+      let create_report_field =
+        schema.field_with_args(
+          "createReport",
+          schema.non_null(admin_types.report_type()),
+          "Submit a moderation report for content",
+          [
+            schema.argument(
+              "subjectUri",
+              schema.non_null(schema.string_type()),
+              "URI of the content to report (at:// or did:)",
+              option.None,
+            ),
+            schema.argument(
+              "reasonType",
+              schema.non_null(admin_types.report_reason_type_enum()),
+              "Type of report",
+              option.None,
+            ),
+            schema.argument(
+              "reason",
+              schema.string_type(),
+              "Optional additional details",
+              option.None,
+            ),
+          ],
+          mutations.create_report_resolver_factory(mutation_ctx),
+        )
+
+      // Step 9b: Build setLabelPreference mutation field
+      let set_label_pref_field =
+        schema.field_with_args(
+          "setLabelPreference",
+          schema.non_null(admin_types.label_preference_type()),
+          "Set visibility preference for a label type",
+          [
+            schema.argument(
+              "val",
+              schema.non_null(schema.string_type()),
+              "Label value",
+              option.None,
+            ),
+            schema.argument(
+              "visibility",
+              schema.non_null(admin_types.label_visibility_enum()),
+              "Visibility setting",
+              option.None,
+            ),
+          ],
+          mutations.set_label_preference_resolver_factory(mutation_ctx),
+        )
+
+      // Step 10: Build viewerLabelPreferences query field
+      let viewer_label_prefs_field =
+        schema.field(
+          "viewerLabelPreferences",
+          schema.non_null(
+            schema.list_type(
+              schema.non_null(admin_types.label_preference_type()),
+            ),
+          ),
+          "Get label preferences for the current user (non-system labels only)",
+          fn(ctx) {
+            // Get viewer_did from context variables (set by auth middleware)
+            case schema.get_variable(ctx, "viewer_did") {
+              option.Some(value.String(viewer_did)) -> {
+                // Get non-system label definitions
+                case label_definitions.get_non_system(mutation_ctx.db) {
+                  Ok(defs) -> {
+                    // Get user's preferences
+                    case
+                      label_preferences.get_by_did(mutation_ctx.db, viewer_did)
+                    {
+                      Ok(prefs) -> {
+                        // Build a map of label_val -> visibility
+                        let pref_map =
+                          list.fold(prefs, [], fn(acc, pref) {
+                            [#(pref.label_val, pref.visibility), ..acc]
+                          })
+
+                        // Map each definition to a preference
+                        let result =
+                          list.map(defs, fn(def) {
+                            let visibility = case
+                              list.key_find(pref_map, def.val)
+                            {
+                              Ok(v) -> v
+                              Error(_) -> def.default_visibility
+                            }
+                            converters.label_preference_to_value(
+                              def,
+                              visibility,
+                            )
+                          })
+
+                        Ok(value.List(result))
+                      }
+                      Error(_) -> Error("Failed to fetch label preferences")
+                    }
+                  }
+                  Error(_) -> Error("Failed to fetch label definitions")
+                }
+              }
+              _ -> Error("Authentication required")
+            }
+          },
+        )
+
+      // Step 11: Build schema with database-backed resolvers, mutations, and subscriptions
       database.build_schema_with_subscriptions(
         parsed_lexicons,
         record_fetcher,
@@ -139,6 +253,9 @@ pub fn build_schema_from_db(
         option.Some(viewer_fetcher),
         option.Some(notification_fetcher),
         option.Some(viewer_state_fetcher),
+        option.Some(labels_fetch),
+        option.Some([create_report_field, set_label_pref_field]),
+        option.Some([viewer_label_prefs_field]),
       )
     }
   }

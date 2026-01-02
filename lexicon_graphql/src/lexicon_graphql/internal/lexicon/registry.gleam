@@ -117,3 +117,8 @@ pub fn get_all_object_refs(registry: Registry) -> List(String) {
   registry.object_defs
   |> dict.keys
 }
+
+/// Get all object definitions from the registry
+pub fn get_all_object_defs(registry: Registry) -> Dict(String, types.ObjectDef) {
+  registry.object_defs
+}
