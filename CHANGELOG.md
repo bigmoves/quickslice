@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.20.0
+
+### Added
+- Add moderation system with labels, reports, and user preferences
+  - Label definitions with severity levels (takedown, alert, inform)
+  - Apply/negate labels on records and accounts via admin API
+  - Automatic takedown filtering from all queries
+  - Self-labels support (author-applied labels merged with moderator labels)
+  - `labels` field exposed on all record types
+  - User-submitted reports with reason types
+  - Admin report review and resolution workflow
+  - Per-user label visibility preferences (ignore, show, warn, hide)
+  - Connection pagination for admin labels and reports queries
+- Add union input type support for GraphQL mutations
+- Add moderation documentation guide
+
 ## v0.19.0
 
 ### Added
