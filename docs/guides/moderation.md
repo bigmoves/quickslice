@@ -301,3 +301,49 @@ System labels (starting with `!`) cannot be configured. The server enforces them
 - `!warn` and `!hide` always apply their effects
 
 Attempting to set a preference for a system label returns an error.
+
+### Client-Side Filtering
+
+The server filters takedown labels automatically, but clients must apply user preferences for other labels. Here's the pattern:
+
+```typescript
+// 1. Fetch preferences once and cache
+const prefs = await client.query(`{
+  viewerLabelPreferences { val visibility }
+}`)
+const prefMap = new Map(prefs.map(p => [p.val, p.visibility]))
+
+// 2. Check visibility for each record
+function getVisibility(record) {
+  for (const label of record.labels ?? []) {
+    const vis = prefMap.get(label.val) ?? 'WARN'
+    if (vis === 'HIDE') return { show: false }
+    if (vis === 'WARN') return { show: true, blur: true }
+  }
+  return { show: true, blur: false }
+}
+
+// 3. Apply in your UI
+function RecordCard({ record }) {
+  const { show, blur } = getVisibility(record)
+
+  if (!show) return null
+
+  if (blur) {
+    return (
+      <BlurOverlay onReveal={() => setRevealed(true)}>
+        <Content record={record} />
+      </BlurOverlay>
+    )
+  }
+
+  return <Content record={record} />
+}
+```
+
+Key points:
+
+- Cache preferences at session start or when user updates them
+- Default unknown labels to `WARN` for safety
+- Multiple labels on one record: apply the most restrictive
+- `IGNORE` and `SHOW` both display normally; `SHOW` is for explicit opt-in to adult content
