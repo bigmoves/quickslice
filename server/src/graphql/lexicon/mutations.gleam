@@ -215,7 +215,8 @@ fn get_blob_paths(
           decode.dict(decode.string, decode.dynamic),
         )
       case json.parse(json.to_string(lex), properties_decoder) {
-        Ok(properties) -> extract_blob_paths_from_properties(properties, [])
+        Ok(properties) ->
+          extract_blob_paths_from_properties(properties, [], lex, lexicons)
         Error(_) -> []
       }
     }
@@ -223,10 +224,67 @@ fn get_blob_paths(
   }
 }
 
+/// Resolve a ref string to get the properties of the referenced definition
+/// Handles both local refs (#defName) and external refs (nsid#defName)
+fn resolve_ref_properties(
+  ref: String,
+  current_lexicon: json.Json,
+  all_lexicons: List(json.Json),
+) -> Result(dict.Dict(String, dynamic.Dynamic), Nil) {
+  case string.starts_with(ref, "#") {
+    // Local ref like "#mediaItem" - look up in current lexicon
+    True -> {
+      let def_name = string.drop_start(ref, 1)
+      let properties_decoder =
+        decode.at(
+          ["defs", def_name, "properties"],
+          decode.dict(decode.string, decode.dynamic),
+        )
+      json.parse(json.to_string(current_lexicon), properties_decoder)
+      |> result.replace_error(Nil)
+    }
+    // External ref like "games.gamesgamesgamesgames.defs#mode"
+    False -> {
+      case string.split(ref, "#") {
+        [nsid, def_name] -> {
+          // Find the lexicon with this nsid
+          let target_lexicon =
+            list.find(all_lexicons, fn(lex) {
+              case
+                json.parse(
+                  json.to_string(lex),
+                  decode.at(["id"], decode.string),
+                )
+              {
+                Ok(id) -> id == nsid
+                Error(_) -> False
+              }
+            })
+          case target_lexicon {
+            Ok(lex) -> {
+              let properties_decoder =
+                decode.at(
+                  ["defs", def_name, "properties"],
+                  decode.dict(decode.string, decode.dynamic),
+                )
+              json.parse(json.to_string(lex), properties_decoder)
+              |> result.replace_error(Nil)
+            }
+            Error(_) -> Error(Nil)
+          }
+        }
+        _ -> Error(Nil)
+      }
+    }
+  }
+}
+
 /// Recursively extract blob paths from lexicon properties
 fn extract_blob_paths_from_properties(
   properties: dict.Dict(String, dynamic.Dynamic),
   current_path: List(String),
+  current_lexicon: json.Json,
+  all_lexicons: List(json.Json),
 ) -> List(List(String)) {
   dict.fold(properties, [], fn(acc, field_name, field_def) {
     let field_path = list.append(current_path, [field_name])
@@ -246,7 +304,12 @@ fn extract_blob_paths_from_properties(
         case nested_props_result {
           Ok(nested_props) -> {
             let nested_paths =
-              extract_blob_paths_from_properties(nested_props, field_path)
+              extract_blob_paths_from_properties(
+                nested_props,
+                field_path,
+                current_lexicon,
+                all_lexicons,
+              )
             list.append(nested_paths, acc)
           }
           Error(_) -> acc
@@ -269,8 +332,38 @@ fn extract_blob_paths_from_properties(
             case item_props_result {
               Ok(item_props) -> {
                 let nested_paths =
-                  extract_blob_paths_from_properties(item_props, field_path)
+                  extract_blob_paths_from_properties(
+                    item_props,
+                    field_path,
+                    current_lexicon,
+                    all_lexicons,
+                  )
                 list.append(nested_paths, acc)
+              }
+              Error(_) -> acc
+            }
+          }
+          // Handle ref type - resolve the reference and extract blob paths
+          Ok("ref") -> {
+            let ref_result =
+              decode.run(field_def, decode.at(["items", "ref"], decode.string))
+            case ref_result {
+              Ok(ref) -> {
+                case
+                  resolve_ref_properties(ref, current_lexicon, all_lexicons)
+                {
+                  Ok(ref_props) -> {
+                    let nested_paths =
+                      extract_blob_paths_from_properties(
+                        ref_props,
+                        field_path,
+                        current_lexicon,
+                        all_lexicons,
+                      )
+                    list.append(nested_paths, acc)
+                  }
+                  Error(_) -> acc
+                }
               }
               Error(_) -> acc
             }
