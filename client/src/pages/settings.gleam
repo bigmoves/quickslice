@@ -89,6 +89,28 @@
 ///   deleteOAuthClient(clientId: $clientId)
 /// }
 /// ```
+///
+/// ```graphql
+/// query GetCookieSettings {
+///   cookieSettings {
+///     __typename
+///     sameSite
+///     secure
+///     domain
+///   }
+/// }
+/// ```
+///
+/// ```graphql
+/// mutation UpdateCookieSettings($sameSite: CookieSameSite, $secure: CookieSecure, $domain: String) {
+///   updateCookieSettings(sameSite: $sameSite, secure: $secure, domain: $domain) {
+///     __typename
+///     sameSite
+///     secure
+///     domain
+///   }
+/// }
+/// ```
 import generated/queries/get_settings
 import gleam/json
 import gleam/option.{None, Some}
@@ -98,6 +120,7 @@ import lustre/element.{type Element}
 import lustre/element/html
 import pages/settings/admin as admin_section
 import pages/settings/basic as basic_section
+import pages/settings/cookie as cookie_section
 import pages/settings/danger_zone as danger_zone_section
 import pages/settings/lexicons as lexicons_section
 import pages/settings/oauth_clients as oauth_clients_section
@@ -159,6 +182,14 @@ pub fn clear_lexicons_alert(model: Model) -> Model {
   Model(..model, lexicons_alert: None)
 }
 
+pub fn set_cookie_alert(model: Model, kind: String, message: String) -> Model {
+  Model(..model, cookie_alert: Some(#(kind, message)))
+}
+
+pub fn clear_cookie_alert(model: Model) -> Model {
+  Model(..model, cookie_alert: None)
+}
+
 pub fn init() -> Model {
   Model(
     domain_authority_input: "",
@@ -186,6 +217,9 @@ pub fn init() -> Model {
     remove_confirm_did: None,
     admin_alert: None,
     danger_zone_alert: None,
+    cookie_same_site_input: "",
+    cookie_secure_input: "",
+    cookie_alert: None,
   )
 }
 
@@ -255,6 +289,7 @@ pub fn view(cache: Cache, model: Model, is_admin: Bool) -> Element(Msg) {
           squall_cache.Data(data) ->
             html.div([attribute.class("space-y-6")], [
               basic_section.view(data.settings, model, is_saving),
+              cookie_section.view(model, is_saving),
               lexicons_section.view(model),
               oauth_clients_section.view(cache, model),
               admin_section.view(data.settings, model),

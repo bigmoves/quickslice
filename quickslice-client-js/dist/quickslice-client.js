@@ -32,11 +32,7 @@ var QuicksliceClient = (() => {
   // src/storage/keys.ts
   function createStorageKeys(namespace) {
     return {
-      accessToken: `quickslice_${namespace}_access_token`,
-      refreshToken: `quickslice_${namespace}_refresh_token`,
-      tokenExpiresAt: `quickslice_${namespace}_token_expires_at`,
       clientId: `quickslice_${namespace}_client_id`,
-      userDid: `quickslice_${namespace}_user_did`,
       codeVerifier: `quickslice_${namespace}_code_verifier`,
       oauthState: `quickslice_${namespace}_oauth_state`,
       redirectUri: `quickslice_${namespace}_redirect_uri`
@@ -48,14 +44,14 @@ var QuicksliceClient = (() => {
     return {
       get(key) {
         const storageKey = keys[key];
-        if (key === "codeVerifier" || key === "oauthState") {
+        if (key === "codeVerifier" || key === "oauthState" || key === "redirectUri") {
           return sessionStorage.getItem(storageKey);
         }
         return localStorage.getItem(storageKey);
       },
       set(key, value) {
         const storageKey = keys[key];
-        if (key === "codeVerifier" || key === "oauthState") {
+        if (key === "codeVerifier" || key === "oauthState" || key === "redirectUri") {
           sessionStorage.setItem(storageKey, value);
         } else {
           localStorage.setItem(storageKey, value);
@@ -233,126 +229,62 @@ var QuicksliceClient = (() => {
     return generateRandomString(16);
   }
 
-  // src/storage/lock.ts
-  var LOCK_TIMEOUT = 5e3;
-  function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-  function getLockKey(namespace, key) {
-    return `quickslice_${namespace}_lock_${key}`;
-  }
-  async function acquireLock(namespace, key, timeout = LOCK_TIMEOUT) {
-    const lockKey = getLockKey(namespace, key);
-    const lockValue = `${Date.now()}_${Math.random()}`;
-    const deadline = Date.now() + timeout;
-    while (Date.now() < deadline) {
-      const existing = localStorage.getItem(lockKey);
-      if (existing) {
-        const [timestamp] = existing.split("_");
-        if (Date.now() - parseInt(timestamp) > LOCK_TIMEOUT) {
-          localStorage.removeItem(lockKey);
-        } else {
-          await sleep(50);
-          continue;
-        }
-      }
-      localStorage.setItem(lockKey, lockValue);
-      await sleep(10);
-      if (localStorage.getItem(lockKey) === lockValue) {
-        return lockValue;
-      }
-    }
-    return null;
-  }
-  function releaseLock(namespace, key, lockValue) {
-    const lockKey = getLockKey(namespace, key);
-    if (localStorage.getItem(lockKey) === lockValue) {
-      localStorage.removeItem(lockKey);
-    }
-  }
-
-  // src/auth/tokens.ts
-  var TOKEN_REFRESH_BUFFER_MS = 6e4;
-  function sleep2(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-  async function refreshTokens(storage, namespace, tokenUrl) {
-    const refreshToken = storage.get("refreshToken");
-    const clientId = storage.get("clientId");
-    if (!refreshToken || !clientId) {
-      throw new Error("No refresh token available");
-    }
-    const dpopProof = await createDPoPProof(namespace, "POST", tokenUrl);
-    const response = await fetch(tokenUrl, {
+  // src/auth/session.ts
+  async function createSession(serverUrl, namespace, options) {
+    const keyData = await getOrCreateDPoPKey(namespace);
+    const dpopJkt = await computeJkt(keyData.publicJwk);
+    const response = await fetch(`${serverUrl}/api/client/session`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        DPoP: dpopProof
+        "Content-Type": "application/json"
       },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-        client_id: clientId
+      credentials: "include",
+      // Include cookies in the response
+      body: JSON.stringify({
+        clientId: options.clientId,
+        dpopJkt,
+        userDid: options.userDid,
+        atpSessionId: options.atpSessionId
       })
     });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
-        `Token refresh failed: ${errorData.error_description || response.statusText}`
+        `Failed to create session: ${errorData.message || response.statusText}`
       );
     }
-    const tokens = await response.json();
-    storage.set("accessToken", tokens.access_token);
-    if (tokens.refresh_token) {
-      storage.set("refreshToken", tokens.refresh_token);
-    }
-    const expiresAt = Date.now() + tokens.expires_in * 1e3;
-    storage.set("tokenExpiresAt", expiresAt.toString());
-    return tokens.access_token;
+    return await response.json();
   }
-  async function getValidAccessToken(storage, namespace, tokenUrl) {
-    const accessToken = storage.get("accessToken");
-    const expiresAt = parseInt(storage.get("tokenExpiresAt") || "0");
-    if (accessToken && Date.now() < expiresAt - TOKEN_REFRESH_BUFFER_MS) {
-      return accessToken;
+  async function getSession(serverUrl) {
+    const response = await fetch(`${serverUrl}/api/client/session`, {
+      method: "GET",
+      credentials: "include"
+      // Include session cookie
+    });
+    if (!response.ok) {
+      return {
+        authenticated: false,
+        did: null,
+        handle: null
+      };
     }
-    const lockKey = "token_refresh";
-    const lockValue = await acquireLock(namespace, lockKey);
-    if (!lockValue) {
-      await sleep2(100);
-      const freshToken = storage.get("accessToken");
-      const freshExpiry = parseInt(storage.get("tokenExpiresAt") || "0");
-      if (freshToken && Date.now() < freshExpiry - TOKEN_REFRESH_BUFFER_MS) {
-        return freshToken;
-      }
-      throw new Error("Failed to refresh token");
-    }
-    try {
-      const freshToken = storage.get("accessToken");
-      const freshExpiry = parseInt(storage.get("tokenExpiresAt") || "0");
-      if (freshToken && Date.now() < freshExpiry - TOKEN_REFRESH_BUFFER_MS) {
-        return freshToken;
-      }
-      return await refreshTokens(storage, namespace, tokenUrl);
-    } finally {
-      releaseLock(namespace, lockKey, lockValue);
-    }
+    return await response.json();
   }
-  function storeTokens(storage, tokens) {
-    storage.set("accessToken", tokens.access_token);
-    if (tokens.refresh_token) {
-      storage.set("refreshToken", tokens.refresh_token);
-    }
-    const expiresAt = Date.now() + tokens.expires_in * 1e3;
-    storage.set("tokenExpiresAt", expiresAt.toString());
-    if (tokens.sub) {
-      storage.set("userDid", tokens.sub);
-    }
+  async function destroySession(serverUrl) {
+    await fetch(`${serverUrl}/api/client/session`, {
+      method: "DELETE",
+      credentials: "include"
+      // Include session cookie
+    });
   }
-  function hasValidSession(storage) {
-    const accessToken = storage.get("accessToken");
-    const refreshToken = storage.get("refreshToken");
-    return !!(accessToken || refreshToken);
+  async function computeJkt(jwk) {
+    const canonical = JSON.stringify({
+      crv: jwk.crv,
+      kty: jwk.kty,
+      x: jwk.x,
+      y: jwk.y
+    });
+    return await sha256Base64Url(canonical);
   }
 
   // src/auth/oauth.ts
@@ -381,7 +313,7 @@ var QuicksliceClient = (() => {
     }
     window.location.href = `${authorizeUrl}?${params.toString()}`;
   }
-  async function handleOAuthCallback(storage, namespace, tokenUrl) {
+  async function handleOAuthCallback(storage, namespace, tokenUrl, serverUrl) {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const state = params.get("state");
@@ -392,7 +324,7 @@ var QuicksliceClient = (() => {
       );
     }
     if (!code || !state) {
-      return false;
+      return null;
     }
     const storedState = storage.get("oauthState");
     if (state !== storedState) {
@@ -426,14 +358,21 @@ var QuicksliceClient = (() => {
       );
     }
     const tokens = await tokenResponse.json();
-    storeTokens(storage, tokens);
+    const sessionInfo = await createSession(serverUrl, namespace, {
+      clientId,
+      userDid: tokens.sub,
+      // DID from token response
+      atpSessionId: tokens.session_id
+      // ATP session ID if present
+    });
     storage.remove("codeVerifier");
     storage.remove("oauthState");
     storage.remove("redirectUri");
     window.history.replaceState({}, document.title, window.location.pathname);
-    return true;
+    return sessionInfo;
   }
-  async function logout(storage, namespace, options = {}) {
+  async function logout(storage, namespace, serverUrl, options = {}) {
+    await destroySession(serverUrl);
     storage.clear();
     await clearDPoPKeys(namespace);
     if (options.reload !== false) {
@@ -442,23 +381,21 @@ var QuicksliceClient = (() => {
   }
 
   // src/graphql.ts
-  async function graphqlRequest(storage, namespace, graphqlUrl, tokenUrl, query, variables = {}, requireAuth = false) {
+  async function graphqlRequest(namespace, graphqlUrl, query, variables = {}, requireAuth = false, signal) {
     const headers = {
       "Content-Type": "application/json"
     };
     if (requireAuth) {
-      const token = await getValidAccessToken(storage, namespace, tokenUrl);
-      if (!token) {
-        throw new Error("Not authenticated");
-      }
-      const dpopProof = await createDPoPProof(namespace, "POST", graphqlUrl, token);
-      headers["Authorization"] = `DPoP ${token}`;
+      const dpopProof = await createDPoPProof(namespace, "POST", graphqlUrl);
       headers["DPoP"] = dpopProof;
     }
     const response = await fetch(graphqlUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify({ query, variables })
+      body: JSON.stringify({ query, variables }),
+      credentials: "include",
+      // Include session cookie
+      signal
     });
     if (!response.ok) {
       throw new Error(`GraphQL request failed: ${response.statusText}`);
@@ -476,6 +413,7 @@ var QuicksliceClient = (() => {
       this.initialized = false;
       this.namespace = "";
       this.storage = null;
+      this.cachedSession = null;
       this.server = options.server.replace(/\/$/, "");
       this.clientId = options.clientId;
       this.redirectUri = options.redirectUri;
@@ -514,82 +452,91 @@ var QuicksliceClient = (() => {
     }
     /**
      * Handle OAuth callback after redirect
-     * Returns true if callback was handled
+     * Returns the session info if callback was handled, null otherwise
      */
     async handleRedirectCallback() {
       await this.init();
-      return await handleOAuthCallback(this.getStorage(), this.namespace, this.tokenUrl);
+      const session = await handleOAuthCallback(
+        this.getStorage(),
+        this.namespace,
+        this.tokenUrl,
+        this.server
+      );
+      if (session) {
+        this.cachedSession = session;
+      }
+      return session;
     }
     /**
      * Logout and clear all stored data
      */
     async logout(options = {}) {
       await this.init();
-      await logout(this.getStorage(), this.namespace, options);
+      this.cachedSession = null;
+      await logout(this.getStorage(), this.namespace, this.server, options);
     }
     /**
      * Check if user is authenticated
+     * Queries the server to verify session is valid
      */
     async isAuthenticated() {
       await this.init();
-      return hasValidSession(this.getStorage());
+      const session = await getSession(this.server);
+      this.cachedSession = session;
+      return session.authenticated;
     }
     /**
-     * Get current user's DID (from stored token data)
+     * Get current user info from session
      * For richer profile info, use client.query() with your own schema
      */
     async getUser() {
       await this.init();
-      if (!hasValidSession(this.getStorage())) {
+      let session = this.cachedSession;
+      if (!session) {
+        session = await getSession(this.server);
+        this.cachedSession = session;
+      }
+      if (!session.authenticated || !session.did) {
         return null;
       }
-      const did = this.getStorage().get("userDid");
-      if (!did) {
-        return null;
-      }
-      return { did };
-    }
-    /**
-     * Get access token (auto-refreshes if needed)
-     */
-    async getAccessToken() {
-      await this.init();
-      return await getValidAccessToken(this.getStorage(), this.namespace, this.tokenUrl);
+      return {
+        did: session.did,
+        handle: session.handle ?? void 0
+      };
     }
     /**
      * Execute a GraphQL query (authenticated)
+     * Uses session cookie for auth - no client-side token management
      */
-    async query(query, variables = {}) {
+    async query(query, variables = {}, options = {}) {
       await this.init();
       return await graphqlRequest(
-        this.getStorage(),
         this.namespace,
         this.graphqlUrl,
-        this.tokenUrl,
         query,
         variables,
-        true
+        true,
+        options.signal
       );
     }
     /**
      * Execute a GraphQL mutation (authenticated)
      */
-    async mutate(mutation, variables = {}) {
-      return this.query(mutation, variables);
+    async mutate(mutation, variables = {}, options = {}) {
+      return this.query(mutation, variables, options);
     }
     /**
      * Execute a public GraphQL query (no auth)
      */
-    async publicQuery(query, variables = {}) {
+    async publicQuery(query, variables = {}, options = {}) {
       await this.init();
       return await graphqlRequest(
-        this.getStorage(),
         this.namespace,
         this.graphqlUrl,
-        this.tokenUrl,
         query,
         variables,
-        false
+        false,
+        options.signal
       );
     }
   };

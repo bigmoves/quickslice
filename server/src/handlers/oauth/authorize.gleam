@@ -430,7 +430,7 @@ fn process_authorization(
     <> "&scope="
     <> uri.percent_encode(scope)
     <> "&login_hint="
-    <> uri.percent_encode(did)
+    <> uri.percent_encode(option.unwrap(req.login_hint, ""))
 
   Ok(RedirectToATProtocol(authorization_url: auth_url))
 }

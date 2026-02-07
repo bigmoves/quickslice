@@ -557,3 +557,65 @@ pub fn report_edge_type() -> schema.Type {
 pub fn report_connection_type() -> schema.Type {
   connection.connection_type("Report", report_edge_type())
 }
+
+// =============================================================================
+// Cookie Settings Types
+// =============================================================================
+
+/// CookieSameSite enum for cookie configuration
+pub fn cookie_same_site_enum() -> schema.Type {
+  schema.enum_type("CookieSameSite", "SameSite attribute for cookies", [
+    schema.enum_value(
+      "STRICT",
+      "Strict: Cookie sent only for same-site requests (recommended)",
+    ),
+    schema.enum_value(
+      "LAX",
+      "Lax: Cookie sent for same-site + top-level navigations",
+    ),
+    schema.enum_value(
+      "NONE",
+      "None: Cookie sent for all requests (requires Secure)",
+    ),
+  ])
+}
+
+/// CookieSecure enum for cookie configuration
+pub fn cookie_secure_enum() -> schema.Type {
+  schema.enum_type("CookieSecure", "Secure flag mode for cookies", [
+    schema.enum_value(
+      "AUTO",
+      "Auto: Detect based on request protocol (default)",
+    ),
+    schema.enum_value("ALWAYS", "Always: Always set Secure flag"),
+    schema.enum_value("NEVER", "Never: Never set Secure flag (dev only)"),
+  ])
+}
+
+/// CookieSettings type for cookie configuration
+pub fn cookie_settings_type() -> schema.Type {
+  schema.object_type(
+    "CookieSettings",
+    "Cookie configuration for client sessions",
+    [
+      schema.field(
+        "sameSite",
+        schema.non_null(cookie_same_site_enum()),
+        "SameSite attribute (strict, lax, or none)",
+        fn(ctx) { Ok(get_field(ctx, "sameSite")) },
+      ),
+      schema.field(
+        "secure",
+        schema.non_null(cookie_secure_enum()),
+        "Secure flag mode (auto, always, or never)",
+        fn(ctx) { Ok(get_field(ctx, "secure")) },
+      ),
+      schema.field(
+        "domain",
+        schema.string_type(),
+        "Optional cookie domain for subdomain sharing",
+        fn(ctx) { Ok(get_field(ctx, "domain")) },
+      ),
+    ],
+  )
+}

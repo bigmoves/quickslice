@@ -45,6 +45,10 @@ pub type Msg {
   ConfirmRemoveAdmin(String)
   CancelRemoveAdmin
   SubmitRemoveAdmin
+  // Cookie settings messages
+  UpdateCookieSameSiteInput(String)
+  UpdateCookieSecureInput(String)
+  SubmitCookieSettings
 }
 
 pub type Model {
@@ -78,5 +82,9 @@ pub type Model {
     remove_confirm_did: Option(String),
     admin_alert: Option(#(String, String)),
     danger_zone_alert: Option(#(String, String)),
+    // Cookie settings state
+    cookie_same_site_input: String,
+    cookie_secure_input: String,
+    cookie_alert: Option(#(String, String)),
   )
 }

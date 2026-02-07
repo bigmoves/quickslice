@@ -2,22 +2,25 @@ import { StorageKeys } from './keys';
 
 /**
  * Create a namespaced storage interface
+ *
+ * With cookie-based auth, we only store OAuth flow state.
+ * Tokens are managed server-side via HTTP-only cookies.
  */
 export function createStorage(keys: StorageKeys) {
   return {
     get(key: keyof StorageKeys): string | null {
       const storageKey = keys[key];
-      // OAuth flow state stays in sessionStorage (per-tab)
-      if (key === 'codeVerifier' || key === 'oauthState') {
+      // OAuth flow state stays in sessionStorage (per-tab, ephemeral)
+      if (key === 'codeVerifier' || key === 'oauthState' || key === 'redirectUri') {
         return sessionStorage.getItem(storageKey);
       }
-      // Tokens go in localStorage (shared across tabs)
+      // Client ID stored in localStorage (shared across tabs)
       return localStorage.getItem(storageKey);
     },
 
     set(key: keyof StorageKeys, value: string): void {
       const storageKey = keys[key];
-      if (key === 'codeVerifier' || key === 'oauthState') {
+      if (key === 'codeVerifier' || key === 'oauthState' || key === 'redirectUri') {
         sessionStorage.setItem(storageKey, value);
       } else {
         localStorage.setItem(storageKey, value);

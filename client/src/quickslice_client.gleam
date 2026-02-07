@@ -51,6 +51,7 @@ import generated/queries/backfill_actor
 import generated/queries/create_o_auth_client
 import generated/queries/delete_o_auth_client
 import generated/queries/get_activity_buckets.{ONEDAY}
+import generated/queries/get_cookie_settings
 import generated/queries/get_current_session
 import generated/queries/get_lexicons
 import generated/queries/get_o_auth_clients
@@ -60,6 +61,7 @@ import generated/queries/get_statistics
 import generated/queries/is_backfilling
 import generated/queries/reset_all
 import generated/queries/trigger_backfill
+import generated/queries/update_cookie_settings
 import generated/queries/update_o_auth_client
 import generated/queries/update_settings
 import generated/queries/upload_lexicons
@@ -263,10 +265,19 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
           get_settings.parse_get_settings_response,
         )
 
-      // GetOAuthClients query
+      // GetCookieSettings query
       let #(cache2, _) =
         squall_cache.lookup(
           cache1,
+          "GetCookieSettings",
+          json.object([]),
+          get_cookie_settings.parse_get_cookie_settings_response,
+        )
+
+      // GetOAuthClients query
+      let #(cache3, _) =
+        squall_cache.lookup(
+          cache2,
           "GetOAuthClients",
           json.object([]),
           get_o_auth_clients.parse_get_o_auth_clients_response,
@@ -274,7 +285,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
 
       // Process pending fetches
       let #(final_cache, fx) =
-        squall_cache.process_pending(cache2, reg, HandleQueryResponse, fn() {
+        squall_cache.process_pending(cache3, reg, HandleQueryResponse, fn() {
           0
         })
       #(final_cache, fx)
@@ -329,6 +340,8 @@ pub type Msg {
   HandleOptimisticMutationFailure(String, String)
   HandleAdminMutationSuccess(String, String)
   HandleAdminMutationFailure(String, String)
+  HandleCookieMutationSuccess(String, String)
+  HandleCookieMutationFailure(String, String)
   OnRouteChange(Route)
   HomePageMsg(home.Msg)
   SettingsPageMsg(settings.Msg)
@@ -460,6 +473,59 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
       let new_settings_model =
         settings.set_admin_alert(
+          model.settings_page_model,
+          "error",
+          friendly_error,
+        )
+
+      #(
+        Model(
+          ..model,
+          cache: cache_after_rollback,
+          settings_page_model: new_settings_model,
+        ),
+        effect.none(),
+      )
+    }
+
+    HandleCookieMutationSuccess(mutation_id, response_body) -> {
+      let cache_after_commit =
+        squall_cache.commit_optimistic(model.cache, mutation_id, response_body)
+
+      let new_settings_model =
+        settings.set_cookie_alert(
+          model.settings_page_model,
+          "success",
+          "Cookie settings updated successfully",
+        )
+
+      #(
+        Model(
+          ..model,
+          cache: cache_after_commit,
+          settings_page_model: new_settings_model,
+        ),
+        effect.none(),
+      )
+    }
+
+    HandleCookieMutationFailure(mutation_id, error_message) -> {
+      let cache_after_rollback =
+        squall_cache.rollback_optimistic(model.cache, mutation_id)
+
+      let friendly_error = case
+        string.split_once(error_message, "Response body: ")
+      {
+        Ok(#(_, response_body)) ->
+          case extract_graphql_error(response_body) {
+            option.Some(graphql_error) -> graphql_error
+            option.None -> error_message
+          }
+        Error(_) -> error_message
+      }
+
+      let new_settings_model =
+        settings.set_cookie_alert(
           model.settings_page_model,
           "error",
           friendly_error,
@@ -625,6 +691,22 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                 plc_directory_url_input: data.settings.plc_directory_url,
                 jetstream_url_input: data.settings.jetstream_url,
                 oauth_supported_scopes_input: data.settings.oauth_supported_scopes,
+              )
+            Error(_) -> model.settings_page_model
+          }
+        }
+        "GetCookieSettings" -> {
+          // Populate cookie settings inputs with loaded values
+          case
+            get_cookie_settings.parse_get_cookie_settings_response(
+              response_body,
+            )
+          {
+            Ok(data) ->
+              settings_types.Model(
+                ..model.settings_page_model,
+                cookie_same_site_input: data.cookie_settings.same_site,
+                cookie_secure_input: data.cookie_settings.secure,
               )
             Error(_) -> model.settings_page_model
           }
@@ -1060,10 +1142,19 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                   get_settings.parse_get_settings_response,
                 )
 
+              // Fetch cookie settings data
+              let #(cache_with_cookie_settings, _) =
+                squall_cache.lookup(
+                  cache_with_settings,
+                  "GetCookieSettings",
+                  json.object([]),
+                  get_cookie_settings.parse_get_cookie_settings_response,
+                )
+
               // Fetch OAuth clients data
               let #(cache_with_lookup, _) =
                 squall_cache.lookup(
-                  cache_with_settings,
+                  cache_with_cookie_settings,
                   "GetOAuthClients",
                   json.object([]),
                   get_o_auth_clients.parse_get_o_auth_clients_response,
@@ -2216,6 +2307,117 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               }
             }
             option.None -> #(model, effect.none())
+          }
+        }
+
+        // Cookie settings message handlers
+        settings_types.UpdateCookieSameSiteInput(value) -> {
+          let new_settings_model =
+            settings_types.Model(
+              ..model.settings_page_model,
+              cookie_same_site_input: value,
+              cookie_alert: None,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings_types.UpdateCookieSecureInput(value) -> {
+          let new_settings_model =
+            settings_types.Model(
+              ..model.settings_page_model,
+              cookie_secure_input: value,
+              cookie_alert: None,
+            )
+          #(
+            Model(..model, settings_page_model: new_settings_model),
+            effect.none(),
+          )
+        }
+
+        settings_types.SubmitCookieSettings -> {
+          // Clear any existing cookie alert
+          let cleared_settings_model =
+            settings_types.Model(
+              ..model.settings_page_model,
+              cookie_alert: None,
+            )
+
+          // Build variables from non-empty inputs
+          let mut_vars = []
+
+          let mut_vars = case model.settings_page_model.cookie_same_site_input {
+            "" -> mut_vars
+            val -> [#("sameSite", json.string(val)), ..mut_vars]
+          }
+
+          let mut_vars = case model.settings_page_model.cookie_secure_input {
+            "" -> mut_vars
+            val -> [#("secure", json.string(val)), ..mut_vars]
+          }
+
+          case mut_vars {
+            [] -> {
+              // No fields to update
+              #(
+                Model(..model, settings_page_model: cleared_settings_model),
+                effect.none(),
+              )
+            }
+            _ -> {
+              let variables = json.object(mut_vars)
+
+              // Build optimistic entity
+              let opt_fields = [
+                #("__typename", json.string("CookieSettings")),
+              ]
+
+              let opt_fields = case
+                model.settings_page_model.cookie_same_site_input
+              {
+                "" -> opt_fields
+                val -> [#("sameSite", json.string(val)), ..opt_fields]
+              }
+
+              let opt_fields = case
+                model.settings_page_model.cookie_secure_input
+              {
+                "" -> opt_fields
+                val -> [#("secure", json.string(val)), ..opt_fields]
+              }
+
+              let optimistic_entity = json.object(opt_fields)
+
+              let #(updated_cache, _mutation_id, mutation_effect) =
+                squall_cache.execute_optimistic_mutation(
+                  model.cache,
+                  model.registry,
+                  "UpdateCookieSettings",
+                  variables,
+                  "CookieSettings:singleton",
+                  fn(_current) { optimistic_entity },
+                  update_cookie_settings.parse_update_cookie_settings_response,
+                  fn(mutation_id, result, response_body) {
+                    case result {
+                      Ok(_) ->
+                        HandleCookieMutationSuccess(mutation_id, response_body)
+                      Error(err) ->
+                        HandleCookieMutationFailure(mutation_id, err)
+                    }
+                  },
+                )
+
+              #(
+                Model(
+                  ..model,
+                  cache: updated_cache,
+                  settings_page_model: cleared_settings_model,
+                ),
+                mutation_effect,
+              )
+            }
           }
         }
       }

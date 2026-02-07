@@ -1,6 +1,4 @@
 import { createDPoPProof } from './auth/dpop';
-import { getValidAccessToken } from './auth/tokens';
-import { Storage } from './storage/storage';
 
 export interface GraphQLResponse<T = unknown> {
   data?: T;
@@ -9,30 +7,27 @@ export interface GraphQLResponse<T = unknown> {
 
 /**
  * Execute a GraphQL query or mutation
+ *
+ * With cookie-based auth, the session cookie is automatically included
+ * via credentials: 'include'. DPoP proof is still added for request binding.
  */
 export async function graphqlRequest<T = unknown>(
-  storage: Storage,
   namespace: string,
   graphqlUrl: string,
-  tokenUrl: string,
   query: string,
   variables: Record<string, unknown> = {},
-  requireAuth = false
+  requireAuth = false,
+  signal?: AbortSignal
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
 
+  // Add DPoP proof for authenticated requests
+  // The session cookie is sent automatically with credentials: 'include'
   if (requireAuth) {
-    const token = await getValidAccessToken(storage, namespace, tokenUrl);
-    if (!token) {
-      throw new Error('Not authenticated');
-    }
-
-    // Create DPoP proof bound to this request
-    const dpopProof = await createDPoPProof(namespace, 'POST', graphqlUrl, token);
-
-    headers['Authorization'] = `DPoP ${token}`;
+    // Create DPoP proof bound to this request (no access token hash since tokens are server-side)
+    const dpopProof = await createDPoPProof(namespace, 'POST', graphqlUrl);
     headers['DPoP'] = dpopProof;
   }
 
@@ -40,6 +35,8 @@ export async function graphqlRequest<T = unknown>(
     method: 'POST',
     headers,
     body: JSON.stringify({ query, variables }),
+    credentials: 'include', // Include session cookie
+    signal,
   });
 
   if (!response.ok) {

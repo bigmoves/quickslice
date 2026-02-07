@@ -130,5 +130,19 @@ pub fn init_registry() -> unstable_registry.Registry {
       "query GetLexicons {\n  lexicons {\n    __typename\n    id\n    json\n    createdAt\n  }\n}",
       "generated/queries/get_lexicons",
     )
+  let reg =
+    unstable_registry.register(
+      reg,
+      "GetCookieSettings",
+      "query GetCookieSettings {\n  cookieSettings {\n    __typename\n    sameSite\n    secure\n    domain\n  }\n}",
+      "generated/queries/get_cookie_settings",
+    )
+  let reg =
+    unstable_registry.register(
+      reg,
+      "UpdateCookieSettings",
+      "mutation UpdateCookieSettings($sameSite: CookieSameSite, $secure: CookieSecure, $domain: String) {\n  updateCookieSettings(sameSite: $sameSite, secure: $secure, domain: $domain) {\n    __typename\n    sameSite\n    secure\n    domain\n  }\n}",
+      "generated/queries/update_cookie_settings",
+    )
   reg
 }

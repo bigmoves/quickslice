@@ -2,7 +2,7 @@ import { createStorageKeys } from './storage/keys';
 import { createStorage, Storage } from './storage/storage';
 import { getOrCreateDPoPKey } from './auth/dpop';
 import { initiateLogin, handleOAuthCallback, logout as doLogout, LoginOptions } from './auth/oauth';
-import { getValidAccessToken, hasValidSession } from './auth/tokens';
+import { getSession, SessionInfo } from './auth/session';
 import { graphqlRequest } from './graphql';
 import { generateNamespaceHash } from './utils/crypto';
 
@@ -15,6 +15,11 @@ export interface QuicksliceClientOptions {
 
 export interface User {
   did: string;
+  handle?: string;
+}
+
+export interface QueryOptions {
+  signal?: AbortSignal;
 }
 
 export class QuicksliceClient {
@@ -28,6 +33,7 @@ export class QuicksliceClient {
   private initialized = false;
   private namespace: string = '';
   private storage: Storage | null = null;
+  private cachedSession: SessionInfo | null = null;
 
   constructor(options: QuicksliceClientOptions) {
     this.server = options.server.replace(/\/$/, ''); // Remove trailing slash
@@ -80,11 +86,20 @@ export class QuicksliceClient {
 
   /**
    * Handle OAuth callback after redirect
-   * Returns true if callback was handled
+   * Returns the session info if callback was handled, null otherwise
    */
-  async handleRedirectCallback(): Promise<boolean> {
+  async handleRedirectCallback(): Promise<SessionInfo | null> {
     await this.init();
-    return await handleOAuthCallback(this.getStorage(), this.namespace, this.tokenUrl);
+    const session = await handleOAuthCallback(
+      this.getStorage(),
+      this.namespace,
+      this.tokenUrl,
+      this.server
+    );
+    if (session) {
+      this.cachedSession = session;
+    }
+    return session;
   }
 
   /**
@@ -92,59 +107,62 @@ export class QuicksliceClient {
    */
   async logout(options: { reload?: boolean } = {}): Promise<void> {
     await this.init();
-    await doLogout(this.getStorage(), this.namespace, options);
+    this.cachedSession = null;
+    await doLogout(this.getStorage(), this.namespace, this.server, options);
   }
 
   /**
    * Check if user is authenticated
+   * Queries the server to verify session is valid
    */
   async isAuthenticated(): Promise<boolean> {
     await this.init();
-    return hasValidSession(this.getStorage());
+    const session = await getSession(this.server);
+    this.cachedSession = session;
+    return session.authenticated;
   }
 
   /**
-   * Get current user's DID (from stored token data)
+   * Get current user info from session
    * For richer profile info, use client.query() with your own schema
    */
   async getUser(): Promise<User | null> {
     await this.init();
-    if (!hasValidSession(this.getStorage())) {
+
+    // Use cached session if available, otherwise fetch
+    let session = this.cachedSession;
+    if (!session) {
+      session = await getSession(this.server);
+      this.cachedSession = session;
+    }
+
+    if (!session.authenticated || !session.did) {
       return null;
     }
 
-    const did = this.getStorage().get('userDid');
-    if (!did) {
-      return null;
-    }
-
-    return { did };
-  }
-
-  /**
-   * Get access token (auto-refreshes if needed)
-   */
-  async getAccessToken(): Promise<string> {
-    await this.init();
-    return await getValidAccessToken(this.getStorage(), this.namespace, this.tokenUrl);
+    return {
+      did: session.did,
+      handle: session.handle ?? undefined,
+    };
   }
 
   /**
    * Execute a GraphQL query (authenticated)
+   * Uses session cookie for auth - no client-side token management
    */
   async query<T = unknown>(
     query: string,
-    variables: Record<string, unknown> = {}
+    variables: Record<string, unknown> = {},
+    options: QueryOptions = {}
   ): Promise<T> {
     await this.init();
     return await graphqlRequest<T>(
-      this.getStorage(),
       this.namespace,
       this.graphqlUrl,
-      this.tokenUrl,
       query,
       variables,
-      true
+      true,
+      options.signal
     );
   }
 
@@ -153,9 +171,10 @@ export class QuicksliceClient {
    */
   async mutate<T = unknown>(
     mutation: string,
-    variables: Record<string, unknown> = {}
+    variables: Record<string, unknown> = {},
+    options: QueryOptions = {}
   ): Promise<T> {
-    return this.query<T>(mutation, variables);
+    return this.query<T>(mutation, variables, options);
   }
 
   /**
@@ -163,17 +182,17 @@ export class QuicksliceClient {
    */
   async publicQuery<T = unknown>(
     query: string,
-    variables: Record<string, unknown> = {}
+    variables: Record<string, unknown> = {},
+    options: QueryOptions = {}
   ): Promise<T> {
     await this.init();
     return await graphqlRequest<T>(
-      this.getStorage(),
       this.namespace,
       this.graphqlUrl,
-      this.tokenUrl,
       query,
       variables,
-      false
+      false,
+      options.signal
     );
   }
 }

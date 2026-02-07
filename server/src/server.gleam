@@ -17,6 +17,7 @@ import gleam/uri
 import handlers/admin_graphql as admin_graphql_handler
 import handlers/admin_oauth_authorize as admin_oauth_authorize_handler
 import handlers/admin_oauth_callback as admin_oauth_callback_handler
+import handlers/client_session as client_session_handler
 import handlers/graphiql as graphiql_handler
 import handlers/graphql as graphql_handler
 import handlers/graphql_ws as graphql_ws_handler
@@ -475,6 +476,9 @@ fn handle_request(
     }
     ["api", "atp", "sessions", session_id] ->
       oauth_atp_session_handler.handle(req, ctx.db, session_id)
+    // Client session management for cookie-based auth
+    ["api", "client", "session"] ->
+      client_session_handler.handle(req, ctx.db, ctx.did_cache)
     // Fallback: serve SPA index.html for client-side routing
     _ -> index_handler.handle()
   }
