@@ -308,18 +308,18 @@ pub fn build_all_object_types(
     })
 
   // PHASE 2: Build all #fragment refs with main-level types available
-  // Sort so nested fragments are built before parent fragments if needed
+  // Use multiple passes to handle inter-fragment dependencies
+  // (e.g., defs#release depends on defs#releaseDate - both are fragment refs,
+  // and alphabetical ordering may process the dependent before its dependency)
   let sorted_fragments = sort_refs_dependencies_first(fragment_refs)
   let phase2_types =
-    list.fold(sorted_fragments, phase1_types, fn(acc, ref) {
-      build_single_object_type(
-        registry,
-        ref,
-        acc,
-        batch_fetcher,
-        generic_record_type,
-      )
-    })
+    build_fragments_multi_pass(
+      sorted_fragments,
+      phase1_types,
+      registry,
+      batch_fetcher,
+      generic_record_type,
+    )
 
   // PHASE 3: Build main-level types that reference their own #fragments
   // Now their #fragment refs can be resolved
@@ -332,6 +332,38 @@ pub fn build_all_object_types(
       generic_record_type,
     )
   })
+}
+
+/// Build fragment refs in multiple passes to resolve inter-fragment dependencies.
+/// On each pass, all fragments are rebuilt with the accumulated types from
+/// previous passes. This handles cases where fragment A depends on fragment B
+/// (e.g., defs#release depends on defs#releaseDate) where alphabetical ordering
+/// may process the dependent before its dependency. The first pass builds leaf
+/// types correctly, and subsequent passes resolve refs that were previously
+/// missing.
+fn build_fragments_multi_pass(
+  fragments: List(String),
+  initial_types: Dict(String, schema.Type),
+  registry: lexicon_registry.Registry,
+  batch_fetcher: option.Option(BatchFetcher),
+  generic_record_type: option.Option(schema.Type),
+) -> Dict(String, schema.Type) {
+  let pass_count = list.length(fragments)
+  case pass_count {
+    0 -> initial_types
+    _ ->
+      list.fold(list.range(1, pass_count), initial_types, fn(acc, _pass) {
+        list.fold(fragments, acc, fn(inner_acc, ref) {
+          build_single_object_type(
+            registry,
+            ref,
+            inner_acc,
+            batch_fetcher,
+            generic_record_type,
+          )
+        })
+      })
+  }
 }
 
 /// Check if a main-level ref has any local #fragment refs in its properties

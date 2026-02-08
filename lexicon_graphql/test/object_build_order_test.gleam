@@ -136,6 +136,129 @@ pub fn union_array_refs_resolve_to_object_types_test() {
   }
 }
 
+/// Test that inter-fragment dependencies resolve correctly when one #fragment
+/// ref contains an array of refs to another #fragment ref.
+/// This reproduces the bug where defs#release (with releaseDates: [defs#releaseDate])
+/// was built before defs#releaseDate due to alphabetical ordering, causing
+/// releaseDates to incorrectly resolve to [String!] instead of [ReleaseDate!].
+pub fn inter_fragment_array_ref_resolves_to_object_type_test() {
+  // Create a lexicon like games.gamesgamesgamesgames.defs with:
+  // - others: "release" object with releaseDates array of refs to #releaseDate
+  // - others: "releaseDate" object with string properties
+  // "release" < "releaseDate" alphabetically, so release is built first
+  // without the fix, releaseDate wouldn't be available yet
+  let lexicon =
+    types.Lexicon(
+      id: "games.gamesgamesgamesgames.defs",
+      defs: types.Defs(
+        main: None,
+        others: dict.from_list([
+          #(
+            "release",
+            types.Object(
+              types.ObjectDef(type_: "object", required_fields: [], properties: [
+                #(
+                  "platform",
+                  types.Property(
+                    type_: "string",
+                    required: False,
+                    format: None,
+                    ref: None,
+                    refs: None,
+                    items: None,
+                  ),
+                ),
+                #(
+                  "releaseDates",
+                  types.Property(
+                    type_: "array",
+                    required: False,
+                    format: None,
+                    ref: None,
+                    refs: None,
+                    items: Some(types.ArrayItems(
+                      type_: "ref",
+                      ref: Some("games.gamesgamesgamesgames.defs#releaseDate"),
+                      refs: None,
+                    )),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+          #(
+            "releaseDate",
+            types.Object(
+              types.ObjectDef(type_: "object", required_fields: [], properties: [
+                #(
+                  "region",
+                  types.Property(
+                    type_: "string",
+                    required: False,
+                    format: None,
+                    ref: None,
+                    refs: None,
+                    items: None,
+                  ),
+                ),
+                #(
+                  "releasedAt",
+                  types.Property(
+                    type_: "string",
+                    required: False,
+                    format: None,
+                    ref: None,
+                    refs: None,
+                    items: None,
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    )
+
+  // Build registry and object types
+  let reg = registry.from_lexicons([lexicon])
+  let object_types = object_builder.build_all_object_types(reg, None, None)
+
+  // Both fragment types should exist
+  let release_type_result =
+    dict.get(object_types, "games.gamesgamesgamesgames.defs#release")
+  should.be_ok(release_type_result)
+
+  let release_date_type_result =
+    dict.get(object_types, "games.gamesgamesgamesgames.defs#releaseDate")
+  should.be_ok(release_date_type_result)
+
+  // Check that release's releaseDates field resolved to the object type,
+  // not the [String!] fallback
+  case release_type_result {
+    Ok(release_type) -> {
+      let fields = schema.get_fields(release_type)
+      let release_dates_field =
+        list.find(fields, fn(f) { schema.field_name(f) == "releaseDates" })
+
+      case release_dates_field {
+        Ok(field) -> {
+          let field_type = schema.field_type(field)
+          let inner_type_name = get_list_inner_type_name(field_type)
+
+          // Should NOT be "String" - should be the releaseDate object type
+          should.be_false(inner_type_name == "String")
+          should.equal(
+            inner_type_name,
+            "GamesGamesgamesgamesgamesDefsReleaseDate",
+          )
+        }
+        Error(_) -> should.fail()
+      }
+    }
+    Error(_) -> should.fail()
+  }
+}
+
 /// Helper to get the inner type name from a list type
 /// NonNull[List[NonNull[Union]]] -> "UnionName"
 fn get_list_inner_type_name(t: schema.Type) -> String {
