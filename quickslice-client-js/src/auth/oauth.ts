@@ -1,7 +1,7 @@
 import { Storage } from '../storage/storage';
 import { createDPoPProof, clearDPoPKeys } from './dpop';
 import { generateCodeVerifier, generateCodeChallenge, generateState } from './pkce';
-import { storeTokens } from './tokens';
+import { createSession, destroySession, SessionInfo } from './session';
 
 export interface LoginOptions {
   handle?: string;
@@ -53,14 +53,15 @@ export async function initiateLogin(
 }
 
 /**
- * Handle OAuth callback - exchange code for tokens
- * Returns true if callback was handled, false if not a callback
+ * Handle OAuth callback - exchange code for tokens and create session
+ * Returns session info if callback was handled, null if not a callback
  */
 export async function handleOAuthCallback(
   storage: Storage,
   namespace: string,
-  tokenUrl: string
-): Promise<boolean> {
+  tokenUrl: string,
+  serverUrl: string
+): Promise<SessionInfo | null> {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
   const state = params.get('state');
@@ -73,7 +74,7 @@ export async function handleOAuthCallback(
   }
 
   if (!code || !state) {
-    return false; // Not a callback
+    return null; // Not a callback
   }
 
   // Verify state
@@ -118,8 +119,13 @@ export async function handleOAuthCallback(
 
   const tokens = await tokenResponse.json();
 
-  // Store tokens
-  storeTokens(storage, tokens);
+  // Create session with cookie (tokens stored server-side)
+  // The server will store the tokens and return a session cookie
+  const sessionInfo = await createSession(serverUrl, namespace, {
+    clientId,
+    userDid: tokens.sub, // DID from token response
+    atpSessionId: tokens.session_id, // ATP session ID if present
+  });
 
   // Clean up OAuth state
   storage.remove('codeVerifier');
@@ -129,17 +135,22 @@ export async function handleOAuthCallback(
   // Clear URL params
   window.history.replaceState({}, document.title, window.location.pathname);
 
-  return true;
+  return sessionInfo;
 }
 
 /**
- * Logout - clear all stored data
+ * Logout - destroy session and clear local data
  */
 export async function logout(
   storage: Storage,
   namespace: string,
+  serverUrl: string,
   options: { reload?: boolean } = {}
 ): Promise<void> {
+  // Destroy server-side session (clears cookie)
+  await destroySession(serverUrl);
+
+  // Clear local storage
   storage.clear();
   await clearDPoPKeys(namespace);
 

@@ -1458,5 +1458,102 @@ pub fn mutation_type(
         }
       },
     ),
+    // updateCookieSettings mutation (admin only)
+    schema.field_with_args(
+      "updateCookieSettings",
+      schema.non_null(admin_types.cookie_settings_type()),
+      "Update cookie configuration for client sessions (admin only)",
+      [
+        schema.argument(
+          "sameSite",
+          admin_types.cookie_same_site_enum(),
+          "SameSite attribute (STRICT, LAX, or NONE)",
+          None,
+        ),
+        schema.argument(
+          "secure",
+          admin_types.cookie_secure_enum(),
+          "Secure flag mode (AUTO, ALWAYS, or NEVER)",
+          None,
+        ),
+        schema.argument(
+          "domain",
+          schema.string_type(),
+          "Cookie domain for subdomain sharing (empty to clear)",
+          None,
+        ),
+      ],
+      fn(ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            case config_repo.is_admin(conn, sess.did) {
+              True -> {
+                // Update sameSite if provided
+                case schema.get_argument(ctx, "sameSite") {
+                  Some(value.Enum(ss)) -> {
+                    case config_repo.parse_same_site(string.lowercase(ss)) {
+                      Ok(parsed) -> {
+                        let _ = config_repo.set_cookie_same_site(conn, parsed)
+                        Nil
+                      }
+                      Error(_) -> Nil
+                    }
+                  }
+                  _ -> Nil
+                }
+
+                // Update secure if provided
+                case schema.get_argument(ctx, "secure") {
+                  Some(value.Enum(sec)) -> {
+                    case config_repo.parse_secure(string.lowercase(sec)) {
+                      Ok(parsed) -> {
+                        let _ = config_repo.set_cookie_secure(conn, parsed)
+                        Nil
+                      }
+                      Error(_) -> Nil
+                    }
+                  }
+                  _ -> Nil
+                }
+
+                // Update domain if provided
+                case schema.get_argument(ctx, "domain") {
+                  Some(value.String(domain)) -> {
+                    let _ = config_repo.set_cookie_domain(conn, domain)
+                    Nil
+                  }
+                  Some(value.Null) -> {
+                    let _ = config_repo.clear_cookie_domain(conn)
+                    Nil
+                  }
+                  _ -> Nil
+                }
+
+                // Return updated settings
+                let same_site =
+                  config_repo.same_site_to_string(
+                    config_repo.get_cookie_same_site(conn),
+                  )
+                let secure =
+                  config_repo.secure_to_string(config_repo.get_cookie_secure(
+                    conn,
+                  ))
+                let domain = case config_repo.get_cookie_domain(conn) {
+                  Ok(d) -> Some(d)
+                  Error(_) -> None
+                }
+                Ok(converters.cookie_settings_to_value(
+                  same_site,
+                  secure,
+                  domain,
+                ))
+              }
+              False -> Error("Admin privileges required")
+            }
+          }
+          Error(_) -> Error("Authentication required")
+        }
+      },
+    ),
   ])
 }

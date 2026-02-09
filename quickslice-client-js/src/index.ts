@@ -1,4 +1,5 @@
-export { QuicksliceClient, QuicksliceClientOptions, User } from './client';
+export { QuicksliceClient, QuicksliceClientOptions, QueryOptions, User } from './client';
+export { SessionInfo } from './auth/session';
 export {
   QuicksliceError,
   LoginRequiredError,

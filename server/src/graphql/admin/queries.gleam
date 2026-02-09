@@ -73,6 +73,41 @@ pub fn query_type(
         }
       },
     ),
+    // cookieSettings query (admin only)
+    schema.field(
+      "cookieSettings",
+      schema.non_null(admin_types.cookie_settings_type()),
+      "Get cookie configuration for client sessions (admin only)",
+      fn(_ctx) {
+        case session.get_current_session(req, conn, did_cache) {
+          Ok(sess) -> {
+            case config_repo.is_admin(conn, sess.did) {
+              True -> {
+                let same_site =
+                  config_repo.same_site_to_string(
+                    config_repo.get_cookie_same_site(conn),
+                  )
+                let secure =
+                  config_repo.secure_to_string(config_repo.get_cookie_secure(
+                    conn,
+                  ))
+                let domain = case config_repo.get_cookie_domain(conn) {
+                  Ok(d) -> Some(d)
+                  Error(_) -> None
+                }
+                Ok(converters.cookie_settings_to_value(
+                  same_site,
+                  secure,
+                  domain,
+                ))
+              }
+              False -> Error("Admin privileges required")
+            }
+          }
+          Error(_) -> Error("Authentication required")
+        }
+      },
+    ),
     // statistics query
     schema.field(
       "statistics",

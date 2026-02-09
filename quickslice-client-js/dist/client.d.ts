@@ -1,4 +1,5 @@
 import { LoginOptions } from './auth/oauth';
+import { SessionInfo } from './auth/session';
 export interface QuicksliceClientOptions {
     server: string;
     clientId: string;
@@ -7,6 +8,10 @@ export interface QuicksliceClientOptions {
 }
 export interface User {
     did: string;
+    handle?: string;
+}
+export interface QueryOptions {
+    signal?: AbortSignal;
 }
 export declare class QuicksliceClient {
     private server;
@@ -19,6 +24,7 @@ export declare class QuicksliceClient {
     private initialized;
     private namespace;
     private storage;
+    private cachedSession;
     constructor(options: QuicksliceClientOptions);
     /**
      * Initialize the client - must be called before other methods
@@ -31,9 +37,9 @@ export declare class QuicksliceClient {
     loginWithRedirect(options?: LoginOptions): Promise<void>;
     /**
      * Handle OAuth callback after redirect
-     * Returns true if callback was handled
+     * Returns the session info if callback was handled, null otherwise
      */
-    handleRedirectCallback(): Promise<boolean>;
+    handleRedirectCallback(): Promise<SessionInfo | null>;
     /**
      * Logout and clear all stored data
      */
@@ -42,27 +48,25 @@ export declare class QuicksliceClient {
     }): Promise<void>;
     /**
      * Check if user is authenticated
+     * Queries the server to verify session is valid
      */
     isAuthenticated(): Promise<boolean>;
     /**
-     * Get current user's DID (from stored token data)
+     * Get current user info from session
      * For richer profile info, use client.query() with your own schema
      */
     getUser(): Promise<User | null>;
     /**
-     * Get access token (auto-refreshes if needed)
-     */
-    getAccessToken(): Promise<string>;
-    /**
      * Execute a GraphQL query (authenticated)
+     * Uses session cookie for auth - no client-side token management
      */
-    query<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T>;
+    query<T = unknown>(query: string, variables?: Record<string, unknown>, options?: QueryOptions): Promise<T>;
     /**
      * Execute a GraphQL mutation (authenticated)
      */
-    mutate<T = unknown>(mutation: string, variables?: Record<string, unknown>): Promise<T>;
+    mutate<T = unknown>(mutation: string, variables?: Record<string, unknown>, options?: QueryOptions): Promise<T>;
     /**
      * Execute a public GraphQL query (no auth)
      */
-    publicQuery<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T>;
+    publicQuery<T = unknown>(query: string, variables?: Record<string, unknown>, options?: QueryOptions): Promise<T>;
 }

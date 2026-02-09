@@ -224,6 +224,121 @@ pub fn set_oauth_supported_scopes(
   set(exec, "oauth_supported_scopes", scopes)
 }
 
+// ===== Cookie Configuration =====
+
+/// Valid SameSite values for cookies
+pub type CookieSameSite {
+  Strict
+  Lax
+  CookieSameSiteNone
+}
+
+/// Parse SameSite string to type
+pub fn parse_same_site(s: String) -> Result(CookieSameSite, Nil) {
+  case string.lowercase(s) {
+    "strict" -> Ok(Strict)
+    "lax" -> Ok(Lax)
+    "none" -> Ok(CookieSameSiteNone)
+    _ -> Error(Nil)
+  }
+}
+
+/// Convert SameSite to string
+pub fn same_site_to_string(ss: CookieSameSite) -> String {
+  case ss {
+    Strict -> "strict"
+    Lax -> "lax"
+    CookieSameSiteNone -> "none"
+  }
+}
+
+/// Valid Secure flag modes for cookies
+pub type CookieSecure {
+  Auto
+  Always
+  Never
+}
+
+/// Parse Secure string to type
+pub fn parse_secure(s: String) -> Result(CookieSecure, Nil) {
+  case string.lowercase(s) {
+    "auto" -> Ok(Auto)
+    "always" -> Ok(Always)
+    "never" -> Ok(Never)
+    _ -> Error(Nil)
+  }
+}
+
+/// Convert Secure to string
+pub fn secure_to_string(sec: CookieSecure) -> String {
+  case sec {
+    Auto -> "auto"
+    Always -> "always"
+    Never -> "never"
+  }
+}
+
+/// Get cookie SameSite setting (defaults to Strict)
+pub fn get_cookie_same_site(exec: Executor) -> CookieSameSite {
+  case get(exec, "cookie_same_site") {
+    Ok(value) ->
+      case parse_same_site(value) {
+        Ok(ss) -> ss
+        Error(_) -> Strict
+      }
+    Error(_) -> Strict
+  }
+}
+
+/// Set cookie SameSite setting
+pub fn set_cookie_same_site(
+  exec: Executor,
+  same_site: CookieSameSite,
+) -> Result(Nil, DbError) {
+  set(exec, "cookie_same_site", same_site_to_string(same_site))
+}
+
+/// Get cookie Secure setting (defaults to Auto)
+pub fn get_cookie_secure(exec: Executor) -> CookieSecure {
+  case get(exec, "cookie_secure") {
+    Ok(value) ->
+      case parse_secure(value) {
+        Ok(sec) -> sec
+        Error(_) -> Auto
+      }
+    Error(_) -> Auto
+  }
+}
+
+/// Set cookie Secure setting
+pub fn set_cookie_secure(
+  exec: Executor,
+  secure: CookieSecure,
+) -> Result(Nil, DbError) {
+  set(exec, "cookie_secure", secure_to_string(secure))
+}
+
+/// Get cookie domain (optional, for subdomain sharing)
+pub fn get_cookie_domain(exec: Executor) -> Result(String, Nil) {
+  case get(exec, "cookie_domain") {
+    Ok(domain) if domain != "" -> Ok(domain)
+    _ -> Error(Nil)
+  }
+}
+
+/// Set cookie domain
+pub fn set_cookie_domain(exec: Executor, domain: String) -> Result(Nil, DbError) {
+  case string.trim(domain) {
+    "" -> delete(exec, "cookie_domain")
+    trimmed -> set(exec, "cookie_domain", trimmed)
+  }
+}
+
+/// Clear cookie domain setting
+pub fn clear_cookie_domain(exec: Executor) -> Result(Nil, DbError) {
+  delete(exec, "cookie_domain")
+}
+
 /// Initialize config with defaults if not already set
 pub fn initialize_config_defaults(exec: Executor) -> Result(Nil, DbError) {
   case get(exec, "relay_url") {

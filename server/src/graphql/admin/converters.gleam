@@ -185,3 +185,24 @@ pub fn report_to_value(report: reports.Report) -> value.Value {
     #("createdAt", value.String(report.created_at)),
   ])
 }
+
+// =============================================================================
+// Cookie Settings Converters
+// =============================================================================
+
+/// Convert cookie settings to GraphQL value
+pub fn cookie_settings_to_value(
+  same_site: String,
+  secure: String,
+  domain: option.Option(String),
+) -> value.Value {
+  let domain_value = case domain {
+    Some(d) -> value.String(d)
+    None -> value.Null
+  }
+  value.Object([
+    #("sameSite", value.Enum(string.uppercase(same_site))),
+    #("secure", value.Enum(string.uppercase(secure))),
+    #("domain", domain_value),
+  ])
+}

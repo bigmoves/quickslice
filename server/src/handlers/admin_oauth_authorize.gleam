@@ -190,7 +190,7 @@ fn process_authorize(
                               " ",
                             ))
                             <> "&login_hint="
-                            <> uri.percent_encode(did)
+                            <> uri.percent_encode(login_hint)
 
                           wisp.redirect(auth_url)
                         }

@@ -2,6 +2,10 @@
 ///
 /// Handles POST requests to /graphql endpoint, builds schemas from lexicons,
 /// and executes GraphQL queries.
+///
+/// Supports two authentication methods:
+/// 1. Cookie + DPoP (primary for JS SDK v2+): Session cookie with DPoP proof
+/// 2. Authorization header (fallback): For backward compatibility
 import database/executor.{type Executor}
 import gleam/bit_array
 import gleam/dynamic/decode
@@ -13,6 +17,7 @@ import gleam/option
 import gleam/result
 import gleam/string
 import graphql/lexicon/schema as lexicon_schema
+import lib/client_session
 import lib/oauth/did_cache
 import wisp
 
@@ -61,11 +66,8 @@ fn handle_graphql_post(
   atp_client_id: String,
   plc_url: String,
 ) -> wisp.Response {
-  // Extract Authorization header (optional for queries, required for mutations)
-  // Strip "Bearer " or "DPoP " prefix if present
-  let auth_token =
-    list.key_find(req.headers, "authorization")
-    |> result.map(strip_auth_prefix)
+  // Try to get auth token, checking cookie-based auth first, then Authorization header
+  let auth_token = get_auth_token(req, db)
 
   // Read request body
   case wisp.read_body_bits(req) {
@@ -104,11 +106,8 @@ fn handle_graphql_get(
   atp_client_id: String,
   plc_url: String,
 ) -> wisp.Response {
-  // Extract Authorization header (optional for queries, required for mutations)
-  // Strip "Bearer " or "DPoP " prefix if present
-  let auth_token =
-    list.key_find(req.headers, "authorization")
-    |> result.map(strip_auth_prefix)
+  // Try to get auth token, checking cookie-based auth first, then Authorization header
+  let auth_token = get_auth_token(req, db)
 
   // Support GET requests with query parameter (no variables for GET)
   let query_params = wisp.get_query(req)
@@ -172,6 +171,23 @@ fn extract_request_from_json(
 
   // Pass the original JSON string so the executor can extract variables
   Ok(#(query, json_str))
+}
+
+/// Get auth token from request, trying cookie-based auth first, then Authorization header
+///
+/// Auth methods checked in order:
+/// 1. Cookie (quickslice_client_session) - for JS SDK v2+ with cookie auth
+/// 2. Authorization header (DPoP or Bearer) - for backward compatibility
+fn get_auth_token(req: wisp.Request, db: Executor) -> Result(String, Nil) {
+  // First, try cookie-based authentication
+  case client_session.get_session_access_token(req, db) {
+    Ok(token) -> Ok(token)
+    Error(_) -> {
+      // Fall back to Authorization header
+      list.key_find(req.headers, "authorization")
+      |> result.map(strip_auth_prefix)
+    }
+  }
 }
 
 /// Strip "Bearer " or "DPoP " prefix from Authorization header value
