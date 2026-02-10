@@ -2,6 +2,7 @@
 
 import database/executor.{type DbError, type Executor, ConnectionError}
 import database/postgres/executor as postgres_executor
+import envoy
 import gleam/erlang/process
 import gleam/int
 import gleam/list
@@ -36,6 +37,7 @@ pub fn connect(url: String) -> Result(Executor, DbError) {
     |> apply_password(config.password)
     |> pog.pool_size(config.pool_size)
     |> pog.idle_interval(config.idle_interval)
+    |> pog.ip_version(config.ip_version)
     |> pog.ssl(case config.ssl {
       True -> pog.SslUnverified
       False -> pog.SslDisabled
@@ -82,6 +84,7 @@ type PgConfig {
     password: option.Option(String),
     pool_size: Int,
     idle_interval: Int,
+    ip_version: pog.IpVersion,
     ssl: Bool,
   )
 }
@@ -118,6 +121,11 @@ fn parse_url(url: String) -> Result(PgConfig, DbError) {
         None -> #(default_pool_size, default_idle_interval, True)
       }
 
+      let ip_version = case envoy.get("ENABLE_IPV6") {
+        Ok("true") -> pog.Ipv6
+        _ -> pog.Ipv4
+      }
+
       case database {
         "" -> Error(ConnectionError("No database specified in PostgreSQL URL"))
         _ ->
@@ -129,6 +137,7 @@ fn parse_url(url: String) -> Result(PgConfig, DbError) {
             password: password,
             pool_size: pool_size,
             idle_interval: idle_interval,
+            ip_version: ip_version,
             ssl: ssl,
           ))
       }
