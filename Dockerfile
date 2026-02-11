@@ -7,42 +7,33 @@ FROM ghcr.io/gleam-lang/gleam:${GLEAM_VERSION}-erlang-alpine AS builder
 RUN apk add --no-cache \
     bash \
     git \
-    nodejs \
-    npm \
     build-base \
     sqlite-dev \
-    postgresql-dev \
-    && npm install -g bun
+    postgresql-dev
 
 # Configure git for non-interactive use
 ENV GIT_TERMINAL_PROMPT=0
 
-# Add local dependencies first (these change less frequently)
-COPY ./lexicon_graphql /build/lexicon_graphql
-COPY ./client /build/client
-COPY ./atproto_car /build/atproto_car
+# Copy only dependency manifests first (these change infrequently)
+COPY ./lexicon_graphql/gleam.toml ./lexicon_graphql/manifest.toml /build/lexicon_graphql/
+COPY ./atproto_car/gleam.toml ./atproto_car/manifest.toml /build/atproto_car/
+COPY ./server/gleam.toml ./server/manifest.toml /build/server/
 
-# Add server code
-COPY ./server /build/server
-
-# Add patches directory
-COPY ./patches /build/patches
-
-# Install dependencies for all projects
-RUN cd /build/client && gleam deps download
+# Download Gleam dependencies (cached unless manifests change)
 RUN cd /build/lexicon_graphql && gleam deps download
 RUN cd /build/server && gleam deps download
 
-# Apply patches to dependencies
+# Copy patches and apply (before full source copy so patch layer is cached)
+COPY ./patches /build/patches
 RUN cd /build && patch -p1 < patches/mist-websocket-protocol.patch
 
-# Install JavaScript dependencies for client
-RUN cd /build/client && npm install
+# Now copy full source code
+COPY ./lexicon_graphql /build/lexicon_graphql
+COPY ./atproto_car /build/atproto_car
+COPY ./server /build/server
 
-# Compile the client code and output to server's static directory
-RUN cd /build/client \
-    && gleam add --dev lustre_dev_tools \
-    && gleam run -m lustre/dev build quickslice_client --minify --outdir=/build/server/priv/static
+# Pre-built client assets
+COPY ./build/static /build/server/priv/static
 
 # Compile the server code
 RUN cd /build/server \
